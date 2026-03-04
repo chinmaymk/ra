@@ -162,4 +162,28 @@ describe('GoogleProvider', () => {
     expect(result.toolCalls[0].name).toBe('test_tool')
     expect(result.toolCalls[0].arguments).toBe('{"x":1}')
   })
+
+  describe('thinking', () => {
+    it('builds thinkingConfig for medium', () => {
+      const provider = new GoogleProvider({ apiKey: 'test' })
+      const genConfig = (provider as any).buildThinkingConfig('medium')
+      expect(genConfig).toEqual({ thinkingBudget: 4096 })
+    })
+
+    it('returns undefined when thinking not set', () => {
+      const provider = new GoogleProvider({ apiKey: 'test' })
+      const genConfig = (provider as any).buildThinkingConfig(undefined)
+      expect(genConfig).toBeUndefined()
+    })
+
+    it('maps low to 512', () => {
+      const provider = new GoogleProvider({ apiKey: 'test' })
+      expect((provider as any).buildThinkingConfig('low')).toEqual({ thinkingBudget: 512 })
+    })
+
+    it('maps high to 16384', () => {
+      const provider = new GoogleProvider({ apiKey: 'test' })
+      expect((provider as any).buildThinkingConfig('high')).toEqual({ thinkingBudget: 16384 })
+    })
+  })
 })

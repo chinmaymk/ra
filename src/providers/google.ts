@@ -3,6 +3,8 @@ import type { Content, Part, Tool as GeminiTool, GenerateContentResponse } from 
 import { extractSystemMessages } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
+const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
+
 export interface GoogleProviderOptions {
   apiKey: string
 }
@@ -27,9 +29,20 @@ export class GoogleProvider implements IProvider {
     return { inputTokens: meta.promptTokenCount ?? 0, outputTokens: meta.candidatesTokenCount ?? 0 }
   }
 
+  private buildThinkingConfig(thinking?: 'low' | 'medium' | 'high') {
+    if (!thinking) return undefined
+    return { thinkingBudget: THINKING_BUDGETS_GOOGLE[thinking] }
+  }
+
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const { model, contents, tools } = this.buildModel(request)
-    const result = await model.generateContent({ contents, ...(tools && { tools }) })
+    const thinkingConfig = this.buildThinkingConfig(request.thinking)
+    const generationConfig = thinkingConfig ? { thinkingConfig } as any : undefined
+    const result = await model.generateContent({
+      contents,
+      ...(tools && { tools }),
+      ...(generationConfig && { generationConfig }),
+    })
     return {
       message: this.mapResponseToMessage(result.response),
       usage: result.response.usageMetadata ? this.toUsage(result.response.usageMetadata) : undefined,
@@ -38,12 +51,20 @@ export class GoogleProvider implements IProvider {
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
     const { model, contents, tools } = this.buildModel(request)
-    const result = await model.generateContentStream({ contents, ...(tools && { tools }) })
+    const thinkingConfig = this.buildThinkingConfig(request.thinking)
+    const generationConfig = thinkingConfig ? { thinkingConfig } as any : undefined
+    const result = await model.generateContentStream({
+      contents,
+      ...(tools && { tools }),
+      ...(generationConfig && { generationConfig }),
+    })
     let usage: TokenUsage | undefined
 
     for await (const chunk of result.stream) {
       for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
-        if ('text' in part && part.text) {
+        if ('thought' in part && (part as any).thought && 'text' in part && part.text) {
+          yield { type: 'thinking', delta: part.text }
+        } else if ('text' in part && part.text) {
           yield { type: 'text', delta: part.text }
         } else if ('functionCall' in part && part.functionCall) {
           const { name, args } = part.functionCall
