@@ -1,5 +1,4 @@
 import { loadConfig } from './config'
-import type { RaConfig } from './config'
 import { loadMiddleware } from './middleware/loader'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { ToolRegistry } from './agent/tool-registry'
@@ -13,6 +12,14 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { join } from 'path'
+
+async function readStdin(): Promise<string | undefined> {
+  if (process.stdin.isTTY) return undefined
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) chunks.push(chunk)
+  const text = Buffer.concat(chunks).toString('utf-8').trim()
+  return text || undefined
+}
 
 const HELP = `
 ra - AI agent CLI
@@ -75,9 +82,17 @@ ENV VARS
   RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
   RA_THINKING
 
+STDIN
+  When input is piped, ra reads stdin and auto-switches to CLI mode.
+  If a prompt argument is given, the prompt comes first followed by stdin.
+  If no prompt argument, stdin becomes the prompt.
+
 EXAMPLES
   ra "What is the capital of France?"
   ra --provider openai --model gpt-4o "Summarize this file" --file report.pdf
+  cat file.ts | ra "review this code"
+  git diff | ra "summarize these changes"
+  echo "hello" | ra
   ra --repl
   ra --http --http-port 8080
   ra --mcp-server-enabled --mcp-server-port 4000 --repl
@@ -90,6 +105,17 @@ async function main(): Promise<void> {
   if (parsed.meta.help) {
     console.log(HELP)
     process.exit(0)
+  }
+
+  // Read piped stdin if available
+  const stdinContent = await readStdin()
+  if (stdinContent) {
+    // Merge: prompt first, then stdin content
+    parsed.meta.prompt = parsed.meta.prompt
+      ? `${parsed.meta.prompt}\n\n${stdinContent}`
+      : stdinContent
+    // Force CLI mode when piping
+    parsed.config.interface = 'cli' as const
   }
 
   const config = await loadConfig({

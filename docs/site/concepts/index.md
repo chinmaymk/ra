@@ -13,11 +13,55 @@ Same binary. Different config. Different agent.
 
 ## Why ra?
 
-Most AI tools lock you into one shape — a chat UI, a framework, a cloud product. ra is the opposite. It's an **agent primitive**: small, composable, and configurable enough to become whatever you need.
+Most AI tools are single-purpose. A CLI that can't become an API. A framework locked to one provider. A chat UI you can't automate. You end up wiring together different tools for different contexts — each with its own config, its own auth, its own quirks.
 
-Give it a system prompt and it has a personality. Give it skills and it has expertise. Connect MCP servers and it has tools. Point it at a different provider and it speaks a different model. The binary never changes — only the configuration does.
+ra is one binary that adapts to where you need it.
 
-That's what makes ra powerful for **agentic loops**. Drop a config file alongside your code, run `ra "do the thing"`, and you have a domain-specific agent that understands your codebase, your tools, and your workflow. Need a code reviewer? A support bot? A CI agent? Same binary, different `ra.config.yml`.
+### CI caught a flaky test
+
+Your pipeline fails at 3am. Add one step:
+
+```bash
+ra --skill debugger --file test-output.log "Why is this test failing?"
+```
+
+It reads the logs, explains the root cause, and exits. Pipe the output to Slack, write it to a PR comment, or just read it in the morning.
+
+### You're building a feature
+
+Drop into the REPL and think out loud:
+
+```bash
+ra
+› /attach src/auth.ts
+› How should I add rate limiting to this endpoint?
+```
+
+Attach files, ask follow-ups, keep context. Resume the session tomorrow with `/resume`.
+
+### Your product needs AI
+
+Start a streaming API server:
+
+```bash
+ra --http --http-port 3000
+```
+
+POST a message, get SSE chunks back. No Express, no framework — just `Bun.serve()` under the hood.
+
+### Your editor needs a specialist
+
+Run ra as an MCP server and Cursor or Claude Desktop can call it directly:
+
+```bash
+ra --mcp --skill code-review
+```
+
+Now your editor has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt.
+
+---
+
+Same config. Same skills. Same binary. The interface changes, the agent doesn't.
 
 ## What's in the box
 

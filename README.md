@@ -45,12 +45,16 @@ ra
 
 ## Why ra?
 
-Most AI tools lock you into one shape. ra is the opposite — it becomes whatever you configure it to be:
+Most AI tools are single-purpose. A CLI that can't be an API. A framework that only speaks one provider. A chat UI you can't script. You end up stitching together different tools for different contexts.
 
-- **Need a code reviewer?** Write a `ra.config.yml` with the right system prompt and skills.
-- **Need a support bot?** Same binary, different config.
-- **Rate-limited on Anthropic?** Flip `RA_PROVIDER=openai` and keep going.
-- **Want to run locally?** Point it at Ollama. No code changes.
+ra is one binary that adapts to where you need it:
+
+- **CI caught a flaky test** — `ra --skill debugger "Why is this test failing?" --file test-output.log` in your pipeline. It reads the logs, explains the failure, done.
+- **You're building a feature** — `ra` drops you into a REPL. Attach files, ask follow-ups, keep context across turns.
+- **Your product needs AI** — `ra --http` gives you a streaming API. POST a message, get SSE chunks back. No framework, no boilerplate.
+- **Your editor needs a specialist** — `ra --mcp` exposes it as a tool. Cursor and Claude Desktop call it with a prompt, get the full agent loop.
+
+Same config. Same skills. Same binary. The interface changes, the agent doesn't.
 
 ## Install
 

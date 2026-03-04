@@ -27,7 +27,7 @@ async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
   let fn: unknown
   try {
     const transpiler = new Bun.Transpiler({ loader: 'ts', deadCodeElimination: false })
-    const js = transpiler.transformSync(`(${entry})`)
+    const js = await transpiler.transform(`(${entry})`)
     fn = (0, eval)(js)
   } catch (err) {
     throw new Error(`Failed to parse inline middleware expression: ${err instanceof Error ? err.message : String(err)}\n  Expression: ${entry}`)
