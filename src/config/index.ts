@@ -87,6 +87,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_THINKING !== undefined && ['low', 'medium', 'high'].includes(env.RA_THINKING)) {
     set(['thinking'], env.RA_THINKING)
   }
+  if (env.RA_TOOL_TIMEOUT !== undefined) setInt(['toolTimeout'], env.RA_TOOL_TIMEOUT)
 
   // HTTP server
   if (env.RA_HTTP_PORT !== undefined)  setInt(['http', 'port'], env.RA_HTTP_PORT)

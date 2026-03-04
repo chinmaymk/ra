@@ -59,6 +59,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'system-prompt':               { type: 'string' },
       'max-iterations':              { type: 'string' },
       'thinking':                    { type: 'string' },
+      'tool-timeout':                { type: 'string' },
       // HTTP server
       'http-port':                   { type: 'string' },
       'http-token':                  { type: 'string' },
@@ -99,6 +100,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values['system-prompt'])   set(['systemPrompt'], values['system-prompt'])
   if (values['max-iterations'])  { const n = safeParseInt(values['max-iterations'] as string); if (n !== undefined) set(['maxIterations'], n) }
   if (values['thinking'])        set(['thinking'], values['thinking'])
+  if (values['tool-timeout'])    { const n = safeParseInt(values['tool-timeout'] as string); if (n !== undefined) set(['toolTimeout'], n) }
 
   // HTTP server
   if (values['http-port'])   { const n = safeParseInt(values['http-port'] as string); if (n !== undefined) set(['http', 'port'], n) }

@@ -148,6 +148,13 @@ describe('loadConfig', () => {
   })
 })
 
+describe('toolTimeout config', () => {
+  it('RA_TOOL_TIMEOUT sets toolTimeout', async () => {
+    const config = await loadConfig({ env: { RA_TOOL_TIMEOUT: '60000' } })
+    expect(config.toolTimeout).toBe(60000)
+  })
+})
+
 describe('thinking config', () => {
   it('rejects invalid RA_THINKING values', async () => {
     const config = await loadConfig({ env: { RA_THINKING: 'extreme' } })
