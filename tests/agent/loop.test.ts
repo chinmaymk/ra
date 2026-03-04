@@ -451,6 +451,29 @@ describe('AgentLoop', () => {
     expect(receivedInput).toEqual({})
   })
 
+  it('tool timeout returns error message to LLM', async () => {
+    const tools = new ToolRegistry()
+    tools.register({
+      name: 'slow_tool',
+      description: 'hangs',
+      inputSchema: { type: 'object' },
+      execute: () => new Promise(resolve => setTimeout(() => resolve('done'), 5000)),
+    })
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'slow_tool' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop({ provider, tools, toolTimeout: 50 })
+    const result = await loop.run([{ role: 'user', content: 'test' }])
+    const toolMsg = result.messages.find(m => m.role === 'tool')
+    expect(toolMsg?.content).toContain('timed out after 50ms')
+    expect((toolMsg as any)?.isError).toBe(true)
+  })
+
   it('compacts messages when exceeding token threshold', async () => {
     let chatCallCount = 0
     let streamCallCount = 0
