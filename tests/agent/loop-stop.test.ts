@@ -24,7 +24,7 @@ const mockProvider: IProvider = {
 test('middleware can stop the loop via ctx.stop()', async () => {
   callCount = 0
   const tools = new ToolRegistry()
-  tools.register({ name: 'noop', description: 'no-op', parameters: {}, execute: async () => 'ok' })
+  tools.register({ name: 'noop', description: 'no-op', inputSchema: {}, execute: async () => 'ok' })
   let iterations = 0
 
   const loop = new AgentLoop({
