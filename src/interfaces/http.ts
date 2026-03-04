@@ -1,5 +1,5 @@
 import type { IProvider, IMessage } from '../providers/types'
-import type { MiddlewareConfig } from '../agent/types'
+import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
@@ -137,7 +137,7 @@ export class HttpServer {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
         }
 
-        const onStreamChunk = async (ctx: { chunk: { type: string; delta?: string } }) => {
+        const onStreamChunk = async (ctx: StreamChunkContext) => {
           if (ctx.chunk.type === 'text') {
             send({ type: 'text', delta: ctx.chunk.delta })
           }
@@ -147,7 +147,7 @@ export class HttpServer {
           ...(opts.middleware ?? {}),
           onStreamChunk: [
             ...(opts.middleware?.onStreamChunk ?? []),
-            onStreamChunk as never,
+            onStreamChunk,
           ],
         }
 
