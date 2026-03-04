@@ -101,21 +101,20 @@ export class Repl {
       middleware: {
         ...userMw,
         onStreamChunk: [
-          async (ctx: StreamChunkContext, next) => {
+          async (ctx: StreamChunkContext) => {
             if (ctx.chunk.type === 'text') {
               if (!boxOpened) { tui.stopSpinner(); boxOpened = true }
               process.stdout.write(ctx.chunk.delta)
             }
-            await next()
           },
           ...(userMw.onStreamChunk ?? []),
         ],
         beforeToolExecution: [
-          async (ctx: ToolExecutionContext, next) => { toolStartTimes.set(ctx.toolCall.id, Date.now()); tui.printToolCall(ctx.toolCall.name); await next() },
+          async (ctx: ToolExecutionContext) => { toolStartTimes.set(ctx.toolCall.id, Date.now()); tui.printToolCall(ctx.toolCall.name) },
           ...(userMw.beforeToolExecution ?? []),
         ],
         afterToolExecution: [
-          async (ctx: ToolResultContext, next) => { tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now())); await next() },
+          async (ctx: ToolResultContext) => { tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now())) },
           ...(userMw.afterToolExecution ?? []),
         ],
       },
