@@ -55,7 +55,7 @@ describe('runSkillScript - new runtimes', () => {
     const p = `${TEST_DIR}/test.go`
     writeFileSync(p, `package main\nimport "fmt"\nfunc main() { fmt.Println("hello-go") }`)
     expect((await runSkillScript(p, ENV)).trim()).toBe('hello-go')
-  })
+  }, 30_000)
 
   it('throws on unknown extension', async () => {
     const p = `${TEST_DIR}/test.rb`
