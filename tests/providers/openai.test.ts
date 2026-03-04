@@ -342,4 +342,47 @@ describe('OpenAIProvider - stream()', () => {
     }
     expect(chunks[0]).toEqual({ type: 'text', delta: 'text' })
   })
+
+  it('captures usage from terminal empty-choices chunk', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () => (async function* () {
+            yield { choices: [{ delta: { content: 'Hello' } }] }
+            yield { choices: [{ delta: {}, finish_reason: 'stop' }] }
+            yield { choices: [], usage: { prompt_tokens: 10, completion_tokens: 5 } }
+          })(),
+        },
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    const done = chunks.find((c: any) => c.type === 'done')
+    expect(done).toBeDefined()
+    expect(done.usage).toBeDefined()
+    expect(done.usage.inputTokens).toBe(10)
+  })
+
+  it('emits done even when stream ends without finish_reason', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () => (async function* () {
+            yield { choices: [{ delta: { content: 'Hello' } }] }
+          })(),
+        },
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    const done = chunks.find((c: any) => c.type === 'done')
+    expect(done).toBeDefined()
+    expect(done.type).toBe('done')
+  })
 })

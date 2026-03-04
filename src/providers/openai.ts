@@ -35,7 +35,7 @@ export class OpenAIProvider implements IProvider {
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const response = await this.client.chat.completions.create({ ...this.buildParams(request), stream: false })
-    const choice = response.choices[0]!
+    const choice = response.choices[0]
     if (!choice) throw new Error('No choices returned from OpenAI')
     return {
       message: this.mapResponseToMessage(choice.message),
@@ -46,8 +46,12 @@ export class OpenAIProvider implements IProvider {
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
     const stream = await this.client.chat.completions.create({ ...this.buildParams(request), stream: true, stream_options: { include_usage: true } })
     const activeToolCalls = new Map<number, string>()
+    let usage: TokenUsage | undefined
+    let sawFinishReason = false
 
     for await (const chunk of stream as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
+      if (chunk.usage) usage = this.toUsage(chunk.usage)
+
       const delta = chunk.choices[0]?.delta
       if (!delta) continue
 
@@ -67,9 +71,11 @@ export class OpenAIProvider implements IProvider {
 
       if (chunk.choices[0]?.finish_reason) {
         for (const id of activeToolCalls.values()) yield { type: 'tool_call_end', id }
-        yield { type: 'done', usage: chunk.usage ? this.toUsage(chunk.usage) : undefined }
+        sawFinishReason = true
       }
     }
+
+    yield { type: 'done', usage }
   }
 
   private mapMessages(messages: IMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
