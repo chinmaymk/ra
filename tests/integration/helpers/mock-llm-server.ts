@@ -138,7 +138,7 @@ export async function startMockLLMServer(): Promise<MockLLMServer> {
     },
   })
 
-  const port = server.port!
+  const port = server.port as number
   const base = `http://127.0.0.1:${port}`
 
   return {
