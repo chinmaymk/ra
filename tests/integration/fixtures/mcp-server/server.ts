@@ -4,11 +4,11 @@ import { z } from 'zod'
 
 const server = new McpServer({ name: 'test-server', version: '1.0.0' })
 
-server.tool('echo_text', 'Echo the input text', { text: z.string() }, async ({ text }) => ({
+server.registerTool('echo_text', { description: 'Echo the input text', inputSchema: { text: z.string() } }, async ({ text }) => ({
   content: [{ type: 'text' as const, text: `echo: ${text}` }],
 }))
 
-server.tool('fail_tool', 'Always fails', {}, async () => {
+server.registerTool('fail_tool', { description: 'Always fails' }, async () => {
   throw new Error('intentional failure')
 })
 
