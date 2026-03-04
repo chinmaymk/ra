@@ -33,6 +33,7 @@ export const defaultConfig: RaConfig = {
     ttlDays: 30,
   },
   maxIterations: 50,
+  toolTimeout: 30000,
   middleware: {},
   compaction: {
     enabled: true,

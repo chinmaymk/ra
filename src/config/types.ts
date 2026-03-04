@@ -32,6 +32,7 @@ export interface RaConfig {
     ttlDays: number
   }
   maxIterations: number
+  toolTimeout: number
   middleware: Record<string, string[]>
   thinking?: 'low' | 'medium' | 'high'
   compaction: {
