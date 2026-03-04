@@ -84,6 +84,26 @@ describe('loadConfig', () => {
     expect(c.http.port).toBe(3000)
   })
 
+  it('deepMerge: array value in cliArgs replaces array, not merges', async () => {
+    // Arrays should be replaced wholesale, not merged
+    const c = await loadConfig({
+      cwd: tmp,
+      cliArgs: { skillDirs: ['/new/dir'] },
+    })
+    expect(c.skillDirs).toEqual(['/new/dir'])
+  })
+
+  it('deepMerge: nested objects are merged, not replaced', async () => {
+    // http.port from CLI should not clobber http.token set by env
+    const c = await loadConfig({
+      cwd: tmp,
+      env: { RA_HTTP_TOKEN: 'secret' },
+      cliArgs: { http: { port: 9999 } },
+    })
+    expect(c.http.port).toBe(9999)
+    expect(c.http.token).toBe('secret')
+  })
+
   it('deepMerge: null in cliArgs is handled (documents overwrite behavior)', async () => {
     const c = await loadConfig({ cwd: tmp, cliArgs: { http: null } as any })
     expect((c as any).http).toBeNull()
