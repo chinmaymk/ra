@@ -98,7 +98,7 @@ describe('loadConfig', () => {
     const c = await loadConfig({
       cwd: tmp,
       env: { RA_HTTP_TOKEN: 'secret' },
-      cliArgs: { http: { port: 9999 } },
+      cliArgs: { http: { port: 9999 } } as any,
     })
     expect(c.http.port).toBe(9999)
     expect(c.http.token).toBe('secret')

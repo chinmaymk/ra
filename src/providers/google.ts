@@ -13,17 +13,17 @@ export interface GoogleProviderOptions {
 export class GoogleProvider implements IProvider {
   readonly name = 'google'
   private client: GoogleGenerativeAI
+  private baseURL?: string
 
   constructor(options: GoogleProviderOptions) {
-    this.client = new GoogleGenerativeAI(
-      options.apiKey,
-      options.baseURL ? ({ baseUrl: options.baseURL } as any) : undefined,
-    )
+    this.client = new GoogleGenerativeAI(options.apiKey)
+    this.baseURL = options.baseURL
   }
 
   private buildModel(request: ChatRequest) {
     const { system, filtered } = extractSystemMessages(request.messages)
-    const model = this.client.getGenerativeModel({ model: request.model, ...(system && { systemInstruction: system }) })
+    const requestOptions = this.baseURL ? { baseUrl: this.baseURL } : undefined
+    const model = this.client.getGenerativeModel({ model: request.model, ...(system && { systemInstruction: system }) }, requestOptions)
     const contents = this.mapMessages(filtered)
     const tools = request.tools?.length ? this.mapTools(request.tools) : undefined
     return { model, contents, tools }

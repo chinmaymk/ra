@@ -430,7 +430,7 @@ describe('AgentLoop', () => {
     const result = await loop.run([{ role: 'user', content: 'use unknown tool' }])
     const toolResult = result.messages.find(m => m.role === 'tool')
     expect(toolResult).toBeDefined()
-    expect(toolResult!.isError).toBe(true)
+    expect((toolResult as any).isError).toBe(true)
     expect(toolResult!.content).toContain('nonexistent_tool')
   })
 

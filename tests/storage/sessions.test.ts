@@ -125,13 +125,14 @@ describe('SessionStorage', () => {
     await limitedStorage.prune({ maxSessions })
     const remaining = await limitedStorage.list()
     expect(remaining).toHaveLength(maxSessions)
+    const remainingIds = remaining.map(s => s.id)
     // The newest sessions should survive
-    expect(remaining.map(s => s.id)).toContain(ids[4])
-    expect(remaining.map(s => s.id)).toContain(ids[3])
-    expect(remaining.map(s => s.id)).toContain(ids[2])
+    expect(remainingIds).toContain(ids[4]!)
+    expect(remainingIds).toContain(ids[3]!)
+    expect(remainingIds).toContain(ids[2]!)
     // The oldest should be gone
-    expect(remaining.map(s => s.id)).not.toContain(ids[0])
-    expect(remaining.map(s => s.id)).not.toContain(ids[1])
+    expect(remainingIds).not.toContain(ids[0]!)
+    expect(remainingIds).not.toContain(ids[1]!)
 
     await Bun.$`rm -rf ${TEST_PATH + '-limited'}`.quiet()
   })
