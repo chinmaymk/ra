@@ -62,3 +62,15 @@ test('handler error propagates and stops chain', async () => {
   expect(order).toEqual([1])
 })
 
+test('skips slow middleware when timeout is set', async () => {
+  const order: number[] = []
+  const controller = new AbortController()
+  const ctx = makeCtx(controller)
+  await runMiddlewareChain(ctx, [
+    async () => { order.push(1) },
+    async () => { await new Promise(r => setTimeout(r, 5000)); order.push(2) },
+    async () => { order.push(3) },
+  ], 50)
+  expect(order).toEqual([1, 3])
+})
+
