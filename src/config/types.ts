@@ -50,6 +50,8 @@ export interface McpClientConfig {
   transport: 'stdio' | 'sse'
   command?: string
   args?: string[]
+  env?: Record<string, string>
+  cwd?: string
   url?: string
 }
 
