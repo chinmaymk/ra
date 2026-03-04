@@ -95,25 +95,29 @@ ra --mcp
 
 ## Providers
 
-ra works with any model from Anthropic, OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch providers and models with a flag — the rest of your config stays the same.
+ra works with any model from Anthropic, OpenAI, Azure OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch providers and models with a flag — the rest of your config stays the same.
 
 ```bash
 ra --provider google --model gemini-2.5-pro "Summarize this doc"
 ra --provider ollama --model llama3 "Write a haiku"
 ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Review this PR"
+ra --provider azure --azure-deployment my-gpt4o "Explain this error"
 ```
 
 Set your API key for the provider you want to use:
 
-| Provider | Env Key |
+| Provider | Env vars |
 |----------|---------|
 | `anthropic` | `RA_ANTHROPIC_API_KEY` |
 | `openai` | `RA_OPENAI_API_KEY` |
 | `google` | `RA_GOOGLE_API_KEY` |
 | `bedrock` | `RA_BEDROCK_REGION` |
 | `ollama` | `RA_OLLAMA_HOST` |
+| `azure` | `RA_AZURE_ENDPOINT`, `RA_AZURE_DEPLOYMENT`, `RA_AZURE_API_KEY` (optional), `RA_AZURE_API_VERSION` (optional) |
 
 > Bedrock falls back to the standard AWS credential chain (`~/.aws/credentials`, IAM roles, etc.) when `RA_BEDROCK_API_KEY` is not set.
+
+> Azure falls back to `DefaultAzureCredential` (covers managed identity, Azure CLI, environment variables) when `RA_AZURE_API_KEY` is not set.
 
 ## Interfaces
 
@@ -438,6 +442,12 @@ export RA_OPENAI_API_KEY=sk-...
 export RA_GOOGLE_API_KEY=...
 export RA_OLLAMA_HOST=http://localhost:11434
 export RA_BEDROCK_REGION=us-east-1
+
+# Azure OpenAI (RA_AZURE_API_KEY is optional — omit to use DefaultAzureCredential)
+export RA_AZURE_ENDPOINT=https://myresource.openai.azure.com/
+export RA_AZURE_DEPLOYMENT=my-gpt4o
+export RA_AZURE_API_KEY=...
+export RA_AZURE_API_VERSION=2024-12-01-preview
 ```
 
 ### CLI flags
@@ -477,7 +487,7 @@ src/
     loop.ts             # Core agent loop (model → tools → repeat)
     tool-registry.ts    # Tool registration and dispatch
     middleware.ts       # Middleware chain execution
-  providers/            # Anthropic, OpenAI, Google, Ollama, Bedrock
+  providers/            # Anthropic, OpenAI, Azure OpenAI, Google, Ollama, Bedrock
   interfaces/           # CLI, REPL, HTTP, MCP server
   config/               # Layered config system
   mcp/                  # MCP client + server
