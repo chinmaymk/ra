@@ -1,13 +1,11 @@
-import type { Middleware } from './types'
+import type { Middleware, StoppableContext } from './types'
 
-export async function runMiddlewareChain<T>(ctx: T, chain: Middleware<T>[]): Promise<void> {
-  let index = 0
-
-  async function next(): Promise<void> {
-    if (index >= chain.length) return
-    const middleware = chain[index++]!
-    await middleware(ctx, next)
+export async function runMiddlewareChain<T extends StoppableContext>(
+  ctx: T,
+  chain: Middleware<T>[],
+): Promise<void> {
+  for (const mw of chain) {
+    if (ctx.signal.aborted) break
+    await mw(ctx)
   }
-
-  await next()
 }

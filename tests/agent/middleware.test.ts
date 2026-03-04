@@ -1,39 +1,44 @@
-import { describe, it, expect } from 'bun:test'
+import { test, expect } from 'bun:test'
 import { runMiddlewareChain } from '../../src/agent/middleware'
+import type { LoopContext } from '../../src/agent/types'
 
-describe('runMiddlewareChain', () => {
-  it('runs middleware in order', async () => {
-    const order: number[] = []
-    const chain = [
-      async (_ctx: any, next: () => Promise<void>) => { order.push(1); await next(); order.push(4) },
-      async (_ctx: any, next: () => Promise<void>) => { order.push(2); await next(); order.push(3) },
-    ]
-    await runMiddlewareChain({}, chain)
-    expect(order).toEqual([1, 2, 3, 4])
-  })
+function makeCtx(controller: AbortController): LoopContext {
+  return {
+    messages: [], iteration: 0, maxIterations: 10, sessionId: 'test',
+    stop: () => controller.abort(),
+    signal: controller.signal,
+  }
+}
 
-  it('short-circuits when next is not called', async () => {
-    const order: number[] = []
-    const chain = [
-      async (_ctx: any, _next: () => Promise<void>) => { order.push(1) },
-      async (_ctx: any, next: () => Promise<void>) => { order.push(2); await next() },
-    ]
-    await runMiddlewareChain({}, chain)
-    expect(order).toEqual([1])
-  })
+test('runs all handlers in order', async () => {
+  const order: number[] = []
+  const controller = new AbortController()
+  const ctx = makeCtx(controller)
+  await runMiddlewareChain(ctx, [
+    async (_c) => { order.push(1) },
+    async (_c) => { order.push(2) },
+  ])
+  expect(order).toEqual([1, 2])
+})
 
-  it('passes context to all middleware', async () => {
-    const ctx = { value: 0 }
-    const chain = [
-      async (c: any, next: () => Promise<void>) => { c.value += 1; await next() },
-      async (c: any, next: () => Promise<void>) => { c.value += 10; await next() },
-    ]
-    await runMiddlewareChain(ctx, chain)
-    expect(ctx.value).toBe(11)
-  })
+test('stops chain when ctx.stop() is called', async () => {
+  const order: number[] = []
+  const controller = new AbortController()
+  const ctx = makeCtx(controller)
+  await runMiddlewareChain(ctx, [
+    async (c) => { order.push(1); c.stop() },
+    async (_c) => { order.push(2) },
+  ])
+  expect(order).toEqual([1])
+})
 
-  it('handles empty chain', async () => {
-    await runMiddlewareChain({}, [])
-    // should not throw
-  })
+test('skips all handlers if already aborted', async () => {
+  const order: number[] = []
+  const controller = new AbortController()
+  controller.abort()
+  const ctx = makeCtx(controller)
+  await runMiddlewareChain(ctx, [
+    async (_c) => { order.push(1) },
+  ])
+  expect(order).toEqual([])
 })
