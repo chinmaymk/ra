@@ -238,6 +238,13 @@ async function main(): Promise<void> {
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${config.http.port}`)
+    // Keep process alive; clean up on signal
+    const httpShutdown = async () => { await httpServer.stop(); await shutdown() }
+    process.removeAllListeners('SIGINT')
+    process.removeAllListeners('SIGTERM')
+    process.on('SIGINT', async () => { await httpShutdown(); process.exit(0) })
+    process.on('SIGTERM', async () => { await httpShutdown(); process.exit(0) })
+    await new Promise(() => {}) // keep alive
   } else {
     // Default: interactive REPL mode
     const repl = new Repl({

@@ -96,6 +96,21 @@ describe('GoogleProvider', () => {
     expect(mapped[0].functionDeclarations[0].parameters).toEqual({ type: 'object', properties: { x: { type: 'number' } } })
   })
 
+  it('handles malformed JSON in toolCall arguments gracefully', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const messages = [
+      {
+        role: 'assistant' as const,
+        content: '',
+        toolCalls: [{ id: 'call_1', name: 'test_tool', arguments: '{broken json' }],
+      },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    const fcPart = mapped[0].parts.find((p: any) => p.functionCall)
+    expect(fcPart).toBeDefined()
+    expect(fcPart.functionCall.args).toEqual({})
+  })
+
   it('maps assistant messages with toolCalls to functionCall parts', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
@@ -116,13 +131,13 @@ describe('GoogleProvider', () => {
   it('maps tool result messages to functionResponse parts', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
-      { role: 'tool' as const, content: 'result text', toolCallId: 'call_123' },
+      { role: 'tool' as const, content: 'result text', toolCallId: 'read_file_0' },
     ]
     const mapped = (provider as any).mapMessages(messages)
     expect(mapped[0].role).toBe('user')
     const frPart = mapped[0].parts.find((p: any) => p.functionResponse)
     expect(frPart).toBeDefined()
-    expect(frPart.functionResponse.name).toBe('call_123')
+    expect(frPart.functionResponse.name).toBe('read_file')
     expect(frPart.functionResponse.response.content).toBe('result text')
   })
 
@@ -393,8 +408,66 @@ describe('GoogleProvider - stream()', () => {
     for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
     }
-    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'read_file', name: 'read_file' })
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'read_file_0', name: 'read_file' })
     expect(chunks[1].type).toBe('tool_call_delta')
-    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'read_file' })
+    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'read_file_0' })
+  })
+
+  it('assigns unique IDs when same tool is called multiple times', async () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      getGenerativeModel: () => ({
+        generateContentStream: async () => ({
+          stream: (async function* () {
+            yield { candidates: [{ content: { parts: [
+              { functionCall: { name: 'read_file', args: { path: 'a.ts' } } },
+              { functionCall: { name: 'read_file', args: { path: 'b.ts' } } },
+            ] } }] }
+          })(),
+        }),
+      }),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    const starts = chunks.filter(c => c.type === 'tool_call_start')
+    expect(starts).toHaveLength(2)
+    expect(starts[0].id).toBe('read_file_0')
+    expect(starts[1].id).toBe('read_file_1')
+    expect(starts[0].id).not.toBe(starts[1].id)
+  })
+})
+
+describe('GoogleProvider - tool result ID mapping', () => {
+  it('strips counter suffix from toolCallId for functionResponse name', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'tool' as const, content: 'file contents', toolCallId: 'read_file_0' },
+      { role: 'tool' as const, content: 'more contents', toolCallId: 'read_file_1' },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].parts[0].functionResponse.name).toBe('read_file')
+    expect(mapped[1].parts[0].functionResponse.name).toBe('read_file')
+  })
+
+  it('mapResponseToMessage assigns unique IDs for duplicate function calls', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const response = {
+      candidates: [{
+        content: {
+          role: 'model',
+          parts: [
+            { functionCall: { name: 'search', args: { q: 'a' } } },
+            { functionCall: { name: 'search', args: { q: 'b' } } },
+          ],
+        },
+      }],
+    }
+    const result = (provider as any).mapResponseToMessage(response)
+    expect(result.toolCalls).toHaveLength(2)
+    expect(result.toolCalls[0].id).toBe('search_0')
+    expect(result.toolCalls[1].id).toBe('search_1')
+    expect(result.toolCalls[0].id).not.toBe(result.toolCalls[1].id)
   })
 })

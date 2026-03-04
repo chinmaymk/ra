@@ -50,4 +50,30 @@ describe('SessionStorage', () => {
     const list = await storage.list()
     expect(list).toHaveLength(3)
   })
+
+  it('appendMessage does not lose data under concurrent writes', async () => {
+    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    const count = 20
+    // Fire all appends concurrently
+    await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        storage.appendMessage(session.id, { role: 'user', content: `msg-${i}` })
+      )
+    )
+    const messages = await storage.readMessages(session.id)
+    expect(messages).toHaveLength(count)
+    // Verify all messages are present (order may vary due to concurrency)
+    const contents = new Set(messages.map(m => m.content as string))
+    for (let i = 0; i < count; i++) {
+      expect(contents.has(`msg-${i}`)).toBe(true)
+    }
+  })
+
+  it('appendMessage works on a fresh file (no prior messages)', async () => {
+    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    await storage.appendMessage(session.id, { role: 'user', content: 'first' })
+    const messages = await storage.readMessages(session.id)
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.content).toBe('first')
+  })
 })

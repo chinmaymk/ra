@@ -77,6 +77,13 @@ describe('loadConfig', () => {
     })
   })
 
+  it('deepMerge handles null values without crashing', async () => {
+    // When a config layer has null for a key that was an object in defaults, it should not crash
+    const c = await loadConfig({ cwd: tmp, cliArgs: { http: null } as any })
+    // Should not throw; http should be overwritten to null or defaults should survive
+    expect(c).toBeDefined()
+  })
+
   it('maps all env vars', async () => {
     const c = await loadConfig({ cwd: tmp, env: {
       RA_PROVIDER: 'openai', RA_MODEL: 'gpt-4o', RA_INTERFACE: 'http',
@@ -125,5 +132,65 @@ describe('thinking config', () => {
   it('defaults thinking to undefined', async () => {
     const config = await loadConfig({ env: {} })
     expect(config.thinking).toBeUndefined()
+  })
+})
+
+describe('systemPrompt file-path detection', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-sysprompt-test-${Date.now()}`)
+    mkdirSync(tmp, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('does NOT try to load plain text as a file path', async () => {
+    const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: 'You are a helpful AI assistant.' } })
+    expect(c.systemPrompt).toBe('You are a helpful AI assistant.')
+  })
+
+  it('loads systemPrompt from .txt file path', async () => {
+    const promptFile = join(tmp, 'custom-prompt.txt')
+    writeFileSync(promptFile, 'You are a pirate.')
+    const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: promptFile } })
+    expect(c.systemPrompt).toBe('You are a pirate.')
+  })
+
+  it('loads systemPrompt from .md file path', async () => {
+    const promptFile = join(tmp, 'prompt.md')
+    writeFileSync(promptFile, '# System\nBe concise.')
+    const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: promptFile } })
+    expect(c.systemPrompt).toBe('# System\nBe concise.')
+  })
+
+  it('loads systemPrompt from relative path starting with ./', async () => {
+    writeFileSync(join(tmp, 'myprompt'), 'Custom prompt text')
+    const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: './myprompt' } })
+    expect(c.systemPrompt).toBe('Custom prompt text')
+  })
+
+  it('resolves tilde ~ paths for systemPrompt', async () => {
+    // We can't easily test actual ~ expansion, but we can verify the code path
+    // by checking that a ~ path that doesn't exist is kept as-is
+    const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: '~/nonexistent-ra-test-prompt.txt' } })
+    expect(c.systemPrompt).toBe('~/nonexistent-ra-test-prompt.txt')
+  })
+
+  it('resolves ../relative paths for systemPrompt', async () => {
+    const parentDir = join(tmp, 'parent')
+    mkdirSync(parentDir, { recursive: true })
+    writeFileSync(join(parentDir, 'prompt.txt'), 'parent prompt')
+    const childDir = join(parentDir, 'child')
+    mkdirSync(childDir, { recursive: true })
+    const c = await loadConfig({ cwd: childDir, cliArgs: { systemPrompt: '../prompt.txt' } })
+    expect(c.systemPrompt).toBe('parent prompt')
+  })
+
+  it('keeps string as-is when path-like but file does not exist', async () => {
+    const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: './nonexistent.txt' } })
+    expect(c.systemPrompt).toBe('./nonexistent.txt')
   })
 })

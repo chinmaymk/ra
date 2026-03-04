@@ -90,8 +90,9 @@ export class BedrockProvider implements IProvider {
         if (typeof msg.content === 'string' && msg.content) content.push({ text: msg.content })
         else if (Array.isArray(msg.content)) content.push(...this.mapContentParts(msg.content))
         for (const tc of msg.toolCalls) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: JSON.parse(tc.arguments) as any } })
+          let input: Record<string, unknown>
+          try { input = JSON.parse(tc.arguments) } catch { input = {} }
+          content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: input as any } })
         }
         return { role: 'assistant', content }
       }

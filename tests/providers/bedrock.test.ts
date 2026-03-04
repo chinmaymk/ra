@@ -12,6 +12,17 @@ describe('BedrockProvider', () => {
     expect(mapped[0].content[0].toolResult.content[0].text).toBe('tool output')
   })
 
+  it('handles malformed JSON in toolCall arguments gracefully', () => {
+    const messages = [{
+      role: 'assistant' as const,
+      content: 'calling tool',
+      toolCalls: [{ id: 'call_1', name: 'my_tool', arguments: 'not{valid' }],
+    }]
+    const mapped = (provider as any).mapMessages(messages)
+    const toolBlock = mapped[0].content.find((b: any) => b.toolUse)
+    expect(toolBlock.toolUse.input).toEqual({})
+  })
+
   it('maps assistant with toolCalls to toolUse blocks alongside text', () => {
     const messages = [{
       role: 'assistant' as const,

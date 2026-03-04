@@ -45,6 +45,21 @@ describe('AnthropicProvider', () => {
     expect(mapped[0].content[0].content).toBe('result text')
   })
 
+  it('handles malformed JSON in toolCall arguments gracefully', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      {
+        role: 'assistant' as const,
+        content: 'calling tool',
+        toolCalls: [{ id: 'call_1', name: 'test_tool', arguments: 'not-valid-json{{{' }],
+      },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    const toolUse = mapped[0].content.find((b: any) => b.type === 'tool_use')
+    expect(toolUse).toBeDefined()
+    expect(toolUse.input).toEqual({})
+  })
+
   it('maps assistant messages with toolCalls to tool_use blocks', () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
     const messages = [
@@ -324,5 +339,49 @@ describe('thinking', () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
     const params = (provider as any).buildParams({ model: 'x', messages: [], thinking: 'high' })
     expect(params.thinking.budget_tokens).toBe(32000)
+  })
+})
+
+describe('AnthropicProvider - stream() input token tracking', () => {
+  it('captures inputTokens from message_start, not message_delta', async () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      messages: {
+        create: async () => (async function* () {
+          yield { type: 'message_start', message: { usage: { input_tokens: 42 } } }
+          yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } }
+          yield { type: 'message_delta', usage: { output_tokens: 7 } }
+          yield { type: 'message_stop' }
+        })(),
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    const done = chunks.find(c => c.type === 'done')
+    expect(done.usage.inputTokens).toBe(42)
+    expect(done.usage.outputTokens).toBe(7)
+  })
+
+  it('defaults inputTokens to 0 when message_start has no usage', async () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      messages: {
+        create: async () => (async function* () {
+          yield { type: 'message_start', message: {} }
+          yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } }
+          yield { type: 'message_delta', usage: { output_tokens: 3 } }
+          yield { type: 'message_stop' }
+        })(),
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    const done = chunks.find(c => c.type === 'done')
+    expect(done.usage.inputTokens).toBe(0)
+    expect(done.usage.outputTokens).toBe(3)
   })
 })

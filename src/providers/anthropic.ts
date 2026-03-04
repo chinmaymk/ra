@@ -39,10 +39,14 @@ export class AnthropicProvider implements IProvider {
     const stream = await this.client.messages.create({ ...this.buildParams(request), stream: true } as Anthropic.MessageCreateParamsStreaming)
 
     let usage: TokenUsage | undefined
+    let inputTokens = 0
     let currentToolCallId = ''
 
     for await (const event of stream as AsyncIterable<Anthropic.MessageStreamEvent>) {
       switch (event.type) {
+        case 'message_start':
+          inputTokens = (event as Anthropic.RawMessageStartEvent).message.usage?.input_tokens ?? 0
+          break
         case 'content_block_start':
           if (event.content_block.type === 'tool_use') {
             currentToolCallId = event.content_block.id
@@ -55,7 +59,7 @@ export class AnthropicProvider implements IProvider {
           else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as any).thinking }
           break
         case 'message_delta':
-          usage = { inputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.input_tokens ?? 0, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
+          usage = { inputTokens, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
           break
         case 'message_stop':
           yield { type: 'done', usage }
@@ -77,7 +81,9 @@ export class AnthropicProvider implements IProvider {
         if (typeof msg.content === 'string' && msg.content) content.push({ type: 'text', text: msg.content })
         else if (Array.isArray(msg.content)) content.push(...this.mapContentParts(msg.content))
         for (const tc of msg.toolCalls) {
-          content.push({ type: 'tool_use', id: tc.id, name: tc.name, input: JSON.parse(tc.arguments) as Record<string, unknown> })
+          let input: Record<string, unknown>
+          try { input = JSON.parse(tc.arguments) } catch { input = {} }
+          content.push({ type: 'tool_use', id: tc.id, name: tc.name, input })
         }
         return { role: 'assistant', content }
       }

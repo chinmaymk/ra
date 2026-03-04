@@ -114,16 +114,27 @@ export class HttpServer {
       compaction: this.options.compaction,
     })
 
-    const result = await loop.run(messages)
+    try {
+      const result = await loop.run(messages)
 
-    // Extract last assistant message text
-    const assistantMessages = result.messages.filter(m => m.role === 'assistant')
-    const last = assistantMessages[assistantMessages.length - 1]
-    const responseText = typeof last?.content === 'string' ? last.content : ''
+      // Extract last assistant message text
+      const assistantMessages = result.messages.filter(m => m.role === 'assistant')
+      const last = assistantMessages[assistantMessages.length - 1]
+      const responseText = typeof last?.content === 'string'
+        ? last.content
+        : Array.isArray(last?.content)
+          ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
+          : ''
 
-    return new Response(JSON.stringify({ response: responseText }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+      return new Response(JSON.stringify({ response: responseText }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
   }
 
   private async handleChatStream(req: Request): Promise<Response> {
@@ -167,8 +178,10 @@ export class HttpServer {
 
         try {
           await loop.run(messages)
-        } finally {
           send({ type: 'done' })
+        } catch (err) {
+          send({ type: 'error', error: err instanceof Error ? err.message : String(err) })
+        } finally {
           controller.close()
         }
       },

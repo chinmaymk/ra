@@ -2,7 +2,7 @@ import readline from 'readline'
 import { AgentLoop } from '../agent/loop'
 import { fileToContentPart } from '../utils/files'
 import type { ToolRegistry } from '../agent/tool-registry'
-import type { MiddlewareConfig, Middleware, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
+import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
@@ -43,7 +43,6 @@ export class Repl {
   async start(): Promise<void> {
     if (this.sessionId) {
       this.messages = await this.options.storage.readMessages(this.sessionId)
-      this.sessionId = this.sessionId
     } else {
       this.sessionId = await this.newSession()
     }

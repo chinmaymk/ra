@@ -233,4 +233,87 @@ describe('HttpServer', () => {
     })
     expect(res.status).toBe(401)
   })
+
+  it('POST /chat sends error event when provider throws', async () => {
+    const errorProvider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('Provider error') },
+      async *stream() {
+        throw new Error('Provider error')
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 11,
+      model: 'test',
+      provider: errorProvider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 11}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text).toContain('"type":"error"')
+    expect(text).toContain('Provider error')
+    // Should NOT contain a done event (error replaces it)
+    expect(text).not.toContain('"type":"done"')
+  })
+
+  it('POST /chat/sync returns 500 JSON when provider throws', async () => {
+    const errorProvider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('sync explosion') },
+      async *stream() {
+        throw new Error('sync explosion')
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 13,
+      model: 'test',
+      provider: errorProvider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 13}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    expect(res.status).toBe(500)
+    const data = await res.json() as { error: string }
+    expect(data.error).toContain('sync explosion')
+  })
+
+  it('POST /chat/sync extracts text from ContentPart[] responses', async () => {
+    const arrayContentProvider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        // The AgentLoop will accumulate text and push an assistant message
+        yield { type: 'text' as const, delta: 'part1 ' }
+        yield { type: 'text' as const, delta: 'part2' }
+        yield { type: 'done' as const }
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 12,
+      model: 'test',
+      provider: arrayContentProvider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 12}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    const data = await res.json() as { response: string }
+    expect(data.response).toBe('part1 part2')
+  })
 })

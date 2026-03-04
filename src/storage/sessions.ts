@@ -54,10 +54,10 @@ export class SessionStorage {
   }
 
   async appendMessage(id: string, message: IMessage): Promise<void> {
-    const file = join(this.sessionDir(id), 'messages.jsonl')
+    const filePath = join(this.sessionDir(id), 'messages.jsonl')
     const line = JSON.stringify(message) + '\n'
-    const existing = await Bun.file(file).text().catch(() => '')
-    await Bun.write(file, existing + line)
+    const { appendFile } = await import('node:fs/promises')
+    await appendFile(filePath, line)
   }
 
   async readMessages(id: string): Promise<IMessage[]> {

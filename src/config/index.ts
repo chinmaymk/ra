@@ -24,6 +24,7 @@ function deepMerge(
       source[key] !== null &&
       typeof source[key] === 'object' &&
       !Array.isArray(source[key]) &&
+      target[key] !== null &&
       typeof target[key] === 'object' &&
       !Array.isArray(target[key])
     ) {
@@ -126,8 +127,28 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   )
 
   const config = merged as unknown as RaConfig
-  const f = Bun.file(config.systemPrompt)
-  if (await f.exists()) config.systemPrompt = await f.text()
+
+  // Only try loading systemPrompt as a file if it looks like a path
+  if (config.systemPrompt && (
+    config.systemPrompt.startsWith('/') ||
+    config.systemPrompt.startsWith('./') ||
+    config.systemPrompt.startsWith('../') ||
+    config.systemPrompt.startsWith('~') ||
+    config.systemPrompt.endsWith('.txt') ||
+    config.systemPrompt.endsWith('.md')
+  )) {
+    let resolved: string
+    if (config.systemPrompt.startsWith('/')) {
+      resolved = config.systemPrompt
+    } else if (config.systemPrompt.startsWith('~')) {
+      const { homedir } = await import('os')
+      resolved = join(homedir(), config.systemPrompt.slice(1))
+    } else {
+      resolved = join(cwd, config.systemPrompt)
+    }
+    const f = Bun.file(resolved)
+    if (await f.exists()) config.systemPrompt = await f.text()
+  }
 
   return config
 }

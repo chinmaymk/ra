@@ -59,6 +59,7 @@ export class GoogleProvider implements IProvider {
       ...(generationConfig && { generationConfig }),
     })
     let usage: TokenUsage | undefined
+    let toolCallCounter = 0
 
     for await (const chunk of result.stream) {
       for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
@@ -68,9 +69,10 @@ export class GoogleProvider implements IProvider {
           yield { type: 'text', delta: part.text }
         } else if ('functionCall' in part && part.functionCall) {
           const { name, args } = part.functionCall
-          yield { type: 'tool_call_start', id: name, name }
-          yield { type: 'tool_call_delta', id: name, argsDelta: JSON.stringify(args ?? {}) }
-          yield { type: 'tool_call_end', id: name }
+          const id = `${name}_${toolCallCounter++}`
+          yield { type: 'tool_call_start', id, name }
+          yield { type: 'tool_call_delta', id, argsDelta: JSON.stringify(args ?? {}) }
+          yield { type: 'tool_call_end', id }
         }
       }
       if (chunk.usageMetadata) usage = this.toUsage(chunk.usageMetadata)
@@ -82,9 +84,11 @@ export class GoogleProvider implements IProvider {
   mapMessages(messages: IMessage[]): Content[] {
     return messages.map((msg): Content => {
       if (msg.role === 'tool') {
+        // toolCallId is formatted as "functionName_counter" — extract the function name for Gemini
+        const toolName = msg.toolCallId!.replace(/_\d+$/, '')
         return {
           role: 'user',
-          parts: [{ functionResponse: { name: msg.toolCallId!, response: { content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) } } }],
+          parts: [{ functionResponse: { name: toolName, response: { content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) } } }],
         }
       }
       const role = msg.role === 'assistant' ? 'model' : 'user'
@@ -92,7 +96,11 @@ export class GoogleProvider implements IProvider {
       if (msg.role === 'assistant' && msg.toolCalls?.length) {
         if (typeof msg.content === 'string' && msg.content) parts.push({ text: msg.content })
         else if (Array.isArray(msg.content)) parts.push(...this.mapContentParts(msg.content))
-        for (const tc of msg.toolCalls) parts.push({ functionCall: { name: tc.name, args: JSON.parse(tc.arguments) } })
+        for (const tc of msg.toolCalls) {
+          let args: Record<string, unknown>
+          try { args = JSON.parse(tc.arguments) } catch { args = {} }
+          parts.push({ functionCall: { name: tc.name, args } })
+        }
       } else if (typeof msg.content === 'string') {
         parts.push({ text: msg.content })
       } else {
@@ -120,11 +128,12 @@ export class GoogleProvider implements IProvider {
   mapResponseToMessage(response: GenerateContentResponse): IMessage {
     const toolCalls: IToolCall[] = []
     let textContent = ''
+    let counter = 0
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
       if ('text' in part && part.text) textContent += part.text
       else if ('functionCall' in part && part.functionCall) {
         const { name, args } = part.functionCall
-        toolCalls.push({ id: name, name, arguments: JSON.stringify(args ?? {}) })
+        toolCalls.push({ id: `${name}_${counter++}`, name, arguments: JSON.stringify(args ?? {}) })
       }
     }
     return { role: 'assistant', content: textContent, ...(toolCalls.length && { toolCalls }) }

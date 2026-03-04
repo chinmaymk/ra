@@ -59,7 +59,14 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
       return
     }
 
-    await transport.handleRequest(req, res)
+    try {
+      await transport.handleRequest(req, res)
+    } catch (err) {
+      if (!res.headersSent) {
+        res.writeHead(500).end(`Internal server error: ${err instanceof Error ? err.message : String(err)}`)
+      }
+      return
+    }
     if (transport.sessionId && !transports.has(transport.sessionId)) {
       transports.set(transport.sessionId, transport)
     }
