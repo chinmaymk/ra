@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import { runSkillScript, buildSkillMessages } from '../../src/skills/runner'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
+import { tmpdir } from '../tmpdir'
 
-const TEST_DIR = '/tmp/ra-test-runner'
+const TEST_DIR = tmpdir('ra-test-runner')
 const hasPython = !!Bun.which('python3') || !!Bun.which('python')
 const hasGo     = !!Bun.which('go') && Bun.spawnSync(['go', 'version']).exitCode === 0
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'bun:test'
 import { runCli } from '../../src/interfaces/cli'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import type { IProvider } from '../../src/providers/types'
+import { tmpdir } from '../tmpdir'
 
 function mockProvider(text: string): IProvider {
   return {
@@ -108,7 +109,7 @@ describe('runCli', () => {
 
   it('attaches files as content parts', async () => {
     const { mkdirSync, writeFileSync, rmSync } = await import('fs')
-    const dir = '/tmp/ra-cli-test'
+    const dir = tmpdir('ra-cli-test')
     mkdirSync(dir, { recursive: true })
     writeFileSync(`${dir}/test.txt`, 'file content')
 

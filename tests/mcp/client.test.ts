@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { McpClient } from '../../src/mcp/client'
 import { ToolRegistry } from '../../src/agent/tool-registry'
+import { tmpdir } from '../tmpdir'
 
 describe('McpClient', () => {
   it('connect accepts empty config array without error', async () => {
@@ -43,7 +44,7 @@ describe('McpClient', () => {
   it('connects to stdio transport, registers tools, and disconnects', async () => {
     // Write a minimal MCP server script that exposes one tool
     const { mkdirSync, writeFileSync, rmSync } = await import('fs')
-    const dir = '/tmp/ra-mcp-client-test'
+    const dir = tmpdir('ra-mcp-client-test')
     mkdirSync(dir, { recursive: true })
     writeFileSync(`${dir}/server.ts`, `
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'

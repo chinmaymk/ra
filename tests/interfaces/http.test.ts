@@ -3,8 +3,9 @@ import { HttpServer } from '../../src/interfaces/http'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import { SessionStorage } from '../../src/storage/sessions'
 import type { IProvider } from '../../src/providers/types'
+import { tmpdir } from '../tmpdir'
 
-const TEST_STORAGE = '/tmp/ra-http-test'
+const TEST_STORAGE = tmpdir('ra-http-test')
 const TEST_PORT = 13579
 
 function mockProvider(text: string): IProvider {

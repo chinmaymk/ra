@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { loadSkills, loadSkillMetadata } from '../../src/skills/loader'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
+import { tmpdir } from '../tmpdir'
 
-const TEST_DIR = '/tmp/ra-test-skills'
+const TEST_DIR = tmpdir('ra-test-skills')
 
 beforeEach(() => mkdirSync(TEST_DIR, { recursive: true }))
 afterEach(() => rmSync(TEST_DIR, { recursive: true, force: true }))
@@ -42,7 +43,7 @@ describe('loadSkills', () => {
   })
 
   it('later dirs override earlier ones for same name', async () => {
-    const DIR2 = '/tmp/ra-test-skills-2'
+    const DIR2 = tmpdir('ra-test-skills-2')
     mkdirSync(`${TEST_DIR}/greet`, { recursive: true })
     mkdirSync(`${DIR2}/greet`, { recursive: true })
     writeFileSync(`${TEST_DIR}/greet/SKILL.md`, '---\nname: greet\ndescription: First\n---\nFirst')

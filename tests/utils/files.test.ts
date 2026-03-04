@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { fileToContentPart } from '../../src/utils/files'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
+import { tmpdir } from '../tmpdir'
 
-const TEST_DIR = '/tmp/ra-files-test'
+const TEST_DIR = tmpdir('ra-files-test')
 
 beforeEach(() => mkdirSync(TEST_DIR, { recursive: true }))
 afterEach(() => rmSync(TEST_DIR, { recursive: true, force: true }))

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { SessionStorage } from '../../src/storage/sessions'
+import { tmpdir } from '../tmpdir'
 
-const TEST_PATH = '/tmp/ra-test-sessions'
+const TEST_PATH = tmpdir('ra-test-sessions')
 
 describe('SessionStorage', () => {
   let storage: SessionStorage

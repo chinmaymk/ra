@@ -4,8 +4,9 @@ import { Repl } from '../../src/interfaces/repl'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import { SessionStorage } from '../../src/storage/sessions'
 import type { IProvider } from '../../src/providers/types'
+import { tmpdir } from '../tmpdir'
 
-const TEST_STORAGE = '/tmp/ra-repl-test'
+const TEST_STORAGE = tmpdir('ra-repl-test')
 
 function mockProvider(text: string): IProvider {
   return {
