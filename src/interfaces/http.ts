@@ -3,6 +3,7 @@ import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
+import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
 
 export interface HttpOptions {
@@ -17,6 +18,7 @@ export interface HttpOptions {
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
   thinking?: 'low' | 'medium' | 'high'
+  compaction?: CompactionConfig
 }
 
 export class HttpServer {
@@ -109,6 +111,7 @@ export class HttpServer {
       maxIterations: this.options.maxIterations,
       sessionId: body.sessionId,
       thinking: this.options.thinking,
+      compaction: this.options.compaction,
     })
 
     const result = await loop.run(messages)
@@ -159,6 +162,7 @@ export class HttpServer {
           maxIterations: opts.maxIterations,
           sessionId: body.sessionId,
           thinking: opts.thinking,
+          compaction: opts.compaction,
         })
 
         try {

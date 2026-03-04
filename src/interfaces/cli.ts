@@ -1,6 +1,7 @@
 import type { IProvider, IMessage, ContentPart } from '../providers/types'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
+import type { CompactionConfig } from '../agent/context-compaction'
 import type { Skill } from '../skills/types'
 import { AgentLoop } from '../agent/loop'
 import { buildSkillMessages } from '../skills/runner'
@@ -19,10 +20,11 @@ export interface CliOptions {
   maxIterations?: number
   onChunk?: (text: string) => void
   thinking?: 'low' | 'medium' | 'high'
+  compaction?: CompactionConfig
 }
 
 export async function runCli(options: CliOptions): Promise<void> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, onChunk = (t) => process.stdout.write(t), thinking } = options
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, onChunk = (t) => process.stdout.write(t), thinking, compaction } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -38,7 +40,7 @@ export async function runCli(options: CliOptions): Promise<void> {
   initialMessages.push({ role: 'user', content })
 
   const loop = new AgentLoop({
-    provider, tools, model, maxIterations, thinking,
+    provider, tools, model, maxIterations, thinking, compaction,
     middleware: {
       ...middleware,
       onStreamChunk: [

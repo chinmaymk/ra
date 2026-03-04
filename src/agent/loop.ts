@@ -2,6 +2,7 @@ import type { IProvider, IMessage, IToolCall } from '../providers/types'
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
+import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
 import { randomUUID } from 'crypto'
 
 export interface AgentLoopOptions {
@@ -12,6 +13,7 @@ export interface AgentLoopOptions {
   middleware?: Partial<MiddlewareConfig>
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
+  compaction?: CompactionConfig
 }
 
 export interface LoopResult {
@@ -42,6 +44,12 @@ export class AgentLoop {
     this.sessionId = options.sessionId ?? randomUUID()
     this.middleware = { ...EMPTY_MW, ...options.middleware }
     this.thinking = options.thinking
+    if (options.compaction?.enabled) {
+      this.middleware.beforeModelCall = [
+        createCompactionMiddleware(this.provider, options.compaction),
+        ...this.middleware.beforeModelCall,
+      ]
+    }
   }
 
   async run(initialMessages: IMessage[]): Promise<LoopResult> {

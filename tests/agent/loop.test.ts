@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import { AgentLoop } from '../../src/agent/loop'
-import type { IProvider, StreamChunk, ChatRequest } from '../../src/providers/types'
+import type { IProvider, StreamChunk, ChatRequest, ChatResponse } from '../../src/providers/types'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 
 function mockProvider(responses: StreamChunk[][]): IProvider {
@@ -295,5 +295,50 @@ describe('AgentLoop', () => {
     const r2 = await loop.run([{ role: 'user', content: 'second' }])
     expect(r1.messages.at(-1)?.content).toBe('run1')
     expect(r2.messages.at(-1)?.content).toBe('run2')
+  })
+
+  it('compacts messages when exceeding token threshold', async () => {
+    let chatCallCount = 0
+    let streamCallCount = 0
+    const longContent = 'x'.repeat(400) // 100 tokens per message
+
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async (): Promise<ChatResponse> => {
+        chatCallCount++
+        return { message: { role: 'assistant', content: 'Summary of prior conversation.' } }
+      },
+      async *stream() {
+        streamCallCount++
+        if (streamCallCount <= 5) {
+          yield { type: 'tool_call_start' as const, id: `tc${streamCallCount}`, name: 'echo' }
+          yield { type: 'tool_call_delta' as const, id: `tc${streamCallCount}`, argsDelta: '{}' }
+          yield { type: 'done' as const }
+        } else {
+          yield { type: 'text' as const, delta: 'final answer' }
+          yield { type: 'done' as const }
+        }
+      },
+    }
+
+    const tools = new ToolRegistry()
+    tools.register({ name: 'echo', description: '', inputSchema: {}, execute: async () => longContent })
+
+    const loop = new AgentLoop({
+      provider,
+      tools,
+      maxIterations: 10,
+      compaction: { enabled: true, threshold: 0.8, maxTokens: 200, contextWindow: 1000 },
+    })
+
+    const result = await loop.run([
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: 'Do things' },
+    ])
+
+    // provider.chat should have been called at least once for summarization
+    expect(chatCallCount).toBeGreaterThan(0)
+    // Should still complete normally
+    expect(result.messages.at(-1)?.content).toBe('final answer')
   })
 })

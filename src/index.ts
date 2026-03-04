@@ -128,7 +128,7 @@ async function main(): Promise<void> {
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, middleware })
+    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, middleware, compaction: config.compaction })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
@@ -184,6 +184,7 @@ async function main(): Promise<void> {
       maxIterations: config.maxIterations,
       middleware,
       thinking: config.thinking,
+      compaction: config.compaction,
     })
     process.stdout.write('\n')
     await shutdown()
@@ -200,6 +201,7 @@ async function main(): Promise<void> {
       maxIterations: config.maxIterations,
       middleware,
       thinking: config.thinking,
+      compaction: config.compaction,
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${config.http.port}`)
@@ -216,6 +218,7 @@ async function main(): Promise<void> {
       sessionId: parsed.meta.resume,
       middleware,
       thinking: config.thinking,
+      compaction: config.compaction,
     })
     await repl.start()
     await shutdown()

@@ -6,6 +6,7 @@ import type { MiddlewareConfig, Middleware, StreamChunkContext, ToolExecutionCon
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
+import type { CompactionConfig } from '../agent/context-compaction'
 import * as tui from './tui'
 
 export interface ReplOptions {
@@ -19,6 +20,7 @@ export interface ReplOptions {
   maxIterations?: number
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
+  compaction?: CompactionConfig
 }
 
 export class Repl {
@@ -102,6 +104,7 @@ export class Repl {
       maxIterations: this.options.maxIterations,
       sessionId: this.sessionId,
       thinking: this.options.thinking,
+      compaction: this.options.compaction,
       middleware: {
         ...userMw,
         onStreamChunk: [
