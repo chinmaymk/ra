@@ -79,6 +79,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'openai-base-url':             { type: 'string' },
       'google-base-url':             { type: 'string' },
       'ollama-host':                 { type: 'string' },
+      'azure-endpoint':              { type: 'string' },
+      'azure-deployment':            { type: 'string' },
     },
     strict: false,
     allowPositionals: true,
@@ -125,6 +127,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values['openai-base-url'])    set(['providers', 'openai', 'baseURL'], values['openai-base-url'])
   if (values['google-base-url'])    set(['providers', 'google', 'baseURL'], values['google-base-url'])
   if (values['ollama-host'])        set(['providers', 'ollama', 'host'], values['ollama-host'])
+  if (values['azure-endpoint'])    set(['providers', 'azure', 'endpoint'], values['azure-endpoint'])
+  if (values['azure-deployment'])  set(['providers', 'azure', 'deployment'], values['azure-deployment'])
 
   return {
     config: r as Partial<RaConfig>,

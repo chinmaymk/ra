@@ -163,6 +163,18 @@ describe('parseArgs', () => {
     })
   })
 
+  describe('Azure provider flags', () => {
+    it('--azure-endpoint sets providers.azure.endpoint', () => {
+      const r = parseArgs(dev('--azure-endpoint', 'https://myresource.openai.azure.com/'))
+      expect((r.config as any).providers?.azure?.endpoint).toBe('https://myresource.openai.azure.com/')
+    })
+
+    it('--azure-deployment sets providers.azure.deployment', () => {
+      const r = parseArgs(dev('--azure-deployment', 'my-gpt4o'))
+      expect((r.config as any).providers?.azure?.deployment).toBe('my-gpt4o')
+    })
+  })
+
   describe('edge cases', () => {
     it('empty argv', () => {
       const r = parseArgs(['ra'])
