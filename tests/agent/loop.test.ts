@@ -348,6 +348,109 @@ describe('AgentLoop', () => {
     expect(errorPhases).toHaveLength(0)
   })
 
+  it('compaction persists across loop iterations (messages written back)', async () => {
+    // Bug: compaction only modified request copy, not loop's canonical messages array.
+    // result.messages grew unboundedly even though provider saw compacted requests.
+    let streamCallCount = 0
+    const longContent = 'x'.repeat(800) // ~200 tokens
+
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async (): Promise<ChatResponse> => {
+        return { message: { role: 'assistant', content: 'Summary.' } }
+      },
+      async *stream() {
+        streamCallCount++
+        if (streamCallCount <= 3) {
+          yield { type: 'tool_call_start' as const, id: `tc${streamCallCount}`, name: 'echo' }
+          yield { type: 'tool_call_delta' as const, id: `tc${streamCallCount}`, argsDelta: '{}' }
+          yield { type: 'done' as const }
+        } else {
+          yield { type: 'text' as const, delta: 'done' }
+          yield { type: 'done' as const }
+        }
+      },
+    }
+
+    const tools = new ToolRegistry()
+    tools.register({ name: 'echo', description: '', inputSchema: {}, execute: async () => longContent })
+
+    const loop = new AgentLoop({
+      provider, tools, maxIterations: 10,
+      compaction: { enabled: true, threshold: 0.8, maxTokens: 100, contextWindow: 500 },
+    })
+
+    const result = await loop.run([
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: 'Do things' },
+    ])
+
+    // Without fix: result.messages has 9 entries (2 initial + 3*(asst+tool) + final asst)
+    // With fix: compaction persists, so result.messages is reduced
+    const withoutCompaction = 2 + 3 * 2 + 1 // 9
+    expect(result.messages.length).toBeLessThan(withoutCompaction)
+  })
+
+  it('handles parallel tool calls — both execute and both results returned', async () => {
+    const executedTools: string[] = []
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'tool_a' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{"x":1}' },
+        { type: 'tool_call_start', id: 'tc2', name: 'tool_b' },
+        { type: 'tool_call_delta', id: 'tc2', argsDelta: '{"y":2}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'both done' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'tool_a', description: '', inputSchema: {}, execute: async () => { executedTools.push('a'); return 'result_a' } })
+    tools.register({ name: 'tool_b', description: '', inputSchema: {}, execute: async () => { executedTools.push('b'); return 'result_b' } })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+
+    expect(executedTools).toContain('a')
+    expect(executedTools).toContain('b')
+    const toolResults = result.messages.filter(m => m.role === 'tool')
+    expect(toolResults).toHaveLength(2)
+    expect(toolResults.some(m => m.content === 'result_a')).toBe(true)
+    expect(toolResults.some(m => m.content === 'result_b')).toBe(true)
+  })
+
+  it('unknown tool name produces isError tool result instead of crashing', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'nonexistent_tool' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'handled' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'use unknown tool' }])
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    expect(toolResult).toBeDefined()
+    expect(toolResult!.isError).toBe(true)
+    expect(toolResult!.content).toContain('nonexistent_tool')
+  })
+
+  it('malformed tool args (invalid JSON) are handled as empty object — tool still executes', async () => {
+    let receivedInput: unknown
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'capture' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: 'not valid json{{{' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'capture', description: '', inputSchema: {}, execute: async (input) => { receivedInput = input; return 'ok' } })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    await loop.run([{ role: 'user', content: 'go' }])
+    expect(receivedInput).toEqual({})
+  })
+
   it('compacts messages when exceeding token threshold', async () => {
     let chatCallCount = 0
     let streamCallCount = 0
