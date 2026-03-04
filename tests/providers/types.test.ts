@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, expectTypeOf } from 'bun:test'
 import type { IProvider, ChatRequest, IMessage, ITool, StreamChunk, ContentPart, TokenUsage } from '../../src/providers/types'
 
 describe('provider types', () => {
@@ -30,5 +30,26 @@ describe('provider types', () => {
       { type: 'done' },
     ]
     expect(chunks).toHaveLength(5)
+  })
+})
+
+describe('types', () => {
+  it('ChatRequest has thinking field', () => {
+    const req: ChatRequest = {
+      model: 'x',
+      messages: [],
+      thinking: 'medium',
+    }
+    expectTypeOf(req.thinking).toEqualTypeOf<'low' | 'medium' | 'high' | undefined>()
+  })
+
+  it('StreamChunk accepts thinking variant', () => {
+    const chunk: StreamChunk = { type: 'thinking', delta: 'hmm...' }
+    expectTypeOf(chunk).toMatchTypeOf<StreamChunk>()
+  })
+
+  it('TokenUsage has thinkingTokens', () => {
+    const u: TokenUsage = { inputTokens: 10, outputTokens: 5, thinkingTokens: 200 }
+    expectTypeOf(u.thinkingTokens).toEqualTypeOf<number | undefined>()
   })
 })

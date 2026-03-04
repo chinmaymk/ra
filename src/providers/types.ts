@@ -36,10 +36,12 @@ export interface ITool {
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number
+  thinkingTokens?: number
 }
 
 export type StreamChunk =
   | { type: 'text'; delta: string }
+  | { type: 'thinking'; delta: string }
   | { type: 'tool_call_start'; id: string; name: string }
   | { type: 'tool_call_delta'; id: string; argsDelta: string }
   | { type: 'tool_call_end'; id: string }
@@ -49,6 +51,7 @@ export interface ChatRequest {
   model: string
   messages: IMessage[]
   tools?: ITool[]
+  thinking?: 'low' | 'medium' | 'high'
   providerOptions?: Record<string, unknown>
 }
 
