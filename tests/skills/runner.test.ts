@@ -90,21 +90,29 @@ describe('runSkillScript - shebang override', () => {
     const out = await runSkillScript(p, ENV)
     expect(out).not.toBe('none')
   })
+
+  it('shebang takes priority over extension: .py file with #!/usr/bin/env bun runs via bun', async () => {
+    const p = `${TEST_DIR}/shebang.py`
+    writeFileSync(p, '#!/usr/bin/env bun\nprocess.stdout.write(process.versions.bun ?? "none")')
+    const out = await runSkillScript(p, ENV)
+    expect(out).not.toBe('none')
+  })
 })
 
 describe('runSkillScript - runtime fallback', () => {
-  it('falls back from node to bun when node is absent', async () => {
+  ;(hasNode ? it : it.skip)('falls back from bun to node when bun is absent', async () => {
     const p = `${TEST_DIR}/fallback.js`
-    writeFileSync(p, 'process.stdout.write(process.versions.bun ?? "none")')
+    writeFileSync(p, 'process.stdout.write("ok")')
 
+    const nodePath = Bun.which('node')
     const spy = spyOn(Bun, 'which').mockImplementation((name: string) => {
-      if (name === 'node') return null
-      if (name === 'bun') return '/usr/bin/bun'
+      if (name === 'bun') return null
+      if (name === 'node') return nodePath
       return null
     })
     try {
       const out = await runSkillScript(p, ENV)
-      expect(out).not.toBe('none')
+      expect(out.trim()).toBe('ok')
     } finally {
       spy.mockRestore()
     }

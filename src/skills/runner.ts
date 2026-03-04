@@ -54,7 +54,7 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
     case 'py':  return buildCmd(findRuntime(['python3', 'python']), scriptPath)
     case 'go':  return ['go', 'run', scriptPath]
     case 'js':
-    case 'ts':  return buildCmd(findRuntime(['node', 'bun', 'deno']), scriptPath)
+    case 'ts':  return buildCmd(findRuntime(['bun', 'node', 'deno']), scriptPath)
     default:    throw new Error(`Unsupported script extension: .${ext ?? ''}`)
   }
 }
