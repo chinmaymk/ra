@@ -26,6 +26,7 @@ export const defaultConfig: RaConfig = {
     ollama: { host: 'http://localhost:11434' },
     bedrock: { region: 'us-east-1' },
     azure: { endpoint: '', deployment: '', apiKey: '' },
+    gateway: { url: '' },
   },
   storage: {
     path: '.ra/sessions',

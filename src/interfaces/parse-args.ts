@@ -81,6 +81,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'ollama-host':                 { type: 'string' },
       'azure-endpoint':              { type: 'string' },
       'azure-deployment':            { type: 'string' },
+      // Gateway (OpenAI-compatible AI gateways)
+      'gateway-url':                 { type: 'string' },
+      'gateway-header':              { type: 'string', multiple: true },
     },
     strict: false,
     allowPositionals: true,
@@ -129,6 +132,17 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values['ollama-host'])        set(['providers', 'ollama', 'host'], values['ollama-host'])
   if (values['azure-endpoint'])    set(['providers', 'azure', 'endpoint'], values['azure-endpoint'])
   if (values['azure-deployment'])  set(['providers', 'azure', 'deployment'], values['azure-deployment'])
+
+  // Gateway
+  if (values['gateway-url'])       set(['providers', 'gateway', 'url'], values['gateway-url'])
+  if (values['gateway-header']) {
+    const headers: Record<string, string> = {}
+    for (const h of values['gateway-header'] as string[]) {
+      const idx = h.indexOf(':')
+      if (idx > 0) headers[h.slice(0, idx).trim()] = h.slice(idx + 1).trim()
+    }
+    if (Object.keys(headers).length) set(['providers', 'gateway', 'headers'], headers)
+  }
 
   return {
     config: r as Partial<RaConfig>,

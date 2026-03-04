@@ -6,6 +6,7 @@ import { GoogleProvider, type GoogleProviderOptions } from './google'
 import { OllamaProvider, type OllamaProviderOptions } from './ollama'
 import { BedrockProvider, type BedrockProviderOptions } from './bedrock'
 import { AzureProvider, type AzureProviderOptions } from './azure'
+import { GatewayProvider, type GatewayProviderOptions } from './gateway'
 
 type ProviderOptionsMap = {
   anthropic: AnthropicProviderOptions
@@ -14,6 +15,7 @@ type ProviderOptionsMap = {
   ollama: OllamaProviderOptions
   bedrock: BedrockProviderOptions
   azure: AzureProviderOptions
+  gateway: GatewayProviderOptions
 }
 
 export type ProviderConfig = {
@@ -52,6 +54,10 @@ export function createProvider(config: ProviderConfig): IProvider {
     case 'azure': {
       const { provider: _, ...opts } = config
       return new AzureProvider(opts)
+    }
+    case 'gateway': {
+      const { provider: _, ...opts } = config
+      return new GatewayProvider(opts)
     }
   }
 }

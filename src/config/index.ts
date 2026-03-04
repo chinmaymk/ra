@@ -123,6 +123,13 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_AZURE_DEPLOYMENT !== undefined) set(['providers', 'azure', 'deployment'], env.RA_AZURE_DEPLOYMENT)
   if (env.RA_AZURE_API_VERSION !== undefined) set(['providers', 'azure', 'apiVersion'], env.RA_AZURE_API_VERSION)
 
+  // Gateway (OpenAI-compatible AI gateways: Tailscale Aperture, Databricks, LiteLLM, etc.)
+  if (env.RA_GATEWAY_URL !== undefined)     set(['providers', 'gateway', 'url'], env.RA_GATEWAY_URL)
+  if (env.RA_GATEWAY_API_KEY !== undefined) set(['providers', 'gateway', 'apiKey'], env.RA_GATEWAY_API_KEY)
+  if (env.RA_GATEWAY_HEADERS !== undefined) {
+    try { set(['providers', 'gateway', 'headers'], JSON.parse(env.RA_GATEWAY_HEADERS)) } catch {}
+  }
+
   return r
 }
 

@@ -7,6 +7,7 @@ const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
 export interface AnthropicProviderOptions {
   apiKey: string
   baseURL?: string
+  headers?: Record<string, string>
 }
 
 export class AnthropicProvider implements IProvider {
@@ -14,7 +15,11 @@ export class AnthropicProvider implements IProvider {
   private client: Anthropic
 
   constructor(options: AnthropicProviderOptions) {
-    this.client = new Anthropic({ apiKey: options.apiKey, baseURL: options.baseURL })
+    this.client = new Anthropic({
+      apiKey: options.apiKey,
+      baseURL: options.baseURL,
+      ...(options.headers && { defaultHeaders: options.headers }),
+    })
   }
 
   buildParams(request: ChatRequest) {

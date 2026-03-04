@@ -4,6 +4,7 @@ import type { IProvider, IMessage, ITool, ChatRequest, ChatResponse, StreamChunk
 export interface OpenAIProviderOptions {
   apiKey: string
   baseURL?: string
+  headers?: Record<string, string>
 }
 
 export class OpenAIProvider implements IProvider {
@@ -11,7 +12,11 @@ export class OpenAIProvider implements IProvider {
   protected client: OpenAI
 
   constructor(options: OpenAIProviderOptions) {
-    this.client = new OpenAI({ apiKey: options.apiKey, baseURL: options.baseURL })
+    this.client = new OpenAI({
+      apiKey: options.apiKey,
+      baseURL: options.baseURL,
+      ...(options.headers && { defaultHeaders: options.headers }),
+    })
   }
 
   buildParams(request: ChatRequest): OpenAI.Chat.ChatCompletionCreateParams {
