@@ -108,6 +108,34 @@ describe('SessionStorage', () => {
     expect(list).toHaveLength(7)
   })
 
+  it('prune() respects maxSessions exactly — keeps newest, deletes oldest', async () => {
+    const maxSessions = 3
+    const limitedStorage = new SessionStorage(TEST_PATH + '-limited')
+    await limitedStorage.init()
+
+    // Create 5 sessions
+    const ids: string[] = []
+    for (let i = 0; i < 5; i++) {
+      const session = await limitedStorage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+      ids.push(session.id)
+      // Small delay so created timestamp differs
+      await new Promise(r => setTimeout(r, 10))
+    }
+
+    await limitedStorage.prune({ maxSessions })
+    const remaining = await limitedStorage.list()
+    expect(remaining).toHaveLength(maxSessions)
+    // The newest sessions should survive
+    expect(remaining.map(s => s.id)).toContain(ids[4])
+    expect(remaining.map(s => s.id)).toContain(ids[3])
+    expect(remaining.map(s => s.id)).toContain(ids[2])
+    // The oldest should be gone
+    expect(remaining.map(s => s.id)).not.toContain(ids[0])
+    expect(remaining.map(s => s.id)).not.toContain(ids[1])
+
+    await Bun.$`rm -rf ${TEST_PATH + '-limited'}`.quiet()
+  })
+
   it('readMessages skips malformed JSONL lines instead of throwing', async () => {
     const { join } = await import('path')
     const { appendFile: nodeAppendFile } = await import('node:fs/promises')
