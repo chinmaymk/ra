@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Type check
+        run: bun tsc --noEmit
+
+      - name: Test
+        run: bun test
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            asset: ra-linux-x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+            asset: ra-linux-arm64
+          - os: macos-latest
+            target: bun-darwin-x64
+            asset: ra-darwin-x64
+          - os: macos-latest
+            target: bun-darwin-arm64
+            asset: ra-darwin-arm64
+          - os: windows-latest
+            target: bun-windows-x64
+            asset: ra-windows-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: bun build src/index.ts --compile --target ${{ matrix.target }} --outfile ${{ matrix.asset }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find dist/ -type f -exec mv {} release/ \;
+          chmod +x release/ra-linux-* release/ra-darwin-*
+          ls -lh release/
+
+      - name: Create checksums
+        working-directory: release
+        run: sha256sum * > checksums.txt
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
