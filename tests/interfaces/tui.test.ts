@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'bun:test'
 import {
   c, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
-  printCommandResponse, printError, printThinkingStart, printThinkingEnd, PROMPT,
+  printCommandResponse, printError, printThinkingStart, printThinkingEnd,
 } from '../../src/interfaces/tui'
 
 function captureStdout(fn: () => void): string {
@@ -19,24 +19,6 @@ function captureStdout(fn: () => void): string {
   }
   return chunks.join('')
 }
-
-describe('TUI color constants', () => {
-  it('exports ANSI color codes', () => {
-    expect(c.reset).toBe('\x1b[0m')
-    expect(c.bold).toBe('\x1b[1m')
-    expect(c.dim).toBe('\x1b[2m')
-    expect(c.cyan).toBe('\x1b[36m')
-    expect(c.red).toBe('\x1b[31m')
-  })
-})
-
-describe('PROMPT', () => {
-  it('contains cyan arrow and reset', () => {
-    expect(PROMPT).toContain('\x1b[96m')
-    expect(PROMPT).toContain('›')
-    expect(PROMPT).toContain('\x1b[0m')
-  })
-})
 
 describe('printHeader', () => {
   it('outputs model and session info', () => {

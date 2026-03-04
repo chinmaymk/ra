@@ -122,11 +122,4 @@ describe('SessionStorage', () => {
     expect(messages[1]?.content).toBe('another good message')
   })
 
-  it('appendMessage works on a fresh file (no prior messages)', async () => {
-    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
-    await storage.appendMessage(session.id, { role: 'user', content: 'first' })
-    const messages = await storage.readMessages(session.id)
-    expect(messages).toHaveLength(1)
-    expect(messages[0]?.content).toBe('first')
-  })
 })

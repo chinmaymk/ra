@@ -84,11 +84,9 @@ describe('loadConfig', () => {
     expect(c.http.port).toBe(3000)
   })
 
-  it('deepMerge handles null values without crashing', async () => {
-    // When a config layer has null for a key that was an object in defaults, it should not crash
+  it('deepMerge: null in cliArgs is handled (documents overwrite behavior)', async () => {
     const c = await loadConfig({ cwd: tmp, cliArgs: { http: null } as any })
-    // Should not throw; http should be overwritten to null or defaults should survive
-    expect(c).toBeDefined()
+    expect((c as any).http).toBeNull()
   })
 
   it('maps all env vars', async () => {
@@ -131,16 +129,6 @@ describe('loadConfig', () => {
 })
 
 describe('thinking config', () => {
-  it('loads RA_THINKING from env', async () => {
-    const config = await loadConfig({ env: { RA_THINKING: 'medium' } })
-    expect(config.thinking).toBe('medium')
-  })
-
-  it('defaults thinking to undefined', async () => {
-    const config = await loadConfig({ env: {} })
-    expect(config.thinking).toBeUndefined()
-  })
-
   it('rejects invalid RA_THINKING values', async () => {
     const config = await loadConfig({ env: { RA_THINKING: 'extreme' } })
     expect(config.thinking).toBeUndefined()

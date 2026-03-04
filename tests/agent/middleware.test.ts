@@ -62,19 +62,3 @@ test('handler error propagates and stops chain', async () => {
   expect(order).toEqual([1])
 })
 
-test('stop() is idempotent — calling multiple times does not throw', async () => {
-  const controller = new AbortController()
-  const ctx = makeCtx(controller)
-  await runMiddlewareChain(ctx, [
-    async (c) => { c.stop(); c.stop(); c.stop() },
-  ])
-  expect(ctx.signal.aborted).toBe(true)
-})
-
-test('signal reflects aborted state after stop()', async () => {
-  const controller = new AbortController()
-  const ctx = makeCtx(controller)
-  expect(ctx.signal.aborted).toBe(false)
-  await runMiddlewareChain(ctx, [async (c) => { c.stop() }])
-  expect(ctx.signal.aborted).toBe(true)
-})

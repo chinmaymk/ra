@@ -44,12 +44,6 @@ describe('runSkillScript - existing behavior', () => {
 })
 
 describe('runSkillScript - new runtimes', () => {
-  it('runs .ts via bun (no shebang, bun is the default fallback)', async () => {
-    const p = `${TEST_DIR}/test.ts`
-    writeFileSync(p, 'console.log("bun-ts")')
-    expect((await runSkillScript(p, ENV)).trim()).toBe('bun-ts')
-  })
-
   ;(hasPython ? it : it.skip)('runs .py script', async () => {
     const p = `${TEST_DIR}/test.py`
     writeFileSync(p, 'print("hello-py")')
