@@ -1,0 +1,28 @@
+const MODEL_FAMILIES: [string, number][] = [
+  ['claude-sonnet', 200_000],
+  ['claude-haiku', 200_000],
+  ['claude-opus', 200_000],
+  ['claude-3.5', 200_000],
+  ['claude-3', 200_000],
+  ['gpt-4o', 128_000],
+  ['gpt-4-turbo', 128_000],
+  ['gpt-4', 8_192],
+  ['gpt-3.5', 16_385],
+  ['o1', 200_000],
+  ['o3', 200_000],
+  ['gemini-2.5', 1_048_576],
+  ['gemini-2.0', 1_048_576],
+  ['gemini-1.5', 1_048_576],
+]
+
+const SORTED_FAMILIES = MODEL_FAMILIES.sort((a, b) => b[0].length - a[0].length)
+
+const DEFAULT_CONTEXT_WINDOW = 128_000
+
+export function getContextWindowSize(model: string, userOverride?: number): number {
+  if (userOverride !== undefined) return userOverride
+  for (const [prefix, size] of SORTED_FAMILIES) {
+    if (model.startsWith(prefix)) return size
+  }
+  return DEFAULT_CONTEXT_WINDOW
+}
