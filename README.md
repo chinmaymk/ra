@@ -35,16 +35,22 @@ ra --provider openai --model gpt-4.1 "Explain this error"
 ra
 ```
 
+## Features
+
+- **Config-driven identity** — One binary becomes a code reviewer, a support bot, a CI agent, or anything else. Drop a `ra.config.yml` and the agent reshapes itself.
+- **Provider portable** — Anthropic, OpenAI, Google, Bedrock, Ollama. Same config, any backend. Switch with a flag when one is down or slow.
+- **Skills** — Package expertise into reusable bundles with instructions, scripts, and reference docs. Inject at runtime or wire always-on.
+- **MCP in both directions** — Pull tools from external MCP servers *and* expose ra itself as a tool for Cursor, Claude Desktop, or your own agents.
+- **Four deployment modes** — CLI for scripts, REPL for conversations, HTTP for apps, MCP for agent-to-agent. One binary, every context.
+
 ## Why ra?
 
-Most AI tools lock you into one shape. ra is the opposite — an **agent primitive** that becomes whatever you configure it to be:
+Most AI tools lock you into one shape. ra is the opposite — it becomes whatever you configure it to be:
 
 - **Need a code reviewer?** Write a `ra.config.yml` with the right system prompt and skills.
 - **Need a support bot?** Same binary, different config.
 - **Rate-limited on Anthropic?** Flip `RA_PROVIDER=openai` and keep going.
 - **Want to run locally?** Point it at Ollama. No code changes.
-
-ra wraps a streaming, middleware-extensible agent loop (model → tool execution → repeat) behind a clean interface. It's built to be composed, scripted, and embedded.
 
 ## Install
 
