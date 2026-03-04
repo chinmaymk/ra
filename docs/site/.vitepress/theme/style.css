@@ -82,6 +82,23 @@
   border-radius: 8px;
 }
 
+/* Wider content area */
+:root {
+  --vp-layout-max-width: 1520px;
+}
+
+.VPDoc .container {
+  max-width: none !important;
+}
+
+.VPDoc.has-aside .content-container {
+  max-width: 960px !important;
+}
+
+.VPDoc:not(.has-aside) .content-container {
+  max-width: 1120px !important;
+}
+
 /* Local search modal */
 .dark .VPLocalSearchBox {
   --vp-local-search-bg: #002b36;
