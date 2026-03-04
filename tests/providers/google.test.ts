@@ -4,7 +4,6 @@ import { extractSystemMessages } from '../../src/providers/utils'
 
 describe('GoogleProvider', () => {
   it('extracts system messages from message array', () => {
-    const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
       { role: 'system' as const, content: 'You are helpful' },
       { role: 'user' as const, content: 'hello' },
@@ -16,7 +15,6 @@ describe('GoogleProvider', () => {
   })
 
   it('extracts multiple system messages joined with newline', () => {
-    const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
       { role: 'system' as const, content: 'First instruction' },
       { role: 'system' as const, content: 'Second instruction' },
