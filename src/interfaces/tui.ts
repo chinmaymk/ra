@@ -68,9 +68,8 @@ let spinnerFrame = 0
 export function startSpinner(): void {
   if (spinnerTimer) return
   spinnerFrame = 0
-  process.stdout.write('\n')
   const tick = () => {
-    process.stdout.write(`\r  ${c.dim}${SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]}${c.reset}`)
+    process.stdout.write(`\r${c.dim}${SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]}${c.reset}`)
     spinnerFrame++
   }
   tick()
@@ -84,7 +83,7 @@ export function stopSpinner(silent = false): void {
   if (silent) {
     process.stdout.write('\r\x1b[K')
   } else {
-    process.stdout.write(`\r  ${c.dim}${c.cyan}ra${c.reset}${c.dim} ›${c.reset} `)
+    process.stdout.write(`\r${c.dim}${c.cyan}›${c.reset} `)
   }
 }
 
@@ -93,7 +92,7 @@ export function closeAssistantBox(): void {
 }
 
 export function printToolCall(name: string): void {
-  process.stdout.write(`\n  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
+  process.stdout.write(`  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
 }
 
 export function printToolResult(name: string, ms: number): void {
@@ -116,7 +115,7 @@ export function printError(msg: string): void {
 export const PROMPT = `\x1b[96m›\x1b[0m `
 
 export function printThinkingStart(): void {
-  process.stdout.write(`\n  ${c.dim}╌╌ thinking ╌╌${c.reset}\n  ${c.dim}`)
+  process.stdout.write(`  ${c.dim}╌╌ thinking ╌╌${c.reset}\n  ${c.dim}`)
 }
 
 export function printThinkingEnd(): void {

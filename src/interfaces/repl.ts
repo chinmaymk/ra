@@ -91,6 +91,7 @@ export class Repl {
     let boxOpened = false
     let thinkingOpened = false
     const toolStartTimes = new Map<string, number>()
+    process.stdout.write('\n')
     tui.startSpinner()
     const userMw = this.options.middleware ?? {}
 
@@ -124,11 +125,11 @@ export class Repl {
           ...(userMw.onStreamChunk ?? []),
         ],
         beforeToolExecution: [
-          async (ctx: ToolExecutionContext) => { toolStartTimes.set(ctx.toolCall.id, Date.now()); tui.printToolCall(ctx.toolCall.name) },
+          async (ctx: ToolExecutionContext) => { tui.stopSpinner(true); toolStartTimes.set(ctx.toolCall.id, Date.now()); tui.printToolCall(ctx.toolCall.name) },
           ...(userMw.beforeToolExecution ?? []),
         ],
         afterToolExecution: [
-          async (ctx: ToolResultContext) => { tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now())) },
+          async (ctx: ToolResultContext) => { tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now())); if (!boxOpened) tui.startSpinner() },
           ...(userMw.afterToolExecution ?? []),
         ],
       },
