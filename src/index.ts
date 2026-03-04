@@ -183,6 +183,7 @@ async function main(): Promise<void> {
       skillMap,
       maxIterations: config.maxIterations,
       middleware,
+      thinking: config.thinking,
     })
     process.stdout.write('\n')
     await shutdown()
@@ -198,6 +199,7 @@ async function main(): Promise<void> {
       skillMap,
       maxIterations: config.maxIterations,
       middleware,
+      thinking: config.thinking,
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${config.http.port}`)
@@ -213,6 +215,7 @@ async function main(): Promise<void> {
       maxIterations: config.maxIterations,
       sessionId: parsed.meta.resume,
       middleware,
+      thinking: config.thinking,
     })
     await repl.start()
     await shutdown()

@@ -18,6 +18,7 @@ export interface ReplOptions {
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
   sessionId?: string
+  thinking?: 'low' | 'medium' | 'high'
 }
 
 export class Repl {
@@ -98,6 +99,7 @@ export class Repl {
       model: this.options.model,
       maxIterations: this.options.maxIterations,
       sessionId: this.sessionId,
+      thinking: this.options.thinking,
       middleware: {
         ...userMw,
         onStreamChunk: [

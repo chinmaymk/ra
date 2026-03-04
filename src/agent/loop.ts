@@ -11,6 +11,7 @@ export interface AgentLoopOptions {
   model?: string
   middleware?: Partial<MiddlewareConfig>
   sessionId?: string
+  thinking?: 'low' | 'medium' | 'high'
 }
 
 export interface LoopResult {
@@ -31,6 +32,7 @@ export class AgentLoop {
   private model: string
   private middleware: MiddlewareConfig
   private sessionId: string
+  private thinking: 'low' | 'medium' | 'high' | undefined
 
   constructor(options: AgentLoopOptions) {
     this.provider = options.provider
@@ -39,6 +41,7 @@ export class AgentLoop {
     this.model = options.model ?? 'default'
     this.sessionId = options.sessionId ?? randomUUID()
     this.middleware = { ...EMPTY_MW, ...options.middleware }
+    this.thinking = options.thinking
   }
 
   async run(initialMessages: IMessage[]): Promise<LoopResult> {
@@ -59,7 +62,12 @@ export class AgentLoop {
       while (iterations < this.maxIterations) {
         iterations++
 
-        const request = { model: this.model, messages: [...messages], tools: this.tools.all() }
+        const request = {
+          model: this.model,
+          messages: [...messages],
+          tools: this.tools.all(),
+          ...(this.thinking && { thinking: this.thinking }),
+        }
         const modelCallCtx: ModelCallContext = { ...stoppable, request, loop: loopCtx() }
         await runMiddlewareChain(modelCallCtx, this.middleware.beforeModelCall)
         if (signal.aborted) break

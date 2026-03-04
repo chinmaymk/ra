@@ -18,10 +18,11 @@ export interface CliOptions {
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
   onChunk?: (text: string) => void
+  thinking?: 'low' | 'medium' | 'high'
 }
 
 export async function runCli(options: CliOptions): Promise<void> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, onChunk = (t) => process.stdout.write(t) } = options
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, onChunk = (t) => process.stdout.write(t), thinking } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -37,7 +38,7 @@ export async function runCli(options: CliOptions): Promise<void> {
   initialMessages.push({ role: 'user', content })
 
   const loop = new AgentLoop({
-    provider, tools, model, maxIterations,
+    provider, tools, model, maxIterations, thinking,
     middleware: {
       ...middleware,
       onStreamChunk: [

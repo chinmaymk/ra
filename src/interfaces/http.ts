@@ -16,6 +16,7 @@ export interface HttpOptions {
   skillMap?: Map<string, Skill>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
+  thinking?: 'low' | 'medium' | 'high'
 }
 
 export class HttpServer {
@@ -107,6 +108,7 @@ export class HttpServer {
       middleware: this.options.middleware,
       maxIterations: this.options.maxIterations,
       sessionId: body.sessionId,
+      thinking: this.options.thinking,
     })
 
     const result = await loop.run(messages)
@@ -156,6 +158,7 @@ export class HttpServer {
           middleware,
           maxIterations: opts.maxIterations,
           sessionId: body.sessionId,
+          thinking: opts.thinking,
         })
 
         try {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import { AgentLoop } from '../../src/agent/loop'
-import type { IProvider, StreamChunk } from '../../src/providers/types'
+import type { IProvider, StreamChunk, ChatRequest } from '../../src/providers/types'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 
 function mockProvider(responses: StreamChunk[][]): IProvider {
@@ -54,6 +54,22 @@ describe('AgentLoop', () => {
     const loop = new AgentLoop({ provider, tools, maxIterations: 3 })
     const result = await loop.run([{ role: 'user', content: 'go' }])
     expect(result.iterations).toBeLessThanOrEqual(3)
+  })
+
+  it('passes thinking to ChatRequest', async () => {
+    const capturedRequests: ChatRequest[] = []
+    const mockProvider = {
+      name: 'mock',
+      stream: async function*(req: ChatRequest) {
+        capturedRequests.push(req)
+        yield { type: 'done' as const }
+      },
+      chat: async () => ({ message: { role: 'assistant' as const, content: '' } }),
+    }
+    const tools = new ToolRegistry()
+    const loop = new AgentLoop({ provider: mockProvider, tools, model: 'test', thinking: 'low' })
+    await loop.run([{ role: 'user', content: 'hi' }])
+    expect(capturedRequests[0]?.thinking).toBe('low')
   })
 
   it('runs middleware at lifecycle points', async () => {
