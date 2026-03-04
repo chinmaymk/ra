@@ -111,3 +111,24 @@ describe('OpenAIProvider', () => {
     expect(result.toolCalls).toBeUndefined()
   })
 })
+
+describe('thinking / reasoning effort', () => {
+  it('adds reasoning effort to buildParams when thinking is set', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({
+      model: 'o3',
+      messages: [{ role: 'user' as const, content: 'hi' }],
+      thinking: 'medium',
+    })
+    expect(params.reasoning).toEqual({ effort: 'medium' })
+  })
+
+  it('does not add reasoning when thinking is not set', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({
+      model: 'gpt-4o',
+      messages: [{ role: 'user' as const, content: 'hi' }],
+    })
+    expect(params.reasoning).toBeUndefined()
+  })
+})

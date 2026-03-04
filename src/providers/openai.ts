@@ -21,11 +21,16 @@ export class OpenAIProvider implements IProvider {
     }
     if (request.tools?.length) params.tools = this.mapTools(request.tools)
     if (request.providerOptions) Object.assign(params, request.providerOptions)
+    if (request.thinking) (params as any).reasoning = { effort: request.thinking }
     return params
   }
 
-  private toUsage(u: { prompt_tokens: number; completion_tokens: number }): TokenUsage {
-    return { inputTokens: u.prompt_tokens, outputTokens: u.completion_tokens }
+  private toUsage(u: { prompt_tokens: number; completion_tokens: number; completion_tokens_details?: { reasoning_tokens?: number } }): TokenUsage {
+    return {
+      inputTokens: u.prompt_tokens,
+      outputTokens: u.completion_tokens,
+      ...(u.completion_tokens_details?.reasoning_tokens && { thinkingTokens: u.completion_tokens_details.reasoning_tokens }),
+    }
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
