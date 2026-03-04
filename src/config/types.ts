@@ -34,6 +34,12 @@ export interface RaConfig {
   maxIterations: number
   middleware: Record<string, string[]>
   thinking?: 'low' | 'medium' | 'high'
+  compaction: {
+    enabled: boolean
+    threshold: number      // 0-1, trigger ratio of context window
+    maxTokens?: number     // absolute token trigger, overrides threshold * contextWindow
+    contextWindow?: number // per-provider override for context window size
+  }
 }
 
 export interface McpClientConfig {

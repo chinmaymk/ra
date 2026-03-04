@@ -35,4 +35,8 @@ export const defaultConfig: RaConfig = {
   },
   maxIterations: 50,
   middleware: {},
+  compaction: {
+    enabled: true,
+    threshold: 0.80,
+  },
 }
