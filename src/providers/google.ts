@@ -85,7 +85,7 @@ export class GoogleProvider implements IProvider {
     return messages.map((msg): Content => {
       if (msg.role === 'tool') {
         // toolCallId is formatted as "functionName_counter" — extract the function name for Gemini
-        const toolName = msg.toolCallId!.replace(/_\d+$/, '')
+        const toolName = msg.toolCallId!.substring(0, msg.toolCallId!.lastIndexOf('_'))
         return {
           role: 'user',
           parts: [{ functionResponse: { name: toolName, response: { content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) } } }],
@@ -119,10 +119,18 @@ export class GoogleProvider implements IProvider {
       if (part.type === 'text') return { text: part.text }
       if (part.type === 'image') {
         const src = part.source
-        return src.type === 'base64' ? { inlineData: { mimeType: src.mediaType, data: src.data } } : { fileData: { mimeType: 'image/jpeg', fileUri: src.url } }
+        return src.type === 'base64' ? { inlineData: { mimeType: src.mediaType, data: src.data } } : { fileData: { mimeType: this.inferMimeType(src.url), fileUri: src.url } }
       }
       return { inlineData: { mimeType: part.mimeType, data: typeof part.data === 'string' ? part.data : Buffer.from(part.data).toString('base64') } }
     })
+  }
+
+  private inferMimeType(url: string): string {
+    if (url.endsWith('.png')) return 'image/png'
+    if (url.endsWith('.gif')) return 'image/gif'
+    if (url.endsWith('.webp')) return 'image/webp'
+    if (url.endsWith('.svg')) return 'image/svg+xml'
+    return 'image/jpeg'
   }
 
   mapResponseToMessage(response: GenerateContentResponse): IMessage {
@@ -130,6 +138,7 @@ export class GoogleProvider implements IProvider {
     let textContent = ''
     let counter = 0
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      if ('thought' in part && (part as any).thought) continue
       if ('text' in part && part.text) textContent += part.text
       else if ('functionCall' in part && part.functionCall) {
         const { name, args } = part.functionCall

@@ -439,6 +439,39 @@ describe('GoogleProvider - stream()', () => {
   })
 })
 
+describe('GoogleProvider - additional bug fixes', () => {
+  it('extracts tool name correctly when name contains digits', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'tool' as const, content: 'result', toolCallId: 'get_result_3_0' },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].parts[0].functionResponse.name).toBe('get_result_3')
+  })
+
+  it('excludes thought parts from textContent in mapResponseToMessage', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const response = {
+      candidates: [{ content: { parts: [
+        { thought: true, text: 'thinking...' },
+        { text: 'actual response' },
+      ] } }],
+    }
+    const msg = (provider as any).mapResponseToMessage(response as any)
+    expect(msg.content).toBe('actual response')
+    expect((msg.content as string)).not.toContain('thinking')
+  })
+
+  it('infers image mime type from URL extension', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/photo.png' } },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].fileData.mimeType).toBe('image/png')
+  })
+})
+
 describe('GoogleProvider - tool result ID mapping', () => {
   it('strips counter suffix from toolCallId for functionResponse name', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
