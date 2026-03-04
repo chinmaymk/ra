@@ -259,6 +259,12 @@ describe('GoogleProvider', () => {
     expect(result.content).toBe('')
   })
 
+  it('accepts baseURL option without error', () => {
+    // Behavioral verification happens in integration tests;
+    // this ensures the option is wired up at the type level
+    expect(() => new GoogleProvider({ apiKey: 'test', baseURL: 'http://localhost:9999' })).not.toThrow()
+  })
+
 })
 
 describe('GoogleProvider - chat()', () => {

@@ -113,6 +113,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_OPENAI_API_KEY !== undefined)     set(['providers', 'openai', 'apiKey'], env.RA_OPENAI_API_KEY)
   if (env.RA_OPENAI_BASE_URL !== undefined)    set(['providers', 'openai', 'baseURL'], env.RA_OPENAI_BASE_URL)
   if (env.RA_GOOGLE_API_KEY !== undefined)     set(['providers', 'google', 'apiKey'], env.RA_GOOGLE_API_KEY)
+  if (env.RA_GOOGLE_BASE_URL !== undefined)    set(['providers', 'google', 'baseURL'], env.RA_GOOGLE_BASE_URL)
   if (env.RA_OLLAMA_HOST !== undefined)        set(['providers', 'ollama', 'host'], env.RA_OLLAMA_HOST)
   if (env.RA_BEDROCK_REGION !== undefined)  set(['providers', 'bedrock', 'region'], env.RA_BEDROCK_REGION)
   if (env.RA_BEDROCK_API_KEY !== undefined) set(['providers', 'bedrock', 'apiKey'], env.RA_BEDROCK_API_KEY)

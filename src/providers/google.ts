@@ -7,6 +7,7 @@ const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
 
 export interface GoogleProviderOptions {
   apiKey: string
+  baseURL?: string
 }
 
 export class GoogleProvider implements IProvider {
@@ -14,7 +15,10 @@ export class GoogleProvider implements IProvider {
   private client: GoogleGenerativeAI
 
   constructor(options: GoogleProviderOptions) {
-    this.client = new GoogleGenerativeAI(options.apiKey)
+    this.client = new GoogleGenerativeAI(
+      options.apiKey,
+      options.baseURL ? ({ baseUrl: options.baseURL } as any) : undefined,
+    )
   }
 
   private buildModel(request: ChatRequest) {

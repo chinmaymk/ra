@@ -76,6 +76,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       // Provider connection options (non-sensitive)
       'anthropic-base-url':          { type: 'string' },
       'openai-base-url':             { type: 'string' },
+      'google-base-url':             { type: 'string' },
       'ollama-host':                 { type: 'string' },
     },
     strict: false,
@@ -120,6 +121,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // Provider connection options
   if (values['anthropic-base-url']) set(['providers', 'anthropic', 'baseURL'], values['anthropic-base-url'])
   if (values['openai-base-url'])    set(['providers', 'openai', 'baseURL'], values['openai-base-url'])
+  if (values['google-base-url'])    set(['providers', 'google', 'baseURL'], values['google-base-url'])
   if (values['ollama-host'])        set(['providers', 'ollama', 'host'], values['ollama-host'])
 
   return {
