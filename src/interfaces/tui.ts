@@ -114,3 +114,11 @@ export function printError(msg: string): void {
 
 // Styled prompt for readline — ANSI OK here, cursor math only breaks on very long wrapped lines
 export const PROMPT = `\x1b[96m›\x1b[0m `
+
+export function printThinkingStart(): void {
+  process.stdout.write(`\n  ${c.dim}╌╌ thinking ╌╌${c.reset}\n  ${c.dim}`)
+}
+
+export function printThinkingEnd(): void {
+  process.stdout.write(`${c.reset}\n  ${c.dim}╌╌╌╌╌╌╌╌╌╌╌╌╌╌${c.reset}\n`)
+}

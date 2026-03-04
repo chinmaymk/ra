@@ -76,7 +76,10 @@ export class AgentLoop {
         const toolCallBuf: { id: string; name: string; argsRaw: string }[] = []
 
         for await (const chunk of this.provider.stream(request)) {
-          if (chunk.type === 'text') {
+          if (chunk.type === 'thinking') {
+            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk)
+            if (signal.aborted) break
+          } else if (chunk.type === 'text') {
             await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk)
             if (signal.aborted) break
             textAccumulator += chunk.delta

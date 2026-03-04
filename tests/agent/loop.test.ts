@@ -108,7 +108,7 @@ describe('AgentLoop', () => {
     ]])
     const loop = new AgentLoop({
       provider, tools: new ToolRegistry(),
-      middleware: { onStreamChunk: [async (ctx) => { chunks.push(ctx.chunk.delta) }] },
+      middleware: { onStreamChunk: [async (ctx) => { if (ctx.chunk.type === 'text' || ctx.chunk.type === 'thinking') chunks.push(ctx.chunk.delta) }] },
     })
     await loop.run([{ role: 'user', content: 'hi' }])
     expect(chunks).toEqual(['hello', ' world'])

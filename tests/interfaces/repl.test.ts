@@ -23,6 +23,18 @@ async function makeStorage(): Promise<SessionStorage> {
   return storage
 }
 
+function mockProviderWithThinking(thinkingDelta: string, textDelta: string): IProvider {
+  return {
+    name: 'mock',
+    chat: async () => { throw new Error() },
+    async *stream() {
+      yield { type: 'thinking', delta: thinkingDelta }
+      yield { type: 'text', delta: textDelta }
+      yield { type: 'done' }
+    },
+  }
+}
+
 describe('Repl', () => {
   afterEach(async () => { await Bun.$`rm -rf ${TEST_STORAGE}`.quiet() })
 
@@ -50,5 +62,32 @@ describe('Repl', () => {
     await repl.processInput('second')
     // Should have user + assistant from first turn, plus new user
     expect(lastMessages.length).toBeGreaterThan(1)
+  })
+
+  it('renders thinking chunks dimmed before main text', async () => {
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider: mockProviderWithThinking('hmm', 'hello'), tools: new ToolRegistry(), storage })
+
+    const chunks: string[] = []
+    const origWrite = process.stdout.write.bind(process.stdout)
+    process.stdout.write = (chunk: string | Uint8Array, ...args: unknown[]) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString())
+      return origWrite(chunk, ...(args as []))
+    }
+
+    try {
+      await repl.processInput('test')
+    } finally {
+      process.stdout.write = origWrite
+    }
+
+    const output = chunks.join('')
+    // dim ANSI code should appear before the thinking delta
+    const dimIndex = output.indexOf('\x1b[2m')
+    const hmmIndex = output.indexOf('hmm')
+    expect(dimIndex).toBeGreaterThanOrEqual(0)
+    expect(hmmIndex).toBeGreaterThan(dimIndex)
+    // main text should also appear
+    expect(output).toContain('hello')
   })
 })

@@ -89,6 +89,7 @@ export class Repl {
     ]
 
     let boxOpened = false
+    let thinkingOpened = false
     const toolStartTimes = new Map<string, number>()
     tui.startSpinner()
     const userMw = this.options.middleware ?? {}
@@ -104,7 +105,18 @@ export class Repl {
         ...userMw,
         onStreamChunk: [
           async (ctx: StreamChunkContext) => {
-            if (ctx.chunk.type === 'text') {
+            if (ctx.chunk.type === 'thinking') {
+              if (!thinkingOpened) {
+                tui.stopSpinner(true)
+                tui.printThinkingStart()
+                thinkingOpened = true
+              }
+              process.stdout.write(ctx.chunk.delta)
+            } else if (ctx.chunk.type === 'text') {
+              if (thinkingOpened) {
+                tui.printThinkingEnd()
+                thinkingOpened = false
+              }
               if (!boxOpened) { tui.stopSpinner(); boxOpened = true }
               process.stdout.write(ctx.chunk.delta)
             }
@@ -124,6 +136,7 @@ export class Repl {
 
     try {
       const result = await loop.run(initialMessages)
+      if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
       tui.stopSpinner(true) // no-op if already stopped by first text chunk; clears spinner if tool-only
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n')
