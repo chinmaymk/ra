@@ -40,7 +40,7 @@ export class AnthropicProvider implements IProvider {
 
     let usage: TokenUsage | undefined
     let inputTokens = 0
-    let currentToolCallId = ''
+    const toolCallIds = new Map<number, string>()
 
     for await (const event of stream as AsyncIterable<Anthropic.MessageStreamEvent>) {
       switch (event.type) {
@@ -49,13 +49,13 @@ export class AnthropicProvider implements IProvider {
           break
         case 'content_block_start':
           if (event.content_block.type === 'tool_use') {
-            currentToolCallId = event.content_block.id
+            toolCallIds.set(event.index, event.content_block.id)
             yield { type: 'tool_call_start', id: event.content_block.id, name: event.content_block.name }
           }
           break
         case 'content_block_delta':
           if (event.delta.type === 'text_delta') yield { type: 'text', delta: event.delta.text }
-          else if (event.delta.type === 'input_json_delta') yield { type: 'tool_call_delta', id: currentToolCallId, argsDelta: event.delta.partial_json }
+          else if (event.delta.type === 'input_json_delta') yield { type: 'tool_call_delta', id: toolCallIds.get(event.index) ?? '', argsDelta: event.delta.partial_json }
           else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as any).thinking }
           break
         case 'message_delta':

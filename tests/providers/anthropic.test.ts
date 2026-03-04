@@ -364,6 +364,31 @@ describe('AnthropicProvider - stream() input token tracking', () => {
     expect(done.usage.outputTokens).toBe(7)
   })
 
+  it('tracks tool call IDs correctly for parallel tool calls', async () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      messages: {
+        create: async () => (async function* () {
+          yield { type: 'message_start', message: { usage: { input_tokens: 10 } } }
+          yield { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tool_1', name: 'read' } }
+          yield { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tool_2', name: 'write' } }
+          yield { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"a":1}' } }
+          yield { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"b":2}' } }
+          yield { type: 'message_delta', usage: { output_tokens: 5 } }
+          yield { type: 'message_stop' }
+        })(),
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'claude-sonnet-4-6', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    const deltas = chunks.filter((c: any) => c.type === 'tool_call_delta')
+    expect(deltas).toHaveLength(2)
+    expect(deltas[0].id).toBe('tool_1')
+    expect(deltas[1].id).toBe('tool_2')
+  })
+
   it('defaults inputTokens to 0 when message_start has no usage', async () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
     ;(provider as any).client = {
