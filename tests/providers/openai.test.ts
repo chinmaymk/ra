@@ -360,3 +360,19 @@ describe('OpenAIProvider - stream()', () => {
     expect(done.type).toBe('done')
   })
 })
+
+describe('OpenAIProvider - extensibility', () => {
+  it('allows subclass to override buildParams', () => {
+    class TestProvider extends OpenAIProvider {
+      protected override buildParams(request: any) {
+        return { ...super.buildParams(request), model: 'overridden' }
+      }
+    }
+    const p = new TestProvider({ apiKey: 'test' })
+    const params = (p as any).buildParams({
+      model: 'original',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(params.model).toBe('overridden')
+  })
+})

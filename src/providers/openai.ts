@@ -8,13 +8,13 @@ export interface OpenAIProviderOptions {
 
 export class OpenAIProvider implements IProvider {
   name = 'openai'
-  private client: OpenAI
+  protected client: OpenAI
 
   constructor(options: OpenAIProviderOptions) {
     this.client = new OpenAI({ apiKey: options.apiKey, baseURL: options.baseURL })
   }
 
-  private buildParams(request: ChatRequest): OpenAI.Chat.ChatCompletionCreateParams {
+  protected buildParams(request: ChatRequest): OpenAI.Chat.ChatCompletionCreateParams {
     const params: OpenAI.Chat.ChatCompletionCreateParams = {
       model: request.model,
       messages: this.mapMessages(request.messages),
