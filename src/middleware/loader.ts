@@ -1,4 +1,5 @@
 import { join, isAbsolute } from 'path'
+import { homedir } from 'os'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '../agent/types'
 
@@ -15,7 +16,8 @@ function isFilePath(s: string): boolean {
 
 async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
   if (isFilePath(entry)) {
-    const resolved = isAbsolute(entry) ? entry : join(cwd, entry)
+    let resolved = isAbsolute(entry) ? entry : join(cwd, entry)
+    if (entry.startsWith('~')) resolved = join(homedir(), entry.slice(1))
     const mod = await import(resolved)
     if (typeof mod.default !== 'function') {
       throw new Error(`Middleware file "${resolved}" must export a default function`)
@@ -24,11 +26,9 @@ async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
   }
   let fn: unknown
   try {
-    const transpiler = new Bun.Transpiler({ loader: 'ts' })
-    const wrapped = transpiler.transformSync(`export const __fn = (${entry})`)
-    // Strip the export wrapper to get a plain expression we can eval
-    const js = wrapped.replace(/^export const __fn = /, '').replace(/;\s*$/, '')
-    fn = (0, eval)('(' + js + ')')
+    const transpiler = new Bun.Transpiler({ loader: 'ts', deadCodeElimination: false })
+    const js = transpiler.transformSync(`(${entry})`)
+    fn = (0, eval)(js)
   } catch (err) {
     throw new Error(`Failed to parse inline middleware expression: ${err instanceof Error ? err.message : String(err)}\n  Expression: ${entry}`)
   }

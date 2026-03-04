@@ -2,8 +2,9 @@ import type { AnthropicProviderOptions } from '../providers/anthropic'
 import type { OpenAIProviderOptions } from '../providers/openai'
 import type { GoogleProviderOptions } from '../providers/google'
 import type { OllamaProviderOptions } from '../providers/ollama'
+import type { BedrockProviderOptions } from '../providers/bedrock'
 
-export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama'
+export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedrock'
 
 export interface RaConfig {
   provider: ProviderName
@@ -11,8 +12,8 @@ export interface RaConfig {
   interface: 'cli' | 'repl' | 'http' | 'mcp'
   systemPrompt: string
   http: { port: number; token: string }
+  skillDirs: string[]
   skills: string[]
-  alwaysLoad: string[]
   mcp: {
     client: McpClientConfig[]
     server: McpServerConfig
@@ -22,6 +23,7 @@ export interface RaConfig {
     openai: OpenAIProviderOptions
     google: GoogleProviderOptions
     ollama: OllamaProviderOptions
+    bedrock: BedrockProviderOptions
   }
   storage: {
     path: string
@@ -31,6 +33,7 @@ export interface RaConfig {
   }
   maxIterations: number
   middleware: Record<string, string[]>
+  thinking?: 'low' | 'medium' | 'high'
 }
 
 export interface McpClientConfig {
@@ -48,7 +51,6 @@ export interface McpServerConfig {
   tool: {
     name: string
     description: string
-    inputSchema: Record<string, unknown>
   }
 }
 

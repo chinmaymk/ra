@@ -77,6 +77,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_INTERFACE !== undefined)      set(['interface'], env.RA_INTERFACE)
   if (env.RA_SYSTEM_PROMPT !== undefined)  set(['systemPrompt'], env.RA_SYSTEM_PROMPT)
   if (env.RA_MAX_ITERATIONS !== undefined) set(['maxIterations'], parseInt(env.RA_MAX_ITERATIONS, 10))
+  if (env.RA_THINKING !== undefined)       set(['thinking'], env.RA_THINKING)
 
   // HTTP server
   if (env.RA_HTTP_PORT !== undefined)  set(['http', 'port'], parseInt(env.RA_HTTP_PORT, 10))
@@ -94,6 +95,10 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_STORAGE_MAX_SESSIONS !== undefined) set(['storage', 'maxSessions'], parseInt(env.RA_STORAGE_MAX_SESSIONS, 10))
   if (env.RA_STORAGE_TTL_DAYS !== undefined)     set(['storage', 'ttlDays'], parseInt(env.RA_STORAGE_TTL_DAYS, 10))
 
+  // Skills
+  if (env.RA_SKILL_DIRS !== undefined) set(['skillDirs'], env.RA_SKILL_DIRS.split(',').filter(Boolean))
+  if (env.RA_SKILLS !== undefined)     set(['skills'], env.RA_SKILLS.split(',').filter(Boolean))
+
   // Provider credentials — env-only (not CLI flags, to avoid leaking in process list/shell history)
   if (env.RA_ANTHROPIC_API_KEY !== undefined)  set(['providers', 'anthropic', 'apiKey'], env.RA_ANTHROPIC_API_KEY)
   if (env.RA_ANTHROPIC_BASE_URL !== undefined) set(['providers', 'anthropic', 'baseURL'], env.RA_ANTHROPIC_BASE_URL)
@@ -101,6 +106,8 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_OPENAI_BASE_URL !== undefined)    set(['providers', 'openai', 'baseURL'], env.RA_OPENAI_BASE_URL)
   if (env.RA_GOOGLE_API_KEY !== undefined)     set(['providers', 'google', 'apiKey'], env.RA_GOOGLE_API_KEY)
   if (env.RA_OLLAMA_HOST !== undefined)        set(['providers', 'ollama', 'host'], env.RA_OLLAMA_HOST)
+  if (env.RA_BEDROCK_REGION !== undefined)  set(['providers', 'bedrock', 'region'], env.RA_BEDROCK_REGION)
+  if (env.RA_BEDROCK_API_KEY !== undefined) set(['providers', 'bedrock', 'apiKey'], env.RA_BEDROCK_API_KEY)
 
   return r
 }
