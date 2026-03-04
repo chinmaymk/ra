@@ -97,3 +97,35 @@ describe('AnthropicProvider', () => {
     expect(mapped[1].source.media_type).toBe('image/png')
   })
 })
+
+describe('thinking', () => {
+  it('includes thinking param in buildParams when thinking is set', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const request = {
+      model: 'claude-3-7-sonnet-20250219',
+      messages: [{ role: 'user' as const, content: 'hi' }],
+      thinking: 'medium' as const,
+    }
+    const params = (provider as any).buildParams(request)
+    expect(params.thinking).toEqual({ type: 'enabled', budget_tokens: 8000 })
+  })
+
+  it('does not include thinking when not set', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const request = { model: 'claude-3-7-sonnet-20250219', messages: [{ role: 'user' as const, content: 'hi' }] }
+    const params = (provider as any).buildParams(request)
+    expect(params.thinking).toBeUndefined()
+  })
+
+  it('maps low to 1000 tokens', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({ model: 'x', messages: [], thinking: 'low' })
+    expect(params.thinking.budget_tokens).toBe(1000)
+  })
+
+  it('maps high to 32000 tokens', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({ model: 'x', messages: [], thinking: 'high' })
+    expect(params.thinking.budget_tokens).toBe(32000)
+  })
+})

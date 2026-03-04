@@ -2,6 +2,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { extractSystemMessages } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
+const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
+
 export interface AnthropicProviderOptions {
   apiKey: string
   baseURL?: string
@@ -23,6 +25,7 @@ export class AnthropicProvider implements IProvider {
       messages: this.mapMessages(filtered),
       ...(system && { system }),
       ...(request.tools?.length && { tools: this.mapTools(request.tools) }),
+      ...(request.thinking && { thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[request.thinking] } }),
     }
   }
 
@@ -49,6 +52,7 @@ export class AnthropicProvider implements IProvider {
         case 'content_block_delta':
           if (event.delta.type === 'text_delta') yield { type: 'text', delta: event.delta.text }
           else if (event.delta.type === 'input_json_delta') yield { type: 'tool_call_delta', id: currentToolCallId, argsDelta: event.delta.partial_json }
+          else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as any).thinking }
           break
         case 'message_delta':
           usage = { inputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.input_tokens ?? 0, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
