@@ -5,6 +5,12 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
+import { logger } from '../utils/logger'
+import { RateLimiter } from '../utils/rate-limiter'
+import { randomUUID } from 'crypto'
+
+/** Maximum request body size in bytes (default 1MB) */
+const MAX_BODY_SIZE = parseInt(process.env.RA_HTTP_MAX_BODY_SIZE || '1048576', 10)
 
 export interface HttpOptions {
   port: number
@@ -20,78 +26,190 @@ export interface HttpOptions {
   toolTimeout?: number
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  corsOrigins?: string
+  rateLimitMax?: number
+  rateLimitWindowMs?: number
 }
 
 export class HttpServer {
   private options: HttpOptions
   private server: ReturnType<typeof Bun.serve> | null = null
+  private startTime = Date.now()
+  private requestCount = 0
+  private activeRequests = 0
+  private rateLimiter: RateLimiter
+  private shuttingDown = false
+  private log = logger.child({ component: 'http' })
 
   constructor(options: HttpOptions) {
     this.options = options
+    this.rateLimiter = new RateLimiter({
+      maxRequests: options.rateLimitMax ?? parseInt(process.env.RA_HTTP_RATE_LIMIT_MAX || '100', 10),
+      windowMs: options.rateLimitWindowMs ?? parseInt(process.env.RA_HTTP_RATE_LIMIT_WINDOW_MS || '60000', 10),
+    })
   }
 
   get port(): number { return (this.server?.port ?? this.options.port) as number }
 
   async start(): Promise<void> {
     const opts = this.options
+    const corsOrigins = opts.corsOrigins ?? process.env.RA_HTTP_CORS_ORIGINS ?? ''
 
     this.server = Bun.serve({
       port: opts.port,
       fetch: async (req: Request): Promise<Response> => {
+        const requestId = req.headers.get('X-Request-ID') || randomUUID()
         const url = new URL(req.url)
+        const startMs = Date.now()
+        this.requestCount++
+        this.activeRequests++
 
-        // Auth check
-        if (opts.token) {
-          const authHeader = req.headers.get('Authorization') ?? ''
-          const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-          if (provided !== opts.token) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-              status: 401,
-              headers: { 'Content-Type': 'application/json' },
-            })
+        const reqLog = this.log.child({ requestId, method: req.method, path: url.pathname })
+
+        try {
+          // CORS preflight
+          if (req.method === 'OPTIONS') {
+            return this.corsResponse(new Response(null, { status: 204 }), corsOrigins, requestId)
           }
-        }
 
-        if (req.method === 'POST' && url.pathname === '/chat/sync') {
-          return this.handleChatSync(req)
-        }
+          // Health/readiness (no auth required)
+          if (req.method === 'GET' && url.pathname === '/health') {
+            return this.corsResponse(this.handleHealth(requestId), corsOrigins, requestId)
+          }
+          if (req.method === 'GET' && url.pathname === '/ready') {
+            return this.corsResponse(this.handleReady(requestId), corsOrigins, requestId)
+          }
 
-        if (req.method === 'POST' && url.pathname === '/chat') {
-          return this.handleChatStream(req)
-        }
+          // Reject during graceful shutdown
+          if (this.shuttingDown) {
+            return this.corsResponse(this.jsonResponse(503, { error: 'Server is shutting down' }, requestId), corsOrigins, requestId)
+          }
 
-        if (req.method === 'GET' && url.pathname === '/sessions') {
-          return this.handleSessions()
-        }
+          // Rate limiting
+          const clientIp = req.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown'
+          const rateCheck = this.rateLimiter.check(clientIp)
+          if (!rateCheck.allowed) {
+            reqLog.warn('Rate limited', { clientIp })
+            const res = this.jsonResponse(429, { error: 'Too Many Requests' }, requestId)
+            res.headers.set('Retry-After', String(Math.ceil(rateCheck.resetMs / 1000)))
+            res.headers.set('X-RateLimit-Remaining', '0')
+            return this.corsResponse(res, corsOrigins, requestId)
+          }
 
-        return new Response(JSON.stringify({ error: 'Not Found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        })
+          // Auth check
+          if (opts.token) {
+            const authHeader = req.headers.get('Authorization') ?? ''
+            const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+            if (provided !== opts.token) {
+              reqLog.warn('Unauthorized request')
+              return this.corsResponse(this.jsonResponse(401, { error: 'Unauthorized' }, requestId), corsOrigins, requestId)
+            }
+          }
+
+          // Route
+          let response: Response
+          if (req.method === 'POST' && url.pathname === '/chat/sync') {
+            response = await this.handleChatSync(req, requestId)
+          } else if (req.method === 'POST' && url.pathname === '/chat') {
+            response = await this.handleChatStream(req, requestId)
+          } else if (req.method === 'GET' && url.pathname === '/sessions') {
+            response = await this.handleSessions(requestId)
+          } else {
+            response = this.jsonResponse(404, { error: 'Not Found' }, requestId)
+          }
+
+          reqLog.info('Request completed', { status: response.status, durationMs: Date.now() - startMs })
+          return this.corsResponse(response, corsOrigins, requestId)
+        } catch (err) {
+          reqLog.error('Unhandled error', { error: err instanceof Error ? err.message : String(err) })
+          return this.corsResponse(this.jsonResponse(500, { error: 'Internal Server Error' }, requestId), corsOrigins, requestId)
+        } finally {
+          this.activeRequests--
+        }
       },
     })
   }
 
   async stop(): Promise<void> {
+    this.shuttingDown = true
+    this.log.info('Graceful shutdown initiated', { activeRequests: this.activeRequests })
+
+    // Wait for in-flight requests (up to 30s)
+    const deadline = Date.now() + 30_000
+    while (this.activeRequests > 0 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 250))
+    }
+
+    if (this.activeRequests > 0) {
+      this.log.warn('Forcing shutdown with active requests', { activeRequests: this.activeRequests })
+    }
+
     if (this.server) {
       this.server.stop(true)
       this.server = null
     }
+    this.rateLimiter.destroy()
+    this.log.info('Server stopped')
   }
 
-  private async parseBody(req: Request): Promise<{ messages: IMessage[]; sessionId?: string } | null> {
+  private jsonResponse(status: number, body: unknown, requestId: string): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-ID': requestId,
+      },
+    })
+  }
+
+  private corsResponse(res: Response, origins: string, requestId: string): Response {
+    if (origins) {
+      res.headers.set('Access-Control-Allow-Origin', origins)
+      res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-ID')
+      res.headers.set('Access-Control-Expose-Headers', 'X-Request-ID, X-RateLimit-Remaining, Retry-After')
+      res.headers.set('Access-Control-Max-Age', '86400')
+    }
+    if (!res.headers.has('X-Request-ID')) {
+      res.headers.set('X-Request-ID', requestId)
+    }
+    return res
+  }
+
+  private handleHealth(requestId: string): Response {
+    return this.jsonResponse(200, {
+      status: 'ok',
+      uptime: Math.floor((Date.now() - this.startTime) / 1000),
+      timestamp: new Date().toISOString(),
+    }, requestId)
+  }
+
+  private handleReady(requestId: string): Response {
+    if (this.shuttingDown) {
+      return this.jsonResponse(503, { status: 'shutting_down' }, requestId)
+    }
+    return this.jsonResponse(200, {
+      status: 'ready',
+      activeRequests: this.activeRequests,
+      totalRequests: this.requestCount,
+    }, requestId)
+  }
+
+  private async parseBody(req: Request, requestId: string): Promise<{ messages: IMessage[]; sessionId?: string } | null> {
     try {
-      return await req.json() as { messages: IMessage[]; sessionId?: string }
+      // Check content-length before reading
+      const contentLength = parseInt(req.headers.get('Content-Length') || '0', 10)
+      if (contentLength > MAX_BODY_SIZE) {
+        return null
+      }
+      const text = await req.text()
+      if (text.length > MAX_BODY_SIZE) {
+        return null
+      }
+      return JSON.parse(text) as { messages: IMessage[]; sessionId?: string }
     } catch {
       return null
     }
-  }
-
-  private static badRequest(): Response {
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    })
   }
 
   private prependSystem(messages: IMessage[]): IMessage[] {
@@ -100,9 +218,9 @@ export class HttpServer {
       : messages
   }
 
-  private async handleChatSync(req: Request): Promise<Response> {
-    const body = await this.parseBody(req)
-    if (!body) return HttpServer.badRequest()
+  private async handleChatSync(req: Request, requestId: string): Promise<Response> {
+    const body = await this.parseBody(req, requestId)
+    if (!body) return this.jsonResponse(400, { error: 'Invalid JSON' }, requestId)
 
     const messages = this.prependSystem(body.messages ?? [])
 
@@ -130,20 +248,16 @@ export class HttpServer {
           ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
           : ''
 
-      return new Response(JSON.stringify({ response: responseText }), {
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return this.jsonResponse(200, { response: responseText }, requestId)
     } catch (err) {
-      return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      this.log.error('Chat sync error', { requestId, error: err instanceof Error ? err.message : String(err) })
+      return this.jsonResponse(500, { error: err instanceof Error ? err.message : String(err) }, requestId)
     }
   }
 
-  private async handleChatStream(req: Request): Promise<Response> {
-    const body = await this.parseBody(req)
-    if (!body) return HttpServer.badRequest()
+  private async handleChatStream(req: Request, requestId: string): Promise<Response> {
+    const body = await this.parseBody(req, requestId)
+    if (!body) return this.jsonResponse(400, { error: 'Invalid JSON' }, requestId)
 
     const messages = this.prependSystem(body.messages ?? [])
     const opts = this.options
@@ -197,14 +311,13 @@ export class HttpServer {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Request-ID': requestId,
       },
     })
   }
 
-  private async handleSessions(): Promise<Response> {
+  private async handleSessions(requestId: string): Promise<Response> {
     const sessions = await this.options.storage.list()
-    return new Response(JSON.stringify({ sessions }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return this.jsonResponse(200, { sessions }, requestId)
   }
 }

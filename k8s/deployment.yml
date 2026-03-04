@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ra
+  labels:
+    app: ra
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ra
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ra
+    spec:
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+        - name: ra
+          image: ra:latest
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: RA_INTERFACE
+              value: "http"
+            - name: RA_HTTP_PORT
+              value: "3000"
+            - name: RA_LOG_FORMAT
+              value: "json"
+            - name: RA_LOG_LEVEL
+              value: "info"
+            - name: NODE_ENV
+              value: "production"
+            - name: RA_ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ra-secrets
+                  key: anthropic-api-key
+                  optional: true
+            - name: RA_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ra-secrets
+                  key: openai-api-key
+                  optional: true
+            - name: RA_HTTP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ra-secrets
+                  key: http-token
+                  optional: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: sessions
+              mountPath: /app/data
+      volumes:
+        - name: sessions
+          emptyDir:
+            sizeLimit: 1Gi
