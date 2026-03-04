@@ -1,0 +1,1 @@
+import{_ as a,o as i,c as n,ag as t}from"./chunks/framework.CO1DiHOz.js";const E=JSON.parse('{"title":"MCP","description":"","frontmatter":{},"headers":[],"relativePath":"modes/mcp.md","filePath":"modes/mcp.md"}'),l={name:"modes/mcp.md"};function e(p,s,h,k,r,o){return i(),n("div",null,[...s[0]||(s[0]=[t("",10)])])}const c=a(l,[["render",e]]);export{E as __pageData,c as default};
