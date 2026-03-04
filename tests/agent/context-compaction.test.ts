@@ -119,6 +119,37 @@ describe('splitMessageZones', () => {
     }
   })
 
+  it('keeps all tool results with their assistant when boundary splits tool group', () => {
+    // Bug: assistant with tc1+tc2 could have tool_tc1 left in compactable
+    // when boundary pulls assistant into recent
+    const asstMulti: IMessage = {
+      role: 'assistant', content: 'multi',
+      toolCalls: [
+        { id: 'tc1', name: 'read', arguments: '{}' },
+        { id: 'tc2', name: 'write', arguments: '{}' },
+      ],
+    }
+    const toolA: IMessage = { role: 'tool', content: 'result a', toolCallId: 'tc1' }
+    const toolB: IMessage = { role: 'tool', content: 'result b', toolCallId: 'tc2' }
+    const messages = [sys, user1, asst1, user2, asstMulti, toolA, toolB, asst3, user3, asst4]
+
+    // Use a budget that places boundary somewhere inside the tool group
+    const { recent, compactable } = splitMessageZones(messages, 1)
+    // asstMulti, toolA, and toolB must all be in the same zone
+    if (recent.includes(asstMulti)) {
+      expect(recent).toContain(toolA)
+      expect(recent).toContain(toolB)
+    }
+    if (compactable.includes(asstMulti)) {
+      expect(compactable).toContain(toolA)
+      expect(compactable).toContain(toolB)
+    }
+    // And vice versa - if any tool result is in recent, the assistant must be too
+    if (recent.includes(toolA) || recent.includes(toolB)) {
+      expect(recent).toContain(asstMulti)
+    }
+  })
+
   it('does not move boundary when tool result has no preceding assistant with toolCalls', () => {
     // We need adjustToolCallBoundary to receive boundary landing on a tool message,
     // with no assistant+toolCalls before it. The for loop (lines 51-54) completes without returning.
@@ -298,13 +329,54 @@ describe('createCompactionMiddleware', () => {
     ]
     const ctx = makeCtx(messages)
     await mw(ctx)
+    // With the fix, ContentPart[] is preserved, not flattened to string
     const summaryMsg = ctx.request.messages.find(
-      m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
+      m => m.role === 'user' && Array.isArray(m.content)
     )
     expect(summaryMsg).toBeDefined()
-    expect(summaryMsg!.content).toContain('look at this image')
-    // Should NOT contain JSON array brackets
-    expect(summaryMsg!.content).not.toContain('[{')
+    const parts = summaryMsg!.content as any[]
+    // Original text part preserved
+    expect(parts.some((p: any) => p.type === 'text' && p.text === 'look at this image')).toBe(true)
+    // Summary appended as text part
+    const allText = parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join(' ')
+    expect(allText).toContain('[Context Summary]')
+  })
+
+  it('preserves ContentPart[] structure when merging summary into pinned user message', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => ({
+        message: { role: 'assistant' as const, content: 'Summary.' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: [
+        { type: 'text' as const, text: 'look at this image' },
+        { type: 'image' as const, source: { type: 'base64' as const, mediaType: 'image/png', data: 'abc123' } },
+      ] },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    const pinnedUser = ctx.request.messages.find(
+      m => m.role === 'user' && Array.isArray(m.content)
+    )
+    // ContentPart[] should be preserved (not flattened to string)
+    expect(pinnedUser).toBeDefined()
+    const parts = pinnedUser!.content as any[]
+    // Should still have the image_url part
+    expect(parts.some((p: any) => p.type === 'image')).toBe(true)
+    // Should also have the summary text appended
+    const textParts = parts.filter((p: any) => p.type === 'text')
+    const allText = textParts.map((p: any) => p.text).join(' ')
+    expect(allText).toContain('[Context Summary]')
   })
 
   it('skips when nothing to compact (all pinned)', async () => {

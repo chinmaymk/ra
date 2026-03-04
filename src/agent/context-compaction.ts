@@ -12,9 +12,18 @@ export interface MessageZones {
 export function splitMessageZones(messages: IMessage[], recentBudgetTokens: number): MessageZones {
   // Pin: all leading system messages + first user message
   let pinnedEnd = 0
+  let foundUser = false
   for (let i = 0; i < messages.length; i++) {
     pinnedEnd = i + 1
-    if (messages[i]!.role === 'user') break
+    if (messages[i]!.role === 'user') { foundUser = true; break }
+  }
+  // If no user message found, only pin leading system messages
+  if (!foundUser) {
+    pinnedEnd = 0
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i]!.role === 'system') pinnedEnd = i + 1
+      else break
+    }
   }
   const pinned = messages.slice(0, pinnedEnd)
   const rest = messages.slice(pinnedEnd)
@@ -52,6 +61,8 @@ function adjustToolCallBoundary(messages: IMessage[], boundary: number): number 
       if (messages[i]!.role === 'assistant' && messages[i]!.toolCalls) {
         return i
       }
+      // Stop searching if we hit a non-tool, non-assistant message (avoid matching unrelated tool groups)
+      if (messages[i]!.role !== 'tool') break
     }
   }
 
@@ -133,22 +144,51 @@ export function createCompactionMiddleware(
     for (let i = mergedPinned.length - 1; i >= 0; i--) {
       if (mergedPinned[i]!.role === 'user') {
         const orig = mergedPinned[i]!
-        const origText = typeof orig.content === 'string'
-          ? orig.content
-          : orig.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
-        let combined = `${origText}\n\n${summaryText}`
-        // If recent starts with user, absorb it to avoid consecutive user messages
+
+        // Build extra text parts to append (summary + optional absorbed user)
+        let extraText = summaryText
         if (mergedRecent.length > 0 && mergedRecent[0]!.role === 'user') {
-          const recentText = typeof mergedRecent[0]!.content === 'string'
-            ? mergedRecent[0]!.content
-            : mergedRecent[0]!.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
-          combined += `\n\n${recentText}`
+          const recentMsg = mergedRecent[0]!
+          if (typeof recentMsg.content === 'string') {
+            extraText += `\n\n${recentMsg.content}`
+          } else {
+            // Preserve non-text parts (images, files) by keeping them in the merged message
+            const textParts = recentMsg.content.filter(p => p.type === 'text')
+            const nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
+            const recentText = textParts.map(p => (p as { type: 'text'; text: string }).text).join('\n')
+            if (recentText) extraText += `\n\n${recentText}`
+            if (nonTextParts.length > 0) {
+              // Append non-text parts to the merged pinned message content
+              if (typeof orig.content === 'string') {
+                mergedPinned[i] = { ...orig, content: [{ type: 'text' as const, text: `${orig.content}\n\n${extraText}` }, ...nonTextParts] }
+                mergedRecent = mergedRecent.slice(1)
+                break
+              } else {
+                mergedPinned[i] = {
+                  ...orig,
+                  content: [...orig.content, { type: 'text' as const, text: `\n\n${extraText}` }, ...nonTextParts],
+                }
+                mergedRecent = mergedRecent.slice(1)
+                break
+              }
+            }
+          }
           mergedRecent = mergedRecent.slice(1)
         }
-        mergedPinned[i] = { ...orig, content: combined }
+
+        // Preserve ContentPart[] structure if original uses it
+        if (typeof orig.content === 'string') {
+          mergedPinned[i] = { ...orig, content: `${orig.content}\n\n${extraText}` }
+        } else {
+          mergedPinned[i] = {
+            ...orig,
+            content: [...orig.content, { type: 'text' as const, text: `\n\n${extraText}` }],
+          }
+        }
         break
       }
     }
-    ctx.request.messages = [...mergedPinned, ...mergedRecent]
+    ctx.request.messages.length = 0
+    ctx.request.messages.push(...mergedPinned, ...mergedRecent)
   }
 }

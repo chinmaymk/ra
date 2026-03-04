@@ -88,7 +88,7 @@ export class OpenAIProvider implements IProvider {
         const content = typeof msg.content === 'string'
           ? msg.content
           : msg.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
-        const result: OpenAI.Chat.ChatCompletionAssistantMessageParam = { role: 'assistant', content }
+        const result: OpenAI.Chat.ChatCompletionAssistantMessageParam = { role: 'assistant', content: content || null }
         if (msg.toolCalls?.length) {
           result.tool_calls = msg.toolCalls.map(tc => ({ id: tc.id, type: 'function' as const, function: { name: tc.name, arguments: tc.arguments } }))
         }
