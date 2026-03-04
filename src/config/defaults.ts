@@ -25,6 +25,7 @@ export const defaultConfig: RaConfig = {
     google: { apiKey: '' },
     ollama: { host: 'http://localhost:11434' },
     bedrock: { region: 'us-east-1' },
+    azure: { endpoint: '', deployment: '', apiKey: '' },
   },
   storage: {
     path: '.ra/sessions',

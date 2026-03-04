@@ -3,8 +3,9 @@ import type { OpenAIProviderOptions } from '../providers/openai'
 import type { GoogleProviderOptions } from '../providers/google'
 import type { OllamaProviderOptions } from '../providers/ollama'
 import type { BedrockProviderOptions } from '../providers/bedrock'
+import type { AzureProviderOptions } from '../providers/azure'
 
-export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedrock'
+export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedrock' | 'azure'
 
 export interface RaConfig {
   provider: ProviderName
@@ -24,6 +25,7 @@ export interface RaConfig {
     google: GoogleProviderOptions
     ollama: OllamaProviderOptions
     bedrock: BedrockProviderOptions
+    azure: AzureProviderOptions
   }
   storage: {
     path: string

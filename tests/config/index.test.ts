@@ -25,6 +25,13 @@ describe('loadConfig', () => {
     expect(c.skills).toEqual([])
   })
 
+  it('includes azure provider defaults', async () => {
+    const c = await loadConfig({ cwd: tmp })
+    expect(c.providers.azure).toBeDefined()
+    expect(c.providers.azure.endpoint).toBe('')
+    expect(c.providers.azure.deployment).toBe('')
+  })
+
   it('resolves systemPrompt from file when path exists', async () => {
     const promptFile = join(tmp, 'prompt.txt')
     writeFileSync(promptFile, 'You are a pirate.')
