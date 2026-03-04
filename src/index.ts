@@ -53,6 +53,9 @@ STORAGE
   --storage-max-sessions <n>          Max stored sessions
   --storage-ttl-days <n>              Session TTL in days
 
+THINKING
+  --thinking <level>                  Enable extended thinking: low | medium | high
+
 PROVIDER OPTIONS
   --anthropic-base-url <url>          Anthropic API base URL
   --openai-base-url <url>             OpenAI API base URL
@@ -70,6 +73,7 @@ ENV VARS
   RA_ANTHROPIC_API_KEY, RA_ANTHROPIC_BASE_URL
   RA_OPENAI_API_KEY, RA_OPENAI_BASE_URL
   RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
+  RA_THINKING
 
 EXAMPLES
   ra "What is the capital of France?"

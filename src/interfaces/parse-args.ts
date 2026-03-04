@@ -50,6 +50,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       model:                         { type: 'string' },
       'system-prompt':               { type: 'string' },
       'max-iterations':              { type: 'string' },
+      'thinking':                    { type: 'string' },
       // HTTP server
       'http-port':                   { type: 'string' },
       'http-token':                  { type: 'string' },
@@ -63,6 +64,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'storage-path':                { type: 'string' },
       'storage-max-sessions':        { type: 'string' },
       'storage-ttl-days':            { type: 'string' },
+      // Skills
+      'skill-dir':                   { type: 'string', multiple: true },
       // Provider connection options (non-sensitive)
       'anthropic-base-url':          { type: 'string' },
       'openai-base-url':             { type: 'string' },
@@ -86,6 +89,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values.model)              set(['model'], values.model)
   if (values['system-prompt'])   set(['systemPrompt'], values['system-prompt'])
   if (values['max-iterations'])  set(['maxIterations'], parseInt(values['max-iterations'] as string, 10))
+  if (values['thinking'])        set(['thinking'], values['thinking'])
 
   // HTTP server
   if (values['http-port'])   set(['http', 'port'], parseInt(values['http-port'] as string, 10))
@@ -102,6 +106,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values['storage-path'])          set(['storage', 'path'], values['storage-path'])
   if (values['storage-max-sessions'])  set(['storage', 'maxSessions'], parseInt(values['storage-max-sessions'] as string, 10))
   if (values['storage-ttl-days'])      set(['storage', 'ttlDays'], parseInt(values['storage-ttl-days'] as string, 10))
+
+  // Skills
+  if (values['skill-dir']) set(['skillDirs'], values['skill-dir'])
 
   // Provider connection options
   if (values['anthropic-base-url']) set(['providers', 'anthropic', 'baseURL'], values['anthropic-base-url'])

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { parseArgs } from '../src/interfaces/parse-args'
+import { parseArgs } from '../../src/interfaces/parse-args'
 
 function dev(...args: string[]): string[] {
   return ['bun', 'src/index.ts', ...args]
@@ -43,6 +43,10 @@ describe('parseArgs', () => {
     it('--model',    () => expect(parseArgs(dev('--model', 'gpt-4o')).config.model).toBe('gpt-4o'))
     it('--system-prompt', () => expect(parseArgs(dev('--system-prompt', 'Be helpful')).config.systemPrompt).toBe('Be helpful'))
     it('--max-iterations', () => expect(parseArgs(dev('--max-iterations', '20')).config.maxIterations).toBe(20))
+    it('parses --thinking flag', () => {
+      const result = parseArgs(['node', 'ra.ts', '--thinking', 'high'])
+      expect(result.config.thinking).toBe('high')
+    })
   })
 
   describe('HTTP server flags', () => {
@@ -110,6 +114,20 @@ describe('parseArgs', () => {
     })
     it('--ollama-host', () => {
       expect(parseArgs(dev('--ollama-host', 'http://localhost:11434')).config.providers?.ollama.host).toBe('http://localhost:11434')
+    })
+  })
+
+  describe('skills flags', () => {
+    it('--skill-dir sets config.skillDirs', () => {
+      expect(parseArgs(dev('--skill-dir', '/skills/a')).config.skillDirs).toEqual(['/skills/a'])
+    })
+    it('--skill-dir is repeatable', () => {
+      expect(parseArgs(dev('--skill-dir', '/a', '--skill-dir', '/b')).config.skillDirs).toEqual(['/a', '/b'])
+    })
+    it('--skill sets meta.skills (not config.skills)', () => {
+      const r = parseArgs(dev('--skill', 'code'))
+      expect(r.meta.skills).toEqual(['code'])
+      expect((r.config as Record<string, unknown>).skills).toBeUndefined()
     })
   })
 
