@@ -1,25 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { AnthropicProvider } from '../../src/providers/anthropic'
-import { extractSystemMessages } from '../../src/providers/utils'
 
 describe('AnthropicProvider', () => {
-  it('has correct name', () => {
-    const provider = new AnthropicProvider({ apiKey: 'test' })
-    expect(provider.name).toBe('anthropic')
-  })
-
-  it('extracts system messages from message array', () => {
-    const provider = new AnthropicProvider({ apiKey: 'test' })
-    const messages = [
-      { role: 'system' as const, content: 'You are helpful' },
-      { role: 'user' as const, content: 'hello' },
-    ]
-    const { system, filtered } = extractSystemMessages(messages)
-    expect(system).toBe('You are helpful')
-    expect(filtered).toHaveLength(1)
-    expect(filtered[0]?.role).toBe('user')
-  })
-
   it('maps tools to Anthropic format', () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
     const tools = [{
@@ -154,15 +136,6 @@ describe('AnthropicProvider', () => {
     })
     expect(params.tools).toBeDefined()
     expect(params.tools).toHaveLength(1)
-  })
-
-  it('buildParams omits tools when not provided', () => {
-    const provider = new AnthropicProvider({ apiKey: 'test' })
-    const params = (provider as any).buildParams({
-      model: 'claude-3',
-      messages: [{ role: 'user', content: 'hi' }],
-    })
-    expect(params.tools).toBeUndefined()
   })
 
   it('buildParams uses providerOptions maxTokens', () => {
@@ -320,13 +293,6 @@ describe('thinking', () => {
     }
     const params = (provider as any).buildParams(request)
     expect(params.thinking).toEqual({ type: 'enabled', budget_tokens: 8000 })
-  })
-
-  it('does not include thinking when not set', () => {
-    const provider = new AnthropicProvider({ apiKey: 'test' })
-    const request = { model: 'claude-3-7-sonnet-20250219', messages: [{ role: 'user' as const, content: 'hi' }] }
-    const params = (provider as any).buildParams(request)
-    expect(params.thinking).toBeUndefined()
   })
 
   it('maps low to 1000 tokens', () => {

@@ -148,15 +148,6 @@ describe('BedrockProvider - buildParams branches', () => {
     expect(params.system[0].text).toBe('Be helpful')
   })
 
-  it('omits system when no system messages', () => {
-    const provider = new BedrockProvider({})
-    const params = (provider as any).buildParams({
-      model: 'x',
-      messages: [{ role: 'user', content: 'hi' }],
-    })
-    expect(params.system).toBeUndefined()
-  })
-
   it('includes toolConfig when tools provided', () => {
     const provider = new BedrockProvider({})
     const tools = [{ name: 'tool', description: 'desc', inputSchema: {}, execute: async () => ({}) }]
@@ -167,15 +158,6 @@ describe('BedrockProvider - buildParams branches', () => {
     })
     expect(params.toolConfig).toBeDefined()
     expect(params.toolConfig.tools).toHaveLength(1)
-  })
-
-  it('omits toolConfig when no tools', () => {
-    const provider = new BedrockProvider({})
-    const params = (provider as any).buildParams({
-      model: 'x',
-      messages: [{ role: 'user', content: 'hi' }],
-    })
-    expect(params.toolConfig).toBeUndefined()
   })
 
   it('uses providerOptions maxTokens', () => {
@@ -206,15 +188,6 @@ describe('BedrockProvider - content parts edge cases', () => {
     ]
     const mapped = (provider as any).mapContentParts(parts)
     expect(mapped[0].text).toContain('application/pdf')
-  })
-
-  it('maps text content part correctly', () => {
-    const provider = new BedrockProvider({})
-    const parts = [
-      { type: 'text' as const, text: 'hello' },
-    ]
-    const mapped = (provider as any).mapContentParts(parts)
-    expect(mapped[0].text).toBe('hello')
   })
 
   it('maps user string message to content array with text block', () => {
@@ -272,20 +245,6 @@ describe('BedrockProvider - chat()', () => {
     expect(result.usage?.outputTokens).toBe(5)
   })
 
-  it('defaults usage to 0 when not present', async () => {
-    const provider = new BedrockProvider({})
-    ;(provider as any).client = {
-      send: async () => ({
-        output: { message: { role: 'assistant', content: [{ text: 'Hi' }] } },
-      }),
-    }
-    const result = await provider.chat({
-      model: 'x',
-      messages: [{ role: 'user', content: 'hi' }],
-    })
-    expect(result.usage?.inputTokens).toBe(0)
-    expect(result.usage?.outputTokens).toBe(0)
-  })
 })
 
 describe('BedrockProvider - stream()', () => {

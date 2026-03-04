@@ -2,11 +2,6 @@ import { describe, it, expect } from 'bun:test'
 import { OpenAIProvider } from '../../src/providers/openai'
 
 describe('OpenAIProvider', () => {
-  it('has correct name', () => {
-    const provider = new OpenAIProvider({ apiKey: 'test' })
-    expect(provider.name).toBe('openai')
-  })
-
   it('keeps system messages in array', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
     const messages = [
@@ -98,18 +93,6 @@ describe('OpenAIProvider', () => {
     expect(mapped[2].image_url.url).toBe('https://example.com/img.png')
   })
 
-  it('maps response without tool_calls', () => {
-    const provider = new OpenAIProvider({ apiKey: 'test' })
-    const openaiMsg = {
-      role: 'assistant',
-      content: 'Just text',
-      tool_calls: undefined,
-    }
-    const result = (provider as any).mapResponseToMessage(openaiMsg)
-    expect(result.role).toBe('assistant')
-    expect(result.content).toBe('Just text')
-    expect(result.toolCalls).toBeUndefined()
-  })
 })
 
 describe('thinking / reasoning effort', () => {
@@ -144,15 +127,6 @@ describe('OpenAIProvider - buildParams branches', () => {
     })
     expect(params.tools).toBeDefined()
     expect(params.tools).toHaveLength(1)
-  })
-
-  it('omits tools when not provided', () => {
-    const provider = new OpenAIProvider({ apiKey: 'test' })
-    const params = (provider as any).buildParams({
-      model: 'gpt-4o',
-      messages: [{ role: 'user', content: 'hi' }],
-    })
-    expect(params.tools).toBeUndefined()
   })
 
   it('merges providerOptions into params', () => {

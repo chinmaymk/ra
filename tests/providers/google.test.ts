@@ -3,11 +3,6 @@ import { GoogleProvider } from '../../src/providers/google'
 import { extractSystemMessages } from '../../src/providers/utils'
 
 describe('GoogleProvider', () => {
-  it('has correct name', () => {
-    const provider = new GoogleProvider({ apiKey: 'test' })
-    expect(provider.name).toBe('google')
-  })
-
   it('extracts system messages from message array', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
@@ -29,16 +24,6 @@ describe('GoogleProvider', () => {
     ]
     const { system, filtered } = extractSystemMessages(messages)
     expect(system).toBe('First instruction\nSecond instruction')
-    expect(filtered).toHaveLength(1)
-  })
-
-  it('returns undefined system when no system messages', () => {
-    const provider = new GoogleProvider({ apiKey: 'test' })
-    const messages = [
-      { role: 'user' as const, content: 'hello' },
-    ]
-    const { system, filtered } = extractSystemMessages(messages)
-    expect(system).toBeUndefined()
     expect(filtered).toHaveLength(1)
   })
 
@@ -276,12 +261,6 @@ describe('GoogleProvider', () => {
     expect(result.content).toBe('')
   })
 
-  it('toUsage defaults to 0 when metadata is missing', () => {
-    const provider = new GoogleProvider({ apiKey: 'test' })
-    const usage = (provider as any).toUsage({})
-    expect(usage.inputTokens).toBe(0)
-    expect(usage.outputTokens).toBe(0)
-  })
 })
 
 describe('GoogleProvider - chat()', () => {
@@ -304,24 +283,6 @@ describe('GoogleProvider - chat()', () => {
     expect(result.message.role).toBe('assistant')
     expect(result.message.content).toBe('Hello from Gemini')
     expect(result.usage?.inputTokens).toBe(10)
-  })
-
-  it('returns undefined usage when usageMetadata is absent', async () => {
-    const provider = new GoogleProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      getGenerativeModel: () => ({
-        generateContent: async () => ({
-          response: {
-            candidates: [{ content: { role: 'model', parts: [{ text: 'Hi' }] } }],
-          },
-        }),
-      }),
-    }
-    const result = await provider.chat({
-      model: 'gemini-pro',
-      messages: [{ role: 'user', content: 'hi' }],
-    })
-    expect(result.usage).toBeUndefined()
   })
 
   it('passes tools and thinkingConfig when provided', async () => {

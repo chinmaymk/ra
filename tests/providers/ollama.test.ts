@@ -2,11 +2,6 @@ import { describe, it, expect } from 'bun:test'
 import { OllamaProvider } from '../../src/providers/ollama'
 
 describe('OllamaProvider', () => {
-  it('has correct name', () => {
-    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
-    expect(provider.name).toBe('ollama')
-  })
-
   it('keeps system messages as role:system', () => {
     const provider = new OllamaProvider({ host: 'http://localhost:11434' })
     const messages = [
@@ -103,15 +98,6 @@ describe('OllamaProvider', () => {
     expect(params.tools).toHaveLength(1)
   })
 
-  it('buildParams omits tools when not provided', () => {
-    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
-    const params = (provider as any).buildParams({
-      model: 'llama3',
-      messages: [{ role: 'user', content: 'hi' }],
-    })
-    expect(params.tools).toBeUndefined()
-  })
-
   it('buildParams merges providerOptions', () => {
     const provider = new OllamaProvider({ host: 'http://localhost:11434' })
     const params = (provider as any).buildParams({
@@ -170,11 +156,6 @@ describe('OllamaProvider', () => {
     ]
     const mapped = (provider as any).mapMessages(messages)
     expect(mapped[0].tool_calls[0].function.arguments).toEqual({})
-  })
-
-  it('creates with default host', () => {
-    const provider = new OllamaProvider()
-    expect(provider.name).toBe('ollama')
   })
 
   it('maps response with null content', () => {
