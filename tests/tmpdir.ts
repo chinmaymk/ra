@@ -1,1 +1,3 @@
-export const tmpdir = (name: string) => `${process.env.TMPDIR ?? '/tmp'}/${name}`
+import { tmpdir as osTmpdir } from 'os'
+
+export const tmpdir = (name: string) => `${osTmpdir()}/${name}`
