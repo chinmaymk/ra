@@ -1,40 +1,45 @@
 import type { IToolCall, IToolResult, StreamChunk, IMessage, ChatRequest } from '../providers/types'
 
-export interface LoopContext {
+export interface StoppableContext {
+  stop: () => void
+  signal: AbortSignal
+}
+
+export interface LoopContext extends StoppableContext {
   messages: IMessage[]
   iteration: number
   maxIterations: number
   sessionId: string
 }
 
-export interface ModelCallContext {
+export interface ModelCallContext extends StoppableContext {
   request: ChatRequest
   loop: LoopContext
 }
 
-export interface StreamChunkContext {
+export interface StreamChunkContext extends StoppableContext {
   chunk: StreamChunk
   loop: LoopContext
 }
 
-export interface ToolExecutionContext {
+export interface ToolExecutionContext extends StoppableContext {
   toolCall: IToolCall
   loop: LoopContext
 }
 
-export interface ToolResultContext {
+export interface ToolResultContext extends StoppableContext {
   toolCall: IToolCall
   result: IToolResult
   loop: LoopContext
 }
 
-export interface ErrorContext {
+export interface ErrorContext extends StoppableContext {
   error: Error
   loop: LoopContext
   phase: 'model_call' | 'tool_execution' | 'stream'
 }
 
-export type Middleware<T> = (ctx: T, next: () => Promise<void>) => Promise<void>
+export type Middleware<T> = (ctx: T) => Promise<void>
 
 export interface MiddlewareConfig {
   beforeLoopBegin: Middleware<LoopContext>[]
