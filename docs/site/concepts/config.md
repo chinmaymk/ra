@@ -22,6 +22,13 @@ ra searches the current directory for any of these files:
 | `RA_SYSTEM_PROMPT` | System prompt string |
 | `RA_MAX_ITERATIONS` | Max agent loop iterations |
 
+```bash
+export RA_PROVIDER=anthropic
+export RA_MODEL=claude-sonnet-4-6
+export RA_SYSTEM_PROMPT="You are a helpful assistant"
+export RA_MAX_ITERATIONS=50
+```
+
 ## Provider credentials (env only)
 
 Credentials are never exposed as CLI flags to keep them out of shell history.
@@ -33,6 +40,37 @@ Credentials are never exposed as CLI flags to keep them out of shell history.
 | Google | `RA_GOOGLE_API_KEY` |
 | Ollama | `RA_OLLAMA_HOST` |
 | Bedrock | `RA_BEDROCK_API_KEY`, `RA_BEDROCK_REGION` |
+
+## Full config file example
+
+```yaml
+provider: anthropic
+model: claude-sonnet-4-6
+systemPrompt: You are a helpful coding assistant.
+maxIterations: 50
+thinking: medium
+
+skills:
+  - code-review
+skillDirs:
+  - ./skills
+
+storage:
+  path: .ra/sessions
+  maxSessions: 100
+  ttlDays: 30
+
+http:
+  port: 3000
+  token: my-secret-token
+
+mcp:
+  client:
+    - name: filesystem
+      transport: stdio
+      command: npx
+      args: ["-y", "@anthropic/mcp-filesystem"]
+```
 
 ## CLI flags
 

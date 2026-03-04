@@ -1,16 +1,24 @@
 # Install
 
-Grab the `ra` binary for your OS. Put it somewhere on your `PATH`. Done.
+## Quick install
 
 ```bash
-mv ra /usr/local/bin/ra
-chmod +x /usr/local/bin/ra
+curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
+```
+
+Or manually:
+
+```bash
+mv ra /usr/local/bin/ra && chmod +x /usr/local/bin/ra
+```
+
+Verify:
+
+```bash
 ra --help
 ```
 
-If `ra --help` prints something, you're in.
-
-## From source
+## Build from source
 
 Requires [Bun](https://bun.sh).
 
@@ -18,6 +26,6 @@ Requires [Bun](https://bun.sh).
 git clone https://github.com/chinmaymk/ra
 cd ra
 bun install
-bun run compile
-# outputs dist/ra
+bun build src/index.ts --compile --target bun --outfile dist/ra
+# Binary is at dist/ra
 ```

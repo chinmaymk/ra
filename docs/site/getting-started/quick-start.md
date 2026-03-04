@@ -1,41 +1,50 @@
 # Quick Start
 
-## One-off question
+Set your provider key and go:
 
 ```bash
-ra "What is the capital of France?"
+export RA_ANTHROPIC_API_KEY="sk-..."
 ```
 
-Streams to stdout and exits.
-
-## Pick a provider and model
+## One-shot — streams to stdout and exits
 
 ```bash
-ra --provider openai --model gpt-4.1-mini "Explain this error"
+ra "Summarize the key points of this file" --file report.pdf
 ```
 
-## Attach a file
-
-```bash
-ra --file report.pdf "Summarize in three bullets."
-```
-
-## Inject a skill
-
-```bash
-ra --skill code-review --file diff.patch "Review this diff."
-```
-
-## Start the REPL
+## Interactive REPL
 
 ```bash
 ra
 ```
 
-You get a `›` prompt. Type. It streams back, runs tools, saves the conversation.
+## HTTP API server
+
+```bash
+ra --http
+```
+
+## MCP server for Cursor / Claude Desktop
+
+```bash
+ra --mcp
+```
+
+## More examples
+
+```bash
+# Code review with a skill and file attachment
+ra --skill code-review --file diff.patch "Review this diff"
+
+# Use a different provider
+ra --provider openai --model gpt-4.1 "Explain this error"
+
+# Enable extended thinking
+ra --thinking high "Design a distributed cache"
+```
 
 ## Next steps
 
 - [Configure a provider](/providers/anthropic) — set your API key
-- [Learn the modes](/modes/cli) — CLI, REPL, HTTP, MCP
+- [Learn the interfaces](/modes/cli) — CLI, REPL, HTTP, MCP
 - [Explore layered config](/concepts/config) — file → env → CLI

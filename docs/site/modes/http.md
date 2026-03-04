@@ -1,22 +1,24 @@
 # HTTP Server
 
-```bash
-ra --http
-```
+A lightweight server built on `Bun.serve()`.
 
-Listens on your configured port (default `3000`). Optional Bearer token auth.
+```bash
+ra --http                        # default port 3000
+ra --http --http-port 8080       # custom port
+ra --http --http-token secret    # with auth
+```
 
 ## Endpoints
 
-| Method + path | Description |
-|---------------|-------------|
-| `POST /chat/sync` | JSON body `{ "messages": [...] }` → `{ "response": "..." }` |
-| `POST /chat` | Same body, streams via SSE: `data: {"type":"text","delta":"..."}` then `data: {"type":"done"}` |
+| Endpoint | Description |
+|----------|-------------|
+| `POST /chat` | SSE stream — `data: {"type":"text","delta":"..."}` |
+| `POST /chat/sync` | Blocking JSON — `{ "response": "..." }` |
 | `GET /sessions` | List stored sessions |
 
 ## Authentication
 
-Set a token in your config or via env. All requests must include:
+When `--http-token` is set, all requests require:
 
 ```
 Authorization: Bearer <token>

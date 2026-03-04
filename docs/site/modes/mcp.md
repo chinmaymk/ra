@@ -4,42 +4,31 @@ ra speaks MCP in both directions.
 
 ## ra as MCP client (uses tools)
 
-Add MCP server configs to `ra.config.yml` and ra connects to them at startup, discovers their tools, and registers them with the model. The model calls them like any other function.
+Connect ra to external MCP servers. Their tools become available to the model automatically.
 
 ```yaml
+# ra.config.yml
 mcp:
-  servers:
+  client:
     - name: filesystem
+      transport: stdio
       command: npx
-      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+      args: ["-y", "@anthropic/mcp-filesystem"]
+    - name: database
+      transport: sse
+      url: http://localhost:8080/mcp
 ```
 
 ## ra as MCP server (is a tool)
 
 ```bash
-ra --mcp
+ra --mcp          # stdio transport (for Cursor, Claude Desktop)
+ra --mcp-http     # HTTP transport
 ```
 
-ra exposes itself as a single MCP tool that takes a prompt and runs the full agent loop. Other apps — Cursor, Claude Desktop, your own agents — can call it.
+ra prints the JSON config snippet to paste into your MCP client.
 
-### Cursor integration
-
-Add to your Cursor MCP config:
-
-```json
-{
-  "mcpServers": {
-    "ra": {
-      "command": "ra",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
-
-### Claude Desktop integration
-
-Add to `claude_desktop_config.json`:
+### Cursor / Claude Desktop integration
 
 ```json
 {
