@@ -84,7 +84,9 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_INTERFACE !== undefined)      set(['interface'], env.RA_INTERFACE)
   if (env.RA_SYSTEM_PROMPT !== undefined)  set(['systemPrompt'], env.RA_SYSTEM_PROMPT)
   if (env.RA_MAX_ITERATIONS !== undefined) setInt(['maxIterations'], env.RA_MAX_ITERATIONS)
-  if (env.RA_THINKING !== undefined)       set(['thinking'], env.RA_THINKING)
+  if (env.RA_THINKING !== undefined && ['low', 'medium', 'high'].includes(env.RA_THINKING)) {
+    set(['thinking'], env.RA_THINKING)
+  }
 
   // HTTP server
   if (env.RA_HTTP_PORT !== undefined)  setInt(['http', 'port'], env.RA_HTTP_PORT)
@@ -148,7 +150,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
       resolved = config.systemPrompt
     } else if (config.systemPrompt.startsWith('~')) {
       const { homedir } = await import('os')
-      resolved = join(homedir(), config.systemPrompt.slice(1))
+      resolved = join(homedir(), config.systemPrompt.slice(2))
     } else {
       resolved = join(cwd, config.systemPrompt)
     }

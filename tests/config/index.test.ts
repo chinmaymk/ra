@@ -140,6 +140,11 @@ describe('thinking config', () => {
     const config = await loadConfig({ env: {} })
     expect(config.thinking).toBeUndefined()
   })
+
+  it('rejects invalid RA_THINKING values', async () => {
+    const config = await loadConfig({ env: { RA_THINKING: 'extreme' } })
+    expect(config.thinking).toBeUndefined()
+  })
 })
 
 describe('systemPrompt file-path detection', () => {
@@ -199,5 +204,18 @@ describe('systemPrompt file-path detection', () => {
   it('keeps string as-is when path-like but file does not exist', async () => {
     const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: './nonexistent.txt' } })
     expect(c.systemPrompt).toBe('./nonexistent.txt')
+  })
+
+  it('resolves tilde paths correctly (~/file expands to homedir/file)', async () => {
+    const { homedir } = await import('os')
+    const home = homedir()
+    const promptFile = join(home, '.ra-test-prompt-tilde.txt')
+    writeFileSync(promptFile, 'tilde prompt content')
+    try {
+      const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: '~/.ra-test-prompt-tilde.txt' } })
+      expect(c.systemPrompt).toBe('tilde prompt content')
+    } finally {
+      rmSync(promptFile, { force: true })
+    }
   })
 })
