@@ -9,7 +9,6 @@ import { McpClient } from './mcp/client'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
-import { c } from './interfaces/tui'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { join } from 'path'
@@ -21,47 +20,75 @@ USAGE
   ra [options] [prompt]
 
 OPTIONS
-  --provider <name>       Provider to use (anthropic, openai, google, ollama)
-  --model <name>          Model name
-  --config <path>         Path to config file
-  --skill <name>          Skill to load (repeatable)
-  --file <path>           File to attach (repeatable)
-  --system-prompt <text>  System prompt text or path to file
-  --resume <session-id>   Resume a previous session
-  --http                  Start HTTP server
-  --repl                  Start interactive REPL (default)
-  --mcp                   Start MCP stdio server
-  --help                  Print this help message
+  --provider <name>                   Provider (anthropic, openai, google, ollama)
+  --model <name>                      Model name
+  --system-prompt <text>              System prompt text or path to file
+  --max-iterations <n>                Max agent loop iterations
+  --config <path>                     Path to config file
+  --skill <name>                      Skill to activate (repeatable)
+  --file <path>                       File to attach (repeatable)
+  --resume <session-id>               Resume a previous session
 
-ARGUMENTS
-  prompt                  Prompt to run (non-interactive mode)
+INTERFACE
+  --cli                               Oneshot mode: run prompt and exit
+  --repl                              Interactive REPL mode (default)
+  --http                              Start HTTP API server
+  --mcp                               Start MCP stdio server
+
+HTTP SERVER
+  --http-port <port>                  HTTP server port (default: 3000)
+  --http-token <token>                Bearer token for HTTP auth
+
+MCP SERVER
+  --mcp-server-enabled                Enable MCP HTTP server alongside main interface
+  --mcp-server-port <port>            MCP HTTP server port (default: 3001)
+  --mcp-server-transport <t>          MCP server transport: stdio | http
+  --mcp-server-tool-name <name>       MCP tool name
+  --mcp-server-tool-description <d>   MCP tool description
+
+STORAGE
+  --storage-path <path>               Session storage directory
+  --storage-max-sessions <n>          Max stored sessions
+  --storage-ttl-days <n>              Session TTL in days
+
+PROVIDER OPTIONS
+  --anthropic-base-url <url>          Anthropic API base URL
+  --openai-base-url <url>             OpenAI API base URL
+  --ollama-host <url>                 Ollama host URL
+
+  --help, -h                          Print this help message
+
+ENV VARS
+  RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
+  RA_HTTP_PORT, RA_HTTP_TOKEN
+  RA_MCP_SERVER_ENABLED, RA_MCP_SERVER_PORT, RA_MCP_SERVER_TRANSPORT
+  RA_MCP_SERVER_TOOL_NAME, RA_MCP_SERVER_TOOL_DESCRIPTION
+  RA_STORAGE_PATH, RA_STORAGE_MAX_SESSIONS, RA_STORAGE_TTL_DAYS
+  RA_ANTHROPIC_API_KEY, RA_ANTHROPIC_BASE_URL
+  RA_OPENAI_API_KEY, RA_OPENAI_BASE_URL
+  RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
 
 EXAMPLES
   ra "What is the capital of France?"
   ra --provider openai --model gpt-4o "Summarize this file" --file report.pdf
-  ra --interface http
-  ra serve
+  ra --repl
+  ra --http --http-port 8080
+  ra --mcp-server-enabled --mcp-server-port 4000 --repl
 `.trim()
 
 
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv)
 
-  if (parsed.help) {
+  if (parsed.meta.help) {
     console.log(HELP)
     process.exit(0)
   }
 
-  const cliArgs: Partial<RaConfig> = {
-    ...(parsed.provider && { provider: parsed.provider as RaConfig['provider'] }),
-    ...(parsed.model && { model: parsed.model }),
-    ...(parsed.systemPrompt && { systemPrompt: parsed.systemPrompt }),
-  }
-
   const config = await loadConfig({
     cwd: process.cwd(),
-    configPath: parsed.config,
-    cliArgs,
+    configPath: parsed.meta.configPath,
+    cliArgs: parsed.config,
     env: process.env as Record<string, string | undefined>,
   })
 
@@ -84,7 +111,7 @@ async function main(): Promise<void> {
   // Active skills for this run (from --skill flags + alwaysLoad)
   const activeSkills = [
     ...(config.alwaysLoad ?? []),
-    ...parsed.skills,
+    ...parsed.meta.skills,
   ]
 
   // Connect MCP clients
@@ -119,21 +146,25 @@ async function main(): Promise<void> {
   process.on('SIGTERM', async () => { await shutdown(); process.exit(0) })
 
   // Determine which interface to launch
-  if (parsed.mcp) {
-    // Stdio MCP server — blocks until stdin closes
+  if (config.interface === 'mcp') {
+    const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
+    const mcpCommand = isDevMode ? 'bun' : process.argv[0]!
+    const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp'] : ['--mcp']
+    const cursorConfig = JSON.stringify({
+      mcpServers: { ra: { command: mcpCommand, args: mcpArgs } }
+    }, null, 2)
+    process.stderr.write(`MCP stdio server starting. Add to .cursor/mcp.json:\n\n${cursorConfig}\n\n`)
     await startMcpStdio(config.mcp.server, mcpHandler)
     await shutdown()
     return
-  } else if (parsed.cli || parsed.prompt) {
-    // Non-interactive oneshot CLI mode
-    if (!parsed.prompt) {
+  } else if (config.interface === 'cli' || parsed.meta.prompt) {
+    if (!parsed.meta.prompt) {
       console.error('Error: --cli requires a prompt argument')
       process.exit(1)
     }
-    process.stdout.write(`${c.cyan}${c.bold}ra ›${c.reset} `)
     await runCli({
-      prompt: parsed.prompt,
-      files: parsed.files,
+      prompt: parsed.meta.prompt,
+      files: parsed.meta.files,
       skills: activeSkills,
       systemPrompt: config.systemPrompt,
       model: config.model,
@@ -144,8 +175,7 @@ async function main(): Promise<void> {
     })
     process.stdout.write('\n')
     await shutdown()
-  } else if (parsed.http) {
-    // HTTP server mode
+  } else if (config.interface === 'http') {
     const httpServer = new HttpServer({
       port: config.http.port,
       token: config.http.token || undefined,
@@ -160,7 +190,7 @@ async function main(): Promise<void> {
     await httpServer.start()
     console.error(`HTTP server listening on port ${config.http.port}`)
   } else {
-    // Interactive REPL mode
+    // Default: interactive REPL mode
     const repl = new Repl({
       model: config.model,
       provider,
@@ -169,9 +199,7 @@ async function main(): Promise<void> {
       systemPrompt: config.systemPrompt,
       skillMap,
       maxIterations: config.maxIterations,
-      sessionId: parsed.resume,
-      onChunk: (text) => process.stdout.write(text),
-      onStatus: (msg) => console.error(msg),
+      sessionId: parsed.meta.resume,
     })
     await repl.start()
     await shutdown()

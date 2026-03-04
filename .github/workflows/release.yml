@@ -58,13 +58,13 @@ jobs:
         run: bun install
 
       - name: Build binary
-        run: bun build src/index.ts --compile --target ${{ matrix.target }} --outfile ${{ matrix.asset }}
+        run: bun build src/index.ts --compile --target ${{ matrix.target }} --outfile dist/${{ matrix.asset }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
-          path: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
 
   release:
     name: Publish Release

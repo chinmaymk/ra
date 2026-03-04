@@ -10,6 +10,10 @@
   "peerDependencies": {
     "typescript": "^5"
   },
+  "scripts": {
+    "compile": "bun build src/index.ts --compile --target bun --outfile dist/ra",
+    "ra": "bun run src/index.ts"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@google/generative-ai": "^0.24.1",

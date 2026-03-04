@@ -18,8 +18,6 @@ export interface ReplOptions {
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
   sessionId?: string
-  onChunk?: (text: string) => void
-  onStatus?: (msg: string) => void
 }
 
 export class Repl {
@@ -42,12 +40,15 @@ export class Repl {
   async start(): Promise<void> {
     if (this.sessionId) {
       this.messages = await this.options.storage.readMessages(this.sessionId)
-      tui.printStatus(`Resumed session ${this.sessionId} (${this.messages.length} messages)`)
+      this.sessionId = this.sessionId
     } else {
       this.sessionId = await this.newSession()
     }
 
     tui.printHeader(this.options.model, this.sessionId!)
+    if (this.options.sessionId) {
+      tui.printResumeHeader(this.sessionId!, this.messages.length)
+    }
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdout.isTTY })
     rl.setPrompt(tui.PROMPT)
@@ -60,7 +61,7 @@ export class Repl {
 
       if (trimmed.startsWith('/')) {
         const response = await this.handleCommand(trimmed)
-        if (response) process.stdout.write(`${tui.c.dim}${response}${tui.c.reset}\n`)
+        if (response) tui.printCommandResponse(response)
       } else {
         await this.processInput(trimmed)
       }
@@ -88,6 +89,7 @@ export class Repl {
 
     let boxOpened = false
     const toolStartTimes = new Map<string, number>()
+    tui.startSpinner()
     const userMw = this.options.middleware ?? {}
 
     const loop = new AgentLoop({
@@ -101,7 +103,7 @@ export class Repl {
         onStreamChunk: [
           async (ctx: StreamChunkContext, next) => {
             if (ctx.chunk.type === 'text') {
-              if (!boxOpened) { tui.openAssistantBox(); boxOpened = true }
+              if (!boxOpened) { tui.stopSpinner(); boxOpened = true }
               process.stdout.write(ctx.chunk.delta)
             }
             await next()
@@ -119,13 +121,22 @@ export class Repl {
       },
     })
 
-    const result = await loop.run(initialMessages)
-    if (boxOpened) tui.closeAssistantBox()
+    try {
+      const result = await loop.run(initialMessages)
+      tui.stopSpinner(true) // no-op if already stopped by first text chunk; clears spinner if tool-only
+      if (boxOpened) tui.closeAssistantBox()
+      else process.stdout.write('\n')
 
-    const newMessages = result.messages.slice(initialMessages.length)
-    this.messages.push(userMessage, ...newMessages)
-    for (const msg of [userMessage, ...newMessages]) {
-      await this.options.storage.appendMessage(this.sessionId!, msg)
+      const newMessages = result.messages.slice(initialMessages.length)
+      this.messages.push(userMessage, ...newMessages)
+      for (const msg of [userMessage, ...newMessages]) {
+        await this.options.storage.appendMessage(this.sessionId!, msg)
+      }
+    } catch (err) {
+      tui.stopSpinner(true)
+      if (boxOpened) tui.closeAssistantBox()
+      else process.stdout.write('\n')
+      tui.printError(err instanceof Error ? err.message : String(err))
     }
   }
 
