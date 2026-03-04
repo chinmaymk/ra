@@ -67,6 +67,12 @@ export RA_OPENAI_API_KEY=sk-...
 export RA_GOOGLE_API_KEY=...
 export RA_OLLAMA_HOST=http://localhost:11434
 export RA_BEDROCK_REGION=us-east-1
+
+# Azure OpenAI (RA_AZURE_API_KEY optional — omit to use DefaultAzureCredential)
+export RA_AZURE_ENDPOINT=https://myresource.openai.azure.com/
+export RA_AZURE_DEPLOYMENT=my-gpt4o
+export RA_AZURE_API_KEY=...
+export RA_AZURE_API_VERSION=2024-12-01-preview
 ```
 
 ## CLI flags
@@ -116,3 +122,4 @@ Credentials are env-only — never exposed as CLI flags to keep them out of shel
 | Google | `RA_GOOGLE_API_KEY` |
 | Ollama | `RA_OLLAMA_HOST` |
 | Bedrock | `RA_BEDROCK_API_KEY`, `RA_BEDROCK_REGION` |
+| Azure | `RA_AZURE_ENDPOINT`, `RA_AZURE_DEPLOYMENT`, `RA_AZURE_API_KEY` (optional), `RA_AZURE_API_VERSION` (optional) |

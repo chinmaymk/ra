@@ -17,7 +17,7 @@ features:
   - title: Full Control Over Context
     details: Every message, tool call, and stream chunk is yours to inspect, modify, or stop. Middleware hooks run at every step. You decide what the model sees and when.
   - title: Any Provider, Any Model
-    details: Use any model from Anthropic, OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch with a flag — the rest of your config stays the same.
+    details: Use any model from Anthropic, OpenAI, Azure OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch with a flag — the rest of your config stays the same.
   - title: Any Interface
     details: Ship as a CLI command, interactive REPL, streaming HTTP API, or MCP server for Cursor and Claude Desktop. One binary, every context.
   - title: Skills & MCP
