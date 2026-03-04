@@ -14,7 +14,7 @@ export class OpenAIProvider implements IProvider {
     this.client = new OpenAI({ apiKey: options.apiKey, baseURL: options.baseURL })
   }
 
-  protected buildParams(request: ChatRequest): OpenAI.Chat.ChatCompletionCreateParams {
+  buildParams(request: ChatRequest): OpenAI.Chat.ChatCompletionCreateParams {
     const params: OpenAI.Chat.ChatCompletionCreateParams = {
       model: request.model,
       messages: this.mapMessages(request.messages),
@@ -25,7 +25,7 @@ export class OpenAIProvider implements IProvider {
     return params
   }
 
-  private toUsage(u: { prompt_tokens: number; completion_tokens: number; completion_tokens_details?: { reasoning_tokens?: number } }): TokenUsage {
+  toUsage(u: { prompt_tokens: number; completion_tokens: number; completion_tokens_details?: { reasoning_tokens?: number } }): TokenUsage {
     return {
       inputTokens: u.prompt_tokens,
       outputTokens: u.completion_tokens,
@@ -76,7 +76,7 @@ export class OpenAIProvider implements IProvider {
     yield { type: 'done', usage }
   }
 
-  private mapMessages(messages: IMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
+  mapMessages(messages: IMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
     return messages.map((msg): OpenAI.Chat.ChatCompletionMessageParam => {
       if (msg.role === 'system') {
         return { role: 'system', content: typeof msg.content === 'string' ? msg.content : msg.content.map(p => p.type === 'text' ? p.text : '').join('') }
@@ -100,11 +100,11 @@ export class OpenAIProvider implements IProvider {
     })
   }
 
-  private mapTools(tools: ITool[]): OpenAI.Chat.ChatCompletionTool[] {
+  mapTools(tools: ITool[]): OpenAI.Chat.ChatCompletionTool[] {
     return tools.map(t => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.inputSchema as Record<string, unknown> } }))
   }
 
-  private mapContentParts(parts: ContentPart[]): OpenAI.Chat.ChatCompletionContentPart[] {
+  mapContentParts(parts: ContentPart[]): OpenAI.Chat.ChatCompletionContentPart[] {
     return parts.map((part): OpenAI.Chat.ChatCompletionContentPart => {
       if (part.type === 'text') return { type: 'text', text: part.text }
       if (part.type === 'image') {
@@ -115,7 +115,7 @@ export class OpenAIProvider implements IProvider {
     })
   }
 
-  private mapResponseToMessage(msg: OpenAI.Chat.ChatCompletionMessage): IMessage {
+  mapResponseToMessage(msg: OpenAI.Chat.ChatCompletionMessage): IMessage {
     const result: IMessage = { role: 'assistant', content: msg.content ?? '' }
     if (msg.tool_calls?.length) {
       result.toolCalls = msg.tool_calls

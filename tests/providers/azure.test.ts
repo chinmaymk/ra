@@ -9,7 +9,7 @@ describe('AzureProvider', () => {
 
   it('uses deployment as model in buildParams', () => {
     const p = new AzureProvider({ endpoint: 'https://test.openai.azure.com/', deployment: 'my-gpt4o', apiVersion: '2024-02-01' })
-    const params = (p as any).buildParams({
+    const params = p.buildParams({
       model: 'should-be-ignored',
       messages: [{ role: 'user', content: 'hi' }],
     })

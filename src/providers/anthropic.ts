@@ -17,7 +17,7 @@ export class AnthropicProvider implements IProvider {
     this.client = new Anthropic({ apiKey: options.apiKey, baseURL: options.baseURL })
   }
 
-  private buildParams(request: ChatRequest) {
+  buildParams(request: ChatRequest) {
     const { system, filtered } = extractSystemMessages(request.messages)
     return {
       model: request.model,
@@ -71,7 +71,7 @@ export class AnthropicProvider implements IProvider {
     if (!emittedDone) yield { type: 'done', usage }
   }
 
-  private mapMessages(messages: IMessage[]): Anthropic.MessageParam[] {
+  mapMessages(messages: IMessage[]): Anthropic.MessageParam[] {
     return messages.map((msg): Anthropic.MessageParam => {
       if (msg.role === 'tool') {
         return {
@@ -95,11 +95,11 @@ export class AnthropicProvider implements IProvider {
     })
   }
 
-  private mapTools(tools: ITool[]): Anthropic.Tool[] {
+  mapTools(tools: ITool[]): Anthropic.Tool[] {
     return tools.map(t => ({ name: t.name, description: t.description, input_schema: t.inputSchema as Anthropic.Tool['input_schema'] }))
   }
 
-  private mapContentParts(parts: ContentPart[]): Anthropic.ContentBlockParam[] {
+  mapContentParts(parts: ContentPart[]): Anthropic.ContentBlockParam[] {
     return parts.map((part): Anthropic.ContentBlockParam => {
       if (part.type === 'text') return { type: 'text', text: part.text }
       if (part.type === 'image') {
@@ -112,7 +112,7 @@ export class AnthropicProvider implements IProvider {
     })
   }
 
-  private mapResponseToMessage(response: Anthropic.Message): IMessage {
+  mapResponseToMessage(response: Anthropic.Message): IMessage {
     const toolCalls: IToolCall[] = []
     let textContent = ''
     for (const block of response.content) {

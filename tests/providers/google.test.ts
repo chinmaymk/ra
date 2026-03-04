@@ -1,4 +1,16 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, mock, beforeEach } from 'bun:test'
+
+const mockGenerateContent = mock()
+const mockGenerateContentStream = mock()
+
+mock.module('@google/generative-ai', () => ({
+  GoogleGenerativeAI: class MockGoogleGenerativeAI {
+    getGenerativeModel() {
+      return { generateContent: mockGenerateContent, generateContentStream: mockGenerateContentStream }
+    }
+  },
+}))
+
 import { GoogleProvider } from '../../src/providers/google'
 import { extractSystemMessages } from '../../src/providers/utils'
 
@@ -30,7 +42,7 @@ describe('GoogleProvider', () => {
     const messages = [
       { role: 'user' as const, content: 'hello' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('user')
     expect(mapped[0].parts[0].text).toBe('hello')
   })
@@ -40,7 +52,7 @@ describe('GoogleProvider', () => {
     const messages = [
       { role: 'assistant' as const, content: 'I can help' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('model')
     expect(mapped[0].parts[0].text).toBe('I can help')
   })
@@ -56,7 +68,7 @@ describe('GoogleProvider', () => {
         ],
       },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].parts[0].text).toBe('Look at this')
     expect(mapped[0].parts[1].inlineData).toBeDefined()
     expect(mapped[0].parts[1].inlineData.mimeType).toBe('image/png')
@@ -71,7 +83,7 @@ describe('GoogleProvider', () => {
       inputSchema: { type: 'object', properties: { x: { type: 'number' } } },
       execute: async () => ({}),
     }]
-    const mapped = (provider as any).mapTools(tools)
+    const mapped = provider.mapTools(tools) as any[]
     expect(mapped).toHaveLength(1)
     expect(mapped[0].functionDeclarations).toHaveLength(1)
     expect(mapped[0].functionDeclarations[0].name).toBe('test_tool')
@@ -88,10 +100,10 @@ describe('GoogleProvider', () => {
         toolCalls: [{ id: 'call_1', name: 'test_tool', arguments: '{broken json' }],
       },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     const fcPart = mapped[0].parts.find((p: any) => p.functionCall)
     expect(fcPart).toBeDefined()
-    expect(fcPart.functionCall.args).toEqual({})
+    expect(fcPart!.functionCall.args).toEqual({})
   })
 
   it('maps assistant messages with toolCalls to functionCall parts', () => {
@@ -103,12 +115,12 @@ describe('GoogleProvider', () => {
         toolCalls: [{ id: 'call_1', name: 'test_tool', arguments: '{"x":1}' }],
       },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('model')
     const fcPart = mapped[0].parts.find((p: any) => p.functionCall)
     expect(fcPart).toBeDefined()
-    expect(fcPart.functionCall.name).toBe('test_tool')
-    expect(fcPart.functionCall.args).toEqual({ x: 1 })
+    expect(fcPart!.functionCall.name).toBe('test_tool')
+    expect(fcPart!.functionCall.args).toEqual({ x: 1 })
   })
 
   it('maps tool result messages to functionResponse parts', () => {
@@ -116,12 +128,12 @@ describe('GoogleProvider', () => {
     const messages = [
       { role: 'tool' as const, content: 'result text', toolCallId: 'read_file_0' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('user')
     const frPart = mapped[0].parts.find((p: any) => p.functionResponse)
     expect(frPart).toBeDefined()
-    expect(frPart.functionResponse.name).toBe('read_file')
-    expect(frPart.functionResponse.response.content).toBe('result text')
+    expect(frPart!.functionResponse.name).toBe('read_file')
+    expect(frPart!.functionResponse.response.content).toBe('result text')
   })
 
   it('maps Gemini response back to IMessage', () => {
@@ -135,7 +147,7 @@ describe('GoogleProvider', () => {
       }],
       usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
     }
-    const result = (provider as any).mapResponseToMessage(geminiResponse)
+    const result = provider.mapResponseToMessage(geminiResponse as any)
     expect(result.role).toBe('assistant')
     expect(result.content).toBe('Hello there')
     expect(result.toolCalls).toBeUndefined()
@@ -154,34 +166,34 @@ describe('GoogleProvider', () => {
       }],
       usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
     }
-    const result = (provider as any).mapResponseToMessage(geminiResponse)
+    const result = provider.mapResponseToMessage(geminiResponse as any)
     expect(result.role).toBe('assistant')
     expect(result.toolCalls).toHaveLength(1)
-    expect(result.toolCalls[0].name).toBe('test_tool')
-    expect(result.toolCalls[0].arguments).toBe('{"x":1}')
+    expect(result.toolCalls![0]!.name).toBe('test_tool')
+    expect(result.toolCalls![0]!.arguments).toBe('{"x":1}')
   })
 
   describe('thinking', () => {
     it('builds thinkingConfig for medium', () => {
       const provider = new GoogleProvider({ apiKey: 'test' })
-      const genConfig = (provider as any).buildThinkingConfig('medium')
+      const genConfig = provider.buildThinkingConfig('medium')
       expect(genConfig).toEqual({ thinkingBudget: 4096 })
     })
 
     it('returns undefined when thinking not set', () => {
       const provider = new GoogleProvider({ apiKey: 'test' })
-      const genConfig = (provider as any).buildThinkingConfig(undefined)
+      const genConfig = provider.buildThinkingConfig(undefined)
       expect(genConfig).toBeUndefined()
     })
 
     it('maps low to 512', () => {
       const provider = new GoogleProvider({ apiKey: 'test' })
-      expect((provider as any).buildThinkingConfig('low')).toEqual({ thinkingBudget: 512 })
+      expect(provider.buildThinkingConfig('low')).toEqual({ thinkingBudget: 512 })
     })
 
     it('maps high to 16384', () => {
       const provider = new GoogleProvider({ apiKey: 'test' })
-      expect((provider as any).buildThinkingConfig('high')).toEqual({ thinkingBudget: 16384 })
+      expect(provider.buildThinkingConfig('high')).toEqual({ thinkingBudget: 16384 })
     })
   })
 
@@ -190,7 +202,7 @@ describe('GoogleProvider', () => {
     const parts = [
       { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/img.jpg' } },
     ]
-    const mapped = (provider as any).mapContentParts(parts)
+    const mapped = provider.mapContentParts(parts) as any[]
     expect(mapped[0].fileData).toBeDefined()
     expect(mapped[0].fileData.fileUri).toBe('https://example.com/img.jpg')
   })
@@ -200,7 +212,7 @@ describe('GoogleProvider', () => {
     const parts = [
       { type: 'file' as const, mimeType: 'application/pdf', data: 'base64data' },
     ]
-    const mapped = (provider as any).mapContentParts(parts)
+    const mapped = provider.mapContentParts(parts) as any[]
     expect(mapped[0].inlineData).toBeDefined()
     expect(mapped[0].inlineData.mimeType).toBe('application/pdf')
   })
@@ -210,7 +222,7 @@ describe('GoogleProvider', () => {
     const parts = [
       { type: 'file' as const, mimeType: 'application/pdf', data: Buffer.from('pdfdata') },
     ]
-    const mapped = (provider as any).mapContentParts(parts)
+    const mapped = provider.mapContentParts(parts) as any[]
     expect(mapped[0].inlineData.data).toBe(Buffer.from('pdfdata').toString('base64'))
   })
 
@@ -223,7 +235,7 @@ describe('GoogleProvider', () => {
         toolCalls: [{ id: 'call_1', name: 'tool', arguments: '{}' }],
       },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('model')
     expect(mapped[0].parts.some((p: any) => p.text === 'Let me help')).toBe(true)
     expect(mapped[0].parts.some((p: any) => p.functionCall)).toBe(true)
@@ -238,7 +250,7 @@ describe('GoogleProvider', () => {
         toolCalls: [{ id: 'call_1', name: 'tool', arguments: '{}' }],
       },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].parts.some((p: any) => p.text === 'here')).toBe(true)
     expect(mapped[0].parts.some((p: any) => p.functionCall)).toBe(true)
   })
@@ -248,38 +260,33 @@ describe('GoogleProvider', () => {
     const messages = [
       { role: 'user' as const, content: [{ type: 'text' as const, text: 'look at this' }] },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].parts[0].text).toBe('look at this')
   })
 
   it('maps response with no candidates gracefully', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
-    const result = (provider as any).mapResponseToMessage({ candidates: [] })
+    const result = provider.mapResponseToMessage({ candidates: [] } as any)
     expect(result.role).toBe('assistant')
     expect(result.content).toBe('')
   })
 
   it('accepts baseURL option without error', () => {
-    // Behavioral verification happens in integration tests;
-    // this ensures the option is wired up at the type level
     expect(() => new GoogleProvider({ apiKey: 'test', baseURL: 'http://localhost:9999' })).not.toThrow()
   })
-
 })
 
 describe('GoogleProvider - chat()', () => {
+  beforeEach(() => mockGenerateContent.mockReset())
+
   it('calls model and returns mapped response with usage', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        candidates: [{ content: { role: 'model', parts: [{ text: 'Hello from Gemini' }] } }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
+      },
+    })
     const provider = new GoogleProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      getGenerativeModel: () => ({
-        generateContent: async () => ({
-          response: {
-            candidates: [{ content: { role: 'model', parts: [{ text: 'Hello from Gemini' }] } }],
-            usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
-          },
-        }),
-      }),
-    }
     const result = await provider.chat({
       model: 'gemini-pro',
       messages: [{ role: 'user', content: 'hi' }],
@@ -290,20 +297,16 @@ describe('GoogleProvider - chat()', () => {
   })
 
   it('passes tools and thinkingConfig when provided', async () => {
-    const provider = new GoogleProvider({ apiKey: 'test' })
     let capturedArgs: any = null
-    ;(provider as any).client = {
-      getGenerativeModel: () => ({
-        generateContent: async (args: any) => {
-          capturedArgs = args
-          return {
-            response: {
-              candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] } }],
-            },
-          }
+    mockGenerateContent.mockImplementation(async (args: any) => {
+      capturedArgs = args
+      return {
+        response: {
+          candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] } }],
         },
-      }),
-    }
+      }
+    })
+    const provider = new GoogleProvider({ apiKey: 'test' })
     await provider.chat({
       model: 'gemini-pro',
       messages: [{ role: 'user', content: 'hi' }],
@@ -316,18 +319,16 @@ describe('GoogleProvider - chat()', () => {
 })
 
 describe('GoogleProvider - stream()', () => {
+  beforeEach(() => mockGenerateContentStream.mockReset())
+
   it('yields text deltas and done with usage', async () => {
+    mockGenerateContentStream.mockResolvedValue({
+      stream: (async function* () {
+        yield { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] }
+        yield { candidates: [{ content: { parts: [{ text: ' World' }] } }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } }
+      })(),
+    })
     const provider = new GoogleProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      getGenerativeModel: () => ({
-        generateContentStream: async () => ({
-          stream: (async function* () {
-            yield { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] }
-            yield { candidates: [{ content: { parts: [{ text: ' World' }] } }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } }
-          })(),
-        }),
-      }),
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -339,17 +340,13 @@ describe('GoogleProvider - stream()', () => {
   })
 
   it('yields thinking deltas for thought parts', async () => {
+    mockGenerateContentStream.mockResolvedValue({
+      stream: (async function* () {
+        yield { candidates: [{ content: { parts: [{ thought: true, text: 'Let me think...' }] } }] }
+        yield { candidates: [{ content: { parts: [{ text: 'Answer here' }] } }] }
+      })(),
+    })
     const provider = new GoogleProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      getGenerativeModel: () => ({
-        generateContentStream: async () => ({
-          stream: (async function* () {
-            yield { candidates: [{ content: { parts: [{ thought: true, text: 'Let me think...' }] } }] }
-            yield { candidates: [{ content: { parts: [{ text: 'Answer here' }] } }] }
-          })(),
-        }),
-      }),
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -359,16 +356,12 @@ describe('GoogleProvider - stream()', () => {
   })
 
   it('yields tool call events for functionCall parts', async () => {
+    mockGenerateContentStream.mockResolvedValue({
+      stream: (async function* () {
+        yield { candidates: [{ content: { parts: [{ functionCall: { name: 'read_file', args: { path: 'x' } } }] } }] }
+      })(),
+    })
     const provider = new GoogleProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      getGenerativeModel: () => ({
-        generateContentStream: async () => ({
-          stream: (async function* () {
-            yield { candidates: [{ content: { parts: [{ functionCall: { name: 'read_file', args: { path: 'x' } } }] } }] }
-          })(),
-        }),
-      }),
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -379,19 +372,15 @@ describe('GoogleProvider - stream()', () => {
   })
 
   it('assigns unique IDs when same tool is called multiple times', async () => {
+    mockGenerateContentStream.mockResolvedValue({
+      stream: (async function* () {
+        yield { candidates: [{ content: { parts: [
+          { functionCall: { name: 'read_file', args: { path: 'a.ts' } } },
+          { functionCall: { name: 'read_file', args: { path: 'b.ts' } } },
+        ] } }] }
+      })(),
+    })
     const provider = new GoogleProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      getGenerativeModel: () => ({
-        generateContentStream: async () => ({
-          stream: (async function* () {
-            yield { candidates: [{ content: { parts: [
-              { functionCall: { name: 'read_file', args: { path: 'a.ts' } } },
-              { functionCall: { name: 'read_file', args: { path: 'b.ts' } } },
-            ] } }] }
-          })(),
-        }),
-      }),
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -410,7 +399,7 @@ describe('GoogleProvider - empty content handling', () => {
     const messages = [
       { role: 'assistant' as const, content: '' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].parts.every((p: any) => p.text !== '')).toBe(true)
     expect(mapped[0].parts).toHaveLength(0)
   })
@@ -420,7 +409,7 @@ describe('GoogleProvider - empty content handling', () => {
     const messages = [
       { role: 'user' as const, content: '' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].parts).toHaveLength(0)
   })
 })
@@ -431,7 +420,7 @@ describe('GoogleProvider - additional bug fixes', () => {
     const messages = [
       { role: 'tool' as const, content: 'result', toolCallId: 'get_result_3_0' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].parts[0].functionResponse.name).toBe('get_result_3')
   })
 
@@ -443,7 +432,7 @@ describe('GoogleProvider - additional bug fixes', () => {
         { text: 'actual response' },
       ] } }],
     }
-    const msg = (provider as any).mapResponseToMessage(response as any)
+    const msg = provider.mapResponseToMessage(response as any)
     expect(msg.content).toBe('actual response')
     expect((msg.content as string)).not.toContain('thinking')
   })
@@ -453,7 +442,7 @@ describe('GoogleProvider - additional bug fixes', () => {
     const parts = [
       { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/photo.png' } },
     ]
-    const mapped = (provider as any).mapContentParts(parts)
+    const mapped = provider.mapContentParts(parts) as any[]
     expect(mapped[0].fileData.mimeType).toBe('image/png')
   })
 })
@@ -465,7 +454,7 @@ describe('GoogleProvider - tool result ID mapping', () => {
       { role: 'tool' as const, content: 'file contents', toolCallId: 'read_file_0' },
       { role: 'tool' as const, content: 'more contents', toolCallId: 'read_file_1' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].parts[0].functionResponse.name).toBe('read_file')
     expect(mapped[1].parts[0].functionResponse.name).toBe('read_file')
   })
@@ -483,10 +472,10 @@ describe('GoogleProvider - tool result ID mapping', () => {
         },
       }],
     }
-    const result = (provider as any).mapResponseToMessage(response)
+    const result = provider.mapResponseToMessage(response as any)
     expect(result.toolCalls).toHaveLength(2)
-    expect(result.toolCalls[0].id).toBe('search_0')
-    expect(result.toolCalls[1].id).toBe('search_1')
-    expect(result.toolCalls[0].id).not.toBe(result.toolCalls[1].id)
+    expect(result.toolCalls![0]!.id).toBe('search_0')
+    expect(result.toolCalls![1]!.id).toBe('search_1')
+    expect(result.toolCalls![0]!.id).not.toBe(result.toolCalls![1]!.id)
   })
 })

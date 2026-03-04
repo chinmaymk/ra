@@ -31,11 +31,11 @@ describe('McpClient', () => {
   })
 
   it('disconnect does not throw when client.close() rejects', async () => {
-    const client = new McpClient()
-    ;(client as any).clients = [
+    const mockClients = [
       { close: async () => { throw new Error('close failed') } },
       { close: async () => {} },
     ]
+    const client = new McpClient(mockClients as any)
     await expect(client.disconnect()).resolves.toBeUndefined()
     expect((client as any).clients).toEqual([])
   })

@@ -163,7 +163,7 @@ export class Repl {
     }
   }
 
-  private async handleCommand(input: string): Promise<string> {
+  async handleCommand(input: string): Promise<string> {
     const parts = input.split(/\s+/)
     const cmd = parts[0]
 

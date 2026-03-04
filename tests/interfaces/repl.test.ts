@@ -99,7 +99,7 @@ describe('Repl', () => {
     // First process some input to build history
     await repl.processInput('first message')
 
-    const response = await (repl as any).handleCommand('/clear')
+    const response = await repl.handleCommand('/clear')
     expect(response).toBe('Message history cleared.')
   })
 
@@ -108,7 +108,7 @@ describe('Repl', () => {
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
     await repl.processInput('hi')
 
-    const response = await (repl as any).handleCommand('/save')
+    const response = await repl.handleCommand('/save')
     expect(response).toContain('saved')
   })
 
@@ -116,7 +116,7 @@ describe('Repl', () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
 
-    const response = await (repl as any).handleCommand('/resume')
+    const response = await repl.handleCommand('/resume')
     expect(response).toBe('Usage: /resume <session-id>')
   })
 
@@ -124,7 +124,7 @@ describe('Repl', () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
 
-    const response = await (repl as any).handleCommand('/resume non-existent-session-id')
+    const response = await repl.handleCommand('/resume non-existent-session-id')
     expect(response).toContain('Session not found')
   })
 
@@ -134,7 +134,7 @@ describe('Repl', () => {
     await storage.appendMessage(session.id, { role: 'user', content: 'saved msg' })
 
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
-    const response = await (repl as any).handleCommand(`/resume ${session.id}`)
+    const response = await repl.handleCommand(`/resume ${session.id}`)
     expect(response).toContain('Resumed session')
     expect(response).toContain('1 messages loaded')
   })
@@ -146,12 +146,14 @@ describe('Repl', () => {
     const skillMap = new Map([['test-skill', skill]])
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillMap })
 
-    // Set pending skill and attachments
-    await (repl as any).handleCommand('/skill test-skill')
-    ;(repl as any).pendingAttachments = [{ type: 'text', text: 'attachment' }]
+    // Set pending skill and an attachment via the public /attach command
+    await repl.handleCommand('/skill test-skill')
+    const tmpFile = `${TEST_STORAGE}/test-attachment.txt`
+    await Bun.write(tmpFile, 'attachment content')
+    await repl.handleCommand(`/attach ${tmpFile}`)
 
-    // Resume a session
-    await (repl as any).handleCommand(`/resume ${session.id}`)
+    // Resume a session — should clear all pending state
+    await repl.handleCommand(`/resume ${session.id}`)
 
     expect((repl as any).pendingSkill).toBeUndefined()
     expect((repl as any).pendingAttachments).toEqual([])
@@ -161,7 +163,7 @@ describe('Repl', () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
 
-    const response = await (repl as any).handleCommand('/skill')
+    const response = await repl.handleCommand('/skill')
     expect(response).toBe('Usage: /skill <name>')
   })
 
@@ -170,7 +172,7 @@ describe('Repl', () => {
     const skillMap = new Map()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillMap })
 
-    const response = await (repl as any).handleCommand('/skill unknown')
+    const response = await repl.handleCommand('/skill unknown')
     expect(response).toBe('Skill not found: unknown')
   })
 
@@ -180,7 +182,7 @@ describe('Repl', () => {
     const skillMap = new Map([['test-skill', skill]])
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillMap })
 
-    const response = await (repl as any).handleCommand('/skill test-skill')
+    const response = await repl.handleCommand('/skill test-skill')
     expect(response).toContain('Skill "test-skill" will be injected')
   })
 
@@ -188,7 +190,7 @@ describe('Repl', () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
 
-    const response = await (repl as any).handleCommand('/attach')
+    const response = await repl.handleCommand('/attach')
     expect(response).toBe('Usage: /attach <path>')
   })
 
@@ -196,7 +198,7 @@ describe('Repl', () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
 
-    const response = await (repl as any).handleCommand('/attach /nonexistent/file.txt')
+    const response = await repl.handleCommand('/attach /nonexistent/file.txt')
     expect(response).toContain('Failed to attach file')
   })
 
@@ -204,7 +206,7 @@ describe('Repl', () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
 
-    const response = await (repl as any).handleCommand('/foobar')
+    const response = await repl.handleCommand('/foobar')
     expect(response).toBe('Unknown command: /foobar')
   })
 
@@ -225,7 +227,7 @@ describe('Repl', () => {
     const repl = new Repl({ model: 'test', provider, tools: new ToolRegistry(), storage, skillMap })
 
     // Set pending skill
-    await (repl as any).handleCommand('/skill test-skill')
+    await repl.handleCommand('/skill test-skill')
     // Now process input - skill should be injected
     await repl.processInput('do something')
 

@@ -1,4 +1,13 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, mock, beforeEach } from 'bun:test'
+
+const mockCompletionsCreate = mock()
+
+mock.module('openai', () => ({
+  default: class MockOpenAI {
+    chat = { completions: { create: mockCompletionsCreate } }
+  },
+}))
+
 import { OpenAIProvider } from '../../src/providers/openai'
 
 describe('OpenAIProvider', () => {
@@ -8,7 +17,7 @@ describe('OpenAIProvider', () => {
       { role: 'system' as const, content: 'You are helpful' },
       { role: 'user' as const, content: 'hello' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('system')
     expect(mapped).toHaveLength(2)
   })
@@ -21,7 +30,7 @@ describe('OpenAIProvider', () => {
       inputSchema: { type: 'object', properties: { x: { type: 'number' } } },
       execute: async () => ({}),
     }]
-    const mapped = (provider as any).mapTools(tools)
+    const mapped = provider.mapTools(tools) as any[]
     expect(mapped[0].type).toBe('function')
     expect(mapped[0].function.name).toBe('test_tool')
   })
@@ -31,7 +40,7 @@ describe('OpenAIProvider', () => {
     const messages = [
       { role: 'tool' as const, content: 'result text', toolCallId: 'call_123' },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('tool')
     expect(mapped[0].tool_call_id).toBe('call_123')
     expect(mapped[0].content).toBe('result text')
@@ -46,7 +55,7 @@ describe('OpenAIProvider', () => {
         toolCalls: [{ id: 'call_1', name: 'test_tool', arguments: '{"x":1}' }],
       },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('assistant')
     expect(mapped[0].content).toBe('Let me call a tool')
     expect(mapped[0].tool_calls).toHaveLength(1)
@@ -69,13 +78,13 @@ describe('OpenAIProvider', () => {
         },
       ],
     }
-    const result = (provider as any).mapResponseToMessage(openaiMsg)
+    const result = provider.mapResponseToMessage(openaiMsg as any)
     expect(result.role).toBe('assistant')
     expect(result.content).toBe('Hello')
     expect(result.toolCalls).toHaveLength(1)
-    expect(result.toolCalls[0].id).toBe('call_1')
-    expect(result.toolCalls[0].name).toBe('test_tool')
-    expect(result.toolCalls[0].arguments).toBe('{"x":1}')
+    expect(result.toolCalls![0]!.id).toBe('call_1')
+    expect(result.toolCalls![0]!.name).toBe('test_tool')
+    expect(result.toolCalls![0]!.arguments).toBe('{"x":1}')
   })
 
   it('maps content parts correctly', () => {
@@ -85,34 +94,33 @@ describe('OpenAIProvider', () => {
       { type: 'image' as const, source: { type: 'base64' as const, mediaType: 'image/png', data: 'abc' } },
       { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/img.png' } },
     ]
-    const mapped = (provider as any).mapContentParts(parts)
+    const mapped = provider.mapContentParts(parts) as any[]
     expect(mapped[0]).toEqual({ type: 'text', text: 'hello' })
     expect(mapped[1].type).toBe('image_url')
     expect(mapped[1].image_url.url).toBe('data:image/png;base64,abc')
     expect(mapped[2].type).toBe('image_url')
     expect(mapped[2].image_url.url).toBe('https://example.com/img.png')
   })
-
 })
 
 describe('thinking / reasoning effort', () => {
   it('adds reasoning effort to buildParams when thinking is set', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    const params = (provider as any).buildParams({
+    const params = provider.buildParams({
       model: 'o3',
       messages: [{ role: 'user' as const, content: 'hi' }],
       thinking: 'medium',
     })
-    expect(params.reasoning).toEqual({ effort: 'medium' })
+    expect((params as any).reasoning).toEqual({ effort: 'medium' })
   })
 
   it('does not add reasoning when thinking is not set', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    const params = (provider as any).buildParams({
+    const params = provider.buildParams({
       model: 'gpt-4o',
       messages: [{ role: 'user' as const, content: 'hi' }],
     })
-    expect(params.reasoning).toBeUndefined()
+    expect((params as any).reasoning).toBeUndefined()
   })
 })
 
@@ -120,7 +128,7 @@ describe('OpenAIProvider - buildParams branches', () => {
   it('includes tools when provided', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
     const tools = [{ name: 'tool', description: 'desc', inputSchema: {}, execute: async () => ({}) }]
-    const params = (provider as any).buildParams({
+    const params = provider.buildParams({
       model: 'gpt-4o',
       messages: [{ role: 'user', content: 'hi' }],
       tools,
@@ -131,7 +139,7 @@ describe('OpenAIProvider - buildParams branches', () => {
 
   it('merges providerOptions into params', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    const params = (provider as any).buildParams({
+    const params = provider.buildParams({
       model: 'gpt-4o',
       messages: [{ role: 'user', content: 'hi' }],
       providerOptions: { temperature: 0.5 },
@@ -143,7 +151,7 @@ describe('OpenAIProvider - buildParams branches', () => {
 describe('OpenAIProvider - toUsage', () => {
   it('maps usage with reasoning tokens', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    const usage = (provider as any).toUsage({
+    const usage = provider.toUsage({
       prompt_tokens: 100,
       completion_tokens: 50,
       completion_tokens_details: { reasoning_tokens: 20 },
@@ -155,7 +163,7 @@ describe('OpenAIProvider - toUsage', () => {
 
   it('maps usage without reasoning tokens', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    const usage = (provider as any).toUsage({
+    const usage = provider.toUsage({
       prompt_tokens: 100,
       completion_tokens: 50,
     })
@@ -171,7 +179,7 @@ describe('OpenAIProvider - content parts edge cases', () => {
     const parts = [
       { type: 'file' as const, mimeType: 'application/pdf', data: 'abc' },
     ]
-    const mapped = (provider as any).mapContentParts(parts)
+    const mapped = provider.mapContentParts(parts) as any[]
     expect(mapped[0].type).toBe('text')
     expect(mapped[0].text).toContain('application/pdf')
   })
@@ -181,7 +189,7 @@ describe('OpenAIProvider - content parts edge cases', () => {
     const messages = [
       { role: 'system' as const, content: [{ type: 'text' as const, text: 'hello ' }, { type: 'text' as const, text: 'world' }] },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].content).toBe('hello world')
   })
 
@@ -190,7 +198,7 @@ describe('OpenAIProvider - content parts edge cases', () => {
     const messages = [
       { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'hello' }] },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].content).toBe('hello')
   })
 
@@ -199,31 +207,27 @@ describe('OpenAIProvider - content parts edge cases', () => {
     const messages = [
       { role: 'user' as const, content: [{ type: 'text' as const, text: 'look' }, { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/img.png' } }] },
     ]
-    const mapped = (provider as any).mapMessages(messages)
+    const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].content).toHaveLength(2)
   })
 
   it('maps response with null content', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
     const msg = { role: 'assistant', content: null, tool_calls: undefined }
-    const result = (provider as any).mapResponseToMessage(msg)
+    const result = provider.mapResponseToMessage(msg as any)
     expect(result.content).toBe('')
   })
 })
 
 describe('OpenAIProvider - chat()', () => {
+  beforeEach(() => mockCompletionsCreate.mockReset())
+
   it('calls client and returns mapped response with usage', async () => {
+    mockCompletionsCreate.mockResolvedValue({
+      choices: [{ message: { role: 'assistant', content: 'Hello from chat' } }],
+      usage: { prompt_tokens: 10, completion_tokens: 5 },
+    })
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      chat: {
-        completions: {
-          create: async () => ({
-            choices: [{ message: { role: 'assistant', content: 'Hello from chat' } }],
-            usage: { prompt_tokens: 10, completion_tokens: 5 },
-          }),
-        },
-      },
-    }
     const result = await provider.chat({
       model: 'gpt-4o',
       messages: [{ role: 'user', content: 'hi' }],
@@ -235,16 +239,10 @@ describe('OpenAIProvider - chat()', () => {
   })
 
   it('returns undefined usage when not present in response', async () => {
+    mockCompletionsCreate.mockResolvedValue({
+      choices: [{ message: { role: 'assistant', content: 'Hi' } }],
+    })
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      chat: {
-        completions: {
-          create: async () => ({
-            choices: [{ message: { role: 'assistant', content: 'Hi' } }],
-          }),
-        },
-      },
-    }
     const result = await provider.chat({
       model: 'gpt-4o',
       messages: [{ role: 'user', content: 'hi' }],
@@ -254,18 +252,14 @@ describe('OpenAIProvider - chat()', () => {
 })
 
 describe('OpenAIProvider - stream()', () => {
+  beforeEach(() => mockCompletionsCreate.mockReset())
+
   it('yields text deltas and done with usage', async () => {
+    mockCompletionsCreate.mockResolvedValue((async function* () {
+      yield { choices: [{ delta: { content: 'Hello' } }] }
+      yield { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } }
+    })())
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      chat: {
-        completions: {
-          create: async () => (async function* () {
-            yield { choices: [{ delta: { content: 'Hello' } }] }
-            yield { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } }
-          })(),
-        },
-      },
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -276,18 +270,12 @@ describe('OpenAIProvider - stream()', () => {
   })
 
   it('yields tool_call_start and tool_call_delta', async () => {
+    mockCompletionsCreate.mockResolvedValue((async function* () {
+      yield { choices: [{ delta: { tool_calls: [{ index: 0, id: 'tc_1', function: { name: 'read_file' } }] } }] }
+      yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"path":"x"}' } }] } }] }
+      yield { choices: [{ delta: {}, finish_reason: 'tool_calls' }] }
+    })())
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      chat: {
-        completions: {
-          create: async () => (async function* () {
-            yield { choices: [{ delta: { tool_calls: [{ index: 0, id: 'tc_1', function: { name: 'read_file' } }] } }] }
-            yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"path":"x"}' } }] } }] }
-            yield { choices: [{ delta: {}, finish_reason: 'tool_calls' }] }
-          })(),
-        },
-      },
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -298,18 +286,12 @@ describe('OpenAIProvider - stream()', () => {
   })
 
   it('skips chunks with no delta', async () => {
+    mockCompletionsCreate.mockResolvedValue((async function* () {
+      yield { choices: [{}] } // no delta
+      yield { choices: [{ delta: { content: 'text' } }] }
+      yield { choices: [{ delta: {}, finish_reason: 'stop' }] }
+    })())
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      chat: {
-        completions: {
-          create: async () => (async function* () {
-            yield { choices: [{}] } // no delta
-            yield { choices: [{ delta: { content: 'text' } }] }
-            yield { choices: [{ delta: {}, finish_reason: 'stop' }] }
-          })(),
-        },
-      },
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -318,18 +300,12 @@ describe('OpenAIProvider - stream()', () => {
   })
 
   it('captures usage from terminal empty-choices chunk', async () => {
+    mockCompletionsCreate.mockResolvedValue((async function* () {
+      yield { choices: [{ delta: { content: 'Hello' } }] }
+      yield { choices: [{ delta: {}, finish_reason: 'stop' }] }
+      yield { choices: [], usage: { prompt_tokens: 10, completion_tokens: 5 } }
+    })())
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      chat: {
-        completions: {
-          create: async () => (async function* () {
-            yield { choices: [{ delta: { content: 'Hello' } }] }
-            yield { choices: [{ delta: {}, finish_reason: 'stop' }] }
-            yield { choices: [], usage: { prompt_tokens: 10, completion_tokens: 5 } }
-          })(),
-        },
-      },
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -341,16 +317,10 @@ describe('OpenAIProvider - stream()', () => {
   })
 
   it('emits done even when stream ends without finish_reason', async () => {
+    mockCompletionsCreate.mockResolvedValue((async function* () {
+      yield { choices: [{ delta: { content: 'Hello' } }] }
+    })())
     const provider = new OpenAIProvider({ apiKey: 'test' })
-    ;(provider as any).client = {
-      chat: {
-        completions: {
-          create: async () => (async function* () {
-            yield { choices: [{ delta: { content: 'Hello' } }] }
-          })(),
-        },
-      },
-    }
     const chunks: any[] = []
     for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
@@ -364,12 +334,12 @@ describe('OpenAIProvider - stream()', () => {
 describe('OpenAIProvider - extensibility', () => {
   it('allows subclass to override buildParams', () => {
     class TestProvider extends OpenAIProvider {
-      protected override buildParams(request: any) {
+      override buildParams(request: any) {
         return { ...super.buildParams(request), model: 'overridden' }
       }
     }
     const p = new TestProvider({ apiKey: 'test' })
-    const params = (p as any).buildParams({
+    const params = p.buildParams({
       model: 'original',
       messages: [{ role: 'user', content: 'hi' }],
     })

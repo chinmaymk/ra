@@ -28,7 +28,7 @@ export class BedrockProvider implements IProvider {
     })
   }
 
-  private buildParams(request: ChatRequest) {
+  buildParams(request: ChatRequest) {
     const { system, filtered } = extractSystemMessages(request.messages)
     return {
       modelId: request.model,
@@ -80,7 +80,7 @@ export class BedrockProvider implements IProvider {
     if (!emittedDone) yield { type: 'done', usage }
   }
 
-  private mapMessages(messages: IMessage[]): BedrockMessage[] {
+  mapMessages(messages: IMessage[]): BedrockMessage[] {
     return messages.map((msg): BedrockMessage => {
       if (msg.role === 'tool') {
         return {
@@ -104,7 +104,7 @@ export class BedrockProvider implements IProvider {
     })
   }
 
-  private mapTools(tools: ITool[]): BedrockTool[] {
+  mapTools(tools: ITool[]): BedrockTool[] {
     return tools.map(t => ({
       toolSpec: {
         name: t.name,
@@ -114,7 +114,7 @@ export class BedrockProvider implements IProvider {
     }))
   }
 
-  private mapContentParts(parts: ContentPart[]): ContentBlock[] {
+  mapContentParts(parts: ContentPart[]): ContentBlock[] {
     return parts.map((part): ContentBlock => {
       if (part.type === 'text') return { text: part.text }
       if (part.type === 'image') {
@@ -135,7 +135,7 @@ export class BedrockProvider implements IProvider {
     })
   }
 
-  private mapResponseToMessage(message?: BedrockMessage): IMessage {
+  mapResponseToMessage(message?: BedrockMessage): IMessage {
     const toolCalls: IToolCall[] = []
     let textContent = ''
     for (const block of message?.content ?? []) {

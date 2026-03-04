@@ -70,22 +70,22 @@ describe('SessionStorage', () => {
   })
 
   it('rejects empty session IDs', async () => {
-    expect(() => (storage as any).sessionDir('')).toThrow('Invalid session ID')
+    expect(() => storage.sessionDir('')).toThrow('Invalid session ID')
   })
 
   it('strips path traversal characters from session IDs', () => {
     // ../../etc/passwd -> etcpasswd (all dots and slashes stripped)
-    const dir = (storage as any).sessionDir('../../etc/passwd')
+    const dir = storage.sessionDir('../../etc/passwd')
     const idPart = dir.split('/').pop()!
     expect(idPart).toBe('etcpasswd')
     expect(idPart).not.toContain('..')
   })
 
   it('sanitizes session IDs by stripping non-alphanumeric characters', () => {
-    const dir = (storage as any).sessionDir('abc-123_def')
+    const dir = storage.sessionDir('abc-123_def')
     expect(dir).toContain('abc-123_def')
     // Dots and slashes are stripped from the ID portion
-    const dir2 = (storage as any).sessionDir('abc.def/ghi')
+    const dir2 = storage.sessionDir('abc.def/ghi')
     const idPart = dir2.split('/').pop()!
     expect(idPart).toBe('abcdefghi')
     expect(idPart).not.toContain('.')

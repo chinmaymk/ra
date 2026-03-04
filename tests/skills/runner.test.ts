@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync, rmSync } from 'fs'
 
 const TEST_DIR = '/tmp/ra-test-runner'
 const hasPython = !!Bun.which('python3') || !!Bun.which('python')
-const hasGo     = !!Bun.which('go')
+const hasGo     = !!Bun.which('go') && Bun.spawnSync(['go', 'version']).exitCode === 0
 
 const ENV = { RA_PROMPT: 'test', RA_MODEL: 'claude', RA_PROVIDER: 'anthropic' }
 

@@ -50,7 +50,7 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
     case null:  return [shell(), scriptPath]
     case 'sh':  return [shell(), scriptPath]
     case 'py':  return buildCmd(findRuntime(['python3', 'python']), scriptPath)
-    case 'go':  return ['go', 'run', scriptPath]
+    case 'go':  return buildCmd(findRuntime(['go']), scriptPath)
     case 'js':
     case 'ts': {
       try {

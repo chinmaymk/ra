@@ -5,7 +5,11 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { McpClientConfig } from '../config/types'
 
 export class McpClient {
-  private clients: Client[] = []
+  private clients: Client[]
+
+  constructor(clients: Client[] = []) {
+    this.clients = clients
+  }
 
   async connect(configs: McpClientConfig[], registry: ToolRegistry): Promise<void> {
     try {

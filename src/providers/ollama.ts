@@ -13,7 +13,7 @@ export class OllamaProvider implements IProvider {
     this.client = new Ollama({ host: options.host })
   }
 
-  private buildParams(request: ChatRequest): Omit<OllamaChatRequest, 'stream'> {
+  buildParams(request: ChatRequest): Omit<OllamaChatRequest, 'stream'> {
     const params: Omit<OllamaChatRequest, 'stream'> = {
       model: request.model,
       messages: this.mapMessages(request.messages),
@@ -53,7 +53,7 @@ export class OllamaProvider implements IProvider {
     }
   }
 
-  private mapMessages(messages: IMessage[]): OllamaMessage[] {
+  mapMessages(messages: IMessage[]): OllamaMessage[] {
     return messages.map((msg): OllamaMessage => {
       if (msg.role === 'system') {
         return { role: 'system', content: typeof msg.content === 'string' ? msg.content : msg.content.map(p => p.type === 'text' ? p.text : '').join('') }
@@ -78,11 +78,11 @@ export class OllamaProvider implements IProvider {
     })
   }
 
-  private mapTools(tools: ITool[]): OllamaTool[] {
+  mapTools(tools: ITool[]): OllamaTool[] {
     return tools.map(t => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.inputSchema as OllamaTool['function']['parameters'] } }))
   }
 
-  private mapResponseToMessage(msg: OllamaMessage): IMessage {
+  mapResponseToMessage(msg: OllamaMessage): IMessage {
     const result: IMessage = { role: 'assistant', content: msg.content ?? '' }
     if (msg.tool_calls?.length) {
       result.toolCalls = msg.tool_calls.map((tc, i) => ({ id: `call_${i}`, name: tc.function.name ?? '', arguments: JSON.stringify(tc.function.arguments) }))

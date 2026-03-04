@@ -37,7 +37,7 @@ export class SessionStorage {
     await Bun.$`mkdir -p ${this.storagePath}`.quiet()
   }
 
-  private sessionDir(id: string): string {
+  sessionDir(id: string): string {
     // Sanitize to prevent path traversal (e.g., ../../etc/passwd)
     const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '')
     if (!sanitized) throw new Error('Invalid session ID')

@@ -33,7 +33,7 @@ export class GoogleProvider implements IProvider {
     return { inputTokens: meta.promptTokenCount ?? 0, outputTokens: meta.candidatesTokenCount ?? 0 }
   }
 
-  private buildThinkingConfig(thinking?: 'low' | 'medium' | 'high') {
+  buildThinkingConfig(thinking?: 'low' | 'medium' | 'high') {
     if (!thinking) return undefined
     return { thinkingBudget: THINKING_BUDGETS_GOOGLE[thinking] }
   }

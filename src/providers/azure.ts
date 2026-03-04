@@ -33,7 +33,7 @@ export class AzureProvider extends OpenAIProvider {
     }
   }
 
-  protected override buildParams(request: ChatRequest) {
+  override buildParams(request: ChatRequest) {
     return { ...super.buildParams(request), model: this.deployment }
   }
 }
