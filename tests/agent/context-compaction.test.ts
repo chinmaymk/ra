@@ -258,6 +258,55 @@ describe('createCompactionMiddleware', () => {
     }
   })
 
+  it('handles summarization API failure gracefully', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('API rate limit') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    const originalLength = ctx.request.messages.length
+    await mw(ctx) // Should not throw
+    expect(ctx.request.messages.length).toBe(originalLength)
+  })
+
+  it('properly extracts text from ContentPart[] pinned user message during compaction', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => ({
+        message: { role: 'assistant' as const, content: 'Summary.' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: [{ type: 'text' as const, text: 'look at this image' }] },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    const summaryMsg = ctx.request.messages.find(
+      m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
+    )
+    expect(summaryMsg).toBeDefined()
+    expect(summaryMsg!.content).toContain('look at this image')
+    // Should NOT contain JSON array brackets
+    expect(summaryMsg!.content).not.toContain('[{')
+  })
+
   it('skips when nothing to compact (all pinned)', async () => {
     const provider: IProvider = {
       name: 'mock',

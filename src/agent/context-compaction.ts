@@ -108,10 +108,15 @@ export function createCompactionMiddleware(
       return `${m.role}${toolInfo}${toolId}: ${content}`
     }).join('\n')
 
-    const summaryResponse = await provider.chat({
-      model: ctx.request.model,
-      messages: [{ role: 'user', content: `${SUMMARIZATION_PROMPT}\n\n${conversationText}` }],
-    })
+    let summaryResponse
+    try {
+      summaryResponse = await provider.chat({
+        model: ctx.request.model,
+        messages: [{ role: 'user', content: `${SUMMARIZATION_PROMPT}\n\n${conversationText}` }],
+      })
+    } catch {
+      return // Leave messages unchanged on summarization failure
+    }
 
     const summaryContent = typeof summaryResponse.message.content === 'string'
       ? summaryResponse.message.content
@@ -128,11 +133,15 @@ export function createCompactionMiddleware(
     for (let i = mergedPinned.length - 1; i >= 0; i--) {
       if (mergedPinned[i]!.role === 'user') {
         const orig = mergedPinned[i]!
-        const origText = typeof orig.content === 'string' ? orig.content : JSON.stringify(orig.content)
+        const origText = typeof orig.content === 'string'
+          ? orig.content
+          : orig.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
         let combined = `${origText}\n\n${summaryText}`
         // If recent starts with user, absorb it to avoid consecutive user messages
         if (mergedRecent.length > 0 && mergedRecent[0]!.role === 'user') {
-          const recentText = typeof mergedRecent[0]!.content === 'string' ? mergedRecent[0]!.content : JSON.stringify(mergedRecent[0]!.content)
+          const recentText = typeof mergedRecent[0]!.content === 'string'
+            ? mergedRecent[0]!.content
+            : mergedRecent[0]!.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
           combined += `\n\n${recentText}`
           mergedRecent = mergedRecent.slice(1)
         }
