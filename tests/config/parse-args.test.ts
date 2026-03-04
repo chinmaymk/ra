@@ -28,6 +28,11 @@ describe('parseArgs', () => {
   describe('interface flags → config.interface', () => {
     it('--http sets http', () => expect(parseArgs(dev('--http')).config.interface).toBe('http'))
     it('--repl sets repl', () => expect(parseArgs(dev('--repl')).config.interface).toBe('repl'))
+    it('--repl with positional prompt preserves repl interface', () => {
+      const result = parseArgs(['bun', 'src/index.ts', '--repl', 'hello world'])
+      expect(result.config.interface).toBe('repl')
+      expect(result.meta.prompt).toBe('hello world')
+    })
     it('--cli sets cli',   () => expect(parseArgs(dev('--cli', 'x')).config.interface).toBe('cli'))
     it('--mcp sets mcp',   () => expect(parseArgs(dev('--mcp')).config.interface).toBe('mcp'))
     it('mcp takes precedence over http when both given', () => {

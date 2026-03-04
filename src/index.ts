@@ -215,7 +215,7 @@ async function main(): Promise<void> {
     await startMcpStdio(config.mcp.server, mcpHandler)
     await shutdown()
     return
-  } else if (config.interface === 'cli' || parsed.meta.prompt) {
+  } else if (config.interface === 'cli' || (parsed.meta.prompt && !parsed.config.interface)) {
     if (!parsed.meta.prompt) {
       console.error('Error: --cli requires a prompt argument')
       process.exit(1)
