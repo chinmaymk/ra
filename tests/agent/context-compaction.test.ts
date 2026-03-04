@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test'
-import { splitMessageZones } from '../../src/agent/context-compaction'
-import type { IMessage } from '../../src/providers/types'
+import { splitMessageZones, createCompactionMiddleware } from '../../src/agent/context-compaction'
+import type { IMessage, IProvider, ChatRequest } from '../../src/providers/types'
+import type { ModelCallContext } from '../../src/agent/types'
 
 describe('splitMessageZones', () => {
   const sys: IMessage = { role: 'system', content: 'You are helpful.' }
@@ -47,5 +48,100 @@ describe('splitMessageZones', () => {
     const messages = [sys, user1, asst1, user2, asst2, tool1, asst3, user3, asst4]
     const { pinned, compactable, recent } = splitMessageZones(messages, 20_000)
     expect([...pinned, ...compactable, ...recent]).toEqual(messages)
+  })
+})
+
+function makeCtx(messages: IMessage[], model = 'claude-sonnet-4-6'): ModelCallContext {
+  const controller = new AbortController()
+  const request: ChatRequest = { model, messages: [...messages], tools: [] }
+  return {
+    stop: () => controller.abort(),
+    signal: controller.signal,
+    request,
+    loop: {
+      stop: () => controller.abort(),
+      signal: controller.signal,
+      messages,
+      iteration: 1,
+      maxIterations: 10,
+      sessionId: 'test',
+    },
+  }
+}
+
+describe('createCompactionMiddleware', () => {
+  it('passes through when under threshold', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8 })
+    const messages: IMessage[] = [
+      { role: 'system', content: 'hi' },
+      { role: 'user', content: 'hello' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(ctx.request.messages).toEqual(messages)
+  })
+
+  it('compacts when over threshold using maxTokens', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => ({
+        message: { role: 'assistant' as const, content: 'Summary of conversation.' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'System prompt here' },
+      { role: 'user', content: 'First user message here' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'Latest message' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    const hasSummary = ctx.request.messages.some(
+      m => typeof m.content === 'string' && m.content.startsWith('[Context Summary]')
+    )
+    expect(hasSummary).toBe(true)
+    expect(ctx.request.messages.length).toBeLessThan(messages.length)
+  })
+
+  it('skips compaction when disabled', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: false, threshold: 0.8, maxTokens: 1 })
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'A very long message'.repeat(100) },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(ctx.request.messages).toEqual(messages)
+  })
+
+  it('skips when nothing to compact (all pinned)', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 1 })
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'hello' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(ctx.request.messages).toEqual(messages)
   })
 })
