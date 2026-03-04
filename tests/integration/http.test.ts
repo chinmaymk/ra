@@ -1,34 +1,20 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test'
 import { createTestEnv, type TestEnv } from './helpers/setup'
-import { spawnBinary, type InteractiveProcess } from './helpers/binary'
-
-async function waitForPort(port: number, path = '/sessions', timeout = 8000): Promise<void> {
-  const deadline = Date.now() + timeout
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}${path}`)
-      if (res.status < 500) return
-    } catch {
-      // not ready yet
-    }
-    await new Promise(r => setTimeout(r, 100))
-  }
-  throw new Error(`Port ${port} not ready after ${timeout}ms`)
-}
+import { spawnHttpServer, type InteractiveProcess } from './helpers/binary'
 
 describe('HTTP interface integration', () => {
   let env: TestEnv
   let httpProc: InteractiveProcess
-  const HTTP_PORT = 19876
-  const BASE_URL = `http://127.0.0.1:${HTTP_PORT}`
+  let BASE_URL: string
 
   beforeAll(async () => {
     env = await createTestEnv()
-    httpProc = spawnBinary(
-      ['--http', '--http-port', String(HTTP_PORT), '--model', 'claude-sonnet-4-6'],
+    const { proc, port } = await spawnHttpServer(
+      ['--http', '--model', 'claude-sonnet-4-6'],
       env.binaryEnv,
     )
-    await waitForPort(HTTP_PORT)
+    httpProc = proc
+    BASE_URL = `http://127.0.0.1:${port}`
   })
 
   afterAll(async () => {
@@ -71,13 +57,11 @@ describe('HTTP interface integration', () => {
   })
 
   it('missing auth token returns 401', async () => {
-    const tokenPort = HTTP_PORT + 1
-    const tokenProc = spawnBinary(
-      ['--http', '--http-port', String(tokenPort), '--http-token', 'secret123', '--model', 'claude-sonnet-4-6'],
+    const { proc: tokenProc, port: tokenPort } = await spawnHttpServer(
+      ['--http', '--http-token', 'secret123', '--model', 'claude-sonnet-4-6'],
       env.binaryEnv,
     )
     try {
-      await waitForPort(tokenPort)
       const res = await fetch(`http://127.0.0.1:${tokenPort}/chat/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -90,13 +74,11 @@ describe('HTTP interface integration', () => {
   })
 
   it('wrong auth token returns 401', async () => {
-    const tokenPort = HTTP_PORT + 2
-    const tokenProc = spawnBinary(
-      ['--http', '--http-port', String(tokenPort), '--http-token', 'correct-token', '--model', 'claude-sonnet-4-6'],
+    const { proc: tokenProc, port: tokenPort } = await spawnHttpServer(
+      ['--http', '--http-token', 'correct-token', '--model', 'claude-sonnet-4-6'],
       env.binaryEnv,
     )
     try {
-      await waitForPort(tokenPort)
       const res = await fetch(`http://127.0.0.1:${tokenPort}/chat/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer wrong-token' },

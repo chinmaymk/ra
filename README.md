@@ -1,7 +1,7 @@
 <h1 align="center">ra</h1>
 
 <p align="center">
-  <b>One binary. Any shape. Any model.</b><br>
+  <b>One loop. Infinite agents.</b><br>
   An extensible agentic loop you shape through config — not code.
 </p>
 
@@ -17,9 +17,9 @@
 
 ---
 
-**ra** is a **r**aw **a**gent. A **r**ole **a**gent. A **r**un-**a**nything **a**gent.
+**ra** is a complete agentic loop you configure into any agent you need.
 
-Drop a `ra.config.yml` in a repo and you have a project-specific assistant. Change an env var and you have a different provider. Pass `--skill` and you inject a new behavior. Run `--mcp-stdio` and it becomes a tool for Cursor or Claude Desktop. The binary never changes — only the config does.
+Define behavior through skills and system prompts. Hook into every step — before the model call, after each tool result, on every stream chunk — with inline or file middleware. Connect any provider with a flag. Ship it as a one-shot CLI command, an interactive REPL, a streaming HTTP API, or an MCP server for Cursor and Claude Desktop. The config is the agent; change the config, change the agent.
 
 ```bash
 # One-off question
@@ -27,6 +27,9 @@ ra "What is the capital of France?"
 
 # Code review with a skill and file attachment
 ra --skill code-review --file diff.patch "Review this diff"
+
+# Custom persona via system prompt
+ra --system-prompt "You are a concise technical writer" "Document this function"
 
 # Use a different provider
 ra --provider openai --model gpt-4.1 "Explain this error"
@@ -42,7 +45,7 @@ ra
 - **Provider portable** — Anthropic, OpenAI, Google, Bedrock, Ollama. Same config, any backend. Switch with a flag when one is down or slow.
 - **Skills** — Package expertise into reusable bundles with instructions, scripts, and reference docs. Inject at runtime or wire always-on. Skills can include shell scripts in any language that run at activation and feed context to the model.
 - **MCP in both directions** — Pull tools from external MCP servers *and* expose ra itself as a tool for Cursor, Claude Desktop, or your own agents. Give the model access to databases, file systems, or your own custom tools — all through config.
-- **Four deployment modes** — CLI for scripts, REPL for conversations, HTTP for apps, MCP for agent-to-agent. One binary, every context.
+- **Multiple deployment modes** — CLI for scripts, REPL for conversations, HTTP for apps, MCP for agent-to-agent. One binary, every context.
 
 ## Why ra?
 
@@ -117,7 +120,7 @@ ra --thinking high "Design a distributed cache"
 
 ## Interfaces
 
-Four ways to run ra. Each serves a different context.
+Each interface serves a different context. Same agent, different entry point.
 
 ### CLI (one-shot)
 
@@ -383,7 +386,7 @@ Inline expressions and file paths both support TypeScript and JavaScript.
 
 ## Configuration
 
-Four layers, each overriding the previous. No surprise precedence.
+Layered config, each overriding the previous. No surprise precedence.
 
 ```
 defaults → config file → env vars → CLI flags
@@ -488,18 +491,11 @@ src/
 ## Building from Source
 
 ```bash
-# Install dependencies
 bun install
-
-# Run in development
-bun run src/index.ts
-
-# Run tests
-bun test
-
-# Build standalone binary
-bun build src/index.ts --compile --target bun --outfile dist/ra
+bun run compile
 ```
+
+Then move `dist/ra` somewhere on your `PATH`.
 
 ## License
 
@@ -509,5 +505,5 @@ MIT
 
 <p align="center">
   <b>ra</b> — raw agent, role agent, run-anything agent.<br>
-  One binary, any shape, any model.
+  One loop. Infinite agents.
 </p>

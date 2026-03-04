@@ -106,7 +106,7 @@ export default async function(_ctx: unknown) {
 
     const configFile = join(tmpDir, 'ra-compact.config.json')
     writeFileSync(configFile, JSON.stringify({
-      compaction: { enabled: true, threshold: 0.1, maxTokens: 100, contextWindow: 1000 },
+      compaction: { enabled: true, threshold: 0.1, maxTokens: 100, contextWindow: 200 },
     }))
 
     const { stdout, exitCode } = await runBinary(

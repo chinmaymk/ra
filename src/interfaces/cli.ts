@@ -22,10 +22,16 @@ export interface CliOptions {
   onChunk?: (text: string) => void
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  sessionMessages?: IMessage[]
 }
 
-export async function runCli(options: CliOptions): Promise<void> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction } = options
+export interface CliResult {
+  messages: IMessage[]
+  priorCount: number
+}
+
+export async function runCli(options: CliOptions): Promise<CliResult> {
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, sessionMessages = [] } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -35,6 +41,9 @@ export async function runCli(options: CliOptions): Promise<void> {
       if (skill) initialMessages.push(...await buildSkillMessages(skill, {}))
     }
   }
+  initialMessages.push(...sessionMessages)
+
+  const priorCount = initialMessages.length
 
   const parts: ContentPart[] = [{ type: 'text', text: prompt }, ...await Promise.all(files.map(fileToContentPart))]
   const content: string | ContentPart[] = parts.length === 1 ? prompt : parts
@@ -51,5 +60,6 @@ export async function runCli(options: CliOptions): Promise<void> {
     },
   })
 
-  await loop.run(initialMessages)
+  const result = await loop.run(initialMessages)
+  return { messages: result.messages, priorCount }
 }

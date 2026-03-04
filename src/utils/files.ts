@@ -10,5 +10,8 @@ export async function fileToContentPart(filePath: string): Promise<ContentPart> 
       source: { type: 'base64', mediaType: mimeType, data: Buffer.from(data).toString('base64') },
     }
   }
+  if (mimeType.startsWith('text/')) {
+    return { type: 'text', text: Buffer.from(data).toString('utf-8') }
+  }
   return { type: 'file', mimeType, data }
 }

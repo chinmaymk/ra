@@ -35,7 +35,11 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
   const shell = () => findRuntime(['bash', 'sh'])
 
   if (content.startsWith('#!')) {
-    return [shell(), scriptPath]
+    const shebangLine = content.split('\n')[0]!.slice(2).trim()
+    const parts = shebangLine.split(/\s+/)
+    // /usr/bin/env python3 → ['python3', scriptPath]; /bin/bash → ['/bin/bash', scriptPath]
+    const interpreter = parts[0]?.endsWith('/env') && parts[1] ? parts[1] : parts[0]!
+    return [interpreter, scriptPath]
   }
 
   const filename = scriptPath.split('/').pop() ?? ''

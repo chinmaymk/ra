@@ -58,7 +58,9 @@ export class SessionStorage {
   }
 
   async appendMessage(id: string, message: IMessage): Promise<void> {
-    const filePath = join(this.sessionDir(id), 'messages.jsonl')
+    const dir = this.sessionDir(id)
+    await Bun.$`mkdir -p ${dir}`.quiet()
+    const filePath = join(dir, 'messages.jsonl')
     const line = JSON.stringify(message) + '\n'
     await appendFile(filePath, line)
   }

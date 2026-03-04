@@ -31,7 +31,10 @@ export interface BinaryEnv {
 }
 
 function buildEnv(opts: BinaryEnv): Record<string, string> {
-  const env: Record<string, string> = {}
+  const env: Record<string, string> = {
+    PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
+    HOME: process.env.HOME ?? '/tmp',
+  }
   if (opts.provider) env['RA_PROVIDER'] = opts.provider
   if (opts.apiKey) {
     const p = opts.provider ?? 'anthropic'
@@ -123,4 +126,57 @@ export function spawnBinary(args: string[], binaryEnv: BinaryEnv): InteractivePr
       return { stdout, stderr, exitCode }
     })(),
   }
+}
+
+/** Spawn HTTP server binary with port 0, read actual port from stderr */
+export async function spawnHttpServer(args: string[], binaryEnv: BinaryEnv): Promise<{ proc: InteractiveProcess; port: number }> {
+  const proc = Bun.spawn([BINARY_PATH, ...args, '--http-port', '0'], {
+    env: buildEnv(binaryEnv),
+    stdout: 'pipe',
+    stderr: 'pipe',
+    stdin: 'pipe',
+  })
+
+  const decoder = new TextDecoder()
+  const stdoutBufs: Uint8Array[] = []
+  ;(async () => { for await (const chunk of proc.stdout) stdoutBufs.push(chunk) })()
+
+  // Read stderr line-by-line until we find the port announcement
+  const port = await new Promise<number>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('HTTP server did not report port within 10s')), 10000)
+    let buf = ''
+    ;(async () => {
+      try {
+        for await (const chunk of proc.stderr) {
+          buf += decoder.decode(chunk)
+          const m = buf.match(/HTTP server listening on port (\d+)/)
+          if (m) {
+            clearTimeout(timer)
+            resolve(parseInt(m[1]!, 10))
+            return
+          }
+        }
+        clearTimeout(timer)
+        reject(new Error('HTTP server stderr closed without port announcement'))
+      } catch (err) {
+        clearTimeout(timer)
+        reject(err)
+      }
+    })()
+  })
+
+  const interactiveProc: InteractiveProcess = {
+    write(text: string) { proc.stdin.write(text) },
+    async readAvailable(): Promise<string> {
+      await new Promise(r => setTimeout(r, 200))
+      return stdoutBufs.splice(0).map(b => decoder.decode(b)).join('')
+    },
+    kill() { proc.kill() },
+    exited: (async () => {
+      const exitCode = await proc.exited
+      return { stdout: stdoutBufs.map(b => decoder.decode(b)).join(''), stderr: '', exitCode }
+    })(),
+  }
+
+  return { proc: interactiveProc, port }
 }

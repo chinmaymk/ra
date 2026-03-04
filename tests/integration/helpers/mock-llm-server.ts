@@ -116,6 +116,22 @@ export async function startMockLLMServer(): Promise<MockLLMServer> {
         return new Response(JSON.stringify({ error: response.message }), { status: response.status })
       }
 
+      const isStreaming = (body as any)?.stream === true
+
+      // For non-streaming Anthropic requests (e.g. compaction via provider.chat()), return JSON
+      if (provider === 'anthropic' && !isStreaming) {
+        const content = response.type === 'text'
+          ? [{ type: 'text', text: response.content }]
+          : [{ type: 'tool_use', id: `toolu_${(response as any).name}`, name: (response as any).name, input: (response as any).args }]
+        return new Response(JSON.stringify({
+          id: 'msg_mock', type: 'message', role: 'assistant', content,
+          model: 'claude-mock',
+          stop_reason: response.type === 'text' ? 'end_turn' : 'tool_use',
+          stop_sequence: null,
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }), { headers: { 'Content-Type': 'application/json' } })
+      }
+
       let sseBody: string
       if (provider === 'anthropic') {
         sseBody = response.type === 'text'

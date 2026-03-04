@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "ra"
   text: "raw agent. role agent. run-anything agent."
-  tagline: An extensible agentic loop you configure into whatever agent you need — skills, MCP, middleware, any model.
+  tagline: The loop is built in. The agent is up to you.
   actions:
     - theme: brand
       text: Get Started
@@ -14,9 +14,9 @@ hero:
       link: /getting-started/quick-start
 
 features:
-  - title: Five Providers
+  - title: Any Provider
     details: Anthropic, OpenAI, Google Gemini, Ollama, AWS Bedrock. Flip RA_PROVIDER and keep going.
-  - title: Four Modes
+  - title: Any Interface
     details: One-shot CLI, interactive REPL, HTTP server, MCP server. Same binary, different flags.
   - title: Layered Config
     details: defaults → file → env → CLI. Commit a baseline, override per-run. No surprises.

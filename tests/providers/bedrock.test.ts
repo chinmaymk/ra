@@ -73,6 +73,15 @@ describe('BedrockProvider', () => {
     expect(mapped[0].image.format).toBe('png')
   })
 
+  it('normalizes image/jpg mediaType to jpeg format for Bedrock', () => {
+    const parts = [{
+      type: 'image' as const,
+      source: { type: 'base64' as const, mediaType: 'image/jpg', data: 'abc123' },
+    }]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].image.format).toBe('jpeg')
+  })
+
   it('falls back to text for URL images (not natively supported)', () => {
     const parts = [{
       type: 'image' as const,

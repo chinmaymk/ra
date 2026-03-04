@@ -33,15 +33,14 @@ describe('fileToContentPart', () => {
     expect(part.type).toBe('image')
   })
 
-  it('returns file content part for .txt file', async () => {
+  it('returns text content part for .txt file', async () => {
     const p = `${TEST_DIR}/test.txt`
     writeFileSync(p, 'hello world')
 
     const part = await fileToContentPart(p)
-    expect(part.type).toBe('file')
-    if (part.type === 'file') {
-      expect(part.mimeType).toBe('text/plain')
-      expect(part.data).toBeDefined()
+    expect(part.type).toBe('text')
+    if (part.type === 'text') {
+      expect(part.text).toBe('hello world')
     }
   })
 

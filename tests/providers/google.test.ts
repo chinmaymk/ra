@@ -404,6 +404,27 @@ describe('GoogleProvider - stream()', () => {
   })
 })
 
+describe('GoogleProvider - empty content handling', () => {
+  it('does not create empty text parts for assistant messages with empty string content', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'assistant' as const, content: '' },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].parts.every((p: any) => p.text !== '')).toBe(true)
+    expect(mapped[0].parts).toHaveLength(0)
+  })
+
+  it('does not create empty text parts for user messages with empty string content', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: '' },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].parts).toHaveLength(0)
+  })
+})
+
 describe('GoogleProvider - additional bug fixes', () => {
   it('extracts tool name correctly when name contains digits', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })

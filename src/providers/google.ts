@@ -106,7 +106,7 @@ export class GoogleProvider implements IProvider {
           parts.push({ functionCall: { name: tc.name, args } })
         }
       } else if (typeof msg.content === 'string') {
-        parts.push({ text: msg.content })
+        if (msg.content) parts.push({ text: msg.content })
       } else {
         parts.push(...this.mapContentParts(msg.content))
       }

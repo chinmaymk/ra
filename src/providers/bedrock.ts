@@ -122,7 +122,7 @@ export class BedrockProvider implements IProvider {
         if (src.type === 'base64') {
           return {
             image: {
-              format: src.mediaType.split('/')[1] as 'jpeg' | 'png' | 'gif' | 'webp',
+              format: (src.mediaType.split('/')[1] === 'jpg' ? 'jpeg' : src.mediaType.split('/')[1]) as 'jpeg' | 'png' | 'gif' | 'webp',
               source: { bytes: Buffer.from(src.data, 'base64') },
             },
           }

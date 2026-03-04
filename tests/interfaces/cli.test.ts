@@ -138,7 +138,8 @@ describe('runCli', () => {
       expect(userMsg.content).toHaveLength(2)
       expect(userMsg.content[0].type).toBe('text')
       expect(userMsg.content[0].text).toBe('analyze this')
-      expect(userMsg.content[1].type).toBe('file')
+      expect(userMsg.content[1].type).toBe('text')
+      expect(userMsg.content[1].text).toBe('file content')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

@@ -124,8 +124,9 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  // Read piped stdin if available
-  const stdinContent = await readStdin()
+  // Read piped stdin only for CLI/unspecified mode (http/repl/mcp manage stdin themselves)
+  const isNonCliInterface = parsed.config.interface && parsed.config.interface !== 'cli'
+  const stdinContent = isNonCliInterface ? undefined : await readStdin()
   if (stdinContent) {
     // Merge: prompt first, then stdin content
     parsed.meta.prompt = parsed.meta.prompt
@@ -220,7 +221,8 @@ async function main(): Promise<void> {
       console.error('Error: --cli requires a prompt argument')
       process.exit(1)
     }
-    await runCli({
+    const sessionMessages = parsed.meta.resume ? await storage.readMessages(parsed.meta.resume) : []
+    const cliResult = await runCli({
       prompt: parsed.meta.prompt,
       files: parsed.meta.files,
       skills: activeSkills,
@@ -230,11 +232,16 @@ async function main(): Promise<void> {
       tools,
       skillMap,
       maxIterations: config.maxIterations,
-      toolTimeout: config.toolTimeout,
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      sessionMessages,
     })
+    if (parsed.meta.resume) {
+      for (const msg of cliResult.messages.slice(cliResult.priorCount)) {
+        await storage.appendMessage(parsed.meta.resume, msg)
+      }
+    }
     process.stdout.write('\n')
     await shutdown()
   } else if (config.interface === 'http') {
