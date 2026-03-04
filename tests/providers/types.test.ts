@@ -28,12 +28,13 @@ describe('provider types', () => {
       { type: 'tool_call_delta', id: '1', argsDelta: '{"x":1}' },
       { type: 'tool_call_end', id: '1' },
       { type: 'done' },
+      { type: 'thinking' as const, delta: 'test' },
     ]
-    expect(chunks).toHaveLength(5)
+    expect(chunks).toHaveLength(6)
   })
 })
 
-describe('types', () => {
+describe('provider types — thinking additions', () => {
   it('ChatRequest has thinking field', () => {
     const req: ChatRequest = {
       model: 'x',
@@ -41,15 +42,19 @@ describe('types', () => {
       thinking: 'medium',
     }
     expectTypeOf(req.thinking).toEqualTypeOf<'low' | 'medium' | 'high' | undefined>()
+    expect(req.thinking).toBe('medium')
   })
 
   it('StreamChunk accepts thinking variant', () => {
     const chunk: StreamChunk = { type: 'thinking', delta: 'hmm...' }
     expectTypeOf(chunk).toMatchTypeOf<StreamChunk>()
+    expect(chunk.type).toBe('thinking')
+    expect(chunk.delta).toBe('hmm...')
   })
 
   it('TokenUsage has thinkingTokens', () => {
     const u: TokenUsage = { inputTokens: 10, outputTokens: 5, thinkingTokens: 200 }
     expectTypeOf(u.thinkingTokens).toEqualTypeOf<number | undefined>()
+    expect(u.thinkingTokens).toBe(200)
   })
 })
