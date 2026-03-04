@@ -53,14 +53,32 @@ When shebang is present: `<binary> <path>` (e.g. `deno run <path>` for deno, `no
 
 ## Tests
 
+### CI-safe test strategy
+
+All tests that require an optional runtime (python, go, deno, node) must guard with `Bun.which()` and call `test.skip` if the runtime is absent. Only `bun` and `sh` are assumed to be universally available in CI.
+
+```ts
+const hasPython = !!Bun.which('python3') || !!Bun.which('python')
+const hasGo     = !!Bun.which('go')
+const hasDeno   = !!Bun.which('deno')
+const hasNode   = !!Bun.which('node')
+```
+
 ### Per-language smoke tests
-One test per extension: write a script printing a known string, assert captured output. Skip gracefully if runtime not installed (`.go`, deno).
+One test per extension: write a script printing a known string, assert captured output.
+- `.sh` — always runs (sh is universal)
+- `.ts` via bun — always runs (bun runs the test suite)
+- `.js` via bun shebang — always runs
+- `.py` — skipped if python3/python absent
+- `.go` — skipped if go absent
+- `.js` via node shebang — skipped if node absent
+- `.ts` via deno shebang — skipped if deno absent
 
 ### Shebang override
-Write a `.js` file with `#!/usr/bin/env bun`, verify it runs under bun (detect via `process.versions.bun` in output).
+Write a `.js` file with `#!/usr/bin/env bun`, verify it runs under bun (detect via `process.versions.bun` in output). Always runs.
 
 ### Runtime fallback
-Mock `Bun.which` to return `null` for `node`, verify `bun` is selected next. Mock both `node` and `bun` absent, verify `deno` is selected.
+Mock `Bun.which` to return `null` for `node`, verify `bun` is selected next. Mock both `node` and `bun` absent, verify `deno` is selected. Uses mocking — no real runtimes needed, always runs.
 
 ## Non-Goals
 
