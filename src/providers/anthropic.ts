@@ -40,6 +40,7 @@ export class AnthropicProvider implements IProvider {
 
     let usage: TokenUsage | undefined
     let inputTokens = 0
+    let emittedDone = false
     const toolCallIds = new Map<number, string>()
 
     for await (const event of stream as AsyncIterable<Anthropic.MessageStreamEvent>) {
@@ -62,10 +63,12 @@ export class AnthropicProvider implements IProvider {
           usage = { inputTokens, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
           break
         case 'message_stop':
+          emittedDone = true
           yield { type: 'done', usage }
           break
       }
     }
+    if (!emittedDone) yield { type: 'done', usage }
   }
 
   private mapMessages(messages: IMessage[]): Anthropic.MessageParam[] {

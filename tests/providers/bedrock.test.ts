@@ -330,6 +330,23 @@ describe('BedrockProvider - stream()', () => {
     expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"x"}' })
   })
 
+  it('emits done even when stream ends without messageStop', async () => {
+    const provider = new BedrockProvider({})
+    ;(provider as any).client = {
+      send: async () => ({
+        stream: (async function* () {
+          yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+          yield { metadata: { usage: { inputTokens: 5, outputTokens: 3 } } }
+        })(),
+      }),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks.at(-1)?.type).toBe('done')
+  })
+
   it('returns early when no stream', async () => {
     const provider = new BedrockProvider({})
     ;(provider as any).client = {

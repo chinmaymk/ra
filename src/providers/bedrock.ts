@@ -59,6 +59,7 @@ export class BedrockProvider implements IProvider {
 
     let usage: TokenUsage | undefined
     let currentToolCallId = ''
+    let emittedDone = false
 
     for await (const event of response.stream) {
       if (event.contentBlockStart?.start?.toolUse) {
@@ -72,9 +73,11 @@ export class BedrockProvider implements IProvider {
       } else if (event.metadata?.usage) {
         usage = { inputTokens: event.metadata.usage.inputTokens ?? 0, outputTokens: event.metadata.usage.outputTokens ?? 0 }
       } else if (event.messageStop) {
+        emittedDone = true
         yield { type: 'done', usage }
       }
     }
+    if (!emittedDone) yield { type: 'done', usage }
   }
 
   private mapMessages(messages: IMessage[]): BedrockMessage[] {

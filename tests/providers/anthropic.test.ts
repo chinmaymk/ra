@@ -342,6 +342,25 @@ describe('thinking', () => {
   })
 })
 
+describe('AnthropicProvider - stream() done emission', () => {
+  it('emits done even when stream ends without message_stop', async () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      messages: {
+        create: async () => (async function* () {
+          yield { type: 'message_start', message: { usage: { input_tokens: 10 } } }
+          yield { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } }
+        })(),
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'test', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks.at(-1)?.type).toBe('done')
+  })
+})
+
 describe('AnthropicProvider - stream() input token tracking', () => {
   it('captures inputTokens from message_start, not message_delta', async () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
