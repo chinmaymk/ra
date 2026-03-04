@@ -1,5 +1,6 @@
 import { loadConfig } from './config'
 import type { RaConfig } from './config'
+import { loadMiddleware } from './middleware/loader'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoop } from './agent/loop'
@@ -25,7 +26,8 @@ OPTIONS
   --system-prompt <text>              System prompt text or path to file
   --max-iterations <n>                Max agent loop iterations
   --config <path>                     Path to config file
-  --skill <name>                      Skill to activate (repeatable)
+  --skill <name>                      Skill to activate for this run (repeatable)
+  --skill-dir <path>                  Directory to load skills from (repeatable)
   --file <path>                       File to attach (repeatable)
   --resume <session-id>               Resume a previous session
 
@@ -64,6 +66,7 @@ ENV VARS
   RA_MCP_SERVER_ENABLED, RA_MCP_SERVER_PORT, RA_MCP_SERVER_TRANSPORT
   RA_MCP_SERVER_TOOL_NAME, RA_MCP_SERVER_TOOL_DESCRIPTION
   RA_STORAGE_PATH, RA_STORAGE_MAX_SESSIONS, RA_STORAGE_TTL_DAYS
+  RA_SKILL_DIRS=dir1,dir2  RA_SKILLS=skill1,skill2
   RA_ANTHROPIC_API_KEY, RA_ANTHROPIC_BASE_URL
   RA_OPENAI_API_KEY, RA_OPENAI_BASE_URL
   RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
@@ -92,6 +95,8 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
+  const middleware = await loadMiddleware(config, process.cwd())
+
   // Create provider
   const provider = createProvider(buildProviderConfig(config.provider, config.providers[config.provider]))
 
@@ -105,14 +110,11 @@ async function main(): Promise<void> {
   const storage = new SessionStorage(storagePath)
   await storage.init()
 
-  // Load skills
-  const skillMap = await loadSkills(config.skills)
+  // Load skills from configured directories
+  const skillMap = await loadSkills(config.skillDirs)
 
-  // Active skills for this run (from --skill flags + alwaysLoad)
-  const activeSkills = [
-    ...(config.alwaysLoad ?? []),
-    ...parsed.meta.skills,
-  ]
+  // Active skills for this run (always-on from config + per-run --skill flags)
+  const activeSkills = [...config.skills, ...parsed.meta.skills]
 
   // Connect MCP clients
   const mcpClient = new McpClient()
@@ -122,7 +124,7 @@ async function main(): Promise<void> {
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations })
+    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, middleware })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
@@ -150,10 +152,14 @@ async function main(): Promise<void> {
     const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
     const mcpCommand = isDevMode ? 'bun' : process.argv[0]!
     const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp'] : ['--mcp']
-    const cursorConfig = JSON.stringify({
+    const mcpConfig = JSON.stringify({
       mcpServers: { ra: { command: mcpCommand, args: mcpArgs } }
     }, null, 2)
-    process.stderr.write(`MCP stdio server starting. Add to .cursor/mcp.json:\n\n${cursorConfig}\n\n`)
+    process.stderr.write(
+      `MCP stdio server starting.\n\n` +
+      `Cursor — .cursor/mcp.json:\n${mcpConfig}\n\n` +
+      `Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n${mcpConfig}\n\n`
+    )
     await startMcpStdio(config.mcp.server, mcpHandler)
     await shutdown()
     return
@@ -172,6 +178,7 @@ async function main(): Promise<void> {
       tools,
       skillMap,
       maxIterations: config.maxIterations,
+      middleware,
     })
     process.stdout.write('\n')
     await shutdown()
@@ -186,6 +193,7 @@ async function main(): Promise<void> {
       systemPrompt: config.systemPrompt,
       skillMap,
       maxIterations: config.maxIterations,
+      middleware,
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${config.http.port}`)
@@ -200,6 +208,7 @@ async function main(): Promise<void> {
       skillMap,
       maxIterations: config.maxIterations,
       sessionId: parsed.meta.resume,
+      middleware,
     })
     await repl.start()
     await shutdown()
