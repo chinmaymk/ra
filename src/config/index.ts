@@ -118,6 +118,10 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_OLLAMA_HOST !== undefined)        set(['providers', 'ollama', 'host'], env.RA_OLLAMA_HOST)
   if (env.RA_BEDROCK_REGION !== undefined)  set(['providers', 'bedrock', 'region'], env.RA_BEDROCK_REGION)
   if (env.RA_BEDROCK_API_KEY !== undefined) set(['providers', 'bedrock', 'apiKey'], env.RA_BEDROCK_API_KEY)
+  if (env.RA_AZURE_API_KEY !== undefined)    set(['providers', 'azure', 'apiKey'], env.RA_AZURE_API_KEY)
+  if (env.RA_AZURE_ENDPOINT !== undefined)   set(['providers', 'azure', 'endpoint'], env.RA_AZURE_ENDPOINT)
+  if (env.RA_AZURE_DEPLOYMENT !== undefined) set(['providers', 'azure', 'deployment'], env.RA_AZURE_DEPLOYMENT)
+  if (env.RA_AZURE_API_VERSION !== undefined) set(['providers', 'azure', 'apiVersion'], env.RA_AZURE_API_VERSION)
 
   return r
 }

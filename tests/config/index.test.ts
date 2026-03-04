@@ -116,6 +116,28 @@ describe('loadConfig', () => {
     expect((c as any).http).toBeNull()
   })
 
+  describe('azure env vars', () => {
+    it('RA_AZURE_API_KEY sets providers.azure.apiKey', async () => {
+      const c = await loadConfig({ cwd: tmp, env: { RA_AZURE_API_KEY: 'my-key' } })
+      expect(c.providers.azure.apiKey).toBe('my-key')
+    })
+
+    it('RA_AZURE_ENDPOINT sets providers.azure.endpoint', async () => {
+      const c = await loadConfig({ cwd: tmp, env: { RA_AZURE_ENDPOINT: 'https://myresource.openai.azure.com/' } })
+      expect(c.providers.azure.endpoint).toBe('https://myresource.openai.azure.com/')
+    })
+
+    it('RA_AZURE_DEPLOYMENT sets providers.azure.deployment', async () => {
+      const c = await loadConfig({ cwd: tmp, env: { RA_AZURE_DEPLOYMENT: 'my-gpt4o' } })
+      expect(c.providers.azure.deployment).toBe('my-gpt4o')
+    })
+
+    it('RA_AZURE_API_VERSION sets providers.azure.apiVersion', async () => {
+      const c = await loadConfig({ cwd: tmp, env: { RA_AZURE_API_VERSION: '2024-12-01-preview' } })
+      expect(c.providers.azure.apiVersion).toBe('2024-12-01-preview')
+    })
+  })
+
   it('maps all env vars', async () => {
     const c = await loadConfig({ cwd: tmp, env: {
       RA_PROVIDER: 'openai', RA_MODEL: 'gpt-4o', RA_INTERFACE: 'http',
