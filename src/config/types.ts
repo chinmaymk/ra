@@ -9,7 +9,7 @@ export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedro
 export interface RaConfig {
   provider: ProviderName
   model: string
-  interface: 'cli' | 'repl' | 'http' | 'mcp'
+  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio'
   systemPrompt: string
   http: { port: number; token: string }
   skillDirs: string[]
@@ -52,7 +52,6 @@ export interface McpClientConfig {
 
 export interface McpServerConfig {
   enabled: boolean
-  transport: 'stdio' | 'http'
   port: number
   tool: {
     name: string

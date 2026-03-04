@@ -42,7 +42,8 @@ INTERFACE
   --cli                               Oneshot mode: run prompt and exit
   --repl                              Interactive REPL mode (default)
   --http                              Start HTTP API server
-  --mcp                               Start MCP stdio server
+  --mcp                               Start MCP HTTP server (default port: 3001)
+  --mcp-stdio                         Start MCP stdio server (for Claude Desktop/Cursor)
 
 HTTP SERVER
   --http-port <port>                  HTTP server port (default: 3000)
@@ -50,8 +51,7 @@ HTTP SERVER
 
 MCP SERVER
   --mcp-server-enabled                Enable MCP HTTP server alongside main interface
-  --mcp-server-port <port>            MCP HTTP server port (default: 3001)
-  --mcp-server-transport <t>          MCP server transport: stdio | http
+  --mcp-server-port <port>            MCP server port (default: 3001)
   --mcp-server-tool-name <name>       MCP tool name
   --mcp-server-tool-description <d>   MCP tool description
 
@@ -73,7 +73,7 @@ PROVIDER OPTIONS
 ENV VARS
   RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
   RA_HTTP_PORT, RA_HTTP_TOKEN
-  RA_MCP_SERVER_ENABLED, RA_MCP_SERVER_PORT, RA_MCP_SERVER_TRANSPORT
+  RA_MCP_SERVER_ENABLED, RA_MCP_SERVER_PORT
   RA_MCP_SERVER_TOOL_NAME, RA_MCP_SERVER_TOOL_DESCRIPTION
   RA_STORAGE_PATH, RA_STORAGE_MAX_SESSIONS, RA_STORAGE_TTL_DAYS
   RA_SKILL_DIRS=dir1,dir2  RA_SKILLS=skill1,skill2
@@ -95,6 +95,8 @@ EXAMPLES
   echo "hello" | ra
   ra --repl
   ra --http --http-port 8080
+  ra --mcp --mcp-server-port 4000
+  ra --mcp-stdio
   ra --mcp-server-enabled --mcp-server-port 4000 --repl
 `.trim()
 
@@ -161,9 +163,9 @@ async function main(): Promise<void> {
     return typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content)
   }
 
-  // Start MCP HTTP server if configured
+  // Start MCP HTTP server if configured (via --mcp-server-enabled alongside another interface)
   let stopMcpHttp: (() => Promise<void>) | null = null
-  if (config.mcp.server?.enabled && config.mcp.server.transport === 'http') {
+  if (config.interface !== 'mcp' && config.mcp.server?.enabled) {
     stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler)
     console.error(`MCP server (http) listening on port ${config.mcp.server.port}`)
   }
@@ -179,9 +181,14 @@ async function main(): Promise<void> {
 
   // Determine which interface to launch
   if (config.interface === 'mcp') {
+    stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler)
+    console.error(`MCP server (http) listening on port ${config.mcp.server.port}`)
+    // Keep process alive
+    await new Promise(() => {})
+  } else if (config.interface === 'mcp-stdio') {
     const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
     const mcpCommand = isDevMode ? 'bun' : process.argv[0]!
-    const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp'] : ['--mcp']
+    const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp-stdio'] : ['--mcp-stdio']
     const mcpConfig = JSON.stringify({
       mcpServers: { ra: { command: mcpCommand, args: mcpArgs } }
     }, null, 2)

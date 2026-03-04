@@ -45,6 +45,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       cli:                           { type: 'boolean' },
       repl:                          { type: 'boolean' },
       mcp:                           { type: 'boolean' },
+      'mcp-stdio':                   { type: 'boolean' },
       // Top-level config
       provider:                      { type: 'string' },
       model:                         { type: 'string' },
@@ -57,7 +58,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
       // MCP server
       'mcp-server-enabled':          { type: 'boolean' },
       'mcp-server-port':             { type: 'string' },
-      'mcp-server-transport':        { type: 'string' },
       'mcp-server-tool-name':        { type: 'string' },
       'mcp-server-tool-description': { type: 'string' },
       // Storage
@@ -79,7 +79,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const set = (path: string[], value: unknown) => setPath(r, path, value)
 
   // Interface selection
-  if (values.mcp)       set(['interface'], 'mcp')
+  if (values['mcp-stdio'])    set(['interface'], 'mcp-stdio')
+  else if (values.mcp)       set(['interface'], 'mcp')
   else if (values.http) set(['interface'], 'http')
   else if (values.repl) set(['interface'], 'repl')
   else if (values.cli)  set(['interface'], 'cli')
@@ -98,7 +99,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // MCP server
   if (values['mcp-server-enabled'])          set(['mcp', 'server', 'enabled'], true)
   if (values['mcp-server-port'])             set(['mcp', 'server', 'port'], parseInt(values['mcp-server-port'] as string, 10))
-  if (values['mcp-server-transport'])        set(['mcp', 'server', 'transport'], values['mcp-server-transport'])
   if (values['mcp-server-tool-name'])        set(['mcp', 'server', 'tool', 'name'], values['mcp-server-tool-name'])
   if (values['mcp-server-tool-description']) set(['mcp', 'server', 'tool', 'description'], values['mcp-server-tool-description'])
 

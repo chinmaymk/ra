@@ -12,7 +12,6 @@ export const defaultConfig: RaConfig = {
     client: [],
     server: {
       enabled: false,
-      transport: 'http' as const,
       port: 3001,
       tool: {
         name: 'ra',

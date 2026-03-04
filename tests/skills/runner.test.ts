@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test'
-import { runSkillScript } from '../../src/skills/runner'
+import { runSkillScript, buildSkillMessages } from '../../src/skills/runner'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 
 const TEST_DIR = '/tmp/ra-test-runner'
@@ -128,5 +128,72 @@ describe('runSkillScript - runtime fallback', () => {
     } finally {
       spy.mockRestore()
     }
+  })
+})
+
+describe('buildSkillMessages', () => {
+  it('returns body as first user message', async () => {
+    const skill = {
+      metadata: { name: 'test', description: '' },
+      body: 'Do the thing',
+      dir: TEST_DIR,
+      scripts: [],
+      references: [],
+      assets: [],
+    }
+    const messages = await buildSkillMessages(skill, ENV)
+    expect(messages).toHaveLength(1)
+    expect(messages[0]!.role).toBe('user')
+    expect(messages[0]!.content).toBe('Do the thing')
+  })
+
+  it('appends script output as additional user messages', async () => {
+    writeFileSync(`${TEST_DIR}/info.sh`, '#!/bin/sh\necho "script output"', { mode: 0o755 })
+
+    const skill = {
+      metadata: { name: 'test', description: '' },
+      body: 'Skill body',
+      dir: TEST_DIR,
+      scripts: ['info.sh'],
+      references: [],
+      assets: [],
+    }
+    const messages = await buildSkillMessages(skill, ENV)
+    expect(messages).toHaveLength(2)
+    expect(messages[0]!.content).toBe('Skill body')
+    expect(messages[1]!.content.toString().trim()).toBe('script output')
+  })
+
+  it('skips empty script output', async () => {
+    writeFileSync(`${TEST_DIR}/empty.sh`, '#!/bin/sh\n# no output', { mode: 0o755 })
+
+    const skill = {
+      metadata: { name: 'test', description: '' },
+      body: 'Skill body',
+      dir: TEST_DIR,
+      scripts: ['empty.sh'],
+      references: [],
+      assets: [],
+    }
+    const messages = await buildSkillMessages(skill, ENV)
+    expect(messages).toHaveLength(1) // Only the body, no script output
+  })
+
+  it('runs multiple scripts and appends each output', async () => {
+    writeFileSync(`${TEST_DIR}/a.sh`, '#!/bin/sh\necho "output A"', { mode: 0o755 })
+    writeFileSync(`${TEST_DIR}/b.sh`, '#!/bin/sh\necho "output B"', { mode: 0o755 })
+
+    const skill = {
+      metadata: { name: 'test', description: '' },
+      body: 'Skill body',
+      dir: TEST_DIR,
+      scripts: ['a.sh', 'b.sh'],
+      references: [],
+      assets: [],
+    }
+    const messages = await buildSkillMessages(skill, ENV)
+    expect(messages).toHaveLength(3)
+    expect(messages[1]!.content.toString().trim()).toBe('output A')
+    expect(messages[2]!.content.toString().trim()).toBe('output B')
   })
 })

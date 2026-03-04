@@ -90,4 +90,204 @@ describe('OllamaProvider', () => {
     expect(result.content).toBe('Just text')
     expect(result.toolCalls).toBeUndefined()
   })
+
+  it('buildParams includes tools when provided', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const tools = [{ name: 'tool', description: 'desc', inputSchema: {}, execute: async () => ({}) }]
+    const params = (provider as any).buildParams({
+      model: 'llama3',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools,
+    })
+    expect(params.tools).toBeDefined()
+    expect(params.tools).toHaveLength(1)
+  })
+
+  it('buildParams omits tools when not provided', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const params = (provider as any).buildParams({
+      model: 'llama3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(params.tools).toBeUndefined()
+  })
+
+  it('buildParams merges providerOptions', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const params = (provider as any).buildParams({
+      model: 'llama3',
+      messages: [{ role: 'user', content: 'hi' }],
+      providerOptions: { temperature: 0.7 },
+    })
+    expect((params as any).temperature).toBe(0.7)
+  })
+
+  it('maps user message with array content to joined text', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const messages = [
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'hello ' }, { type: 'text' as const, text: 'world' }] },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content).toBe('hello world')
+  })
+
+  it('maps system message with array content to joined text', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const messages = [
+      { role: 'system' as const, content: [{ type: 'text' as const, text: 'sys' }] },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content).toBe('sys')
+  })
+
+  it('maps tool message with non-string content to JSON', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const messages = [
+      { role: 'tool' as const, content: [{ type: 'text' as const, text: 'result' }], toolCallId: 'tc1' },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content).toBe(JSON.stringify([{ type: 'text', text: 'result' }]))
+  })
+
+  it('maps assistant with string content to empty when array', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const messages = [
+      { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'hi' }] },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    // Array content on assistant results in empty string
+    expect(mapped[0].content).toBe('')
+  })
+
+  it('handles invalid JSON arguments in toolCalls gracefully', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const messages = [
+      {
+        role: 'assistant' as const,
+        content: '',
+        toolCalls: [{ id: 'call_1', name: 'tool', arguments: 'invalid json' }],
+      },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].tool_calls[0].function.arguments).toEqual({})
+  })
+
+  it('creates with default host', () => {
+    const provider = new OllamaProvider()
+    expect(provider.name).toBe('ollama')
+  })
+
+  it('maps response with null content', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const msg = { role: 'assistant', content: undefined }
+    const result = (provider as any).mapResponseToMessage(msg)
+    expect(result.content).toBe('')
+  })
+})
+
+describe('OllamaProvider - chat()', () => {
+  it('calls client and returns mapped response', async () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    ;(provider as any).client = {
+      chat: async () => ({
+        message: { role: 'assistant', content: 'Hello from Ollama' },
+      }),
+    }
+    const result = await provider.chat({
+      model: 'llama3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.message.role).toBe('assistant')
+    expect(result.message.content).toBe('Hello from Ollama')
+  })
+
+  it('returns response with tool calls', async () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    ;(provider as any).client = {
+      chat: async () => ({
+        message: {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ function: { name: 'tool', arguments: { x: 1 } } }],
+        },
+      }),
+    }
+    const result = await provider.chat({
+      model: 'llama3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    const toolCalls = result.message.toolCalls
+    if (!toolCalls) throw new Error('Expected toolCalls to be defined')
+    expect(toolCalls).toHaveLength(1)
+    expect(toolCalls[0]?.name).toBe('tool')
+  })
+})
+
+describe('OllamaProvider - stream()', () => {
+  it('yields text deltas and done with usage', async () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    ;(provider as any).client = {
+      chat: async () => (async function* () {
+        yield { message: { content: 'Hello' }, done: false }
+        yield { message: { content: ' World' }, done: false }
+        yield { message: {}, done: true, prompt_eval_count: 10, eval_count: 5 }
+      })(),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'llama3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'Hello' })
+    expect(chunks[1]).toEqual({ type: 'text', delta: ' World' })
+    expect(chunks[2].type).toBe('done')
+    expect(chunks[2].usage).toEqual({ inputTokens: 10, outputTokens: 5 })
+  })
+
+  it('yields tool call events from stream', async () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    ;(provider as any).client = {
+      chat: async () => (async function* () {
+        yield { message: { tool_calls: [{ function: { name: 'tool', arguments: { x: 1 } } }] }, done: false }
+        yield { message: {}, done: true }
+      })(),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'llama3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'call_0', name: 'tool' })
+    expect(chunks[1].type).toBe('tool_call_delta')
+    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'call_0' })
+  })
+
+  it('skips messages with no content or tool_calls', async () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    ;(provider as any).client = {
+      chat: async () => (async function* () {
+        yield { message: undefined, done: false }  // no msg
+        yield { message: { content: 'text' }, done: false }
+        yield { message: {}, done: true }
+      })(),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'llama3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'text' })
+    expect(chunks[1].type).toBe('done')
+  })
+
+  it('done without eval counts yields undefined usage', async () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    ;(provider as any).client = {
+      chat: async () => (async function* () {
+        yield { message: {}, done: true }
+      })(),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'llama3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'done', usage: undefined })
+  })
 })

@@ -71,8 +71,8 @@ describe('parseArgs', () => {
     it('--mcp-server-port', () => {
       expect(parseArgs(dev('--mcp-server-port', '4001')).config.mcp?.server.port).toBe(4001)
     })
-    it('--mcp-server-transport', () => {
-      expect(parseArgs(dev('--mcp-server-transport', 'stdio')).config.mcp?.server.transport).toBe('stdio')
+    it('--mcp-stdio sets mcp-stdio', () => {
+      expect(parseArgs(dev('--mcp-stdio')).config.interface).toBe('mcp-stdio')
     })
     it('--mcp-server-tool-name', () => {
       expect(parseArgs(dev('--mcp-server-tool-name', 'mybot')).config.mcp?.server.tool.name).toBe('mybot')
@@ -84,7 +84,6 @@ describe('parseArgs', () => {
       const r = parseArgs(dev('--mcp-server-port', '5000'))
       expect(r.config.mcp?.server.port).toBe(5000)
       expect(r.config.mcp?.server.enabled).toBeUndefined()
-      expect(r.config.mcp?.server.transport).toBeUndefined()
     })
   })
 
@@ -176,13 +175,11 @@ describe('parseArgs', () => {
       const r = parseArgs(dev(
         '--mcp-server-enabled',
         '--mcp-server-port', '5000',
-        '--mcp-server-transport', 'http',
         '--mcp-server-tool-name', 'ra',
         '--mcp-server-tool-description', 'My agent',
       ))
       expect(r.config.mcp?.server.enabled).toBe(true)
       expect(r.config.mcp?.server.port).toBe(5000)
-      expect(r.config.mcp?.server.transport).toBe('http')
       expect(r.config.mcp?.server.tool.name).toBe('ra')
       expect(r.config.mcp?.server.tool.description).toBe('My agent')
     })

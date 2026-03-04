@@ -83,7 +83,7 @@ describe('loadConfig', () => {
       RA_SYSTEM_PROMPT: 'Be terse', RA_MAX_ITERATIONS: '99',
       RA_HTTP_PORT: '4000', RA_HTTP_TOKEN: 'secret',
       RA_MCP_SERVER_ENABLED: 'true', RA_MCP_SERVER_PORT: '5001',
-      RA_MCP_SERVER_TRANSPORT: 'stdio', RA_MCP_SERVER_TOOL_NAME: 'mybot',
+      RA_MCP_SERVER_TOOL_NAME: 'mybot',
       RA_MCP_SERVER_TOOL_DESCRIPTION: 'A bot',
       RA_STORAGE_PATH: '/custom/storage', RA_STORAGE_MAX_SESSIONS: '50', RA_STORAGE_TTL_DAYS: '7',
       RA_SKILL_DIRS: '/skills/a,/skills/b', RA_SKILLS: 'code,search',
@@ -100,7 +100,6 @@ describe('loadConfig', () => {
     expect(c.http.token).toBe('secret')
     expect(c.mcp.server.enabled).toBe(true)
     expect(c.mcp.server.port).toBe(5001)
-    expect(c.mcp.server.transport).toBe('stdio')
     expect(c.mcp.server.tool.name).toBe('mybot')
     expect(c.mcp.server.tool.description).toBe('A bot')
     expect(c.storage.path).toBe('/custom/storage')

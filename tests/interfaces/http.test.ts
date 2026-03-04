@@ -82,4 +82,155 @@ describe('HttpServer', () => {
     })
     expect(res.status).toBe(401)
   })
+
+  it('allows request when correct token is provided', async () => {
+    server = new HttpServer({
+      port: TEST_PORT + 3,
+      token: 'secret',
+      model: 'test',
+      provider: mockProvider('authorized'),
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 3}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer secret' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json() as { response: string }
+    expect(data.response).toBe('authorized')
+  })
+
+  it('returns 404 for unknown routes', async () => {
+    server = new HttpServer({
+      port: TEST_PORT + 4,
+      model: 'test',
+      provider: mockProvider('ok'),
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 4}/unknown`)
+    expect(res.status).toBe(404)
+    const data = await res.json() as { error: string }
+    expect(data.error).toBe('Not Found')
+  })
+
+  it('returns 400 for invalid JSON body on /chat/sync', async () => {
+    server = new HttpServer({
+      port: TEST_PORT + 5,
+      model: 'test',
+      provider: mockProvider('ok'),
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 5}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'not json{{{',
+    })
+    expect(res.status).toBe(400)
+    const data = await res.json() as { error: string }
+    expect(data.error).toBe('Invalid JSON')
+  })
+
+  it('returns 400 for invalid JSON body on /chat stream', async () => {
+    server = new HttpServer({
+      port: TEST_PORT + 6,
+      model: 'test',
+      provider: mockProvider('ok'),
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 6}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'invalid json',
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('POST /chat streams SSE text events', async () => {
+    server = new HttpServer({
+      port: TEST_PORT + 7,
+      model: 'test',
+      provider: mockProvider('streamed'),
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 7}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('text/event-stream')
+    const text = await res.text()
+    expect(text).toContain('"type":"text"')
+    expect(text).toContain('"type":"done"')
+  })
+
+  it('prepends system prompt when configured', async () => {
+    let capturedMessages: any[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream(req) {
+        capturedMessages = req.messages
+        yield { type: 'text', delta: 'ok' }
+        yield { type: 'done' }
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 8,
+      model: 'test',
+      provider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+      systemPrompt: 'You are a helpful assistant',
+    })
+    await server.start()
+    await fetch(`http://localhost:${TEST_PORT + 8}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    expect(capturedMessages[0]?.role).toBe('system')
+    expect(capturedMessages[0]?.content).toBe('You are a helpful assistant')
+  })
+
+  it('stop is idempotent when server not started', async () => {
+    server = new HttpServer({
+      port: TEST_PORT + 9,
+      model: 'test',
+      provider: mockProvider('ok'),
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    // stop without start should not throw
+    await server.stop()
+  })
+
+  it('returns 401 when no Authorization header and token required', async () => {
+    server = new HttpServer({
+      port: TEST_PORT + 10,
+      token: 'secret',
+      model: 'test',
+      provider: mockProvider('ok'),
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 10}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    expect(res.status).toBe(401)
+  })
 })

@@ -96,6 +96,203 @@ describe('AnthropicProvider', () => {
     expect(mapped[1].source.type).toBe('base64')
     expect(mapped[1].source.media_type).toBe('image/png')
   })
+
+  it('maps URL image content parts', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/img.png' } },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].type).toBe('image')
+    expect(mapped[0].source.type).toBe('url')
+    expect(mapped[0].source.url).toBe('https://example.com/img.png')
+  })
+
+  it('maps file/document content parts to base64 document', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'file' as const, mimeType: 'application/pdf', data: 'base64pdfdata' },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].type).toBe('document')
+    expect(mapped[0].source.type).toBe('base64')
+    expect(mapped[0].source.media_type).toBe('application/pdf')
+  })
+
+  it('maps file content parts with Buffer data', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'file' as const, mimeType: 'application/pdf', data: Buffer.from('pdfdata') },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].type).toBe('document')
+    expect(mapped[0].source.data).toBe(Buffer.from('pdfdata').toString('base64'))
+  })
+
+  it('buildParams includes tools when provided', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const tools = [{ name: 'test', description: 'test', inputSchema: {}, execute: async () => ({}) }]
+    const params = (provider as any).buildParams({
+      model: 'claude-3',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools,
+    })
+    expect(params.tools).toBeDefined()
+    expect(params.tools).toHaveLength(1)
+  })
+
+  it('buildParams omits tools when not provided', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({
+      model: 'claude-3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(params.tools).toBeUndefined()
+  })
+
+  it('buildParams uses providerOptions maxTokens', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({
+      model: 'claude-3',
+      messages: [{ role: 'user', content: 'hi' }],
+      providerOptions: { maxTokens: 8192 },
+    })
+    expect(params.max_tokens).toBe(8192)
+  })
+
+  it('buildParams defaults maxTokens to 4096', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({
+      model: 'claude-3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(params.max_tokens).toBe(4096)
+  })
+
+  it('maps assistant message with array content and toolCalls', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      {
+        role: 'assistant' as const,
+        content: [{ type: 'text' as const, text: 'looking at this' }],
+        toolCalls: [{ id: 'call_1', name: 'test_tool', arguments: '{}' }],
+      },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].role).toBe('assistant')
+    expect(mapped[0].content.some((b: any) => b.type === 'text')).toBe(true)
+    expect(mapped[0].content.some((b: any) => b.type === 'tool_use')).toBe(true)
+  })
+
+  it('maps user message with array content', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      {
+        role: 'user' as const,
+        content: [{ type: 'text' as const, text: 'hello' }],
+      },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].role).toBe('user')
+    expect(mapped[0].content[0].type).toBe('text')
+  })
+
+  it('maps response with only text (no tool_use)', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const response = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Just text' }],
+      usage: { input_tokens: 5, output_tokens: 3 },
+    }
+    const result = (provider as any).mapResponseToMessage(response)
+    expect(result.content).toBe('Just text')
+    expect(result.toolCalls).toBeUndefined()
+  })
+})
+
+describe('AnthropicProvider - chat()', () => {
+  it('calls client and returns mapped response with usage', async () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      messages: {
+        create: async () => ({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Hello from chat' }],
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+      },
+    }
+    const result = await provider.chat({
+      model: 'claude-3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.message.role).toBe('assistant')
+    expect(result.message.content).toBe('Hello from chat')
+    expect(result.usage?.inputTokens).toBe(10)
+    expect(result.usage?.outputTokens).toBe(5)
+  })
+})
+
+describe('AnthropicProvider - stream()', () => {
+  it('yields text deltas from content_block_delta events', async () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      messages: {
+        create: async () => (async function* () {
+          yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' } }
+          yield { type: 'message_delta', usage: { input_tokens: 10, output_tokens: 5 } }
+          yield { type: 'message_stop' }
+        })(),
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'Hello' })
+    expect(chunks[1].type).toBe('done')
+    expect(chunks[1].usage).toBeDefined()
+  })
+
+  it('yields tool_call_start from content_block_start with tool_use', async () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      messages: {
+        create: async () => (async function* () {
+          yield { type: 'content_block_start', content_block: { type: 'tool_use', id: 'tc_1', name: 'read_file' } }
+          yield { type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: '{"path":' } }
+          yield { type: 'message_delta', usage: { input_tokens: 10, output_tokens: 5 } }
+          yield { type: 'message_stop' }
+        })(),
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'read_file' })
+    expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":' })
+  })
+
+  it('yields thinking deltas from thinking_delta events', async () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      messages: {
+        create: async () => (async function* () {
+          yield { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Let me think...' } }
+          yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' } }
+          yield { type: 'message_delta', usage: { input_tokens: 0, output_tokens: 10 } }
+          yield { type: 'message_stop' }
+        })(),
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'thinking', delta: 'Let me think...' })
+    expect(chunks[1]).toEqual({ type: 'text', delta: 'Answer' })
+  })
 })
 
 describe('thinking', () => {

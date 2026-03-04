@@ -186,4 +186,215 @@ describe('GoogleProvider', () => {
       expect((provider as any).buildThinkingConfig('high')).toEqual({ thinkingBudget: 16384 })
     })
   })
+
+  it('maps URL image to fileData format', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/img.jpg' } },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].fileData).toBeDefined()
+    expect(mapped[0].fileData.fileUri).toBe('https://example.com/img.jpg')
+  })
+
+  it('maps file/document content parts to inlineData', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'file' as const, mimeType: 'application/pdf', data: 'base64data' },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].inlineData).toBeDefined()
+    expect(mapped[0].inlineData.mimeType).toBe('application/pdf')
+  })
+
+  it('maps file content parts with Buffer data', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'file' as const, mimeType: 'application/pdf', data: Buffer.from('pdfdata') },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].inlineData.data).toBe(Buffer.from('pdfdata').toString('base64'))
+  })
+
+  it('maps assistant with text content and toolCalls', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const messages = [
+      {
+        role: 'assistant' as const,
+        content: 'Let me help',
+        toolCalls: [{ id: 'call_1', name: 'tool', arguments: '{}' }],
+      },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].role).toBe('model')
+    expect(mapped[0].parts.some((p: any) => p.text === 'Let me help')).toBe(true)
+    expect(mapped[0].parts.some((p: any) => p.functionCall)).toBe(true)
+  })
+
+  it('maps assistant with array content and toolCalls', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const messages = [
+      {
+        role: 'assistant' as const,
+        content: [{ type: 'text' as const, text: 'here' }],
+        toolCalls: [{ id: 'call_1', name: 'tool', arguments: '{}' }],
+      },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].parts.some((p: any) => p.text === 'here')).toBe(true)
+    expect(mapped[0].parts.some((p: any) => p.functionCall)).toBe(true)
+  })
+
+  it('maps user message with array content parts', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'look at this' }] },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].parts[0].text).toBe('look at this')
+  })
+
+  it('maps response with no candidates gracefully', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const result = (provider as any).mapResponseToMessage({ candidates: [] })
+    expect(result.role).toBe('assistant')
+    expect(result.content).toBe('')
+  })
+
+  it('toUsage defaults to 0 when metadata is missing', () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    const usage = (provider as any).toUsage({})
+    expect(usage.inputTokens).toBe(0)
+    expect(usage.outputTokens).toBe(0)
+  })
+})
+
+describe('GoogleProvider - chat()', () => {
+  it('calls model and returns mapped response with usage', async () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      getGenerativeModel: () => ({
+        generateContent: async () => ({
+          response: {
+            candidates: [{ content: { role: 'model', parts: [{ text: 'Hello from Gemini' }] } }],
+            usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
+          },
+        }),
+      }),
+    }
+    const result = await provider.chat({
+      model: 'gemini-pro',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.message.role).toBe('assistant')
+    expect(result.message.content).toBe('Hello from Gemini')
+    expect(result.usage?.inputTokens).toBe(10)
+  })
+
+  it('returns undefined usage when usageMetadata is absent', async () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      getGenerativeModel: () => ({
+        generateContent: async () => ({
+          response: {
+            candidates: [{ content: { role: 'model', parts: [{ text: 'Hi' }] } }],
+          },
+        }),
+      }),
+    }
+    const result = await provider.chat({
+      model: 'gemini-pro',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.usage).toBeUndefined()
+  })
+
+  it('passes tools and thinkingConfig when provided', async () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    let capturedArgs: any = null
+    ;(provider as any).client = {
+      getGenerativeModel: () => ({
+        generateContent: async (args: any) => {
+          capturedArgs = args
+          return {
+            response: {
+              candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] } }],
+            },
+          }
+        },
+      }),
+    }
+    await provider.chat({
+      model: 'gemini-pro',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools: [{ name: 'tool', description: 'desc', inputSchema: {}, execute: async () => ({}) }],
+      thinking: 'medium',
+    })
+    expect(capturedArgs.tools).toBeDefined()
+    expect(capturedArgs.generationConfig).toBeDefined()
+  })
+})
+
+describe('GoogleProvider - stream()', () => {
+  it('yields text deltas and done with usage', async () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      getGenerativeModel: () => ({
+        generateContentStream: async () => ({
+          stream: (async function* () {
+            yield { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] }
+            yield { candidates: [{ content: { parts: [{ text: ' World' }] } }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } }
+          })(),
+        }),
+      }),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'Hello' })
+    expect(chunks[1]).toEqual({ type: 'text', delta: ' World' })
+    expect(chunks[2].type).toBe('done')
+    expect(chunks[2].usage.inputTokens).toBe(10)
+  })
+
+  it('yields thinking deltas for thought parts', async () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      getGenerativeModel: () => ({
+        generateContentStream: async () => ({
+          stream: (async function* () {
+            yield { candidates: [{ content: { parts: [{ thought: true, text: 'Let me think...' }] } }] }
+            yield { candidates: [{ content: { parts: [{ text: 'Answer here' }] } }] }
+          })(),
+        }),
+      }),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'thinking', delta: 'Let me think...' })
+    expect(chunks[1]).toEqual({ type: 'text', delta: 'Answer here' })
+  })
+
+  it('yields tool call events for functionCall parts', async () => {
+    const provider = new GoogleProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      getGenerativeModel: () => ({
+        generateContentStream: async () => ({
+          stream: (async function* () {
+            yield { candidates: [{ content: { parts: [{ functionCall: { name: 'read_file', args: { path: 'x' } } }] } }] }
+          })(),
+        }),
+      }),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'read_file', name: 'read_file' })
+    expect(chunks[1].type).toBe('tool_call_delta')
+    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'read_file' })
+  })
 })

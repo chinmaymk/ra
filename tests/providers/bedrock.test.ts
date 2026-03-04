@@ -111,4 +111,223 @@ describe('thinking', () => {
     const params = (provider as any).buildParams({ model: 'x', messages: [] })
     expect(params.additionalModelRequestFields).toBeUndefined()
   })
+
+  it('maps low thinking to 1000 tokens', () => {
+    const provider = new BedrockProvider({})
+    const params = (provider as any).buildParams({
+      model: 'x',
+      messages: [{ role: 'user', content: 'hi' }],
+      thinking: 'low',
+    })
+    expect(params.additionalModelRequestFields.thinking.budget_tokens).toBe(1000)
+  })
+})
+
+describe('BedrockProvider - buildParams branches', () => {
+  it('includes system text when system messages present', () => {
+    const provider = new BedrockProvider({})
+    const params = (provider as any).buildParams({
+      model: 'x',
+      messages: [
+        { role: 'system', content: 'Be helpful' },
+        { role: 'user', content: 'hi' },
+      ],
+    })
+    expect(params.system).toBeDefined()
+    expect(params.system[0].text).toBe('Be helpful')
+  })
+
+  it('omits system when no system messages', () => {
+    const provider = new BedrockProvider({})
+    const params = (provider as any).buildParams({
+      model: 'x',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(params.system).toBeUndefined()
+  })
+
+  it('includes toolConfig when tools provided', () => {
+    const provider = new BedrockProvider({})
+    const tools = [{ name: 'tool', description: 'desc', inputSchema: {}, execute: async () => ({}) }]
+    const params = (provider as any).buildParams({
+      model: 'x',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools,
+    })
+    expect(params.toolConfig).toBeDefined()
+    expect(params.toolConfig.tools).toHaveLength(1)
+  })
+
+  it('omits toolConfig when no tools', () => {
+    const provider = new BedrockProvider({})
+    const params = (provider as any).buildParams({
+      model: 'x',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(params.toolConfig).toBeUndefined()
+  })
+
+  it('uses providerOptions maxTokens', () => {
+    const provider = new BedrockProvider({})
+    const params = (provider as any).buildParams({
+      model: 'x',
+      messages: [{ role: 'user', content: 'hi' }],
+      providerOptions: { maxTokens: 8192 },
+    })
+    expect(params.inferenceConfig.maxTokens).toBe(8192)
+  })
+
+  it('defaults maxTokens to 4096', () => {
+    const provider = new BedrockProvider({})
+    const params = (provider as any).buildParams({
+      model: 'x',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(params.inferenceConfig.maxTokens).toBe(4096)
+  })
+})
+
+describe('BedrockProvider - content parts edge cases', () => {
+  it('maps file/document content part as text placeholder', () => {
+    const provider = new BedrockProvider({})
+    const parts = [
+      { type: 'file' as const, mimeType: 'application/pdf', data: 'abc' },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].text).toContain('application/pdf')
+  })
+
+  it('maps text content part correctly', () => {
+    const provider = new BedrockProvider({})
+    const parts = [
+      { type: 'text' as const, text: 'hello' },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].text).toBe('hello')
+  })
+
+  it('maps user string message to content array with text block', () => {
+    const provider = new BedrockProvider({})
+    const messages = [{ role: 'user' as const, content: 'hello' }]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content[0].text).toBe('hello')
+  })
+
+  it('maps user array content through mapContentParts', () => {
+    const provider = new BedrockProvider({})
+    const messages = [
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'look at this' }] },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content[0].text).toBe('look at this')
+  })
+
+  it('maps assistant with array content and toolCalls', () => {
+    const provider = new BedrockProvider({})
+    const messages = [
+      {
+        role: 'assistant' as const,
+        content: [{ type: 'text' as const, text: 'looking' }],
+        toolCalls: [{ id: 'call_1', name: 'tool', arguments: '{}' }],
+      },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content.some((b: any) => b.text === 'looking')).toBe(true)
+    expect(mapped[0].content.some((b: any) => b.toolUse)).toBe(true)
+  })
+})
+
+describe('BedrockProvider - chat()', () => {
+  it('calls client and returns mapped response with usage', async () => {
+    const provider = new BedrockProvider({})
+    ;(provider as any).client = {
+      send: async () => ({
+        output: {
+          message: {
+            role: 'assistant',
+            content: [{ text: 'Hello from Bedrock' }],
+          },
+        },
+        usage: { inputTokens: 10, outputTokens: 5 },
+      }),
+    }
+    const result = await provider.chat({
+      model: 'anthropic.claude-3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.message.role).toBe('assistant')
+    expect(result.message.content).toBe('Hello from Bedrock')
+    expect(result.usage?.inputTokens).toBe(10)
+    expect(result.usage?.outputTokens).toBe(5)
+  })
+
+  it('defaults usage to 0 when not present', async () => {
+    const provider = new BedrockProvider({})
+    ;(provider as any).client = {
+      send: async () => ({
+        output: { message: { role: 'assistant', content: [{ text: 'Hi' }] } },
+      }),
+    }
+    const result = await provider.chat({
+      model: 'x',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.usage?.inputTokens).toBe(0)
+    expect(result.usage?.outputTokens).toBe(0)
+  })
+})
+
+describe('BedrockProvider - stream()', () => {
+  it('yields text deltas and done with usage', async () => {
+    const provider = new BedrockProvider({})
+    ;(provider as any).client = {
+      send: async () => ({
+        stream: (async function* () {
+          yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+          yield { contentBlockDelta: { delta: { text: ' World' } } }
+          yield { metadata: { usage: { inputTokens: 10, outputTokens: 5 } } }
+          yield { messageStop: {} }
+        })(),
+      }),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'Hello' })
+    expect(chunks[1]).toEqual({ type: 'text', delta: ' World' })
+    expect(chunks[2].type).toBe('done')
+    expect(chunks[2].usage).toEqual({ inputTokens: 10, outputTokens: 5 })
+  })
+
+  it('yields tool call events from stream', async () => {
+    const provider = new BedrockProvider({})
+    ;(provider as any).client = {
+      send: async () => ({
+        stream: (async function* () {
+          yield { contentBlockStart: { start: { toolUse: { toolUseId: 'tc_1', name: 'read_file' } } } }
+          yield { contentBlockDelta: { delta: { toolUse: { input: '{"path":"x"}' } } } }
+          yield { messageStop: {} }
+        })(),
+      }),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'read_file' })
+    expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"x"}' })
+  })
+
+  it('returns early when no stream', async () => {
+    const provider = new BedrockProvider({})
+    ;(provider as any).client = {
+      send: async () => ({}),
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks).toHaveLength(0)
+  })
 })

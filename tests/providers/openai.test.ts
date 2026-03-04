@@ -132,3 +132,214 @@ describe('thinking / reasoning effort', () => {
     expect(params.reasoning).toBeUndefined()
   })
 })
+
+describe('OpenAIProvider - buildParams branches', () => {
+  it('includes tools when provided', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const tools = [{ name: 'tool', description: 'desc', inputSchema: {}, execute: async () => ({}) }]
+    const params = (provider as any).buildParams({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools,
+    })
+    expect(params.tools).toBeDefined()
+    expect(params.tools).toHaveLength(1)
+  })
+
+  it('omits tools when not provided', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(params.tools).toBeUndefined()
+  })
+
+  it('merges providerOptions into params', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const params = (provider as any).buildParams({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+      providerOptions: { temperature: 0.5 },
+    })
+    expect(params.temperature).toBe(0.5)
+  })
+})
+
+describe('OpenAIProvider - toUsage', () => {
+  it('maps usage with reasoning tokens', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const usage = (provider as any).toUsage({
+      prompt_tokens: 100,
+      completion_tokens: 50,
+      completion_tokens_details: { reasoning_tokens: 20 },
+    })
+    expect(usage.inputTokens).toBe(100)
+    expect(usage.outputTokens).toBe(50)
+    expect(usage.thinkingTokens).toBe(20)
+  })
+
+  it('maps usage without reasoning tokens', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const usage = (provider as any).toUsage({
+      prompt_tokens: 100,
+      completion_tokens: 50,
+    })
+    expect(usage.inputTokens).toBe(100)
+    expect(usage.outputTokens).toBe(50)
+    expect(usage.thinkingTokens).toBeUndefined()
+  })
+})
+
+describe('OpenAIProvider - content parts edge cases', () => {
+  it('maps file content part as text placeholder', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'file' as const, mimeType: 'application/pdf', data: 'abc' },
+    ]
+    const mapped = (provider as any).mapContentParts(parts)
+    expect(mapped[0].type).toBe('text')
+    expect(mapped[0].text).toContain('application/pdf')
+  })
+
+  it('maps system message with array content to joined text', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'system' as const, content: [{ type: 'text' as const, text: 'hello ' }, { type: 'text' as const, text: 'world' }] },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content).toBe('hello world')
+  })
+
+  it('maps assistant with array content to joined text', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'hello' }] },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content).toBe('hello')
+  })
+
+  it('maps user message with array content parts', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'look' }, { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/img.png' } }] },
+    ]
+    const mapped = (provider as any).mapMessages(messages)
+    expect(mapped[0].content).toHaveLength(2)
+  })
+
+  it('maps response with null content', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const msg = { role: 'assistant', content: null, tool_calls: undefined }
+    const result = (provider as any).mapResponseToMessage(msg)
+    expect(result.content).toBe('')
+  })
+})
+
+describe('OpenAIProvider - chat()', () => {
+  it('calls client and returns mapped response with usage', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () => ({
+            choices: [{ message: { role: 'assistant', content: 'Hello from chat' } }],
+            usage: { prompt_tokens: 10, completion_tokens: 5 },
+          }),
+        },
+      },
+    }
+    const result = await provider.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.message.role).toBe('assistant')
+    expect(result.message.content).toBe('Hello from chat')
+    expect(result.usage?.inputTokens).toBe(10)
+    expect(result.usage?.outputTokens).toBe(5)
+  })
+
+  it('returns undefined usage when not present in response', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () => ({
+            choices: [{ message: { role: 'assistant', content: 'Hi' } }],
+          }),
+        },
+      },
+    }
+    const result = await provider.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.usage).toBeUndefined()
+  })
+})
+
+describe('OpenAIProvider - stream()', () => {
+  it('yields text deltas and done with usage', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () => (async function* () {
+            yield { choices: [{ delta: { content: 'Hello' } }] }
+            yield { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } }
+          })(),
+        },
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'Hello' })
+    expect(chunks[1].type).toBe('done')
+    expect(chunks[1].usage.inputTokens).toBe(10)
+  })
+
+  it('yields tool_call_start and tool_call_delta', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () => (async function* () {
+            yield { choices: [{ delta: { tool_calls: [{ index: 0, id: 'tc_1', function: { name: 'read_file' } }] } }] }
+            yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"path":"x"}' } }] } }] }
+            yield { choices: [{ delta: {}, finish_reason: 'tool_calls' }] }
+          })(),
+        },
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'read_file' })
+    expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"x"}' })
+    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'tc_1' })
+  })
+
+  it('skips chunks with no delta', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    ;(provider as any).client = {
+      chat: {
+        completions: {
+          create: async () => (async function* () {
+            yield { choices: [{}] } // no delta
+            yield { choices: [{ delta: { content: 'text' } }] }
+            yield { choices: [{ delta: {}, finish_reason: 'stop' }] }
+          })(),
+        },
+      },
+    }
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'text' })
+  })
+})
