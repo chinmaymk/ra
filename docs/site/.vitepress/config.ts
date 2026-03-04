@@ -4,6 +4,12 @@ export default defineConfig({
   title: 'ra',
   description: 'raw agent. role agent. run-anything agent.',
   base: '/ra/',
+  appearance: 'dark',
+  head: [
+    ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
+    ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap' }],
+  ],
   themeConfig: {
     logo: '/logo.svg',
     nav: [
