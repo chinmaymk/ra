@@ -11,7 +11,7 @@ skills/
     scripts/
       gather-diff.sh   # Model can run on demand for additional context
     references/
-      style-guide.md   # Injected as reference context
+      style-guide.md   # Read on demand as reference context
 ```
 
 **SKILL.md** uses YAML frontmatter:
@@ -58,6 +58,22 @@ skillDirs:
   - ./skills
 ```
 
+## On-demand scripts and references
+
+Scripts and references are **not** loaded eagerly — they are available on demand via REPL commands:
+
+**Run a script:**
+```
+/skill-run code-review gather-diff.sh
+```
+The script output is attached to your next message as context.
+
+**Read a reference:**
+```
+/skill-ref code-review style-guide.md
+```
+The reference content is attached to your next message as context.
+
 ## Skill directories
 
 Configure where ra looks for skills:
@@ -68,29 +84,57 @@ skillDirs:
   - ~/.ra/skills
 ```
 
-## Installing skills from GitHub
+## Installing skills from registries
 
-Install community or private skills directly from GitHub:
+Ra can download skills from npm, GitHub, or URLs and store them in `~/.ra/skills`.
 
-```bash
-ra skill install <github-url>
-```
-
-**Supported URL formats:**
+### Install from npm
 
 ```bash
-ra skill install owner/repo
-ra skill install github.com/owner/repo
-ra skill install https://github.com/owner/repo
+ra skill install code-review                  # bare package name
+ra skill install npm:ra-skill-lint            # explicit npm prefix
+ra skill install npm:ra-skill-lint@1.2.3      # specific version
 ```
 
-**Pin a specific ref (tag, branch, or commit):**
+**npm skill package convention:** Packages can either have a `SKILL.md` at their root, or contain one or more skill subdirectories (each with its own `SKILL.md`). The `ra-skill-` prefix in the package name is stripped when naming the installed skill directory.
+
+### Install from GitHub
 
 ```bash
-ra skill install owner/repo@v2
+ra skill install github:user/ra-skill-review
 ```
 
-This downloads the tarball from GitHub, locates the top-level `skills/` directory in the repo, validates the skills, and copies them into the first configured `skillDirs` (or `./skills` by default).
+Downloads the default branch (`main` or `master`) and looks for skill directories within.
+
+### Install from URL
+
+```bash
+ra skill install https://example.com/skills.tgz
+```
+
+Downloads and extracts a tarball, then installs any skill directories found inside.
+
+### List installed skills
+
+```bash
+ra skill list
+```
+
+### Remove an installed skill
+
+```bash
+ra skill remove code-review
+```
+
+### Using installed skills
+
+Add `~/.ra/skills` to your skill directories:
+
+```yaml
+skillDirs:
+  - ./skills           # project-local skills
+  - ~/.ra/skills       # installed skills
+```
 
 ## Scripts
 
@@ -113,3 +157,16 @@ git diff --staged
 | `.go` | `go run` | `#!/usr/bin/env go` |
 
 TypeScript and JavaScript scripts prefer Bun, falling back to Node then Deno. If a shebang is present, it takes priority over extension-based detection.
+
+## References
+
+Reference files (in the `references/` subdirectory) provide supplementary documentation that can be loaded on demand. They are not included in the initial skill context to keep token usage efficient.
+
+```
+references/
+  style-guide.md       # Coding style guidelines
+  api-patterns.md      # API design patterns
+  error-handling.md    # Error handling best practices
+```
+
+Use `/skill-ref <skill> <filename>` in the REPL to load a reference into context when needed.

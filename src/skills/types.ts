@@ -14,3 +14,13 @@ export interface Skill {
   references: string[]  // relative paths like 'references/REFERENCE.md'
   assets: string[]      // relative paths like 'assets/template.json'
 }
+
+/** Source information for a skill installed from a registry */
+export interface SkillSource {
+  registry: 'npm' | 'github' | 'url'
+  package?: string      // npm package name
+  repo?: string         // github owner/repo
+  url?: string          // raw URL
+  version?: string      // installed version
+  installedAt: string   // ISO timestamp
+}

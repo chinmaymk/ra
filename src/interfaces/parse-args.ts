@@ -1,6 +1,11 @@
 import { parseArgs as utilParseArgs } from 'util'
 import type { RaConfig } from '../config/types'
 
+export interface SkillCommand {
+  action: 'install' | 'remove' | 'list'
+  args: string[]
+}
+
 export interface ParsedArgsMeta {
   help: boolean
   files: string[]
@@ -10,7 +15,7 @@ export interface ParsedArgsMeta {
   configPath?: string
   exec?: string
   showContext: boolean
-  subcommand?: { name: string; args: string[] }
+  skillCommand?: SkillCommand
 }
 
 export interface ParsedArgs {
@@ -39,16 +44,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
   )
   const userArgs = argv.slice(isScriptPath ? 2 : 1)
 
-  // Detect subcommands (e.g., "skill install github.com/org/repo")
-  if (userArgs[0] === 'skill') {
+  // Check for skill subcommand: ra skill install|remove|list [args...]
+  if (userArgs[0] === 'skill' && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
+    const action = userArgs[1] as 'install' | 'remove' | 'list'
+    const subArgs = userArgs.slice(2)
     return {
-      config: {} as Partial<RaConfig>,
+      config: {},
       meta: {
         help: false,
         showContext: false,
         files: [],
         skills: [],
-        subcommand: { name: 'skill', args: userArgs.slice(1) },
+        skillCommand: { action, args: subArgs },
       },
     }
   }

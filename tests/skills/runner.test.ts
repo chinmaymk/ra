@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test'
-import { runSkillScript } from '../../src/skills/runner'
+import { runSkillScript, runSkillScriptByName } from '../../src/skills/runner'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from '../tmpdir'
 
@@ -142,5 +142,51 @@ describe('runSkillScript - runtime fallback', () => {
     } finally {
       spy.mockRestore()
     }
+  })
+})
+
+describe('runSkillScriptByName', () => {
+  it('runs a script by short name', async () => {
+    mkdirSync(`${TEST_DIR}/scripts`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/scripts/gather.sh`, '#!/bin/sh\necho "gathered"', { mode: 0o755 })
+
+    const skill = {
+      metadata: { name: 'review', description: '' },
+      body: 'Body',
+      dir: TEST_DIR,
+      scripts: ['scripts/gather.sh'],
+      references: [],
+      assets: [],
+    }
+    const output = await runSkillScriptByName(skill, 'gather.sh', ENV)
+    expect(output.trim()).toBe('gathered')
+  })
+
+  it('runs a script by full relative path', async () => {
+    mkdirSync(`${TEST_DIR}/scripts`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/scripts/gather.sh`, '#!/bin/sh\necho "gathered"', { mode: 0o755 })
+
+    const skill = {
+      metadata: { name: 'review', description: '' },
+      body: 'Body',
+      dir: TEST_DIR,
+      scripts: ['scripts/gather.sh'],
+      references: [],
+      assets: [],
+    }
+    const output = await runSkillScriptByName(skill, 'scripts/gather.sh', ENV)
+    expect(output.trim()).toBe('gathered')
+  })
+
+  it('throws for nonexistent script', async () => {
+    const skill = {
+      metadata: { name: 'review', description: '' },
+      body: 'Body',
+      dir: TEST_DIR,
+      scripts: [],
+      references: [],
+      assets: [],
+    }
+    await expect(runSkillScriptByName(skill, 'nonexistent.sh', ENV)).rejects.toThrow('Script not found')
   })
 })
