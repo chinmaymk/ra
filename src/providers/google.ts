@@ -24,7 +24,8 @@ export class GoogleProvider implements IProvider {
     const { system, filtered } = extractSystemMessages(request.messages)
     const requestOptions = this.baseURL ? { baseUrl: this.baseURL } : undefined
     const model = this.client.getGenerativeModel({ model: request.model, ...(system && { systemInstruction: system }) }, requestOptions)
-    const contents = this.mapMessages(filtered)
+    // Filter out messages with empty parts to avoid Gemini API rejection
+    const contents = this.mapMessages(filtered).filter(c => c.parts.length > 0)
     const tools = request.tools?.length ? this.mapTools(request.tools) : undefined
     return { model, contents, tools }
   }

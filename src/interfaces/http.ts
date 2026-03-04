@@ -84,7 +84,12 @@ export class HttpServer {
 
   private async parseBody(req: Request): Promise<{ messages: IMessage[]; sessionId?: string } | null> {
     try {
-      return await req.json() as { messages: IMessage[]; sessionId?: string }
+      const body = await req.json() as Record<string, unknown>
+      if (!body || typeof body !== 'object') return null
+      // Ensure messages is an array (default to empty if missing)
+      const messages = Array.isArray(body.messages) ? body.messages as IMessage[] : []
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined
+      return { messages, sessionId }
     } catch {
       return null
     }
