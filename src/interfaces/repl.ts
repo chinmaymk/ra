@@ -172,7 +172,15 @@ export class Repl {
       case '/resume': {
         const id = parts[1]
         if (!id) return 'Usage: /resume <session-id>'
-        this.messages = await this.options.storage.readMessages(id)
+        const messages = await this.options.storage.readMessages(id)
+        if (messages.length === 0) {
+          // Verify session exists by checking if it's in the session list
+          const sessions = await this.options.storage.list()
+          if (!sessions.some(s => s.id === id)) {
+            return `Session not found: ${id}`
+          }
+        }
+        this.messages = messages
         this.sessionId = id
         return `Resumed session ${id} (${this.messages.length} messages loaded).`
       }

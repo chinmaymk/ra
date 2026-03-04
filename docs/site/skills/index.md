@@ -68,12 +68,14 @@ Skills can include scripts that run at activation. Their output is injected as c
 git diff --staged
 ```
 
-**Multi-runtime support** — scripts are detected by shebang:
+**Multi-runtime support** — scripts are detected by shebang, falling back to file extension:
 
-| Runtime | Shebang |
-|---------|---------|
-| Bash | `#!/bin/bash` or `#!/usr/bin/env bash` |
-| Python | `#!/usr/bin/env python3` |
-| TypeScript | `#!/usr/bin/env bun` or `#!/usr/bin/env ts-node` |
-| JavaScript | `#!/usr/bin/env node` |
-| Go | `#!/usr/bin/env go run` |
+| Extension | Default runtime | Shebang example |
+|-----------|----------------|-----------------|
+| `.sh` | `sh` | `#!/bin/bash` |
+| `.py` | `python3` → `python` | `#!/usr/bin/env python3` |
+| `.ts` | `bun` → `node` → `deno` | `#!/usr/bin/env bun` |
+| `.js` | `bun` → `node` → `deno` | `#!/usr/bin/env node` |
+| `.go` | `go run` | `#!/usr/bin/env go` |
+
+TypeScript and JavaScript scripts prefer Bun, falling back to Node then Deno. If a shebang is present, it takes priority over extension-based detection.

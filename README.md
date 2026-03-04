@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>One binary. Any shape. Any model.</b><br>
-  A configurable AI agent you shape through config — not code.
+  An extensible agentic loop you shape through config — not code.
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 **ra** is a **r**aw **a**gent. A **r**ole **a**gent. A **r**un-**a**nything **a**gent.
 
-Drop a `ra.config.yml` in a repo and you have a project-specific assistant. Change an env var and you have a different provider. Pass `--skill` and you inject a new behavior. Run `--mcp` and it becomes a tool for Cursor or Claude Desktop. The binary never changes — only the config does.
+Drop a `ra.config.yml` in a repo and you have a project-specific assistant. Change an env var and you have a different provider. Pass `--skill` and you inject a new behavior. Run `--mcp-stdio` and it becomes a tool for Cursor or Claude Desktop. The binary never changes — only the config does.
 
 ```bash
 # One-off question
@@ -37,22 +37,23 @@ ra
 
 ## Features
 
+- **Extensible agentic loop** — A real model→tools→repeat loop with streaming, tool calling, and context compaction built in. Middleware hooks let you intercept every step — before the model call, after tool execution, on each stream chunk. Write hooks in TypeScript or JavaScript, inline or as files. Build guardrails, logging, or custom routing without forking anything.
 - **Config-driven identity** — One binary becomes a code reviewer, a support bot, a CI agent, or anything else. Drop a `ra.config.yml` and the agent reshapes itself.
 - **Provider portable** — Anthropic, OpenAI, Google, Bedrock, Ollama. Same config, any backend. Switch with a flag when one is down or slow.
-- **Skills** — Package expertise into reusable bundles with instructions, scripts, and reference docs. Inject at runtime or wire always-on.
-- **MCP in both directions** — Pull tools from external MCP servers *and* expose ra itself as a tool for Cursor, Claude Desktop, or your own agents.
+- **Skills** — Package expertise into reusable bundles with instructions, scripts, and reference docs. Inject at runtime or wire always-on. Skills can include shell scripts in any language that run at activation and feed context to the model.
+- **MCP in both directions** — Pull tools from external MCP servers *and* expose ra itself as a tool for Cursor, Claude Desktop, or your own agents. Give the model access to databases, file systems, or your own custom tools — all through config.
 - **Four deployment modes** — CLI for scripts, REPL for conversations, HTTP for apps, MCP for agent-to-agent. One binary, every context.
 
 ## Why ra?
 
-Most AI tools are single-purpose. A CLI that can't be an API. A framework that only speaks one provider. A chat UI you can't script. You end up stitching together different tools for different contexts.
+Most AI agent frameworks give you a locked-down loop you can't inspect or modify. Most CLI tools give you a prompt-in, text-out pipe with no agent capabilities. You end up choosing between power and flexibility.
 
-ra is one binary that adapts to where you need it:
+ra gives you both. At its core is an **extensible agentic loop** — model calls, tool execution, streaming, and context management — that you customize through config, skills, middleware, and MCP. No subclassing, no forking, no framework lock-in.
 
 - **CI caught a flaky test** — `ra --skill debugger "Why is this test failing?" --file test-output.log` in your pipeline. It reads the logs, explains the failure, done.
 - **You're building a feature** — `ra` drops you into a REPL. Attach files, ask follow-ups, keep context across turns.
 - **Your product needs AI** — `ra --http` gives you a streaming API. POST a message, get SSE chunks back. No framework, no boilerplate.
-- **Your editor needs a specialist** — `ra --mcp` exposes it as a tool. Cursor and Claude Desktop call it with a prompt, get the full agent loop.
+- **Your editor needs a specialist** — `ra --mcp-stdio` exposes it as a tool. Cursor and Claude Desktop call it with a prompt, get the full agent loop.
 
 Same config. Same skills. Same binary. The interface changes, the agent doesn't.
 
@@ -164,11 +165,11 @@ ra --http --http-token secret    # with auth
 Expose ra as a tool that other apps can call.
 
 ```bash
-ra --mcp          # stdio transport (for Cursor, Claude Desktop)
-ra --mcp-http     # HTTP transport
+ra --mcp-stdio    # stdio transport (for Cursor, Claude Desktop)
+ra --mcp          # HTTP transport (default port 3001)
 ```
 
-ra prints the JSON config snippet you need to paste into your MCP client config.
+When you run `--mcp-stdio`, ra prints the JSON config snippet you need to paste into your MCP client config.
 
 ## Skills
 
@@ -222,7 +223,7 @@ skillDirs:
 # scripts/analyze.py — automatically runs with python3
 ```
 
-Supported: `bash`, `python`, `typescript`, `javascript`, `go`.
+Supported: `bash`, `python`, `typescript`, `javascript`, `go`. TypeScript and JavaScript scripts prefer Bun, falling back to Node then Deno.
 
 ## MCP
 
@@ -247,14 +248,14 @@ mcp:
 
 ### As a server
 
-Run `ra --mcp` and it exposes itself as a single MCP tool. Other apps call it with a prompt and get the full agent loop.
+Run `ra --mcp-stdio` and it exposes itself as a single MCP tool. Other apps call it with a prompt and get the full agent loop.
 
 ```json
 {
   "mcpServers": {
     "ra": {
       "command": "ra",
-      "args": ["--mcp"]
+      "args": ["--mcp-stdio"]
     }
   }
 }
@@ -273,19 +274,112 @@ middleware:
     - "./middleware/log-tools.ts"
 ```
 
-| Hook | When |
-|------|------|
-| `beforeLoopBegin` | Once at start |
-| `beforeModelCall` | Before each LLM call |
-| `onStreamChunk` | Per streaming chunk |
-| `afterModelResponse` | After model finishes |
-| `beforeToolExecution` | Before each tool call |
-| `afterToolExecution` | After each tool returns |
-| `afterLoopIteration` | After each loop iteration |
-| `afterLoopComplete` | After final iteration |
-| `onError` | On exceptions |
+Each middleware is an `async (ctx) => void` function. Every context object has `stop()` and `signal`:
 
-Any middleware can call `ctx.stop()` to halt the loop.
+```ts
+ctx.stop()          // halt the agent loop
+ctx.signal.aborted  // check if already stopped
+```
+
+### Hooks and context shapes
+
+| Hook | Context | Description |
+|------|---------|-------------|
+| `beforeLoopBegin` | `LoopContext` | Once at start |
+| `beforeModelCall` | `ModelCallContext` | Before each LLM call |
+| `onStreamChunk` | `StreamChunkContext` | Per streaming chunk |
+| `afterModelResponse` | `ModelCallContext` | After model finishes |
+| `beforeToolExecution` | `ToolExecutionContext` | Before each tool call |
+| `afterToolExecution` | `ToolResultContext` | After each tool returns |
+| `afterLoopIteration` | `LoopContext` | After each loop iteration |
+| `afterLoopComplete` | `LoopContext` | After final iteration |
+| `onError` | `ErrorContext` | On exceptions |
+
+### Context types
+
+**`LoopContext`** — available on all hooks via `ctx.loop` (or directly for loop-level hooks):
+
+```ts
+{
+  messages: IMessage[]     // full conversation history
+  iteration: number        // current loop iteration
+  maxIterations: number
+  sessionId: string
+  stop(): void
+  signal: AbortSignal
+}
+```
+
+**`ModelCallContext`** — `beforeModelCall`, `afterModelResponse`:
+
+```ts
+{
+  request: {               // the ChatRequest about to be sent
+    model: string
+    messages: IMessage[]
+    tools?: ITool[]
+    thinking?: 'low' | 'medium' | 'high'
+  }
+  loop: LoopContext
+}
+```
+
+**`StreamChunkContext`** — `onStreamChunk`:
+
+```ts
+{
+  chunk:
+    | { type: 'text'; delta: string }
+    | { type: 'thinking'; delta: string }
+    | { type: 'tool_call_start'; id: string; name: string }
+    | { type: 'tool_call_delta'; id: string; argsDelta: string }
+    | { type: 'tool_call_end'; id: string }
+    | { type: 'done'; usage?: { inputTokens: number; outputTokens: number } }
+  loop: LoopContext
+}
+```
+
+**`ToolExecutionContext`** — `beforeToolExecution`:
+
+```ts
+{
+  toolCall: { id: string; name: string; arguments: string }
+  loop: LoopContext
+}
+```
+
+**`ToolResultContext`** — `afterToolExecution`:
+
+```ts
+{
+  toolCall: { id: string; name: string; arguments: string }
+  result: { toolCallId: string; content: string; isError?: boolean }
+  loop: LoopContext
+}
+```
+
+**`ErrorContext`** — `onError`:
+
+```ts
+{
+  error: Error
+  phase: 'model_call' | 'tool_execution' | 'stream'
+  loop: LoopContext
+}
+```
+
+### File middleware
+
+Export a default async function:
+
+```ts
+// middleware/log-tools.ts
+export default async (ctx) => {
+  console.log(`Tool ${ctx.toolCall.name} returned:`, ctx.result.content)
+}
+```
+
+Inline expressions and file paths both support TypeScript and JavaScript.
 
 ## Configuration
 

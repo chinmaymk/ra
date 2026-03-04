@@ -2,20 +2,22 @@
 
 > **ra** is a **r**aw **a**gent. A **r**ole **a**gent. A **r**un-**a**nything **a**gent.
 >
-> One binary you configure into whatever agent you need — without rewriting anything.
+> An extensible agentic loop you configure into whatever agent you need — without rewriting anything.
+
+At its core, ra is an **agentic loop**: model → tools → repeat. But unlike most frameworks, every step is customizable. Skills inject domain expertise, MCP connects external tools, middleware hooks let you intercept and modify the loop at every stage, and the whole thing is driven by config — not code.
 
 Same binary. Different config. Different agent.
 
 - Drop a `ra.config.yml` in a repo → a project-specific assistant with its own system prompt, skills, and tools
 - Set env vars → a different provider, a different persona, the same CLI
 - Pass `--skill` → inject a role or behavior at runtime
-- Run `--mcp` → expose it as a tool to Cursor, Claude Desktop, or anything MCP-aware
+- Run `--mcp-stdio` → expose it as a tool to Cursor, Claude Desktop, or anything MCP-aware
 
 ## Why ra?
 
-Most AI tools are single-purpose. A CLI that can't become an API. A framework locked to one provider. A chat UI you can't automate. You end up wiring together different tools for different contexts — each with its own config, its own auth, its own quirks.
+Most agent frameworks give you a locked-down loop you can't inspect or modify. Most CLI tools give you prompt-in, text-out with no agent capabilities. You end up choosing between power and flexibility.
 
-ra is one binary that adapts to where you need it.
+ra gives you both — a real agentic loop that's fully extensible through config, skills, middleware, and MCP.
 
 ### CI caught a flaky test
 
@@ -54,7 +56,7 @@ POST a message, get SSE chunks back. No Express, no framework — just `Bun.serv
 Run ra as an MCP server and Cursor or Claude Desktop can call it directly:
 
 ```bash
-ra --mcp --skill code-review
+ra --mcp-stdio --skill code-review
 ```
 
 Now your editor has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt.
@@ -72,7 +74,9 @@ Same config. Same skills. Same binary. The interface changes, the agent doesn't.
 | **HTTP API** | Sync + streaming chat, session management |
 | **MCP client** | Pull tools from other MCP servers |
 | **MCP server** | Expose ra as a tool to other apps |
+| **Agentic loop** | Model → tools → repeat with streaming, context compaction, and configurable iteration limits |
 | **Tool calling** | Model invokes functions, ra executes them |
+| **Middleware** | Hooks at every loop stage — before model call, after tool execution, on stream chunks, on errors |
 | **Skills** | Reusable instruction bundles — roles, behaviors, and assets |
 | **File attachments** | Attach files in CLI and REPL |
 | **Session storage** | Persist conversations, resume later, auto-prune old ones |

@@ -121,6 +121,69 @@ test('inline middleware expression is callable and receives ctx', async () => {
   expect(fakeCtx.__testMarker).toBe('called')
 })
 
+test('file middleware reads context properties', async () => {
+  const config = {
+    ...defaultConfig,
+    middleware: { beforeLoopBegin: ['./ctx-reader.ts'] },
+  }
+  const mw = await loadMiddleware(config, cwd)
+  const ctx: any = {
+    iteration: 3, maxIterations: 10, sessionId: 'sess-abc',
+    messages: [], stop: () => {}, signal: new AbortController().signal,
+  }
+  await mw.beforeLoopBegin![0]!(ctx)
+  expect(ctx.__saw).toBe('iter=3,max=10,sid=sess-abc')
+})
+
+test('file middleware calls stop() and observes signal', async () => {
+  const config = {
+    ...defaultConfig,
+    middleware: { beforeLoopBegin: ['./ctx-stopper.ts'] },
+  }
+  const mw = await loadMiddleware(config, cwd)
+  const ac = new AbortController()
+  const ctx: any = {
+    iteration: 0, maxIterations: 1, sessionId: 's', messages: [],
+    stop: () => ac.abort(), signal: ac.signal,
+  }
+  await mw.beforeLoopBegin![0]!(ctx)
+  expect(ctx.__beforeStop).toBe(false)
+  expect(ctx.__afterStop).toBe(true)
+  expect(ac.signal.aborted).toBe(true)
+})
+
+test('file middleware mutates messages array', async () => {
+  const config = {
+    ...defaultConfig,
+    middleware: { beforeLoopBegin: ['./ctx-mutator.ts'] },
+  }
+  const mw = await loadMiddleware(config, cwd)
+  const messages: any[] = [{ role: 'user', content: 'original' }]
+  const ctx: any = {
+    iteration: 0, maxIterations: 1, sessionId: 's', messages,
+    stop: () => {}, signal: new AbortController().signal,
+  }
+  await mw.beforeLoopBegin![0]!(ctx)
+  expect(messages).toHaveLength(2)
+  expect(messages[1].content).toBe('injected by middleware')
+})
+
+test('inline middleware reads nested loop context', async () => {
+  const config = {
+    ...defaultConfig,
+    middleware: {
+      beforeModelCall: ['async (ctx) => { ctx.__nested = ctx.loop.sessionId + ":" + ctx.loop.iteration }'],
+    },
+  }
+  const mw = await loadMiddleware(config, cwd)
+  const ctx: any = {
+    request: {}, loop: { sessionId: 'x', iteration: 5, messages: [], maxIterations: 10 },
+    stop: () => {}, signal: new AbortController().signal,
+  }
+  await mw.beforeModelCall![0]!(ctx)
+  expect(ctx.__nested).toBe('x:5')
+})
+
 test('throws with descriptive message on eval non-function', async () => {
   const config = {
     ...defaultConfig,

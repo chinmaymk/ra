@@ -171,6 +171,21 @@ describe('parseArgs', () => {
       expect(r.config.provider).toBe('openai')
     })
 
+    it('ignores non-numeric --max-iterations', () => {
+      const r = parseArgs(dev('--max-iterations', 'abc'))
+      expect(r.config.maxIterations).toBeUndefined()
+    })
+
+    it('ignores non-numeric --http-port', () => {
+      const r = parseArgs(dev('--http-port', 'not-a-number'))
+      expect(r.config.http?.port).toBeUndefined()
+    })
+
+    it('ignores non-numeric --storage-max-sessions', () => {
+      const r = parseArgs(dev('--storage-max-sessions', 'xyz'))
+      expect(r.config.storage?.maxSessions).toBeUndefined()
+    })
+
     it('all MCP server fields together', () => {
       const r = parseArgs(dev(
         '--mcp-server-enabled',

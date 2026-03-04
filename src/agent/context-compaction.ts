@@ -117,10 +117,29 @@ export function createCompactionMiddleware(
       ? summaryResponse.message.content
       : JSON.stringify(summaryResponse.message.content)
 
-    ctx.request.messages = [
-      ...pinned,
-      { role: 'user', content: `[Context Summary]\n${summaryContent}` },
-      ...recent,
-    ]
+    const summaryText = `[Context Summary]\n${summaryContent}`
+
+    // Merge summary into the last pinned user message to avoid consecutive user messages.
+    // Pinned always ends with a user message. If recent also starts with user, merge that too.
+    const mergedPinned = [...pinned]
+    let mergedRecent = [...recent]
+
+    // Build the combined content: pinned user text + summary + (optionally) first recent user text
+    for (let i = mergedPinned.length - 1; i >= 0; i--) {
+      if (mergedPinned[i]!.role === 'user') {
+        const orig = mergedPinned[i]!
+        const origText = typeof orig.content === 'string' ? orig.content : JSON.stringify(orig.content)
+        let combined = `${origText}\n\n${summaryText}`
+        // If recent starts with user, absorb it to avoid consecutive user messages
+        if (mergedRecent.length > 0 && mergedRecent[0]!.role === 'user') {
+          const recentText = typeof mergedRecent[0]!.content === 'string' ? mergedRecent[0]!.content : JSON.stringify(mergedRecent[0]!.content)
+          combined += `\n\n${recentText}`
+          mergedRecent = mergedRecent.slice(1)
+        }
+        mergedPinned[i] = { ...orig, content: combined }
+        break
+      }
+    }
+    ctx.request.messages = [...mergedPinned, ...mergedRecent]
   }
 }

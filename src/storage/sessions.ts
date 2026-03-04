@@ -37,7 +37,10 @@ export class SessionStorage {
   }
 
   private sessionDir(id: string): string {
-    return join(this.storagePath, id)
+    // Sanitize to prevent path traversal (e.g., ../../etc/passwd)
+    const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '')
+    if (!sanitized) throw new Error('Invalid session ID')
+    return join(this.storagePath, sanitized)
   }
 
   async create(options: CreateSessionOptions): Promise<Session> {

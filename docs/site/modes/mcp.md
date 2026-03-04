@@ -22,11 +22,11 @@ mcp:
 ## ra as MCP server (is a tool)
 
 ```bash
-ra --mcp          # stdio transport (for Cursor, Claude Desktop)
-ra --mcp-http     # HTTP transport
+ra --mcp-stdio    # stdio transport (for Cursor, Claude Desktop)
+ra --mcp          # HTTP transport (default port 3001)
 ```
 
-ra prints the JSON config snippet to paste into your MCP client.
+When you run `--mcp-stdio`, ra prints the JSON config snippet to paste into your MCP client.
 
 ### Cursor / Claude Desktop integration
 
@@ -35,7 +35,7 @@ ra prints the JSON config snippet to paste into your MCP client.
   "mcpServers": {
     "ra": {
       "command": "ra",
-      "args": ["--mcp"]
+      "args": ["--mcp-stdio"]
     }
   }
 }

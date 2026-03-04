@@ -1,20 +1,7 @@
 import { join } from 'path'
+import { chmodSync, statSync } from 'fs'
 import type { IMessage } from '../providers/types'
 import type { Skill } from './types'
-
-/**
- * Parse the shebang binary from the first line of a script.
- * #!/usr/bin/env node  -> 'node'
- * #!/usr/bin/bun       -> 'bun'
- * Returns null if no shebang present.
- */
-function parseShebang(content: string): string | null {
-  const firstLine = content.split('\n')[0] ?? ''
-  if (!firstLine.startsWith('#!')) return null
-  const parts = firstLine.slice(2).trim().split(/\s+/)
-  if (parts[0]?.endsWith('env') && parts[1]) return parts[1]
-  return parts[0]?.split('/').pop() ?? null
-}
 
 /**
  * Find the first available binary from candidates via Bun.which.
@@ -40,21 +27,48 @@ function buildCmd(runtime: string, scriptPath: string): string[] {
 }
 
 /**
+ * Check if a file has a shebang line.
+ */
+function hasShebang(content: string): boolean {
+  return content.startsWith('#!')
+}
+
+/**
+ * Ensure a file is executable (adds +x if needed).
+ */
+function ensureExecutable(scriptPath: string): void {
+  const stat = statSync(scriptPath)
+  if (!(stat.mode & 0o111)) {
+    chmodSync(scriptPath, stat.mode | 0o755)
+  }
+}
+
+/**
  * Resolve the command to run a script.
- * Shebang takes priority; falls back to extension-based defaults.
+ * Files with shebangs are run directly (OS handles interpreter selection).
+ * Otherwise, extension-based detection picks the runtime.
  */
 async function resolveCmd(scriptPath: string): Promise<string[]> {
   const content = await Bun.file(scriptPath).text()
-  const shebang = parseShebang(content)
-  if (shebang) return buildCmd(shebang, scriptPath)
+
+  if (hasShebang(content)) {
+    ensureExecutable(scriptPath)
+    return [scriptPath]
+  }
 
   const ext = scriptPath.split('.').pop()?.toLowerCase()
   switch (ext) {
-    case 'sh':  return ['sh', scriptPath]
+    case 'sh':  return [findRuntime(['bash', 'sh']), scriptPath]
     case 'py':  return buildCmd(findRuntime(['python3', 'python']), scriptPath)
     case 'go':  return ['go', 'run', scriptPath]
     case 'js':
-    case 'ts':  return buildCmd(findRuntime(['bun', 'node', 'deno']), scriptPath)
+    case 'ts': {
+      try {
+        return buildCmd(findRuntime(['bun', 'node', 'deno']), scriptPath)
+      } catch {
+        return [process.execPath, '--exec', scriptPath]
+      }
+    }
     default:    throw new Error(`Unsupported script extension: .${ext ?? ''}`)
   }
 }
@@ -62,10 +76,14 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
 export async function runSkillScript(scriptPath: string, env: Record<string, string>): Promise<string> {
   const cmd = await resolveCmd(scriptPath)
   const proc = Bun.spawn(cmd, { env: { ...process.env, ...env }, stdout: 'pipe', stderr: 'pipe' })
-  const [output, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
+  const [output, stderrText, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
 
   if (exitCode !== 0) {
-    throw new Error(`Script exited with code ${exitCode}: ${(await new Response(proc.stderr).text()).trim()}`)
+    throw new Error(`Script exited with code ${exitCode}: ${stderrText.trim()}`)
   }
   return output
 }

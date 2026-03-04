@@ -44,7 +44,7 @@ export class OpenAIProvider implements IProvider {
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const stream = await this.client.chat.completions.create({ ...this.buildParams(request), stream: true })
+    const stream = await this.client.chat.completions.create({ ...this.buildParams(request), stream: true, stream_options: { include_usage: true } })
     const activeToolCalls = new Map<number, string>()
 
     for await (const chunk of stream as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {

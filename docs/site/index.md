@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "ra"
   text: "raw agent. role agent. run-anything agent."
-  tagline: One binary you configure into whatever agent you need — without rewriting anything.
+  tagline: An extensible agentic loop you configure into whatever agent you need — skills, MCP, middleware, any model.
   actions:
     - theme: brand
       text: Get Started
@@ -20,6 +20,8 @@ features:
     details: One-shot CLI, interactive REPL, HTTP server, MCP server. Same binary, different flags.
   - title: Layered Config
     details: defaults → file → env → CLI. Commit a baseline, override per-run. No surprises.
-  - title: Skills & Middleware
-    details: Reusable instruction bundles and composable middleware. Build any agent from config.
+  - title: Extensible Agent Loop
+    details: A real model→tools→repeat loop with middleware hooks at every step. Write hooks in JS/TS, inline or as files. Add guardrails, logging, or custom routing — all from config.
+  - title: Skills & MCP
+    details: Inject skills for domain expertise. Connect MCP servers for tools. Expose ra itself as an MCP tool. Extend without forking.
 ---

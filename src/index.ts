@@ -68,6 +68,7 @@ PROVIDER OPTIONS
   --openai-base-url <url>             OpenAI API base URL
   --ollama-host <url>                 Ollama host URL
 
+  --exec <script>                     Execute a JS/TS file and exit
   --help, -h                          Print this help message
 
 ENV VARS
@@ -101,8 +102,22 @@ EXAMPLES
 `.trim()
 
 
+async function execScript(scriptPath: string): Promise<void> {
+  const resolved = require('path').resolve(scriptPath)
+  const mod = await import(resolved)
+  if (typeof mod.default === 'function') {
+    const result = await mod.default()
+    if (result !== undefined) console.log(typeof result === 'string' ? result : JSON.stringify(result))
+  }
+}
+
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv)
+
+  if (parsed.meta.exec) {
+    await execScript(parsed.meta.exec)
+    process.exit(0)
+  }
 
   if (parsed.meta.help) {
     console.log(HELP)

@@ -37,6 +37,12 @@ describe('runSkillScript - existing behavior', () => {
     writeFileSync(p, '#!/bin/sh\nexit 1', { mode: 0o755 })
     await expect(runSkillScript(p, ENV)).rejects.toThrow('Script exited with code 1')
   })
+
+  it('captures stderr content in error message for failing scripts', async () => {
+    const p = `${TEST_DIR}/stderr.sh`
+    writeFileSync(p, '#!/bin/sh\necho "error details" >&2\nexit 1', { mode: 0o755 })
+    await expect(runSkillScript(p, ENV)).rejects.toThrow('error details')
+  })
 })
 
 describe('runSkillScript - new runtimes', () => {
@@ -118,13 +124,40 @@ describe('runSkillScript - runtime fallback', () => {
     }
   })
 
-  it('throws when no JS runtime is available', async () => {
+  it('falls back to --exec when no JS runtime is available', async () => {
     const p = `${TEST_DIR}/nort.js`
-    writeFileSync(p, 'console.log("x")')
+    writeFileSync(p, 'console.log("exec-fallback")')
 
     const spy = spyOn(Bun, 'which').mockReturnValue(null)
     try {
-      await expect(runSkillScript(p, ENV)).rejects.toThrow('None of')
+      const out = await runSkillScript(p, ENV)
+      expect(out.trim()).toBe('exec-fallback')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('falls back to --exec with module imports when no JS runtime is available', async () => {
+    const p = `${TEST_DIR}/with-import.ts`
+    writeFileSync(p, 'import { join } from "path"\nconsole.log(join("hello", "world"))')
+
+    const spy = spyOn(Bun, 'which').mockReturnValue(null)
+    try {
+      const out = await runSkillScript(p, ENV)
+      expect(out.trim()).toBe('hello/world')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('falls back to --exec for .ts files when no JS runtime is available', async () => {
+    const p = `${TEST_DIR}/nort.ts`
+    writeFileSync(p, 'const msg: string = "exec-ts-fallback"\nconsole.log(msg)')
+
+    const spy = spyOn(Bun, 'which').mockReturnValue(null)
+    try {
+      const out = await runSkillScript(p, ENV)
+      expect(out.trim()).toBe('exec-ts-fallback')
     } finally {
       spy.mockRestore()
     }

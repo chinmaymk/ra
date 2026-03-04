@@ -77,6 +77,13 @@ describe('loadConfig', () => {
     })
   })
 
+  it('ignores non-numeric env var values for integer fields', async () => {
+    const c = await loadConfig({ cwd: tmp, env: { RA_MAX_ITERATIONS: 'abc', RA_HTTP_PORT: 'not-a-number' } })
+    // Should fall back to defaults, not NaN
+    expect(c.maxIterations).toBe(50)
+    expect(c.http.port).toBe(3000)
+  })
+
   it('deepMerge handles null values without crashing', async () => {
     // When a config layer has null for a key that was an object in defaults, it should not crash
     const c = await loadConfig({ cwd: tmp, cliArgs: { http: null } as any })

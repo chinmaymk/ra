@@ -68,32 +68,38 @@ function setPath(obj: Record<string, unknown>, path: string[], value: unknown): 
   cur[path[path.length - 1]!] = value
 }
 
+function safeParseInt(value: string): number | undefined {
+  const n = parseInt(value, 10)
+  return Number.isNaN(n) ? undefined : n
+}
+
 function loadEnvVars(env: Record<string, string | undefined>): Record<string, unknown> {
   const r: Record<string, unknown> = {}
   const set = (path: string[], value: unknown) => setPath(r, path, value)
+  const setInt = (path: string[], value: string) => { const n = safeParseInt(value); if (n !== undefined) set(path, n) }
 
   // Top-level
   if (env.RA_PROVIDER !== undefined)       set(['provider'], env.RA_PROVIDER)
   if (env.RA_MODEL !== undefined)          set(['model'], env.RA_MODEL)
   if (env.RA_INTERFACE !== undefined)      set(['interface'], env.RA_INTERFACE)
   if (env.RA_SYSTEM_PROMPT !== undefined)  set(['systemPrompt'], env.RA_SYSTEM_PROMPT)
-  if (env.RA_MAX_ITERATIONS !== undefined) set(['maxIterations'], parseInt(env.RA_MAX_ITERATIONS, 10))
+  if (env.RA_MAX_ITERATIONS !== undefined) setInt(['maxIterations'], env.RA_MAX_ITERATIONS)
   if (env.RA_THINKING !== undefined)       set(['thinking'], env.RA_THINKING)
 
   // HTTP server
-  if (env.RA_HTTP_PORT !== undefined)  set(['http', 'port'], parseInt(env.RA_HTTP_PORT, 10))
+  if (env.RA_HTTP_PORT !== undefined)  setInt(['http', 'port'], env.RA_HTTP_PORT)
   if (env.RA_HTTP_TOKEN !== undefined) set(['http', 'token'], env.RA_HTTP_TOKEN)
 
   // MCP server
   if (env.RA_MCP_SERVER_ENABLED !== undefined)           set(['mcp', 'server', 'enabled'], env.RA_MCP_SERVER_ENABLED === 'true')
-  if (env.RA_MCP_SERVER_PORT !== undefined)              set(['mcp', 'server', 'port'], parseInt(env.RA_MCP_SERVER_PORT, 10))
+  if (env.RA_MCP_SERVER_PORT !== undefined)              setInt(['mcp', 'server', 'port'], env.RA_MCP_SERVER_PORT)
   if (env.RA_MCP_SERVER_TOOL_NAME !== undefined)         set(['mcp', 'server', 'tool', 'name'], env.RA_MCP_SERVER_TOOL_NAME)
   if (env.RA_MCP_SERVER_TOOL_DESCRIPTION !== undefined)  set(['mcp', 'server', 'tool', 'description'], env.RA_MCP_SERVER_TOOL_DESCRIPTION)
 
   // Storage
   if (env.RA_STORAGE_PATH !== undefined)         set(['storage', 'path'], env.RA_STORAGE_PATH)
-  if (env.RA_STORAGE_MAX_SESSIONS !== undefined) set(['storage', 'maxSessions'], parseInt(env.RA_STORAGE_MAX_SESSIONS, 10))
-  if (env.RA_STORAGE_TTL_DAYS !== undefined)     set(['storage', 'ttlDays'], parseInt(env.RA_STORAGE_TTL_DAYS, 10))
+  if (env.RA_STORAGE_MAX_SESSIONS !== undefined) setInt(['storage', 'maxSessions'], env.RA_STORAGE_MAX_SESSIONS)
+  if (env.RA_STORAGE_TTL_DAYS !== undefined)     setInt(['storage', 'ttlDays'], env.RA_STORAGE_TTL_DAYS)
 
   // Skills
   if (env.RA_SKILL_DIRS !== undefined) set(['skillDirs'], env.RA_SKILL_DIRS.split(',').filter(Boolean))

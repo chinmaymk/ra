@@ -202,7 +202,7 @@ describe('createCompactionMiddleware', () => {
     const ctx = makeCtx(messages)
     await mw(ctx)
     const hasSummary = ctx.request.messages.some(
-      m => typeof m.content === 'string' && m.content.startsWith('[Context Summary]')
+      m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
     )
     expect(hasSummary).toBe(true)
     expect(ctx.request.messages.length).toBeLessThan(messages.length)
@@ -222,6 +222,40 @@ describe('createCompactionMiddleware', () => {
     const ctx = makeCtx(messages)
     await mw(ctx)
     expect(ctx.request.messages).toEqual(messages)
+  })
+
+  it('merges compaction summary into user message to preserve role alternation', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => ({
+        message: { role: 'assistant' as const, content: 'Conversation summary.' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'System prompt' },
+      { role: 'user', content: 'First message' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'Latest message' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    // Summary should be merged into a user message
+    const summaryMsg = ctx.request.messages.find(
+      m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
+    )
+    expect(summaryMsg).toBeDefined()
+    expect(summaryMsg!.role).toBe('user')
+    // No consecutive user messages should exist
+    for (let i = 1; i < ctx.request.messages.length; i++) {
+      if (ctx.request.messages[i]!.role === 'user') {
+        expect(ctx.request.messages[i - 1]!.role).not.toBe('user')
+      }
+    }
   })
 
   it('skips when nothing to compact (all pinned)', async () => {

@@ -8,11 +8,17 @@ export interface ParsedArgsMeta {
   prompt?: string
   resume?: string
   configPath?: string
+  exec?: string
 }
 
 export interface ParsedArgs {
   config: Partial<RaConfig>
   meta: ParsedArgsMeta
+}
+
+function safeParseInt(value: string): number | undefined {
+  const n = parseInt(value, 10)
+  return Number.isNaN(n) ? undefined : n
 }
 
 function setPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
@@ -35,6 +41,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     args: userArgs,
     options: {
       // Meta (not mapped to RaConfig)
+      exec:                          { type: 'string' },
       config:                        { type: 'string' },
       skill:                         { type: 'string', multiple: true },
       file:                          { type: 'string', multiple: true },
@@ -89,23 +96,23 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values.provider)           set(['provider'], values.provider)
   if (values.model)              set(['model'], values.model)
   if (values['system-prompt'])   set(['systemPrompt'], values['system-prompt'])
-  if (values['max-iterations'])  set(['maxIterations'], parseInt(values['max-iterations'] as string, 10))
+  if (values['max-iterations'])  { const n = safeParseInt(values['max-iterations'] as string); if (n !== undefined) set(['maxIterations'], n) }
   if (values['thinking'])        set(['thinking'], values['thinking'])
 
   // HTTP server
-  if (values['http-port'])   set(['http', 'port'], parseInt(values['http-port'] as string, 10))
+  if (values['http-port'])   { const n = safeParseInt(values['http-port'] as string); if (n !== undefined) set(['http', 'port'], n) }
   if (values['http-token'])  set(['http', 'token'], values['http-token'])
 
   // MCP server
   if (values['mcp-server-enabled'])          set(['mcp', 'server', 'enabled'], true)
-  if (values['mcp-server-port'])             set(['mcp', 'server', 'port'], parseInt(values['mcp-server-port'] as string, 10))
+  if (values['mcp-server-port'])             { const n = safeParseInt(values['mcp-server-port'] as string); if (n !== undefined) set(['mcp', 'server', 'port'], n) }
   if (values['mcp-server-tool-name'])        set(['mcp', 'server', 'tool', 'name'], values['mcp-server-tool-name'])
   if (values['mcp-server-tool-description']) set(['mcp', 'server', 'tool', 'description'], values['mcp-server-tool-description'])
 
   // Storage
   if (values['storage-path'])          set(['storage', 'path'], values['storage-path'])
-  if (values['storage-max-sessions'])  set(['storage', 'maxSessions'], parseInt(values['storage-max-sessions'] as string, 10))
-  if (values['storage-ttl-days'])      set(['storage', 'ttlDays'], parseInt(values['storage-ttl-days'] as string, 10))
+  if (values['storage-max-sessions'])  { const n = safeParseInt(values['storage-max-sessions'] as string); if (n !== undefined) set(['storage', 'maxSessions'], n) }
+  if (values['storage-ttl-days'])      { const n = safeParseInt(values['storage-ttl-days'] as string); if (n !== undefined) set(['storage', 'ttlDays'], n) }
 
   // Skills
   if (values['skill-dir']) set(['skillDirs'], values['skill-dir'])
@@ -124,6 +131,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       prompt:     positionals.join(' ') || undefined,
       resume:     values.resume as string | undefined,
       configPath: values.config as string | undefined,
+      exec:       values.exec as string | undefined,
     },
   }
 }

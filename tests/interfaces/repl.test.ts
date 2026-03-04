@@ -120,6 +120,14 @@ describe('Repl', () => {
     expect(response).toBe('Usage: /resume <session-id>')
   })
 
+  it('handleCommand /resume with non-existent id returns error', async () => {
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
+
+    const response = await (repl as any).handleCommand('/resume non-existent-session-id')
+    expect(response).toContain('Session not found')
+  })
+
   it('handleCommand /resume with valid id loads messages', async () => {
     const storage = await makeStorage()
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'repl' })
