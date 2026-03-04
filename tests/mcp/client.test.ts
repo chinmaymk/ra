@@ -37,6 +37,16 @@ describe('McpClient', () => {
     // No error means success
   })
 
+  it('disconnect does not throw when client.close() rejects', async () => {
+    const client = new McpClient()
+    ;(client as any).clients = [
+      { close: async () => { throw new Error('close failed') } },
+      { close: async () => {} },
+    ]
+    await expect(client.disconnect()).resolves.toBeUndefined()
+    expect((client as any).clients).toEqual([])
+  })
+
   it('connects to stdio transport, registers tools, and disconnects', async () => {
     // Write a minimal MCP server script that exposes one tool
     const { mkdirSync, writeFileSync, rmSync } = await import('fs')

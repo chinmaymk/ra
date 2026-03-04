@@ -39,7 +39,7 @@ export class McpClient {
   }
 
   async disconnect(): Promise<void> {
-    await Promise.all(this.clients.map(c => c.close()))
+    await Promise.allSettled(this.clients.map(c => c.close()))
     this.clients = []
   }
 }
