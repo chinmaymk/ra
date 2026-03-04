@@ -6,8 +6,8 @@ export const defaultConfig: RaConfig = {
   interface: 'repl',
   systemPrompt: 'You are a helpful AI assistant.',
   http: { port: 3000, token: '' },
+  skillDirs: [],
   skills: [],
-  alwaysLoad: [],
   mcp: {
     client: [],
     server: {
@@ -17,7 +17,6 @@ export const defaultConfig: RaConfig = {
       tool: {
         name: 'ra',
         description: 'Ra AI agent',
-        inputSchema: {},
       },
     },
   },
@@ -26,6 +25,7 @@ export const defaultConfig: RaConfig = {
     openai: { apiKey: '' },
     google: { apiKey: '' },
     ollama: { host: 'http://localhost:11434' },
+    bedrock: { region: 'us-east-1' },
   },
   storage: {
     path: '.ra/sessions',
