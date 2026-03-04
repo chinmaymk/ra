@@ -17,6 +17,7 @@ export interface HttpOptions {
   skillMap?: Map<string, Skill>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
+  toolTimeout?: number
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
 }
@@ -28,6 +29,8 @@ export class HttpServer {
   constructor(options: HttpOptions) {
     this.options = options
   }
+
+  get port(): number { return (this.server?.port ?? this.options.port) as number }
 
   async start(): Promise<void> {
     const opts = this.options
@@ -109,6 +112,7 @@ export class HttpServer {
       model: this.options.model,
       middleware: this.options.middleware,
       maxIterations: this.options.maxIterations,
+      toolTimeout: this.options.toolTimeout,
       sessionId: body.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
@@ -171,6 +175,7 @@ export class HttpServer {
           model: opts.model,
           middleware,
           maxIterations: opts.maxIterations,
+          toolTimeout: opts.toolTimeout,
           sessionId: body.sessionId,
           thinking: opts.thinking,
           compaction: opts.compaction,

@@ -18,6 +18,7 @@ export interface ReplOptions {
   skillMap?: Map<string, Skill>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
+  toolTimeout?: number
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
@@ -105,6 +106,7 @@ export class Repl {
       tools: this.options.tools,
       model: this.options.model,
       maxIterations: this.options.maxIterations,
+      toolTimeout: this.options.toolTimeout,
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,

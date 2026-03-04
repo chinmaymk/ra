@@ -171,7 +171,7 @@ async function main(): Promise<void> {
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, middleware, compaction: config.compaction })
+    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware, compaction: config.compaction })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
@@ -230,6 +230,7 @@ async function main(): Promise<void> {
       tools,
       skillMap,
       maxIterations: config.maxIterations,
+      toolTimeout: config.toolTimeout,
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
@@ -247,12 +248,13 @@ async function main(): Promise<void> {
       systemPrompt: config.systemPrompt,
       skillMap,
       maxIterations: config.maxIterations,
+      toolTimeout: config.toolTimeout,
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
     })
     await httpServer.start()
-    console.error(`HTTP server listening on port ${config.http.port}`)
+    console.error(`HTTP server listening on port ${httpServer.port}`)
     // Keep process alive; clean up on signal
     const httpShutdown = async () => { await httpServer.stop(); await shutdown() }
     process.removeAllListeners('SIGINT')
@@ -270,6 +272,7 @@ async function main(): Promise<void> {
       systemPrompt: config.systemPrompt,
       skillMap,
       maxIterations: config.maxIterations,
+      toolTimeout: config.toolTimeout,
       sessionId: parsed.meta.resume,
       middleware,
       thinking: config.thinking,
