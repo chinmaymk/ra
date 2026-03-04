@@ -1,24 +1,21 @@
 # Providers
 
-ra supports five providers. All use the same interface — swap `RA_PROVIDER` and keep going.
-
-| Provider | Value | Env Key | Thinking |
-|----------|-------|---------|:--------:|
-| Anthropic | `anthropic` | `RA_ANTHROPIC_API_KEY` | `low` / `medium` / `high` |
-| OpenAI | `openai` | `RA_OPENAI_API_KEY` | `low` / `medium` / `high` |
-| Google Gemini | `google` | `RA_GOOGLE_API_KEY` | `low` / `medium` / `high` |
-| AWS Bedrock | `bedrock` | `RA_BEDROCK_API_KEY` + `RA_BEDROCK_REGION` | `low` / `medium` / `high` |
-| Ollama | `ollama` | `RA_OLLAMA_HOST` | — |
+ra works with any model from Anthropic, OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch providers and models with a flag — the rest of your config stays the same.
 
 ```bash
-# Switch providers on the fly
-ra --provider google --model gemini-2.5-pro "Explain quantum computing"
-
-# Use a local model
+ra --provider google --model gemini-2.5-pro "Summarize this doc"
 ra --provider ollama --model llama3 "Write a haiku"
-
-# Enable extended thinking
-ra --thinking high "Design a distributed cache"
+ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Review this PR"
 ```
+
+Set your API key for the provider you want to use:
+
+| Provider | Value | Env Key |
+|----------|-------|---------|
+| Anthropic | `anthropic` | `RA_ANTHROPIC_API_KEY` |
+| OpenAI | `openai` | `RA_OPENAI_API_KEY` |
+| Google Gemini | `google` | `RA_GOOGLE_API_KEY` |
+| AWS Bedrock | `bedrock` | `RA_BEDROCK_REGION` |
+| Ollama | `ollama` | `RA_OLLAMA_HOST` |
 
 See the individual provider pages for setup and credential details.

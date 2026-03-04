@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: "ra"
-  text: "raw agent. role agent. run-anything agent."
+  text: "A complete agentic loop you configure into any agent you need."
   tagline: The loop is built in. The agent is up to you.
   actions:
     - theme: brand
@@ -14,14 +14,14 @@ hero:
       link: /getting-started/quick-start
 
 features:
-  - title: Any Provider
-    details: Anthropic, OpenAI, Google Gemini, Ollama, AWS Bedrock. Flip RA_PROVIDER and keep going.
+  - title: Full Control Over Context
+    details: Every message, tool call, and stream chunk is yours to inspect, modify, or stop. Middleware hooks run at every step. You decide what the model sees and when.
+  - title: Any Provider, Any Model
+    details: Use any model from Anthropic, OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch with a flag — the rest of your config stays the same.
   - title: Any Interface
-    details: One-shot CLI, interactive REPL, HTTP server, MCP server. Same binary, different flags.
-  - title: Layered Config
-    details: defaults → file → env → CLI. Commit a baseline, override per-run. No surprises.
-  - title: Extensible Agent Loop
-    details: A real model→tools→repeat loop with middleware hooks at every step. Write hooks in JS/TS, inline or as files. Add guardrails, logging, or custom routing — all from config.
+    details: Ship as a CLI command, interactive REPL, streaming HTTP API, or MCP server for Cursor and Claude Desktop. One binary, every context.
   - title: Skills & MCP
-    details: Inject skills for domain expertise. Connect MCP servers for tools. Expose ra itself as an MCP tool. Extend without forking.
+    details: Define behavior through skills and system prompts. Connect external MCP servers for tools. Expose ra itself as an MCP tool. Extend without touching core code.
+  - title: Layered Config
+    details: defaults → file → env → CLI. Commit a baseline, override per-run. The config is the agent — change the config, change the agent.
 ---
