@@ -63,6 +63,8 @@ export class AgentLoop {
 
     const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId })
 
+    let currentPhase: 'model_call' | 'tool_execution' | 'stream' = 'model_call'
+
     try {
       await runMiddlewareChain(loopCtx(), this.middleware.beforeLoopBegin)
       if (signal.aborted) return { messages, iterations }
@@ -83,6 +85,7 @@ export class AgentLoop {
         let textAccumulator = ''
         const toolCallBuf: { id: string; name: string; argsRaw: string }[] = []
 
+        currentPhase = 'stream'
         for await (const chunk of this.provider.stream(request)) {
           if (chunk.type === 'thinking') {
             await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk)
@@ -109,18 +112,26 @@ export class AgentLoop {
         if (signal.aborted) break
 
         if (toolCalls.length) {
+          currentPhase = 'tool_execution'
           const results = await Promise.allSettled(
             toolCalls.map(async tc => {
               await runMiddlewareChain({ ...stoppable, toolCall: tc, loop: loopCtx() } satisfies ToolExecutionContext, this.middleware.beforeToolExecution)
               if (signal.aborted) return ''
               let input: unknown
               try { input = JSON.parse(tc.arguments || '{}') } catch { input = {} }
-              const value = await this.tools.execute(tc.name, input)
-              const content = typeof value === 'string' ? value : JSON.stringify(value)
-              await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution)
-              return content
+              try {
+                const value = await this.tools.execute(tc.name, input)
+                const content = typeof value === 'string' ? value : JSON.stringify(value)
+                await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution)
+                return content
+              } catch (err) {
+                const errMsg = err instanceof Error ? err.message : String(err)
+                await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content: errMsg, isError: true }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution)
+                throw err
+              }
             })
           )
+          currentPhase = 'model_call'
 
           if (!signal.aborted) {
             for (let i = 0; i < toolCalls.length; i++) {
@@ -145,7 +156,7 @@ export class AgentLoop {
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err))
-      await runMiddlewareChain({ ...stoppable, error, loop: loopCtx(), phase: 'model_call' } satisfies ErrorContext, this.middleware.onError)
+      await runMiddlewareChain({ ...stoppable, error, loop: loopCtx(), phase: currentPhase } satisfies ErrorContext, this.middleware.onError)
       throw err
     }
 

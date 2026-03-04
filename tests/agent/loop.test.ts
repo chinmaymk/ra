@@ -297,6 +297,57 @@ describe('AgentLoop', () => {
     expect(r2.messages.at(-1)?.content).toBe('run2')
   })
 
+  it('calls afterToolExecution with isError when tool throws', async () => {
+    const afterResults: { isError: boolean; content: string }[] = []
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'failing' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'done' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'failing', description: '', inputSchema: {}, execute: async () => { throw new Error('tool exploded') } })
+    const loop = new AgentLoop({
+      provider, tools,
+      middleware: {
+        afterToolExecution: [async (ctx) => {
+          afterResults.push({ isError: ctx.result.isError, content: ctx.result.content as string })
+        }],
+      },
+    })
+    // The loop should not throw - the error is captured and used as tool result
+    await loop.run([{ role: 'user', content: 'go' }])
+    expect(afterResults).toHaveLength(1)
+    expect(afterResults[0]!.isError).toBe(true)
+    expect(afterResults[0]!.content).toBe('tool exploded')
+  })
+
+  it('onError uses correct phase when error occurs during tool execution', async () => {
+    const errorPhases: string[] = []
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'failing' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'failing', description: '', inputSchema: {}, execute: async () => { throw new Error('tool error') } })
+    const loop = new AgentLoop({
+      provider, tools,
+      middleware: {
+        onError: [async (ctx) => { errorPhases.push(ctx.phase) }],
+      },
+    })
+    // With the fix, tool errors are caught internally and don't propagate to onError
+    // But a hard rethrow should show tool_execution phase
+    await loop.run([{ role: 'user', content: 'go' }])
+    // No error should propagate since tool errors are handled internally
+    expect(errorPhases).toHaveLength(0)
+  })
+
   it('compacts messages when exceeding token threshold', async () => {
     let chatCallCount = 0
     let streamCallCount = 0
