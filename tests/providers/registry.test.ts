@@ -18,4 +18,8 @@ describe('createProvider', () => {
     const p = createProvider({ provider: 'ollama', host: 'http://localhost:11434' })
     expect(p.name).toBe('ollama')
   })
+  it('creates bedrock provider', () => {
+    const p = createProvider({ provider: 'bedrock', region: 'us-east-1' })
+    expect(p.name).toBe('bedrock')
+  })
 })

@@ -4,11 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
-
-export interface McpServerConfig {
-  port: number
-  tool: { name: string; description: string; inputSchema: Record<string, unknown> }
-}
+import type { McpServerConfig } from '../config/types'
 
 export type McpToolHandler = (input: unknown) => Promise<string>
 

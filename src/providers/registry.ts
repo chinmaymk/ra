@@ -4,12 +4,14 @@ import { AnthropicProvider, type AnthropicProviderOptions } from './anthropic'
 import { OpenAIProvider, type OpenAIProviderOptions } from './openai'
 import { GoogleProvider, type GoogleProviderOptions } from './google'
 import { OllamaProvider, type OllamaProviderOptions } from './ollama'
+import { BedrockProvider, type BedrockProviderOptions } from './bedrock'
 
 type ProviderOptionsMap = {
   anthropic: AnthropicProviderOptions
   openai: OpenAIProviderOptions
   google: GoogleProviderOptions
   ollama: OllamaProviderOptions
+  bedrock: BedrockProviderOptions
 }
 
 export type ProviderConfig = {
@@ -40,6 +42,10 @@ export function createProvider(config: ProviderConfig): IProvider {
     case 'ollama': {
       const { provider: _, ...opts } = config
       return new OllamaProvider(opts)
+    }
+    case 'bedrock': {
+      const { provider: _, ...opts } = config
+      return new BedrockProvider(opts)
     }
   }
 }

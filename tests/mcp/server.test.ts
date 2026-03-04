@@ -4,7 +4,6 @@ import { startMcpHttp } from '../../src/mcp/server'
 const toolConfig = {
   name: 'ra',
   description: 'Run the RA agent with a prompt',
-  inputSchema: {},
 }
 
 describe('startMcpHttp', () => {
@@ -15,7 +14,7 @@ describe('startMcpHttp', () => {
   })
 
   it('starts and exposes /mcp endpoint with tools/list', async () => {
-    stop = await startMcpHttp({ port: 3098, tool: toolConfig }, async (input) => `echo: ${JSON.stringify(input)}`)
+    stop = await startMcpHttp({ enabled: true, transport: 'http' as const, port: 3098, tool: toolConfig }, async (input) => `echo: ${JSON.stringify(input)}`)
 
     const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' }
 
@@ -54,7 +53,7 @@ describe('startMcpHttp', () => {
   })
 
   it('returns 404 for unknown paths', async () => {
-    stop = await startMcpHttp({ port: 3097, tool: toolConfig }, async () => 'ok')
+    stop = await startMcpHttp({ enabled: true, transport: 'http' as const, port: 3097, tool: toolConfig }, async () => 'ok')
     const res = await fetch('http://localhost:3097/unknown')
     expect(res.status).toBe(404)
   })
