@@ -49,16 +49,16 @@ ra
 
 ## Why ra?
 
-Most AI agent frameworks give you a locked-down loop you can't inspect or modify. Most CLI tools give you a prompt-in, text-out pipe with no agent capabilities. You end up choosing between power and flexibility.
+ra gives you full ownership of the agent loop.
 
-ra gives you both. At its core is an **extensible agentic loop** — model calls, tool execution, streaming, and context management — that you customize through config, skills, middleware, and MCP. No subclassing, no forking, no framework lock-in.
+Every message in and out, every tool call, every stream chunk — you can inspect it, modify it, or stop it. Middleware hooks run at every step. The full conversation history is always available to your hooks. Context compaction is built in and configurable. You decide what the model sees and when.
 
-- **CI caught a flaky test** — `ra --skill debugger "Why is this test failing?" --file test-output.log` in your pipeline. It reads the logs, explains the failure, done.
-- **You're building a feature** — `ra` drops you into a REPL. Attach files, ask follow-ups, keep context across turns.
-- **Your product needs AI** — `ra --http` gives you a streaming API. POST a message, get SSE chunks back. No framework, no boilerplate.
-- **Your editor needs a specialist** — `ra --mcp-stdio` exposes it as a tool. Cursor and Claude Desktop call it with a prompt, get the full agent loop.
+On top of that control sits everything you need to build real agents: skills for reusable behavior, MCP for tool connectivity, layered config for environment-specific tuning, and multiple interfaces so the same agent works in a terminal, a product, or another agent's toolchain.
 
-Same config. Same skills. Same binary. The interface changes, the agent doesn't.
+- **In a CI pipeline** — `ra --skill debugger --file test-output.log "Why is this test failing?"` reads the logs and explains the failure.
+- **In a terminal** — `ra` opens an interactive REPL. Attach files, ask follow-ups, keep context across turns.
+- **In a product** — `ra --http` serves a streaming API. POST a message, get SSE back.
+- **In an editor** — `ra --mcp-stdio` exposes the full agent loop as a tool for Cursor or Claude Desktop.
 
 ## Install
 
@@ -95,26 +95,23 @@ ra --mcp
 
 ## Providers
 
-Anthropic, OpenAI, Google, Bedrock, Ollama — switch with a flag or env var. Same config, any backend.
-
-| Provider | Env Key | Thinking Support |
-|----------|---------|:---:|
-| **Anthropic** | `RA_ANTHROPIC_API_KEY` | `low` / `medium` / `high` |
-| **OpenAI** | `RA_OPENAI_API_KEY` | `low` / `medium` / `high` |
-| **Google Gemini** | `RA_GOOGLE_API_KEY` | `low` / `medium` / `high` |
-| **AWS Bedrock** | `RA_BEDROCK_API_KEY` + `RA_BEDROCK_REGION` | `low` / `medium` / `high` |
-| **Ollama** | `RA_OLLAMA_HOST` | — |
+ra works with any model from Anthropic, OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch providers and models with a flag — the rest of your config stays the same.
 
 ```bash
-# Switch providers on the fly
-ra --provider google --model gemini-2.5-pro "Explain quantum computing"
-
-# Use a local model
+ra --provider google --model gemini-2.5-pro "Summarize this doc"
 ra --provider ollama --model llama3 "Write a haiku"
-
-# Enable extended thinking
-ra --thinking high "Design a distributed cache"
+ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Review this PR"
 ```
+
+Set your API key for the provider you want to use:
+
+| Provider | Env Key |
+|----------|---------|
+| `anthropic` | `RA_ANTHROPIC_API_KEY` |
+| `openai` | `RA_OPENAI_API_KEY` |
+| `google` | `RA_GOOGLE_API_KEY` |
+| `bedrock` | `RA_BEDROCK_REGION` |
+| `ollama` | `RA_OLLAMA_HOST` |
 
 > Bedrock falls back to the standard AWS credential chain (`~/.aws/credentials`, IAM roles, etc.) when `RA_BEDROCK_API_KEY` is not set.
 
