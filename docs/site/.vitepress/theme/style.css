@@ -82,21 +82,13 @@
   border-radius: 8px;
 }
 
-/* Wider content area */
-:root {
-  --vp-layout-max-width: 1520px;
-}
-
-.VPDoc .container {
-  max-width: none !important;
-}
-
+/* Wider doc content */
 .VPDoc.has-aside .content-container {
-  max-width: 960px !important;
+  max-width: 868px !important;
 }
 
 .VPDoc:not(.has-aside) .content-container {
-  max-width: 1120px !important;
+  max-width: 1080px !important;
 }
 
 /* Local search modal */
