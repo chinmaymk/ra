@@ -139,6 +139,24 @@ describe('Repl', () => {
     expect(response).toContain('1 messages loaded')
   })
 
+  it('clears pending state on /resume', async () => {
+    const storage = await makeStorage()
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'repl' })
+    const skill = { metadata: { name: 'test-skill', description: '' }, body: 'skill body', scripts: [], dir: '/tmp', references: [], assets: [] }
+    const skillMap = new Map([['test-skill', skill]])
+    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillMap })
+
+    // Set pending skill and attachments
+    await (repl as any).handleCommand('/skill test-skill')
+    ;(repl as any).pendingAttachments = [{ type: 'text', text: 'attachment' }]
+
+    // Resume a session
+    await (repl as any).handleCommand(`/resume ${session.id}`)
+
+    expect((repl as any).pendingSkill).toBeUndefined()
+    expect((repl as any).pendingAttachments).toEqual([])
+  })
+
   it('handleCommand /skill without name returns usage', async () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
@@ -314,6 +332,48 @@ describe('Repl.start()', () => {
     const msgs = (repl as any).messages
     // Should have original 2 messages + new user + new assistant
     expect(msgs.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('does not crash when handleCommand throws (e.g., storage error)', async () => {
+    const storage = await makeStorage()
+    const input = new PassThrough()
+
+    const origWrite = process.stdout.write.bind(process.stdout)
+    const outputChunks: string[] = []
+    process.stdout.write = (chunk: string | Uint8Array, ...args: unknown[]) => {
+      outputChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString())
+      return true
+    }
+    const origStdin = process.stdin
+    const origIsTTY = process.stdout.isTTY
+    Object.defineProperty(process, 'stdin', { value: input, writable: true, configurable: true })
+    process.stdout.isTTY = false as any
+
+    // Make /resume throw by breaking storage.readMessages
+    const origRead = storage.readMessages.bind(storage)
+    storage.readMessages = async () => { throw new Error('corrupt file') }
+
+    const repl = new Repl({ model: 'test', provider: mockProvider('ok'), tools: new ToolRegistry(), storage })
+
+    setTimeout(() => {
+      input.write('/resume some-session-id\n')
+      input.end()
+    }, 10)
+
+    let threw = false
+    try {
+      await repl.start()
+    } catch {
+      threw = true
+    } finally {
+      process.stdout.write = origWrite
+      Object.defineProperty(process, 'stdin', { value: origStdin, writable: true, configurable: true })
+      process.stdout.isTTY = origIsTTY
+      storage.readMessages = origRead
+    }
+
+    expect(threw).toBe(false)
+    expect(outputChunks.join('')).toContain('corrupt file')
   })
 
   it('creates new session when no sessionId provided', async () => {

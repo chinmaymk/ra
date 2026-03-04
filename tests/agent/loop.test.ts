@@ -313,7 +313,7 @@ describe('AgentLoop', () => {
       provider, tools,
       middleware: {
         afterToolExecution: [async (ctx) => {
-          afterResults.push({ isError: ctx.result.isError, content: ctx.result.content as string })
+          afterResults.push({ isError: ctx.result.isError ?? false, content: ctx.result.content as string })
         }],
       },
     })

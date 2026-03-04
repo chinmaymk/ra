@@ -17,7 +17,7 @@ function isFilePath(s: string): boolean {
 async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
   if (isFilePath(entry)) {
     let resolved = isAbsolute(entry) ? entry : join(cwd, entry)
-    if (entry.startsWith('~')) resolved = join(homedir(), entry.slice(1))
+    if (entry.startsWith('~/')) resolved = join(homedir(), entry.slice(2))
     const mod = await import(resolved)
     if (typeof mod.default !== 'function') {
       throw new Error(`Middleware file "${resolved}" must export a default function`)

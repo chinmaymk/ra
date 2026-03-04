@@ -41,17 +41,21 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
 
     if (req.method === 'DELETE') {
       const t = transports.get(sessionId)
-      if (t) { await t.close(); transports.delete(sessionId) }
+      if (!t) { res.writeHead(404).end('Session not found'); return }
+      await t.close()
+      transports.delete(sessionId)
       res.writeHead(200).end()
       return
     }
 
     let transport: StreamableHTTPServerTransport
 
+    let isNew = false
     if (req.method === 'POST' && !sessionId) {
       transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() })
       transport.onclose = () => { if (transport.sessionId) transports.delete(transport.sessionId) }
       await server.connect(transport)
+      isNew = true
     } else if (sessionId && transports.has(sessionId)) {
       transport = transports.get(sessionId)!
     } else {
@@ -61,14 +65,12 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
 
     try {
       await transport.handleRequest(req, res)
+      if (isNew && transport.sessionId) transports.set(transport.sessionId, transport)
     } catch (err) {
       if (!res.headersSent) {
         res.writeHead(500).end(`Internal server error: ${err instanceof Error ? err.message : String(err)}`)
       }
       return
-    }
-    if (transport.sessionId && !transports.has(transport.sessionId)) {
-      transports.set(transport.sessionId, transport)
     }
   })
 

@@ -91,6 +91,37 @@ describe('SessionStorage', () => {
     expect(idPart).not.toContain('.')
   })
 
+  it('prune with both TTL and maxSessions deletes correct count', async () => {
+    for (let i = 0; i < 10; i++) {
+      const s = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+      if (i < 2) {
+        const { join } = await import('path')
+        const metaPath = join(TEST_PATH, s.id, 'meta.json')
+        const meta = JSON.parse(await Bun.file(metaPath).text())
+        meta.created = new Date(Date.now() - 2 * 86_400_000).toISOString()
+        await Bun.write(metaPath, JSON.stringify(meta, null, 2))
+      }
+      await new Promise(r => setTimeout(r, 10))
+    }
+    await storage.prune({ ttlDays: 1, maxSessions: 7 })
+    const list = await storage.list()
+    expect(list).toHaveLength(7)
+  })
+
+  it('readMessages skips malformed JSONL lines instead of throwing', async () => {
+    const { join } = await import('path')
+    const { appendFile: nodeAppendFile } = await import('node:fs/promises')
+    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    await storage.appendMessage(session.id, { role: 'user', content: 'good message' })
+    const filePath = join(TEST_PATH, session.id, 'messages.jsonl')
+    await nodeAppendFile(filePath, '{corrupt json\n')
+    await storage.appendMessage(session.id, { role: 'assistant', content: 'another good message' })
+    const messages = await storage.readMessages(session.id)
+    expect(messages).toHaveLength(2)
+    expect(messages[0]?.content).toBe('good message')
+    expect(messages[1]?.content).toBe('another good message')
+  })
+
   it('appendMessage works on a fresh file (no prior messages)', async () => {
     const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
     await storage.appendMessage(session.id, { role: 'user', content: 'first' })

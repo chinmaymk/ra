@@ -184,6 +184,29 @@ test('inline middleware reads nested loop context', async () => {
   expect(ctx.__nested).toBe('x:5')
 })
 
+test('tilde path expansion uses slice(2) so ~/file resolves to homedir/file', async () => {
+  const { homedir } = await import('os')
+  const { writeFileSync, rmSync } = await import('fs')
+  const home = homedir()
+  const tmpFile = path.join(home, '.ra-test-middleware-tilde.ts')
+  writeFileSync(tmpFile, 'export default async function(ctx: any) { ctx.__tilde = true }')
+  try {
+    const config = {
+      ...defaultConfig,
+      middleware: {
+        beforeLoopBegin: [`~/.ra-test-middleware-tilde.ts`],
+      },
+    }
+    const mw = await loadMiddleware(config, cwd)
+    expect(typeof mw.beforeLoopBegin![0]).toBe('function')
+    const ctx: any = {}
+    await mw.beforeLoopBegin![0]!(ctx as any)
+    expect(ctx.__tilde).toBe(true)
+  } finally {
+    rmSync(tmpFile, { force: true })
+  }
+})
+
 test('throws with descriptive message on eval non-function', async () => {
   const config = {
     ...defaultConfig,

@@ -1,4 +1,5 @@
 import { join } from 'path'
+import { appendFile } from 'node:fs/promises'
 import type { IMessage } from '../providers/types'
 
 export interface SessionMeta {
@@ -59,7 +60,6 @@ export class SessionStorage {
   async appendMessage(id: string, message: IMessage): Promise<void> {
     const filePath = join(this.sessionDir(id), 'messages.jsonl')
     const line = JSON.stringify(message) + '\n'
-    const { appendFile } = await import('node:fs/promises')
     await appendFile(filePath, line)
   }
 
@@ -72,7 +72,11 @@ export class SessionStorage {
     return text
       .split('\n')
       .filter(line => line.trim().length > 0)
-      .map(line => JSON.parse(line) as IMessage)
+      .map(line => {
+        try { return JSON.parse(line) as IMessage }
+        catch { return null }
+      })
+      .filter((msg): msg is IMessage => msg !== null)
   }
 
   async saveCheckpoint(id: string, data: Record<string, unknown>): Promise<void> {
@@ -107,8 +111,11 @@ export class SessionStorage {
       const cutoff = Date.now() - options.ttlDays * 86_400_000
       sessions.filter(s => new Date(s.meta.created).getTime() < cutoff).forEach(s => toDelete.add(s.id))
     }
-    if (options.maxSessions !== undefined && sessions.length > options.maxSessions) {
-      sessions.filter(s => !toDelete.has(s.id)).slice(0, sessions.length - options.maxSessions).forEach(s => toDelete.add(s.id))
+    if (options.maxSessions !== undefined) {
+      const remaining = sessions.filter(s => !toDelete.has(s.id))
+      if (remaining.length > options.maxSessions) {
+        remaining.slice(0, remaining.length - options.maxSessions).forEach(s => toDelete.add(s.id))
+      }
     }
 
     await Promise.all([...toDelete].map(id => Bun.$`rm -rf ${this.sessionDir(id)}`.quiet()))

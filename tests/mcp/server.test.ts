@@ -58,10 +58,19 @@ describe('startMcpHttp', () => {
     expect(res.status).toBe(404)
   })
 
-  it('DELETE without session returns 200', async () => {
+  it('DELETE without session returns 404', async () => {
     stop = await startMcpHttp({ enabled: true, port: 3096, tool: toolConfig }, async () => 'ok')
     const res = await fetch('http://localhost:3096/mcp', { method: 'DELETE' })
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(404)
+  })
+
+  it('DELETE with unknown session id returns 404', async () => {
+    stop = await startMcpHttp({ enabled: true, port: 3091, tool: toolConfig }, async () => 'ok')
+    const res = await fetch('http://localhost:3091/mcp', {
+      method: 'DELETE',
+      headers: { 'mcp-session-id': 'nonexistent-session-id' },
+    })
+    expect(res.status).toBe(404)
   })
 
   it('returns 400 for POST with invalid session id', async () => {

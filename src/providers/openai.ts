@@ -47,7 +47,6 @@ export class OpenAIProvider implements IProvider {
     const stream = await this.client.chat.completions.create({ ...this.buildParams(request), stream: true, stream_options: { include_usage: true } })
     const activeToolCalls = new Map<number, string>()
     let usage: TokenUsage | undefined
-    let sawFinishReason = false
 
     for await (const chunk of stream as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
       if (chunk.usage) usage = this.toUsage(chunk.usage)
@@ -71,7 +70,6 @@ export class OpenAIProvider implements IProvider {
 
       if (chunk.choices[0]?.finish_reason) {
         for (const id of activeToolCalls.values()) yield { type: 'tool_call_end', id }
-        sawFinishReason = true
       }
     }
 

@@ -62,8 +62,12 @@ export class Repl {
       if (!trimmed) { prompt(); continue }
 
       if (trimmed.startsWith('/')) {
-        const response = await this.handleCommand(trimmed)
-        if (response) tui.printCommandResponse(response)
+        try {
+          const response = await this.handleCommand(trimmed)
+          if (response) tui.printCommandResponse(response)
+        } catch (err) {
+          tui.printError(err instanceof Error ? err.message : String(err))
+        }
       } else {
         await this.processInput(trimmed)
       }
@@ -182,6 +186,8 @@ export class Repl {
         }
         this.messages = messages
         this.sessionId = id
+        this.pendingSkill = undefined
+        this.pendingAttachments = []
         return `Resumed session ${id} (${this.messages.length} messages loaded).`
       }
       case '/skill': {
