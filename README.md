@@ -1,171 +1,409 @@
-# ra
+<h1 align="center">ra</h1>
 
-> **ra** is a **r**aw **a**gent. A **r**ole **a**gent. A **r**un-**a**nything **a**gent.
->
-> One binary you configure into whatever agent you need — without rewriting anything.
+<p align="center">
+  <b>One binary. Any shape. Any model.</b><br>
+  A configurable AI agent you shape through config — not code.
+</p>
 
-Same binary. Different config. Different agent.
-
-- Drop a `ra.config.yml` in a repo → a project-specific assistant with its own system prompt, skills, and tools
-- Set env vars → a different provider, a different persona, the same CLI
-- Pass `--skill` → inject a role or behavior at runtime
-- Run `--mcp` → expose it as a tool to Cursor, Claude Desktop, or anything MCP-aware
-
-No wrappers. No frameworks. Just config.
-
-<br>
-
-### Why ra?
-
-Most AI tools lock you into one shape — a chat UI, a framework, a cloud product. ra is the opposite. It's an **agent primitive**: small, composable, and configurable enough to become whatever you need.
-
-Give it a system prompt and it has a personality. Give it skills and it has expertise. Connect MCP servers and it has tools. Point it at a different provider and it speaks a different model. The binary never changes — only the configuration does.
-
-That's what makes ra powerful for **agentic loops**. Drop a config file alongside your code, run `ra "do the thing"`, and you have a domain-specific agent that understands your codebase, your tools, and your workflow. Need a code reviewer? A support bot? A CI agent? Same binary, different `ra.config.yml`.
-
-**Five providers, one interface.** Anthropic, OpenAI, Google Gemini, Ollama, AWS Bedrock. Rate-limited on one? Flip `RA_PROVIDER` and keep going. Want to run locally? Point it at Ollama. Same config, different backend — no code changes.
-
-**Four ways to run it.** Each one serves a different context:
-
-- **One-shot CLI** — scriptable prompts that stream to stdout and exit. Pipe it, chain it, cron it.
-- **Interactive REPL** — conversational sessions with history, tool use, and file attachments.
-- **HTTP server** — sync and streaming endpoints your application talks to directly.
-- **MCP server** — expose ra as a callable tool so Cursor, Claude Desktop, or your own agents can use it.
-
-And ra is also an **MCP client** — it connects to other MCP servers to pull in their tools, so the model can call databases, filesystems, APIs, or anything else someone has exposed over MCP.
-
-<br>
-
-### What's in the box
-
-| Feature | Description |
-|---------|-------------|
-| **REPL** | Interactive sessions with history |
-| **One-shot CLI** | Scriptable prompts, streams to stdout |
-| **HTTP API** | Sync + streaming chat, session management |
-| **MCP client** | Pull tools from other MCP servers |
-| **MCP server** | Expose ra as a tool to other apps |
-| **Tool calling** | Model invokes functions, ra executes them |
-| **Skills** | Reusable instruction bundles — roles, behaviors, and assets |
-| **File attachments** | Attach files in CLI and REPL |
-| **Session storage** | Persist conversations, resume later, auto-prune old ones |
-| **Layered config** | File → env → CLI override order; commit a baseline, tweak per-run |
-
-<br>
-
-### Table of contents
-
-- [Install](#install)
-- [Quick start](#quick-start)
-- [REPL](#repl)
-- [HTTP API](#http-api)
-- [MCP](#mcp)
-- [Layered config](#layered-config)
+<p align="center">
+  <a href="#install">Install</a> &middot;
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#providers">Providers</a> &middot;
+  <a href="#interfaces">Interfaces</a> &middot;
+  <a href="#skills">Skills</a> &middot;
+  <a href="#mcp">MCP</a> &middot;
+  <a href="#configuration">Configuration</a>
+</p>
 
 ---
 
-### Install
+**ra** is a **r**aw **a**gent. A **r**ole **a**gent. A **r**un-**a**nything **a**gent.
 
-Grab the `ra` binary for your OS. Put it somewhere on your `PATH`. Done.
+Drop a `ra.config.yml` in a repo and you have a project-specific assistant. Change an env var and you have a different provider. Pass `--skill` and you inject a new behavior. Run `--mcp` and it becomes a tool for Cursor or Claude Desktop. The binary never changes — only the config does.
 
 ```bash
-mv ra /usr/local/bin/ra
-chmod +x /usr/local/bin/ra
+# One-off question
+ra "What is the capital of France?"
+
+# Code review with a skill and file attachment
+ra --skill code-review --file diff.patch "Review this diff"
+
+# Use a different provider
+ra --provider openai --model gpt-4.1 "Explain this error"
+
+# Interactive session
+ra
+```
+
+## Why ra?
+
+Most AI tools lock you into one shape. ra is the opposite — an **agent primitive** that becomes whatever you configure it to be:
+
+- **Need a code reviewer?** Write a `ra.config.yml` with the right system prompt and skills.
+- **Need a support bot?** Same binary, different config.
+- **Rate-limited on Anthropic?** Flip `RA_PROVIDER=openai` and keep going.
+- **Want to run locally?** Point it at Ollama. No code changes.
+
+ra wraps a streaming, middleware-extensible agent loop (model → tool execution → repeat) behind a clean interface. It's built to be composed, scripted, and embedded.
+
+## Install
+
+```bash
+# Download and install
+curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
+
+# Or manually
+mv ra /usr/local/bin/ra && chmod +x /usr/local/bin/ra
+
+# Verify
 ra --help
 ```
 
-If `ra --help` prints something, you're in.
+## Quick Start
 
----
-
-### Quick start
-
-One-off question:
+Set your provider key and go:
 
 ```bash
-ra "What is the capital of France?"
+export RA_ANTHROPIC_API_KEY="sk-..."
+
+# One-shot — streams to stdout and exits
+ra "Summarize the key points of this file" --file report.pdf
+
+# Interactive REPL
+ra
+
+# HTTP API server
+ra --http
+
+# MCP server for Cursor / Claude Desktop
+ra --mcp
 ```
 
-Pick a provider and model, attach a file, or inject a skill:
+## Providers
+
+Anthropic, OpenAI, Google, Bedrock, Ollama — switch with a flag or env var. Same config, any backend.
+
+| Provider | Env Key | Thinking Support |
+|----------|---------|:---:|
+| **Anthropic** | `RA_ANTHROPIC_API_KEY` | `low` / `medium` / `high` |
+| **OpenAI** | `RA_OPENAI_API_KEY` | `low` / `medium` / `high` |
+| **Google Gemini** | `RA_GOOGLE_API_KEY` | `low` / `medium` / `high` |
+| **AWS Bedrock** | `RA_BEDROCK_API_KEY` + `RA_BEDROCK_REGION` | `low` / `medium` / `high` |
+| **Ollama** | `RA_OLLAMA_HOST` | — |
 
 ```bash
-ra --provider openai --model gpt-4.1-mini "Explain this error"
-ra --file report.pdf "Summarize in three bullets."
-ra --skill code-review --file diff.patch "Review this diff."
+# Switch providers on the fly
+ra --provider google --model gemini-2.5-pro "Explain quantum computing"
+
+# Use a local model
+ra --provider ollama --model llama3 "Write a haiku"
+
+# Enable extended thinking
+ra --thinking high "Design a distributed cache"
 ```
 
-Streams to stdout and exits. Script it, pipe it, forget it.
+> Bedrock falls back to the standard AWS credential chain (`~/.aws/credentials`, IAM roles, etc.) when `RA_BEDROCK_API_KEY` is not set.
 
----
+## Interfaces
 
-### REPL
+Four ways to run ra. Each serves a different context.
+
+### CLI (one-shot)
+
+Scriptable prompts that stream to stdout and exit. Pipe it, chain it, cron it.
+
+```bash
+ra "What's wrong with this code?" --file buggy.ts
+ra --skill summarizer --file notes.md "Three bullet summary"
+cat error.log | ra "Explain this error"
+```
+
+### REPL (interactive)
+
+The default mode. Full conversational sessions with tool use, file attachments, and history.
 
 ```bash
 ra
 ```
 
-You get a `›` prompt. Type. It streams back, runs tools, saves the conversation.
-
 | Command | Description |
-|--------|-------------|
+|---------|-------------|
 | `/clear` | Clear history, start fresh |
-| `/resume <session-id>` | Load and continue a previous session |
-| `/skill <name>` | Inject a skill with your next message |
-| `/attach <path>` | Attach a file to your next message |
-
----
+| `/resume <id>` | Resume a previous session |
+| `/skill <name>` | Inject a skill for the next message |
+| `/attach <path>` | Attach a file to the next message |
 
 ### HTTP API
 
+A lightweight server built on `Bun.serve()`.
+
 ```bash
-ra --http
+ra --http                        # default port 3000
+ra --http --http-port 8080       # custom port
+ra --http --http-token secret    # with auth
 ```
 
-Listens on your configured port (default `3000`). Optional Bearer token in config.
-
-| Method + path | Description |
-|---------------|-------------|
-| `POST /chat/sync` | JSON body `{ "messages": [...] }` → `{ "response": "..." }` |
-| `POST /chat` | Same body, but streams via SSE: `data: {"type":"text","delta":"..."}` then `data: {"type":"done"}` |
+| Endpoint | Description |
+|----------|-------------|
+| `POST /chat` | SSE stream — `data: {"type":"text","delta":"..."}` |
+| `POST /chat/sync` | Blocking JSON — `{ "response": "..." }` |
 | `GET /sessions` | List stored sessions |
 
-When a token is set, send `Authorization: Bearer <token>`.
+### MCP Server
 
+Expose ra as a tool that other apps can call.
+
+```bash
+ra --mcp          # stdio transport (for Cursor, Claude Desktop)
+ra --mcp-http     # HTTP transport
+```
+
+ra prints the JSON config snippet you need to paste into your MCP client config.
+
+## Skills
+
+Skills are reusable instruction bundles — roles, behaviors, and assets packaged as directories.
+
+```
+skills/
+  code-review/
+    SKILL.md           # Frontmatter + instructions
+    scripts/
+      gather-diff.sh   # Runs at activation, output becomes context
+    references/
+      style-guide.md   # Injected as reference context
+```
+
+**SKILL.md** uses YAML frontmatter:
+
+```yaml
+---
+name: code-review
+description: Reviews code for bugs, style, and best practices
 ---
 
-### MCP
+You are a senior code reviewer. Focus on:
+- Correctness and edge cases
+- Performance implications
+- Naming and readability
+```
+
+Use skills from the CLI, REPL, or config:
+
+```bash
+# CLI
+ra --skill code-review "Review the latest changes"
+
+# REPL
+/skill code-review
+
+# Config (always-on)
+# ra.config.yml
+skills:
+  - code-review
+skillDirs:
+  - ./skills
+```
+
+**Multi-runtime scripts** — skill scripts support shebang detection. Write them in any language:
+
+```bash
+#!/usr/bin/env python3
+# scripts/analyze.py — automatically runs with python3
+```
+
+Supported: `bash`, `python`, `typescript`, `javascript`, `go`.
+
+## MCP
 
 ra speaks MCP in both directions.
 
-| Mode | What it does |
-|-----|----------------|
-| **ra uses tools** | Add MCP server configs and ra connects to them, discovers their tools, and registers them. The model calls them like any other function. |
-| **ra is the tool** | Run `ra --mcp` and ra exposes itself as a single MCP tool that takes a prompt and runs the full agent loop. Other apps — Cursor, Claude Desktop, your own agents — can call it. |
+### As a client
+
+Connect ra to external MCP servers. Their tools become available to the model automatically.
+
+```yaml
+# ra.config.yml
+mcp:
+  client:
+    - name: filesystem
+      transport: stdio
+      command: npx
+      args: ["-y", "@anthropic/mcp-filesystem"]
+    - name: database
+      transport: sse
+      url: http://localhost:8080/mcp
+```
+
+### As a server
+
+Run `ra --mcp` and it exposes itself as a single MCP tool. Other apps call it with a prompt and get the full agent loop.
+
+```json
+{
+  "mcpServers": {
+    "ra": {
+      "command": "ra",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+## Middleware
+
+Lifecycle hooks that let you intercept and modify the agent loop. Define them inline or as file paths.
+
+```yaml
+# ra.config.yml
+middleware:
+  beforeModelCall:
+    - "(ctx) => { console.log('Calling model...'); }"
+  afterToolExecution:
+    - "./middleware/log-tools.ts"
+```
+
+| Hook | When |
+|------|------|
+| `beforeLoopBegin` | Once at start |
+| `beforeModelCall` | Before each LLM call |
+| `onStreamChunk` | Per streaming chunk |
+| `afterModelResponse` | After model finishes |
+| `beforeToolExecution` | Before each tool call |
+| `afterToolExecution` | After each tool returns |
+| `afterLoopIteration` | After each loop iteration |
+| `afterLoopComplete` | After final iteration |
+| `onError` | On exceptions |
+
+Any middleware can call `ctx.stop()` to halt the loop.
+
+## Configuration
+
+Four layers, each overriding the previous. No surprise precedence.
+
+```
+defaults → config file → env vars → CLI flags
+```
+
+### Config file
+
+Place in your project root. Supports JSON, YAML, or TOML.
+
+```yaml
+# ra.config.yml
+provider: anthropic
+model: claude-sonnet-4-6
+systemPrompt: You are a helpful coding assistant.
+maxIterations: 50
+thinking: medium
+
+skills:
+  - code-review
+skillDirs:
+  - ./skills
+
+storage:
+  path: .ra/sessions
+  maxSessions: 100
+  ttlDays: 30
+
+http:
+  port: 3000
+  token: my-secret-token
+
+mcp:
+  client:
+    - name: filesystem
+      transport: stdio
+      command: npx
+      args: ["-y", "@anthropic/mcp-filesystem"]
+```
+
+### Environment variables
+
+```bash
+# Provider
+export RA_PROVIDER=anthropic
+export RA_MODEL=claude-sonnet-4-6
+export RA_SYSTEM_PROMPT="You are a helpful assistant"
+export RA_MAX_ITERATIONS=50
+
+# API keys (env-only — kept out of shell history)
+export RA_ANTHROPIC_API_KEY=sk-...
+export RA_OPENAI_API_KEY=sk-...
+export RA_GOOGLE_API_KEY=...
+export RA_OLLAMA_HOST=http://localhost:11434
+export RA_BEDROCK_REGION=us-east-1
+```
+
+### CLI flags
+
+```bash
+ra --provider openai \
+   --model gpt-4.1 \
+   --system-prompt "Be concise" \
+   --max-iterations 10 \
+   --thinking high \
+   --skill code-review \
+   --file context.md \
+   "Review this code"
+```
+
+## Session Storage
+
+Conversations persist automatically under `.ra/sessions/`. Resume any session by ID.
+
+```bash
+# List sessions
+ra --http  # GET /sessions
+
+# Resume in REPL
+ra
+› /resume abc-123-def
+```
+
+Sessions auto-prune by TTL and max count.
+
+## Architecture
+
+```
+src/
+  index.ts              # Entry point
+  agent/
+    loop.ts             # Core agent loop (model → tools → repeat)
+    tool-registry.ts    # Tool registration and dispatch
+    middleware.ts       # Middleware chain execution
+  providers/            # Anthropic, OpenAI, Google, Ollama, Bedrock
+  interfaces/           # CLI, REPL, HTTP, MCP server
+  config/               # Layered config system
+  mcp/                  # MCP client + server
+  skills/               # Skill loader, runner, types
+  storage/              # JSONL session persistence
+```
+
+## Building from Source
+
+```bash
+# Install dependencies
+bun install
+
+# Run in development
+bun run src/index.ts
+
+# Run tests
+bun test
+
+# Build standalone binary
+bun build src/index.ts --compile --target bun --outfile dist/ra
+```
+
+## License
+
+MIT
 
 ---
 
-### Layered config
-
-**defaults → file → env → CLI.** Each layer overrides the previous. No surprise precedence.
-
-Commit a `ra.config.yml` for a team or project baseline. Use environment variables for secrets and per-environment behavior. Use CLI flags when you need a one-off override.
-
-- **File** (cwd): `ra.config.json`, `ra.config.yaml`, `ra.config.yml`, or `ra.config.toml`
-- **Env:** `RA_PROVIDER`, `RA_MODEL`, `RA_SYSTEM_PROMPT`, `RA_MAX_ITERATIONS`
-- **CLI:** `--provider`, `--model`, `--system-prompt`, etc. — overrides everything.
-
-**Provider credentials** (env only — not exposed as CLI flags, to keep them out of shell history):
-
-| Provider | Env var(s) |
-|----------|-----------|
-| Anthropic | `RA_ANTHROPIC_API_KEY`, `RA_ANTHROPIC_BASE_URL` |
-| OpenAI | `RA_OPENAI_API_KEY`, `RA_OPENAI_BASE_URL` |
-| Google | `RA_GOOGLE_API_KEY` |
-| Ollama | `RA_OLLAMA_HOST` |
-| Bedrock | `RA_BEDROCK_API_KEY`, `RA_BEDROCK_REGION` |
-
-For Bedrock, `RA_BEDROCK_API_KEY` sets a Bearer token. If omitted, ra falls back to the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, `~/.aws/credentials`, IAM roles, etc.).
-
----
-
-> *ra: raw agent, role agent, run-anything agent. One binary, any shape, zero lock-in.*
+<p align="center">
+  <b>ra</b> — raw agent, role agent, run-anything agent.<br>
+  One binary, any shape, any model.
+</p>
