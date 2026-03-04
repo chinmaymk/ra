@@ -5,8 +5,6 @@ import { mkdirSync, writeFileSync, rmSync } from 'fs'
 const TEST_DIR = '/tmp/ra-test-runner'
 const hasPython = !!Bun.which('python3') || !!Bun.which('python')
 const hasGo     = !!Bun.which('go')
-const hasNode   = !!Bun.which('node')
-const hasDeno   = !!Bun.which('deno')
 
 const ENV = { RA_PROMPT: 'test', RA_MODEL: 'claude', RA_PROVIDER: 'anthropic' }
 
@@ -52,12 +50,6 @@ describe('runSkillScript - new runtimes', () => {
     expect((await runSkillScript(p, ENV)).trim()).toBe('bun-ts')
   })
 
-  it('runs .js via bun shebang', async () => {
-    const p = `${TEST_DIR}/test.js`
-    writeFileSync(p, '#!/usr/bin/env bun\nconsole.log("bun-js")')
-    expect((await runSkillScript(p, ENV)).trim()).toBe('bun-js')
-  })
-
   ;(hasPython ? it : it.skip)('runs .py script', async () => {
     const p = `${TEST_DIR}/test.py`
     writeFileSync(p, 'print("hello-py")')
@@ -70,43 +62,37 @@ describe('runSkillScript - new runtimes', () => {
     expect((await runSkillScript(p, ENV)).trim()).toBe('hello-go')
   })
 
-  ;(hasNode ? it : it.skip)('runs .js via node shebang', async () => {
-    const p = `${TEST_DIR}/node.js`
-    writeFileSync(p, `#!/usr/bin/env node\nconsole.log("node-js")`)
-    expect((await runSkillScript(p, ENV)).trim()).toBe('node-js')
-  })
-
-  ;(hasDeno ? it : it.skip)('runs .ts via deno shebang', async () => {
-    const p = `${TEST_DIR}/deno.ts`
-    writeFileSync(p, `#!/usr/bin/env deno\nconsole.log("deno-ts")`)
-    expect((await runSkillScript(p, ENV)).trim()).toBe('deno-ts')
-  })
-
   it('throws on unknown extension', async () => {
     const p = `${TEST_DIR}/test.rb`
     writeFileSync(p, 'puts "hi"')
     await expect(runSkillScript(p, ENV)).rejects.toThrow('Unsupported script extension')
   })
+
+  it('runs extensionless files via bash', async () => {
+    const p = `${TEST_DIR}/myscript`
+    writeFileSync(p, 'echo "no-ext"')
+    expect((await runSkillScript(p, ENV)).trim()).toBe('no-ext')
+  })
 })
 
-describe('runSkillScript - shebang override', () => {
-  it('shebang #!/usr/bin/env bun on .js file uses bun (process.versions.bun is set)', async () => {
-    const p = `${TEST_DIR}/shebang.js`
-    writeFileSync(p, '#!/usr/bin/env bun\nprocess.stdout.write(process.versions.bun ?? "none")')
+describe('runSkillScript - shebang handling', () => {
+  it('files with shebangs are run via bash/sh', async () => {
+    const p = `${TEST_DIR}/shebang.sh`
+    writeFileSync(p, '#!/bin/sh\necho "shebang-works"')
     const out = await runSkillScript(p, ENV)
-    expect(out).not.toBe('none')
+    expect(out.trim()).toBe('shebang-works')
   })
 
-  it('shebang takes priority over extension: .py file with #!/usr/bin/env bun runs via bun', async () => {
-    const p = `${TEST_DIR}/shebang.py`
-    writeFileSync(p, '#!/usr/bin/env bun\nprocess.stdout.write(process.versions.bun ?? "none")')
+  it('shebang with env invocation works via bash', async () => {
+    const p = `${TEST_DIR}/shebang2.sh`
+    writeFileSync(p, '#!/usr/bin/env bash\necho "env-bash"')
     const out = await runSkillScript(p, ENV)
-    expect(out).not.toBe('none')
+    expect(out.trim()).toBe('env-bash')
   })
 })
 
 describe('runSkillScript - runtime fallback', () => {
-  ;(hasNode ? it : it.skip)('falls back from bun to node when bun is absent', async () => {
+  ;(Bun.which('node') ? it : it.skip)('falls back from bun to node when bun is absent', async () => {
     const p = `${TEST_DIR}/fallback.js`
     writeFileSync(p, 'process.stdout.write("ok")')
 

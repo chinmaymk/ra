@@ -1,5 +1,4 @@
 import { join } from 'path'
-import { chmodSync, statSync } from 'fs'
 import type { IMessage } from '../providers/types'
 import type { Skill } from './types'
 
@@ -27,38 +26,25 @@ function buildCmd(runtime: string, scriptPath: string): string[] {
 }
 
 /**
- * Check if a file has a shebang line.
- */
-function hasShebang(content: string): boolean {
-  return content.startsWith('#!')
-}
-
-/**
- * Ensure a file is executable (adds +x if needed).
- */
-function ensureExecutable(scriptPath: string): void {
-  const stat = statSync(scriptPath)
-  if (!(stat.mode & 0o111)) {
-    chmodSync(scriptPath, stat.mode | 0o755)
-  }
-}
-
-/**
  * Resolve the command to run a script.
- * Files with shebangs are run directly (OS handles interpreter selection).
- * Otherwise, extension-based detection picks the runtime.
+ * Uses extension-based detection to pick the runtime.
+ * Shell scripts and files with shebangs are run via bash/sh.
  */
 async function resolveCmd(scriptPath: string): Promise<string[]> {
   const content = await Bun.file(scriptPath).text()
+  const shell = () => findRuntime(['bash', 'sh'])
 
-  if (hasShebang(content)) {
-    ensureExecutable(scriptPath)
-    return [scriptPath]
+  if (content.startsWith('#!')) {
+    return [shell(), scriptPath]
   }
 
-  const ext = scriptPath.split('.').pop()?.toLowerCase()
+  const filename = scriptPath.split('/').pop() ?? ''
+  const dotIdx = filename.lastIndexOf('.')
+  const ext = dotIdx > 0 ? filename.slice(dotIdx + 1).toLowerCase() : null
+
   switch (ext) {
-    case 'sh':  return [findRuntime(['bash', 'sh']), scriptPath]
+    case null:  return [shell(), scriptPath]
+    case 'sh':  return [shell(), scriptPath]
     case 'py':  return buildCmd(findRuntime(['python3', 'python']), scriptPath)
     case 'go':  return ['go', 'run', scriptPath]
     case 'js':
@@ -69,7 +55,7 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
         return [process.execPath, '--exec', scriptPath]
       }
     }
-    default:    throw new Error(`Unsupported script extension: .${ext ?? ''}`)
+    default:    throw new Error(`Unsupported script extension: .${ext}`)
   }
 }
 
