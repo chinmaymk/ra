@@ -1,0 +1,27 @@
+provider: anthropic
+model: claude-sonnet-4-6
+interface: cli
+
+skills:
+  - code-review
+skillDirs:
+  - ./skills
+
+mcp:
+  client:
+    - name: github
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+middleware:
+  afterModelResponse:
+    - ./middleware/token-budget.ts
+
+maxIterations: 10
+
+compaction:
+  enabled: true
+  threshold: 0.8
