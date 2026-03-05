@@ -22,6 +22,7 @@ export interface CliOptions {
   onChunk?: (text: string) => void
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  contextMessages?: IMessage[]
   sessionMessages?: IMessage[]
 }
 
@@ -31,7 +32,7 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, sessionMessages = [] } = options
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [] } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -51,6 +52,10 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   if (skillMap && skillMap.size > activeSkillNames.size) {
     const xml = buildAvailableSkillsXml(skillMap, activeSkillNames)
     if (xml) initialMessages.push({ role: 'user', content: xml })
+  }
+  // Inject context-file messages before user prompt
+  if (contextMessages.length) {
+    initialMessages.push(...contextMessages)
   }
   initialMessages.push(...sessionMessages)
 
