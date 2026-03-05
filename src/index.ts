@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { loadConfig } from './config'
 import { loadMiddleware } from './middleware/loader'
 import { createProvider, buildProviderConfig } from './providers/registry'
