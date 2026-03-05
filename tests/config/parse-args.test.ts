@@ -146,6 +146,10 @@ describe('parseArgs', () => {
     it('--help → meta.help', () => expect(parseArgs(dev('--help')).meta.help).toBe(true))
     it('-h → meta.help',     () => expect(parseArgs(dev('-h')).meta.help).toBe(true))
     it('defaults meta.help to false', () => expect(parseArgs(dev()).meta.help).toBe(false))
+    it('parses --show-context flag', () => {
+      const result = parseArgs(['bun', 'src/index.ts', '--show-context'])
+      expect(result.meta.showContext).toBe(true)
+    })
     it('multiple --skill flags', () => {
       expect(parseArgs(dev('--skill', 'code', '--skill', 'search')).meta.skills).toEqual(['code', 'search'])
     })

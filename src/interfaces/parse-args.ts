@@ -9,6 +9,7 @@ export interface ParsedArgsMeta {
   resume?: string
   configPath?: string
   exec?: string
+  showContext: boolean
   subcommand?: { name: string; args: string[] }
 }
 
@@ -44,6 +45,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       config: {} as Partial<RaConfig>,
       meta: {
         help: false,
+        showContext: false,
         files: [],
         skills: [],
         subcommand: { name: 'skill', args: userArgs.slice(1) },
@@ -61,6 +63,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       file:                          { type: 'string', multiple: true },
       resume:                        { type: 'string' },
       help:                          { type: 'boolean', short: 'h' },
+      'show-context':                { type: 'boolean' },
       // Interface selection → config.interface
       http:                          { type: 'boolean' },
       cli:                           { type: 'boolean' },
@@ -148,6 +151,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     config: r as Partial<RaConfig>,
     meta: {
       help:       (values.help as boolean | undefined) ?? false,
+      showContext: (values['show-context'] as boolean | undefined) ?? false,
       files:      (values.file as string[] | undefined) ?? [],
       skills:     (values.skill as string[] | undefined) ?? [],
       prompt:     positionals.join(' ') || undefined,

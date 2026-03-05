@@ -70,6 +70,7 @@ PROVIDER OPTIONS
   --openai-base-url <url>             OpenAI API base URL
   --ollama-host <url>                 Ollama host URL
 
+  --show-context                      Show discovered context files and exit
   --exec <script>                     Execute a JS/TS file and exit
   --help, -h                          Print this help message
 
@@ -228,6 +229,20 @@ async function main(): Promise<void> {
 
   process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
   process.on('SIGTERM', async () => { await shutdown(); process.exit(0) })
+
+  if (parsed.meta.showContext) {
+    if (contextMessages.length === 0) {
+      console.log('No context files discovered.')
+    } else {
+      for (const msg of contextMessages) {
+        const content = typeof msg.content === 'string' ? msg.content : ''
+        console.log(content)
+        console.log()
+      }
+    }
+    await shutdown()
+    process.exit(0)
+  }
 
   // Determine which interface to launch
   if (config.interface === 'mcp') {
