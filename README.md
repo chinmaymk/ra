@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>One loop. Infinite agents.</b><br>
-  An extensible agentic loop you shape through config — not code.
+  An extensible agentic loop you shape through config.
 </p>
 
 <p align="center">

@@ -18,7 +18,7 @@ export class McpClient {
         if (config.transport === 'sse' && !config.url) throw new Error(`McpClientConfig "${config.name}" requires a url for sse transport`)
 
         const transport = config.transport === 'stdio'
-          ? new StdioClientTransport({ command: config.command!, args: config.args })
+          ? new StdioClientTransport({ command: config.command!, args: config.args, env: config.env, cwd: config.cwd })
           : new SSEClientTransport(new URL(config.url!))
 
         const client = new Client({ name: config.name, version: '1.0.0' })
