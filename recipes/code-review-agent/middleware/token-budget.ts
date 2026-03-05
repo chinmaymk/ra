@@ -1,4 +1,4 @@
-import type { ModelCallContext } from "../../../src/agent/types"
+import type { ModelCallContext } from "@chinmaymk/ra/agent/types"
 
 const TOKEN_BUDGET = parseInt(process.env.RA_TOKEN_BUDGET || "200000", 10)
 let totalTokens = 0
