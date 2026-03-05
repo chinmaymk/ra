@@ -232,7 +232,7 @@ describe('Repl', () => {
     // Now process input - skill should be injected
     await repl.processInput('do something')
 
-    const userMsg = capturedMessages.find((m: any) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('skill'))
+    const userMsg = capturedMessages.find((m: any) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('do something'))
     expect(userMsg).toBeDefined()
     expect(userMsg.content).toContain('test-skill')
     expect(userMsg.content).toContain('skill content')

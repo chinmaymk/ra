@@ -6,6 +6,7 @@ import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolRe
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
+import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
 import * as tui from './tui'
 
@@ -80,7 +81,7 @@ export class Repl {
     if (!this.sessionId) this.sessionId = await this.newSession()
 
     const text = this.pendingSkill
-      ? `<skill name="${this.pendingSkill.metadata.name}">\n${this.pendingSkill.body}\n</skill>\n\n${input}`
+      ? `${buildActiveSkillXml(this.pendingSkill)}\n\n${input}`
       : input
     this.pendingSkill = undefined
 
@@ -93,6 +94,18 @@ export class Repl {
       ...this.messages,
       userMessage,
     ]
+
+    // Inject available skills XML as first user message if skills exist
+    if (this.options.skillMap && this.options.skillMap.size > 0 && this.messages.length === 0) {
+      const xml = buildAvailableSkillsXml(this.options.skillMap)
+      if (xml) {
+        initialMessages.splice(
+          this.options.systemPrompt ? 1 : 0,
+          0,
+          { role: 'user', content: xml }
+        )
+      }
+    }
 
     let boxOpened = false
     let thinkingOpened = false
