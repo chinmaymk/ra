@@ -309,6 +309,7 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      contextMessages,
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${httpServer.port}`)
