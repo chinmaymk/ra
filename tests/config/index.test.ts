@@ -177,6 +177,18 @@ describe('loadConfig', () => {
   })
 })
 
+describe('builtinTools config', () => {
+  it('loads builtinTools from env var', async () => {
+    const config = await loadConfig({ env: { RA_BUILTIN_TOOLS: 'true' } })
+    expect(config.builtinTools).toBe(true)
+  })
+
+  it('defaults builtinTools to false', async () => {
+    const config = await loadConfig({ env: {} })
+    expect(config.builtinTools).toBe(false)
+  })
+})
+
 describe('toolTimeout config', () => {
   it('RA_TOOL_TIMEOUT sets toolTimeout', async () => {
     const config = await loadConfig({ env: { RA_TOOL_TIMEOUT: '60000' } })

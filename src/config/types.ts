@@ -35,6 +35,7 @@ export interface RaConfig {
   }
   maxIterations: number
   toolTimeout: number
+  builtinTools: boolean
   middleware: Record<string, string[]>
   thinking?: 'low' | 'medium' | 'high'
   compaction: {

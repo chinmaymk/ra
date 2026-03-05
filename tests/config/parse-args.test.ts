@@ -49,6 +49,10 @@ describe('parseArgs', () => {
     it('--system-prompt', () => expect(parseArgs(dev('--system-prompt', 'Be helpful')).config.systemPrompt).toBe('Be helpful'))
     it('--max-iterations', () => expect(parseArgs(dev('--max-iterations', '20')).config.maxIterations).toBe(20))
     it('--tool-timeout', () => expect(parseArgs(dev('--tool-timeout', '15000')).config.toolTimeout).toBe(15000))
+    it('parses --builtin-tools flag', () => {
+      const result = parseArgs(['node', 'ra.ts', '--builtin-tools'])
+      expect(result.config.builtinTools).toBe(true)
+    })
     it('parses --thinking flag', () => {
       const result = parseArgs(['node', 'ra.ts', '--thinking', 'high'])
       expect(result.config.thinking).toBe('high')
