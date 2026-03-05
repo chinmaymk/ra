@@ -12,6 +12,7 @@ import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
+import { registerBuiltinTools } from './tools'
 import { join } from 'path'
 
 async function readStdin(): Promise<string | undefined> {
@@ -69,6 +70,7 @@ PROVIDER OPTIONS
   --openai-base-url <url>             OpenAI API base URL
   --ollama-host <url>                 Ollama host URL
 
+  --builtin-tools                     Enable built-in tools (filesystem, shell, network)
   --exec <script>                     Execute a JS/TS file and exit
   --help, -h                          Print this help message
 
@@ -87,6 +89,7 @@ ENV VARS
   RA_ANTHROPIC_API_KEY, RA_ANTHROPIC_BASE_URL
   RA_OPENAI_API_KEY, RA_OPENAI_BASE_URL
   RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
+  RA_BUILTIN_TOOLS
   RA_THINKING
 
 STDIN
@@ -176,6 +179,10 @@ async function main(): Promise<void> {
   // Create tool registry
   const tools = new ToolRegistry()
 
+  if (config.builtinTools) {
+    registerBuiltinTools(tools)
+  }
+
   // Create session storage
   const storagePath = config.storage.path.startsWith('/')
     ? config.storage.path
@@ -207,7 +214,7 @@ async function main(): Promise<void> {
   // Start MCP HTTP server if configured (via --mcp-server-enabled alongside another interface)
   let stopMcpHttp: (() => Promise<void>) | null = null
   if (config.interface !== 'mcp' && config.mcp.server?.enabled) {
-    stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler)
+    stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
     console.error(`MCP server (http) listening on port ${config.mcp.server.port}`)
   }
 
@@ -222,7 +229,7 @@ async function main(): Promise<void> {
 
   // Determine which interface to launch
   if (config.interface === 'mcp') {
-    stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler)
+    stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
     console.error(`MCP server (http) listening on port ${config.mcp.server.port}`)
     // Keep process alive
     await new Promise(() => {})
@@ -238,7 +245,7 @@ async function main(): Promise<void> {
       `Cursor — .cursor/mcp.json:\n${mcpConfig}\n\n` +
       `Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n${mcpConfig}\n\n`
     )
-    await startMcpStdio(config.mcp.server, mcpHandler)
+    await startMcpStdio(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
     await shutdown()
     return
   } else if (config.interface === 'cli' || (parsed.meta.prompt && !parsed.config.interface)) {

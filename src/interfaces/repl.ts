@@ -8,6 +8,7 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
+import { ASK_USER_SIGNAL } from '../tools/ask-user'
 import * as tui from './tui'
 
 export interface ReplOptions {
@@ -167,6 +168,20 @@ export class Repl {
       this.messages.push(userMessage, ...newMessages)
       for (const msg of [userMessage, ...newMessages]) {
         await this.options.storage.appendMessage(this.sessionId!, msg)
+      }
+
+      // Detect ask_user — in REPL, just print the question; next input resumes naturally
+      let askMsg: IMessage | undefined
+      for (let i = result.messages.length - 1; i >= 0; i--) {
+        const m = result.messages[i]!
+        if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
+          askMsg = m
+          break
+        }
+      }
+      if (askMsg && typeof askMsg.content === 'string') {
+        const question = askMsg.content.slice(ASK_USER_SIGNAL.length)
+        tui.printCommandResponse(`[Question for you] ${question}`)
       }
     } catch (err) {
       tui.stopSpinner(true)

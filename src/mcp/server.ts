@@ -5,10 +5,11 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import type { McpServerConfig } from '../config/types'
+import type { ToolRegistry } from '../agent/tool-registry'
 
 export type McpToolHandler = (input: unknown) => Promise<string>
 
-function buildServer(config: McpServerConfig, handler: McpToolHandler): McpServer {
+function buildServer(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): McpServer {
   const server = new McpServer({ name: config.tool.name, version: '1.0.0' })
   server.tool(
     config.tool.name,
@@ -18,16 +19,32 @@ function buildServer(config: McpServerConfig, handler: McpToolHandler): McpServe
       content: [{ type: 'text' as const, text: await handler(prompt) }],
     })
   )
+
+  // Expose built-in tools as MCP tools (except ask_user)
+  if (builtinTools) {
+    for (const tool of builtinTools.all()) {
+      if (tool.name === 'ask_user') continue
+      server.tool(
+        tool.name,
+        tool.description,
+        tool.inputSchema as any,
+        async (args: Record<string, unknown>) => ({
+          content: [{ type: 'text' as const, text: String(await tool.execute(args)) }],
+        })
+      )
+    }
+  }
+
   return server
 }
 
-export async function startMcpStdio(config: McpServerConfig, handler: McpToolHandler): Promise<void> {
-  const server = buildServer(config, handler)
+export async function startMcpStdio(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): Promise<void> {
+  const server = buildServer(config, handler, builtinTools)
   await server.connect(new StdioServerTransport())
 }
 
-export async function startMcpHttp(config: McpServerConfig, handler: McpToolHandler): Promise<() => Promise<void>> {
-  const server = buildServer(config, handler)
+export async function startMcpHttp(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): Promise<() => Promise<void>> {
+  const server = buildServer(config, handler, builtinTools)
   const transports = new Map<string, StreamableHTTPServerTransport>()
 
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {

@@ -6,6 +6,7 @@ import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml } from '../skills/loader'
+import { ASK_USER_SIGNAL } from '../tools/ask-user'
 
 export interface HttpOptions {
   port: number
@@ -137,7 +138,19 @@ export class HttpServer {
           ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
           : ''
 
-      return new Response(JSON.stringify({ response: responseText }), {
+      let askQuestion: string | undefined
+      for (let i = result.messages.length - 1; i >= 0; i--) {
+        const m = result.messages[i]!
+        if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
+          askQuestion = m.content.slice(ASK_USER_SIGNAL.length)
+          break
+        }
+      }
+
+      return new Response(JSON.stringify({
+        response: responseText,
+        ...(askQuestion && { askUser: askQuestion, sessionId: body.sessionId }),
+      }), {
         headers: { 'Content-Type': 'application/json' },
       })
     } catch (err) {
@@ -189,7 +202,16 @@ export class HttpServer {
         })
 
         try {
-          await loop.run(messages)
+          const result = await loop.run(messages)
+
+          for (let i = result.messages.length - 1; i >= 0; i--) {
+            const m = result.messages[i]!
+            if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
+              send({ type: 'ask_user', question: m.content.slice(ASK_USER_SIGNAL.length) })
+              break
+            }
+          }
+
           send({ type: 'done' })
         } catch (err) {
           send({ type: 'error', error: err instanceof Error ? err.message : String(err) })

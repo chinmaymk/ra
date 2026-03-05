@@ -1,0 +1,285 @@
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
+import { writeFileSync, readFileSync, mkdirSync, rmSync, existsSync } from 'fs'
+import { join } from 'path'
+import { readFileTool } from '../../src/tools/read-file'
+import { writeFileTool } from '../../src/tools/write-file'
+import { updateFileTool } from '../../src/tools/update-file'
+import { appendFileTool } from '../../src/tools/append-file'
+import { listDirectoryTool } from '../../src/tools/list-directory'
+import { searchFilesTool } from '../../src/tools/search-files'
+import { globFilesTool } from '../../src/tools/glob-files'
+import { moveFileTool } from '../../src/tools/move-file'
+import { copyFileTool } from '../../src/tools/copy-file'
+import { deleteFileTool } from '../../src/tools/delete-file'
+import { executeBashTool } from '../../src/tools/execute-bash'
+import { webFetchTool } from '../../src/tools/web-fetch'
+import { askUserTool, ASK_USER_SIGNAL } from '../../src/tools/ask-user'
+import { checklistTool } from '../../src/tools/checklist'
+import { registerBuiltinTools } from '../../src/tools'
+import { ToolRegistry } from '../../src/agent/tool-registry'
+
+const TMP = join(import.meta.dir, '.tmp-builtin-tools')
+
+beforeAll(() => {
+  rmSync(TMP, { recursive: true, force: true })
+  mkdirSync(join(TMP, 'src'), { recursive: true })
+  mkdirSync(join(TMP, 'sub'), { recursive: true })
+  writeFileSync(join(TMP, 'hello.txt'), 'line1\nline2\nline3\nline4\nline5\n')
+  writeFileSync(join(TMP, 'src', 'app.ts'), 'function hello() {\n  return "world"\n}')
+  writeFileSync(join(TMP, 'src', 'util.ts'), 'export const x = 1')
+  writeFileSync(join(TMP, 'sub', 'deep.ts'), 'const hello = 42')
+  writeFileSync(join(TMP, 'readme.md'), '# readme')
+})
+
+afterAll(() => { rmSync(TMP, { recursive: true, force: true }) })
+
+describe('read_file', () => {
+  const tool = readFileTool()
+
+  it('reads file with line numbers and supports offset/limit', async () => {
+    const full = await tool.execute({ path: join(TMP, 'hello.txt') }) as string
+    expect(full).toBe('1: line1\n2: line2\n3: line3\n4: line4\n5: line5')
+
+    const slice = await tool.execute({ path: join(TMP, 'hello.txt'), offset: 2, limit: 2 }) as string
+    expect(slice).toBe('2: line2\n3: line3')
+  })
+
+  it('throws on missing file', () => {
+    expect(tool.execute({ path: join(TMP, 'nope.txt') })).rejects.toThrow()
+  })
+})
+
+describe('write_file', () => {
+  const tool = writeFileTool()
+
+  it('creates files with nested dirs and overwrites', async () => {
+    const p = join(TMP, 'write', 'deep', 'file.txt')
+    await tool.execute({ path: p, content: 'first' })
+    expect(readFileSync(p, 'utf-8')).toBe('first')
+
+    await tool.execute({ path: p, content: 'second' })
+    expect(readFileSync(p, 'utf-8')).toBe('second')
+  })
+})
+
+describe('update_file', () => {
+  const tool = updateFileTool()
+
+  it('replaces first occurrence only and errors on missing string', async () => {
+    const p = join(TMP, 'update.txt')
+    writeFileSync(p, 'aaa bbb aaa')
+    await tool.execute({ path: p, old_string: 'aaa', new_string: 'ccc' })
+    expect(readFileSync(p, 'utf-8')).toBe('ccc bbb aaa')
+
+    expect(tool.execute({ path: p, old_string: 'missing', new_string: 'x' })).rejects.toThrow('not found')
+  })
+
+  it('handles multi-line replacements', async () => {
+    const p = join(TMP, 'update-multi.txt')
+    writeFileSync(p, 'line1\nline2\nline3')
+    await tool.execute({ path: p, old_string: 'line1\nline2', new_string: 'replaced' })
+    expect(readFileSync(p, 'utf-8')).toBe('replaced\nline3')
+  })
+})
+
+describe('append_file', () => {
+  const tool = appendFileTool()
+
+  it('appends to existing and creates new files', async () => {
+    const existing = join(TMP, 'append-existing.txt')
+    writeFileSync(existing, 'hello')
+    await tool.execute({ path: existing, content: ' world' })
+    expect(readFileSync(existing, 'utf-8')).toBe('hello world')
+
+    const newFile = join(TMP, 'append-new.txt')
+    await tool.execute({ path: newFile, content: 'created' })
+    expect(readFileSync(newFile, 'utf-8')).toBe('created')
+  })
+})
+
+describe('list_directory', () => {
+  it('lists entries with trailing / for directories', async () => {
+    const tool = listDirectoryTool()
+    const result = await tool.execute({ path: TMP }) as string
+    expect(result).toContain('hello.txt')
+    expect(result).toContain('src/')
+    expect(result).toContain('sub/')
+  })
+})
+
+describe('search_files', () => {
+  it('finds matches recursively with file:line:content format and supports include filter', async () => {
+    const tool = searchFilesTool()
+    const result = await tool.execute({ path: TMP, pattern: 'hello' }) as string
+    expect(result).toContain('src/app.ts:1:function hello()')
+    expect(result).toContain('sub/deep.ts:1:const hello = 42')
+    expect(result).not.toContain('readme.md')
+
+    const filtered = await tool.execute({ path: TMP, pattern: 'hello', include: '*.ts' }) as string
+    expect(filtered).toContain('app.ts')
+    expect(filtered).not.toContain('readme')
+  })
+})
+
+describe('glob_files', () => {
+  it('matches glob patterns', async () => {
+    const tool = globFilesTool()
+    const ts = await tool.execute({ path: TMP, pattern: '**/*.ts' }) as string
+    expect(ts).toContain('app.ts')
+    expect(ts).toContain('util.ts')
+    expect(ts).not.toContain('readme.md')
+
+    const none = await tool.execute({ path: TMP, pattern: '**/*.xyz' }) as string
+    expect(none).toContain('No files found')
+  })
+})
+
+describe('move_file', () => {
+  it('moves file and creates destination dirs', async () => {
+    const tool = moveFileTool()
+    const src = join(TMP, 'move-src.txt')
+    const dst = join(TMP, 'moved', 'nested', 'dst.txt')
+    writeFileSync(src, 'moveme')
+    await tool.execute({ source: src, destination: dst })
+    expect(existsSync(src)).toBe(false)
+    expect(readFileSync(dst, 'utf-8')).toBe('moveme')
+  })
+})
+
+describe('copy_file', () => {
+  it('copies files and directories recursively', async () => {
+    const tool = copyFileTool()
+    const srcDir = join(TMP, 'copy-src')
+    mkdirSync(join(srcDir, 'nested'), { recursive: true })
+    writeFileSync(join(srcDir, 'a.txt'), 'hello')
+    writeFileSync(join(srcDir, 'nested', 'b.txt'), 'deep')
+
+    const dstDir = join(TMP, 'copy-dst')
+    await tool.execute({ source: srcDir, destination: dstDir })
+    expect(existsSync(join(srcDir, 'a.txt'))).toBe(true) // source preserved
+    expect(readFileSync(join(dstDir, 'a.txt'), 'utf-8')).toBe('hello')
+    expect(readFileSync(join(dstDir, 'nested', 'b.txt'), 'utf-8')).toBe('deep')
+  })
+})
+
+describe('delete_file', () => {
+  it('deletes files and directories, errors on non-existent', async () => {
+    const tool = deleteFileTool()
+    const dir = join(TMP, 'del-dir')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'f.txt'), 'x')
+    await tool.execute({ path: dir })
+    expect(existsSync(dir)).toBe(false)
+
+    expect(tool.execute({ path: join(TMP, 'nope') })).rejects.toThrow()
+  })
+})
+
+describe('execute_bash', () => {
+  if (process.platform === 'win32') return
+
+  const tool = executeBashTool()
+
+  it('runs commands and returns combined stdout/stderr', async () => {
+    const result = await tool.execute({ command: 'echo hello && echo err >&2' }) as string
+    expect(result).toContain('hello')
+    expect(result).toContain('err')
+  })
+
+  it('rejects on timeout', () => {
+    expect(tool.execute({ command: 'sleep 60', timeout: 500 })).rejects.toThrow('timed out')
+  })
+})
+
+describe('web_fetch', () => {
+  it('makes HTTP requests and returns structured response', async () => {
+    let receivedBody = ''
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        if (req.method === 'POST') {
+          receivedBody = await req.text()
+          return new Response('posted')
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { 'Content-Type': 'application/json' },
+        })
+      },
+    })
+    try {
+      const tool = webFetchTool()
+      // GET
+      const get = JSON.parse(await tool.execute({ url: `http://localhost:${server.port}` }) as string)
+      expect(get.status).toBe(200)
+      expect(get.body).toContain('ok')
+
+      // POST
+      await tool.execute({ url: `http://localhost:${server.port}`, method: 'POST', body: '{"k":"v"}' })
+      expect(receivedBody).toBe('{"k":"v"}')
+    } finally {
+      server.stop(true)
+    }
+  })
+})
+
+describe('ask_user', () => {
+  it('returns question prefixed with signal', async () => {
+    const tool = askUserTool()
+    const result = await tool.execute({ question: 'What color?' }) as string
+    expect(result).toBe(`${ASK_USER_SIGNAL}What color?`)
+  })
+})
+
+describe('checklist', () => {
+  it('tracks items through full lifecycle with dynamic description showing remaining', async () => {
+    const tool = checklistTool()
+
+    // Description starts without count when empty
+    expect(tool.description).not.toContain('remaining')
+
+    await tool.execute({ action: 'add', item: 'Write tests' })
+    await tool.execute({ action: 'add', item: 'Fix bug' })
+    const r = await tool.execute({ action: 'add', item: 'Deploy' }) as string
+    expect(r).toContain('3 remaining')
+
+    // Description dynamically shows remaining items with indices
+    expect(tool.description).toContain('Remaining (3/3): 0: Write tests, 1: Fix bug, 2: Deploy')
+
+    await tool.execute({ action: 'check', index: 0 })
+    expect(tool.description).toContain('Remaining (2/3): 1: Fix bug, 2: Deploy')
+
+    const list = await tool.execute({ action: 'list' }) as string
+    expect(list).toContain('[x] Write tests')
+    expect(list).toContain('[ ] Fix bug')
+    expect(list).toContain('2 of 3 remaining')
+
+    await tool.execute({ action: 'remove', index: 1 })
+    const list2 = await tool.execute({ action: 'list' }) as string
+    expect(list2).not.toContain('Fix bug')
+    expect(list2).toContain('1 of 2 remaining')
+  })
+})
+
+describe('registerBuiltinTools', () => {
+  it('registers all 14 tools with platform-specific shell', () => {
+    const registry = new ToolRegistry()
+    registerBuiltinTools(registry)
+    const names = registry.all().map(t => t.name)
+
+    expect(names).toHaveLength(14)
+    expect(names).toContain('read_file')
+    expect(names).toContain('write_file')
+    expect(names).toContain('update_file')
+    expect(names).toContain('append_file')
+    expect(names).toContain('list_directory')
+    expect(names).toContain('search_files')
+    expect(names).toContain('glob_files')
+    expect(names).toContain('move_file')
+    expect(names).toContain('copy_file')
+    expect(names).toContain('delete_file')
+    expect(names).toContain('web_fetch')
+    expect(names).toContain('ask_user')
+    expect(names).toContain('checklist')
+    expect(names).toContain(process.platform === 'win32' ? 'execute_powershell' : 'execute_bash')
+  })
+})

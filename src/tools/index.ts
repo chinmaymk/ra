@@ -1,0 +1,44 @@
+import type { ToolRegistry } from '../agent/tool-registry'
+import { readFileTool } from './read-file'
+import { writeFileTool } from './write-file'
+import { updateFileTool } from './update-file'
+import { appendFileTool } from './append-file'
+import { listDirectoryTool } from './list-directory'
+import { searchFilesTool } from './search-files'
+import { globFilesTool } from './glob-files'
+import { moveFileTool } from './move-file'
+import { copyFileTool } from './copy-file'
+import { deleteFileTool } from './delete-file'
+import { executeBashTool } from './execute-bash'
+import { executePowershellTool } from './execute-powershell'
+import { webFetchTool } from './web-fetch'
+import { askUserTool } from './ask-user'
+import { checklistTool } from './checklist'
+
+export function registerBuiltinTools(registry: ToolRegistry): void {
+  // Filesystem
+  registry.register(readFileTool())
+  registry.register(writeFileTool())
+  registry.register(updateFileTool())
+  registry.register(appendFileTool())
+  registry.register(listDirectoryTool())
+  registry.register(searchFilesTool())
+  registry.register(globFilesTool())
+  registry.register(moveFileTool())
+  registry.register(copyFileTool())
+  registry.register(deleteFileTool())
+
+  // Shell — platform-specific
+  if (process.platform === 'win32') {
+    registry.register(executePowershellTool())
+  } else {
+    registry.register(executeBashTool())
+  }
+
+  // Network
+  registry.register(webFetchTool())
+
+  // Agent interaction
+  registry.register(askUserTool())
+  registry.register(checklistTool())
+}
