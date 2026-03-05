@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { loadConfig } from './config'
+import { discoverContextFiles, buildContextMessages } from './context'
 import { loadMiddleware } from './middleware/loader'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { ToolRegistry } from './agent/tool-registry'
@@ -168,6 +169,14 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
+  // Discover project context files
+  const contextMessages = config.context.enabled
+    ? buildContextMessages(await discoverContextFiles({
+        cwd: process.cwd(),
+        patterns: config.context.patterns,
+      }))
+    : []
+
   const middleware = await loadMiddleware(config, process.cwd())
 
   // Create provider
@@ -260,6 +269,7 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      contextMessages,
       sessionMessages,
     })
     if (parsed.meta.resume) {
