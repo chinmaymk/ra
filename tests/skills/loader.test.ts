@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { loadSkills, loadSkillMetadata } from '../../src/skills/loader'
+import { loadSkills, loadSkillMetadata, buildAvailableSkillsXml, buildActiveSkillXml } from '../../src/skills/loader'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from '../tmpdir'
 
@@ -51,5 +51,45 @@ describe('loadSkills', () => {
     const skills = await loadSkills([TEST_DIR, DIR2])
     expect(skills.get('greet')!.metadata.description).toBe('Second')
     rmSync(DIR2, { recursive: true, force: true })
+  })
+})
+
+describe('buildAvailableSkillsXml', () => {
+  it('generates XML with name, description, and location for each skill', async () => {
+    mkdirSync(`${TEST_DIR}/greet`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/greet/SKILL.md`, '---\nname: greet\ndescription: Greets users warmly\n---\nHello! Greet the user.')
+    const skills = await loadSkills([TEST_DIR])
+    const xml = buildAvailableSkillsXml(skills)
+    expect(xml).toContain('<available_skills>')
+    expect(xml).toContain('<name>greet</name>')
+    expect(xml).toContain('<description>Greets users warmly</description>')
+    expect(xml).toContain(`<location>${TEST_DIR}/greet/SKILL.md</location>`)
+    expect(xml).toContain('</available_skills>')
+  })
+
+  it('returns empty string for empty skill map', () => {
+    const xml = buildAvailableSkillsXml(new Map())
+    expect(xml).toBe('')
+  })
+
+  it('excludes skills listed in the exclude set', async () => {
+    mkdirSync(`${TEST_DIR}/greet`, { recursive: true })
+    mkdirSync(`${TEST_DIR}/review`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/greet/SKILL.md`, '---\nname: greet\ndescription: Greets\n---\nBody')
+    writeFileSync(`${TEST_DIR}/review/SKILL.md`, '---\nname: review\ndescription: Reviews\n---\nBody')
+    const skills = await loadSkills([TEST_DIR])
+    const xml = buildAvailableSkillsXml(skills, new Set(['greet']))
+    expect(xml).not.toContain('<name>greet</name>')
+    expect(xml).toContain('<name>review</name>')
+  })
+})
+
+describe('buildActiveSkillXml', () => {
+  it('wraps skill body in skill XML tags', async () => {
+    mkdirSync(`${TEST_DIR}/greet`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/greet/SKILL.md`, '---\nname: greet\ndescription: Greets users warmly\n---\nHello! Greet the user.')
+    const skills = await loadSkills([TEST_DIR])
+    const xml = buildActiveSkillXml(skills.get('greet')!)
+    expect(xml).toBe('<skill name="greet">\nHello! Greet the user.\n</skill>')
   })
 })

@@ -65,3 +65,19 @@ export function loadSkills(dirs: string[]): Promise<Map<string, Skill>> {
 export function loadSkillMetadata(dirs: string[]): Promise<Map<string, SkillMetadata>> {
   return scanSkillDirs(dirs, async (_, metadata) => metadata)
 }
+
+export function buildAvailableSkillsXml(skills: Map<string, Skill>, exclude?: Set<string>): string {
+  const entries: string[] = []
+  for (const [name, skill] of skills) {
+    if (exclude?.has(name)) continue
+    entries.push(
+      `  <skill>\n    <name>${name}</name>\n    <description>${skill.metadata.description}</description>\n    <location>${join(skill.dir, 'SKILL.md')}</location>\n  </skill>`
+    )
+  }
+  if (entries.length === 0) return ''
+  return `<available_skills>\n${entries.join('\n')}\n</available_skills>`
+}
+
+export function buildActiveSkillXml(skill: Skill): string {
+  return `<skill name="${skill.metadata.name}">\n${skill.body}\n</skill>`
+}
