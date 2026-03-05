@@ -40,7 +40,6 @@ async function scanSkillDirs<T>(
           license: frontmatter['license'] as string | undefined,
           compatibility: frontmatter['compatibility'] as string | undefined,
           metadata: frontmatter['metadata'] as Record<string, string> | undefined,
-          allowedTools: frontmatter['allowedTools'] as string[] | undefined,
         }
 
         result.set(entry, await build(join(dir, entry), metadata, body))
