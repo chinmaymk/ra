@@ -60,6 +60,20 @@ jobs:
       - name: Build binary
         run: bun build src/index.ts --compile --target ${{ matrix.target }} --outfile dist/${{ matrix.asset }}
 
+      - name: Strip binary (Linux x64)
+        if: matrix.target == 'bun-linux-x64'
+        run: strip dist/${{ matrix.asset }}
+
+      - name: Strip binary (Linux arm64)
+        if: matrix.target == 'bun-linux-arm64'
+        run: |
+          sudo apt-get update && sudo apt-get install -y binutils-aarch64-linux-gnu
+          aarch64-linux-gnu-strip dist/${{ matrix.asset }}
+
+      - name: Strip binary (macOS)
+        if: startsWith(matrix.target, 'bun-darwin')
+        run: strip dist/${{ matrix.asset }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -84,8 +98,18 @@ jobs:
         run: |
           mkdir -p release
           find dist/ -type f -exec mv {} release/ \;
-          chmod +x release/ra-linux-* release/ra-darwin-*
           ls -lh release/
+
+      - name: Compress binaries
+        working-directory: release
+        run: |
+          for f in ra-linux-* ra-darwin-*; do
+            gzip -9 "$f"
+          done
+          for f in ra-windows-*; do
+            zip -9 "${f%.exe}.zip" "$f" && rm "$f"
+          done
+          ls -lh
 
       - name: Create checksums
         working-directory: release

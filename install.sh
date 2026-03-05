@@ -33,11 +33,12 @@ if [ "$VERSION" = "latest" ]; then
   VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')"
 fi
 
-URL="https://github.com/$REPO/releases/download/$VERSION/$ASSET"
+URL="https://github.com/$REPO/releases/download/$VERSION/${ASSET}.gz"
 
 echo "Installing ra $VERSION ($ASSET) to $BIN_DIR/$BIN_NAME..."
 
-curl -fsSL "$URL" -o "/tmp/$ASSET"
+curl -fsSL "$URL" -o "/tmp/${ASSET}.gz"
+gunzip -f "/tmp/${ASSET}.gz"
 chmod +x "/tmp/$ASSET"
 
 if [ -w "$BIN_DIR" ]; then
