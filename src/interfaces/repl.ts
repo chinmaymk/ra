@@ -23,6 +23,7 @@ export interface ReplOptions {
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  contextMessages?: IMessage[]
 }
 
 export class Repl {
@@ -91,6 +92,7 @@ export class Repl {
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
     const initialMessages: IMessage[] = [
       ...(this.options.systemPrompt ? [{ role: 'system' as const, content: this.options.systemPrompt }] : []),
+      ...(this.messages.length === 0 && this.options.contextMessages?.length ? this.options.contextMessages : []),
       ...this.messages,
       userMessage,
     ]
@@ -222,6 +224,17 @@ export class Repl {
         } catch (err) {
           return `Failed to attach file: ${err instanceof Error ? err.message : String(err)}`
         }
+      }
+      case '/context': {
+        if (!this.options.contextMessages?.length) return 'No context files discovered.'
+        const lines = this.options.contextMessages.map(m => {
+          const content = typeof m.content === 'string' ? m.content : ''
+          const pathMatch = content.match(/<context-file path="([^"]+)">/)
+          const path = pathMatch?.[1] ?? 'unknown'
+          const size = content.length
+          return `  ${path}  (${size} chars)`
+        })
+        return `Discovered context files:\n${lines.join('\n')}`
       }
       default:
         return `Unknown command: ${cmd}`

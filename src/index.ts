@@ -319,6 +319,7 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      contextMessages,
     })
     await repl.start()
     await shutdown()
