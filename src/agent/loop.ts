@@ -117,40 +117,32 @@ export class AgentLoop {
 
         if (toolCalls.length) {
           currentPhase = 'tool_execution'
-          const results = await Promise.allSettled(
-            toolCalls.map(async tc => {
-              await runMiddlewareChain({ ...stoppable, toolCall: tc, loop: loopCtx() } satisfies ToolExecutionContext, this.middleware.beforeToolExecution, this.toolTimeout)
-              if (signal.aborted) return ''
-              let input: unknown
-              try { input = JSON.parse(tc.arguments || '{}') } catch { input = {} }
-              try {
-                const value = this.toolTimeout > 0
-                  ? await withTimeout(this.tools.execute(tc.name, input), this.toolTimeout, `Tool '${tc.name}'`)
-                  : await this.tools.execute(tc.name, input)
-                const content = typeof value === 'string' ? value : JSON.stringify(value)
-                await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
-                return content
-              } catch (err) {
-                const errMsg = err instanceof Error ? err.message : String(err)
-                await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content: errMsg, isError: true }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
-                throw err
-              }
-            })
-          )
-          currentPhase = 'model_call'
-
-          if (!signal.aborted) {
-            for (let i = 0; i < toolCalls.length; i++) {
-              const tc = toolCalls[i]!
-              const settled = results[i]!
-              const isError = settled.status === 'rejected'
-              const content = isError
-                ? (settled.reason instanceof Error ? settled.reason.message : String(settled.reason))
-                : settled.value
-              messages.push({ role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) })
+          for (const tc of toolCalls) {
+            if (signal.aborted) break
+            await runMiddlewareChain({ ...stoppable, toolCall: tc, loop: loopCtx() } satisfies ToolExecutionContext, this.middleware.beforeToolExecution, this.toolTimeout)
+            if (signal.aborted) break
+            let input: unknown
+            try { input = JSON.parse(tc.arguments || '{}') } catch { input = {} }
+            let content: string
+            let isError = false
+            try {
+              const value = this.toolTimeout > 0
+                ? await withTimeout(this.tools.execute(tc.name, input), this.toolTimeout, `Tool '${tc.name}'`)
+                : await this.tools.execute(tc.name, input)
+              content = typeof value === 'string' ? value : JSON.stringify(value)
+              await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
+            } catch (err) {
+              isError = true
+              content = err instanceof Error ? err.message : String(err)
+              await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: true }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             }
+            messages.push({ role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) })
           }
+          currentPhase = 'model_call'
         }
+
+        // Break if ask_user was invoked — the loop should suspend
+        if (toolCalls.some(tc => tc.name === 'ask_user')) { stop(); break }
 
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopIteration, this.toolTimeout)
         if (signal.aborted) break

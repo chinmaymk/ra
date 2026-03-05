@@ -6,14 +6,12 @@ export function moveFileTool(): ITool {
   return {
     name: 'move_file',
     description:
-      'Move or rename a file or directory from source to destination. ' +
-      'Creates parent directories at the destination if they do not exist. ' +
-      'Works on both files and directories.',
+      'Move or rename a file or directory. Creates parent directories at the destination automatically.',
     inputSchema: {
       type: 'object',
       properties: {
-        source: { type: 'string', description: 'Current path of the file or directory' },
-        destination: { type: 'string', description: 'New path for the file or directory' },
+        source: { type: 'string', description: 'Current path' },
+        destination: { type: 'string', description: 'New path' },
       },
       required: ['source', 'destination'],
     },

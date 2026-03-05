@@ -5,15 +5,14 @@ export function readFileTool(): ITool {
   return {
     name: 'read_file',
     description:
-      'Read the contents of a file at the given path. Returns the file content with line numbers prefixed (e.g. "1: first line"). ' +
-      'Use the optional `offset` (1-based line number) and `limit` (number of lines) parameters to read a specific range of lines from large files. ' +
-      'If no offset/limit is provided, the entire file is returned.',
+      'Read a file and return its contents with line numbers (e.g. "1: first line\\n2: second line"). ' +
+      'Returns the entire file by default. Use `offset` and `limit` to read a specific range.',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Absolute or relative path to the file to read' },
-        offset: { type: 'number', description: 'Start reading from this line number (1-based). Optional.' },
-        limit: { type: 'number', description: 'Maximum number of lines to return. Optional.' },
+        path: { type: 'string', description: 'File path to read' },
+        offset: { type: 'number', description: 'Line number to start from (1-based)' },
+        limit: { type: 'number', description: 'Number of lines to return' },
       },
       required: ['path'],
     },

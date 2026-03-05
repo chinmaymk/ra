@@ -183,9 +183,9 @@ describe('builtinTools config', () => {
     expect(config.builtinTools).toBe(true)
   })
 
-  it('defaults builtinTools to false', async () => {
+  it('defaults builtinTools to true', async () => {
     const config = await loadConfig({ env: {} })
-    expect(config.builtinTools).toBe(false)
+    expect(config.builtinTools).toBe(true)
   })
 })
 

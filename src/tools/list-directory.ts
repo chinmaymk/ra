@@ -6,13 +6,12 @@ export function listDirectoryTool(): ITool {
   return {
     name: 'list_directory',
     description:
-      'List the files and directories at the given path. ' +
-      'Returns one entry per line. Directories have a trailing "/" to distinguish them from files. ' +
-      'Does not recurse into subdirectories — only lists the immediate children.',
+      'List immediate children of a directory, one per line. ' +
+      'Directories are suffixed with "/" (e.g. "src/"). Does not recurse.',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Path to the directory to list' },
+        path: { type: 'string', description: 'Directory path to list' },
       },
       required: ['path'],
     },

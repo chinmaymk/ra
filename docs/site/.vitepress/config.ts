@@ -62,6 +62,7 @@ export default defineConfig({
       {
         text: 'Features',
         items: [
+          { text: 'Built-in Tools', link: '/tools/' },
           { text: 'Skills', link: '/skills/' },
           { text: 'Middleware', link: '/middleware/' },
         ],

@@ -5,17 +5,14 @@ export function executeBashTool(): ITool {
   return {
     name: 'execute_bash',
     description:
-      'Execute a bash command and return its output (stdout and stderr combined). ' +
-      'The command runs in a bash shell on this system. Use standard bash syntax. ' +
-      'Use the optional `timeout` parameter (in milliseconds) to limit execution time. Default timeout is 30 seconds. ' +
-      'For long-running commands, consider running them in the background with "&" and redirecting output to a file. ' +
-      'The `cwd` parameter sets the working directory for the command.',
+      `Run a bash command on this ${process.platform === 'darwin' ? 'macOS' : 'Linux'} system. ` +
+      'Returns stdout and stderr combined. Default timeout: 30s.',
     inputSchema: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: 'The bash command to execute' },
-        cwd: { type: 'string', description: 'Working directory for the command. Optional.' },
-        timeout: { type: 'number', description: 'Timeout in milliseconds. Default: 30000. Optional.' },
+        command: { type: 'string', description: 'Bash command to run' },
+        cwd: { type: 'string', description: 'Working directory' },
+        timeout: { type: 'number', description: 'Timeout in ms (default: 30000)' },
       },
       required: ['command'],
     },

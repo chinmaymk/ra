@@ -10,6 +10,7 @@
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#providers">Providers</a> &middot;
   <a href="#interfaces">Interfaces</a> &middot;
+  <a href="#built-in-tools">Tools</a> &middot;
   <a href="#skills">Skills</a> &middot;
   <a href="#mcp">MCP</a> &middot;
   <a href="#configuration">Configuration</a>
@@ -40,6 +41,7 @@ ra
 
 ## Features
 
+- **Batteries included** — 14 built-in tools for filesystem operations, shell execution, HTTP requests, and user interaction. The agent can read, write, search, and run commands out of the box — no setup required.
 - **Extensible agentic loop** — A real model→tools→repeat loop with streaming, tool calling, and context compaction built in. Middleware hooks let you intercept every step — before the model call, after tool execution, on each stream chunk. Write hooks in TypeScript or JavaScript, inline or as files. Build guardrails, logging, or custom routing without forking anything.
 - **Config-driven identity** — One binary becomes a code reviewer, a support bot, a CI agent, or anything else. Drop a `ra.config.yml` and the agent reshapes itself.
 - **Provider portable** — Anthropic, OpenAI, Google, Bedrock, Ollama. Same config, any backend. Switch with a flag when one is down or slow.
@@ -174,6 +176,33 @@ ra --mcp          # HTTP transport (default port 3001)
 ```
 
 When you run `--mcp-stdio`, ra prints the JSON config snippet you need to paste into your MCP client config.
+
+## Built-in Tools
+
+ra ships with 14 built-in tools that give the agent filesystem access, shell execution, HTTP requests, and user interaction out of the box. Enabled by default.
+
+| Category | Tools |
+|----------|-------|
+| **Filesystem** | `read_file`, `write_file`, `update_file`, `append_file`, `list_directory`, `search_files`, `glob_files`, `move_file`, `copy_file`, `delete_file` |
+| **Shell** | `execute_bash` (macOS/Linux) or `execute_powershell` (Windows) |
+| **Network** | `web_fetch` |
+| **Agent** | `ask_user`, `checklist` |
+
+Tools are self-describing — each includes a description and input schema so the model knows when and how to use them without any system prompt. The shell tool automatically includes the detected OS in its description.
+
+The `checklist` tool dynamically updates its description to show remaining items, keeping the model aware of progress across turns.
+
+To disable built-in tools:
+
+```bash
+ra --no-builtin-tools
+# or
+export RA_BUILTIN_TOOLS=false
+```
+
+When ra runs as an MCP server, all built-in tools (except `ask_user`) are automatically exposed as MCP tools.
+
+See the [full tools reference](https://chinmaymk.github.io/ra/tools/) for parameters and examples.
 
 ## Skills
 

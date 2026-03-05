@@ -6,14 +6,12 @@ export function askUserTool(): ITool {
   return {
     name: 'ask_user',
     description:
-      'Ask the user a question and wait for their response. ' +
-      'Use this when you need clarification, confirmation, or additional information from the user before proceeding. ' +
-      'The agent loop will pause after this tool is called. The user\'s response will come as a new message when they reply. ' +
-      'Provide a clear, specific question.',
+      'Ask the user a question. The agent loop pauses until the user replies. ' +
+      'Use when you need clarification or confirmation before proceeding. Call only once per turn.',
     inputSchema: {
       type: 'object',
       properties: {
-        question: { type: 'string', description: 'The question to ask the user' },
+        question: { type: 'string', description: 'Clear, specific question for the user' },
       },
       required: ['question'],
     },

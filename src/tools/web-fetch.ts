@@ -4,18 +4,14 @@ export function webFetchTool(): ITool {
   return {
     name: 'web_fetch',
     description:
-      'Make an HTTP request to a URL and return the response. ' +
-      'Returns a JSON object with `status` (HTTP status code), `headers` (response headers), and `body` (response body as text). ' +
-      'Supports GET, POST, PUT, PATCH, DELETE methods. Default method is GET. ' +
-      'Use `headers` to set request headers (e.g. Authorization, Content-Type). ' +
-      'Use `body` to send a request body (for POST/PUT/PATCH).',
+      'Make an HTTP request. Returns JSON: {"status": number, "headers": {}, "body": "response text"}.',
     inputSchema: {
       type: 'object',
       properties: {
-        url: { type: 'string', description: 'The URL to fetch' },
-        method: { type: 'string', description: 'HTTP method: GET, POST, PUT, PATCH, DELETE. Default: GET.' },
-        headers: { type: 'object', description: 'Request headers as key-value pairs. Optional.' },
-        body: { type: 'string', description: 'Request body string. Optional.' },
+        url: { type: 'string', description: 'URL to request' },
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], description: 'HTTP method (default: GET)' },
+        headers: { type: 'object', description: 'Request headers, e.g. {"Authorization": "Bearer token"}' },
+        body: { type: 'string', description: 'Request body string' },
       },
       required: ['url'],
     },

@@ -6,15 +6,13 @@ export function writeFileTool(): ITool {
   return {
     name: 'write_file',
     description:
-      'Create or overwrite a file at the given path with the provided content. ' +
-      'Parent directories are created automatically if they do not exist. ' +
-      'If the file already exists, it will be completely replaced with the new content. ' +
-      'Use update_file instead if you only want to change part of an existing file.',
+      'Create or overwrite a file with the given content. Parent directories are created automatically. ' +
+      'WARNING: Overwrites the entire file if it exists. Use update_file for partial edits.',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Absolute or relative path to the file to write' },
-        content: { type: 'string', description: 'The content to write to the file' },
+        path: { type: 'string', description: 'File path to create or overwrite' },
+        content: { type: 'string', description: 'Complete file content' },
       },
       required: ['path', 'content'],
     },

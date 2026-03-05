@@ -92,7 +92,7 @@ export function closeAssistantBox(): void {
 }
 
 export function printToolCall(name: string): void {
-  process.stdout.write(`  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
+  process.stdout.write(`\n  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
 }
 
 export function printToolResult(name: string, ms: number): void {

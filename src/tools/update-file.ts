@@ -5,16 +5,16 @@ export function updateFileTool(): ITool {
   return {
     name: 'update_file',
     description:
-      'Update a file by replacing the first occurrence of `old_string` with `new_string`. ' +
-      'The old_string must match exactly (including whitespace and indentation). ' +
-      'Only the first occurrence is replaced. ' +
-      'Use this for surgical edits to existing files. For creating new files, use write_file instead.',
+      'Replace the first occurrence of `old_string` with `new_string` in a file. ' +
+      'IMPORTANT: `old_string` must match exactly, including whitespace, indentation, and newlines. ' +
+      'Only the first match is replaced. Supports multi-line strings. ' +
+      'Fails if `old_string` is not found. Use write_file to create new files.',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Path to the file to update' },
-        old_string: { type: 'string', description: 'The exact string to find in the file' },
-        new_string: { type: 'string', description: 'The string to replace old_string with' },
+        path: { type: 'string', description: 'File path to update' },
+        old_string: { type: 'string', description: 'Exact string to find (must match precisely)' },
+        new_string: { type: 'string', description: 'Replacement string' },
       },
       required: ['path', 'old_string', 'new_string'],
     },

@@ -13,8 +13,7 @@ export function checklistTool(): ITool {
   return {
     name: 'checklist',
     get description() {
-      const base = 'Track tasks with a checklist. ' +
-        'Actions: "add" (item text), "check"/"uncheck"/"remove" (by 0-based index), "list" (show all).'
+      const base = 'Manage a task checklist. Actions: "add" (requires item), "check"/"uncheck"/"remove" (require index), "list".'
       if (items.length === 0) return base
       const unchecked = items
         .map((it, i) => ({ ...it, i }))
@@ -26,9 +25,9 @@ export function checklistTool(): ITool {
     inputSchema: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['add', 'check', 'uncheck', 'remove', 'list'], description: 'The action to perform' },
-        item: { type: 'string', description: 'Item text (for "add" action)' },
-        index: { type: 'number', description: 'Item index, 0-based (for "check", "uncheck", "remove" actions)' },
+        action: { type: 'string', enum: ['add', 'check', 'uncheck', 'remove', 'list'], description: 'Action to perform' },
+        item: { type: 'string', description: 'Task text (required for "add")' },
+        index: { type: 'number', description: '0-based item index (required for "check", "uncheck", "remove")' },
       },
       required: ['action'],
     },

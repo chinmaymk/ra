@@ -5,13 +5,12 @@ export function deleteFileTool(): ITool {
   return {
     name: 'delete_file',
     description:
-      'Delete a file or directory at the given path. ' +
-      'Directories are deleted recursively, including all contents. ' +
-      'This operation is irreversible — use with caution.',
+      'Delete a file or directory. Directories are deleted recursively. ' +
+      'IRREVERSIBLE. Fails if path does not exist.',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Path to the file or directory to delete' },
+        path: { type: 'string', description: 'Path to delete' },
       },
       required: ['path'],
     },

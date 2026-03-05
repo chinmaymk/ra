@@ -6,13 +6,13 @@ export function appendFileTool(): ITool {
   return {
     name: 'append_file',
     description:
-      'Append content to the end of a file. Creates the file (and parent directories) if it does not exist. ' +
-      'Does not add any separator — if you need a newline before the appended content, include it in the content string.',
+      'Append content to the end of a file. Creates the file and parent directories if missing. ' +
+      'No newline is added automatically — include "\\n" in content if needed.',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Path to the file to append to' },
-        content: { type: 'string', description: 'Content to append to the end of the file' },
+        path: { type: 'string', description: 'File path to append to (created if missing)' },
+        content: { type: 'string', description: 'Content to append (verbatim, no auto-newline)' },
       },
       required: ['path', 'content'],
     },

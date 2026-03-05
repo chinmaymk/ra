@@ -6,14 +6,13 @@ export function copyFileTool(): ITool {
   return {
     name: 'copy_file',
     description:
-      'Copy a file or directory from source to destination. ' +
-      'Directories are copied recursively, including all nested files and subdirectories. ' +
-      'Creates parent directories at the destination if they do not exist.',
+      'Copy a file or directory to a new location. Directories are copied recursively. ' +
+      'Creates parent directories at the destination automatically.',
     inputSchema: {
       type: 'object',
       properties: {
-        source: { type: 'string', description: 'Path of the file or directory to copy' },
-        destination: { type: 'string', description: 'Destination path for the copy' },
+        source: { type: 'string', description: 'Path to copy from' },
+        destination: { type: 'string', description: 'Path to copy to' },
       },
       required: ['source', 'destination'],
     },

@@ -23,17 +23,15 @@ export function searchFilesTool(): ITool {
   return {
     name: 'search_files',
     description:
-      'Search for a text pattern across files in a directory, recursively. ' +
-      'Returns matching lines with file paths and line numbers in the format "path:line:content". ' +
-      'Skips node_modules and .git directories. ' +
-      'Use the optional `include` parameter to filter by filename pattern (e.g. "*.ts", "*.json"). ' +
-      'The pattern is matched as a plain string (not regex).',
+      'Recursively search file contents for a plain text string (not regex). ' +
+      'Returns matches as "relative/path:line_number:matching_line". ' +
+      'Skips node_modules/ and .git/. Use `include` to filter by filename glob.',
     inputSchema: {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'Directory to search in' },
-        pattern: { type: 'string', description: 'Text pattern to search for' },
-        include: { type: 'string', description: 'Optional filename glob filter, e.g. "*.ts"' },
+        pattern: { type: 'string', description: 'Plain text string to search for (not regex)' },
+        include: { type: 'string', description: 'Filename glob filter, e.g. "*.ts" or "*.json"' },
       },
       required: ['path', 'pattern'],
     },

@@ -5,15 +5,14 @@ export function globFilesTool(): ITool {
   return {
     name: 'glob_files',
     description:
-      'Find files matching a glob pattern within a directory. ' +
-      'Returns a list of matching file paths, one per line. ' +
-      'Supports standard glob patterns: "*" matches any file, "**" matches directories recursively, "?" matches a single character. ' +
-      'Example patterns: "**/*.ts" (all TypeScript files), "src/**/*.test.ts" (all test files in src).',
+      'Find files matching a glob pattern. Returns matching paths, one per line. ' +
+      'Patterns: "*" = any file, "**" = recursive directories, "?" = single char. ' +
+      'Examples: "**/*.ts", "src/**/*.test.ts", "*.json".',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Directory to search in' },
-        pattern: { type: 'string', description: 'Glob pattern to match files against' },
+        path: { type: 'string', description: 'Base directory to search from' },
+        pattern: { type: 'string', description: 'Glob pattern (e.g. "**/*.ts")' },
       },
       required: ['path', 'pattern'],
     },

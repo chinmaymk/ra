@@ -5,16 +5,14 @@ export function executePowershellTool(): ITool {
   return {
     name: 'execute_powershell',
     description:
-      'Execute a PowerShell command and return its output. ' +
-      'The command runs in PowerShell on this Windows system. Use PowerShell syntax. ' +
-      'Examples: "Get-ChildItem" to list files, "Get-Content file.txt" to read a file, "Remove-Item file.txt" to delete. ' +
-      'Use the optional `timeout` parameter (in milliseconds) to limit execution time. Default timeout is 30 seconds.',
+      'Run a PowerShell command on this Windows system. ' +
+      'Returns stdout and stderr combined. Uses -NoProfile for fast startup. Default timeout: 30s.',
     inputSchema: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: 'The PowerShell command to execute' },
-        cwd: { type: 'string', description: 'Working directory for the command. Optional.' },
-        timeout: { type: 'number', description: 'Timeout in milliseconds. Default: 30000. Optional.' },
+        command: { type: 'string', description: 'PowerShell command to run' },
+        cwd: { type: 'string', description: 'Working directory' },
+        timeout: { type: 'number', description: 'Timeout in ms (default: 30000)' },
       },
       required: ['command'],
     },

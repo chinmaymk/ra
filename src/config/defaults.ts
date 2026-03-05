@@ -35,7 +35,7 @@ export const defaultConfig: RaConfig = {
   },
   maxIterations: 50,
   toolTimeout: 30000,
-  builtinTools: false,
+  builtinTools: true,
   middleware: {},
   compaction: {
     enabled: true,
