@@ -1,7 +1,3 @@
-import { join } from 'path'
-import type { IMessage } from '../providers/types'
-import type { Skill } from './types'
-
 /**
  * Find the first available binary from candidates via Bun.which.
  * Throws if none found.
@@ -76,13 +72,4 @@ export async function runSkillScript(scriptPath: string, env: Record<string, str
     throw new Error(`Script exited with code ${exitCode}: ${stderrText.trim()}`)
   }
   return output
-}
-
-export async function buildSkillMessages(skill: Skill, env: Record<string, string>): Promise<IMessage[]> {
-  const messages: IMessage[] = [{ role: 'user', content: skill.body }]
-  for (const rel of skill.scripts) {
-    const output = await runSkillScript(join(skill.dir, rel), env)
-    if (output.trim()) messages.push({ role: 'user', content: output })
-  }
-  return messages
 }
