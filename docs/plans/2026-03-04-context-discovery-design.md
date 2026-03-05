@@ -27,12 +27,10 @@ context:
     - .github/copilot-instructions.md
     - .windsurfrules
     - .clinerules
-  ignore: []           # exclude specific paths from results
 ```
 
 - `patterns` is a flat list of file glob strings
 - No patterns = no discovery
-- `ignore` excludes specific matched paths
 
 ### Discovery
 
@@ -66,4 +64,4 @@ Message 3 (user): the actual user prompt
 
 - No format-specific parsing (no .mdc frontmatter, no AGENTS.md path scoping)
 - No smart filtering or scoping logic
-- No middleware integration for pruning — if you don't want a file, remove the pattern or add to `ignore`
+- If you don't want a file, remove the pattern from config

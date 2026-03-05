@@ -30,7 +30,6 @@ describe('context types', () => {
     const config: ContextConfig = {
       enabled: true,
       patterns: ['CLAUDE.md', '.cursorrules'],
-      ignore: [],
     }
     expect(config.enabled).toBe(true)
     expect(config.patterns).toHaveLength(2)
@@ -60,7 +59,6 @@ Create `src/context/types.ts`:
 export interface ContextConfig {
   enabled: boolean
   patterns: string[]
-  ignore: string[]
 }
 
 export interface ContextFile {
@@ -90,7 +88,6 @@ In `src/config/defaults.ts`, add to `defaultConfig`:
 context: {
   enabled: true,
   patterns: [],
-  ignore: [],
 },
 ```
 
@@ -143,7 +140,6 @@ describe('discoverContextFiles', () => {
     const files = await discoverContextFiles({
       cwd: tmp,
       patterns: ['CLAUDE.md'],
-      ignore: [],
     })
     expect(files).toEqual([])
   })
@@ -153,7 +149,6 @@ describe('discoverContextFiles', () => {
     const files = await discoverContextFiles({
       cwd: tmp,
       patterns: ['CLAUDE.md'],
-      ignore: [],
     })
     expect(files).toHaveLength(1)
     expect(files[0].relativePath).toBe('CLAUDE.md')
@@ -167,7 +162,6 @@ describe('discoverContextFiles', () => {
     const files = await discoverContextFiles({
       cwd: sub,
       patterns: ['CLAUDE.md'],
-      ignore: [],
     })
     expect(files).toHaveLength(1)
     expect(files[0].content).toBe('root instructions')
@@ -181,24 +175,11 @@ describe('discoverContextFiles', () => {
     const files = await discoverContextFiles({
       cwd: sub,
       patterns: ['CLAUDE.md'],
-      ignore: [],
     })
     expect(files).toHaveLength(2)
     // Closest first
     expect(files[0].content).toBe('src level')
     expect(files[1].content).toBe('root')
-  })
-
-  it('respects ignore list', async () => {
-    writeFileSync(join(tmp, 'CLAUDE.md'), 'instructions')
-    writeFileSync(join(tmp, '.cursorrules'), 'rules')
-    const files = await discoverContextFiles({
-      cwd: tmp,
-      patterns: ['CLAUDE.md', '.cursorrules'],
-      ignore: ['.cursorrules'],
-    })
-    expect(files).toHaveLength(1)
-    expect(files[0].relativePath).toBe('CLAUDE.md')
   })
 
   it('supports glob patterns like .cursor/rules/*', async () => {
@@ -209,17 +190,15 @@ describe('discoverContextFiles', () => {
     const files = await discoverContextFiles({
       cwd: tmp,
       patterns: ['.cursor/rules/*'],
-      ignore: [],
     })
     expect(files).toHaveLength(2)
   })
 
-  it('returns empty when disabled (caller responsibility, but test no crash)', async () => {
+  it('returns empty when no patterns given', async () => {
     writeFileSync(join(tmp, 'CLAUDE.md'), 'instructions')
     const files = await discoverContextFiles({
       cwd: tmp,
       patterns: [],
-      ignore: [],
     })
     expect(files).toEqual([])
   })
@@ -242,7 +221,6 @@ import type { ContextFile } from './types'
 export interface DiscoverOptions {
   cwd: string
   patterns: string[]
-  ignore: string[]
 }
 
 async function findGitRoot(cwd: string): Promise<string | null> {
@@ -252,7 +230,7 @@ async function findGitRoot(cwd: string): Promise<string | null> {
 }
 
 export async function discoverContextFiles(options: DiscoverOptions): Promise<ContextFile[]> {
-  const { cwd, patterns, ignore } = options
+  const { cwd, patterns } = options
   if (patterns.length === 0) return []
 
   const gitRoot = await findGitRoot(cwd)
@@ -272,13 +250,11 @@ export async function discoverContextFiles(options: DiscoverOptions): Promise<Co
   if (dirs[dirs.length - 1] !== root) dirs.push(root)
 
   const files: ContextFile[] = []
-  const ignoreSet = new Set(ignore)
 
   for (const dir of dirs) {
     for (const pattern of patterns) {
       const glob = new Bun.Glob(pattern)
       for await (const match of glob.scan({ cwd: dir, absolute: false, onlyFiles: true })) {
-        if (ignoreSet.has(match) || ignoreSet.has(pattern)) continue
         const absPath = join(dir, match)
         // Deduplicate — same absolute path could match from different dirs
         if (files.some(f => f.path === absPath)) continue
@@ -460,7 +436,6 @@ const contextMessages = config.context.enabled
   ? buildContextMessages(await discoverContextFiles({
       cwd: process.cwd(),
       patterns: config.context.patterns,
-      ignore: config.context.ignore,
     }))
   : []
 ```
