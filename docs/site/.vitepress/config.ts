@@ -71,6 +71,7 @@ export default defineConfig({
         items: [
           { text: 'HTTP API', link: '/api/' },
           { text: 'Recipes', link: '/recipes/' },
+          { text: 'Dynamic Prompts', link: '/recipes/dynamic-prompts' },
         ],
       },
     ],
