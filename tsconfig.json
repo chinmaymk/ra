@@ -25,6 +25,7 @@
 
     "baseUrl": ".",
     "paths": {
+      "@chinmaymk/ra": ["./src/types.ts"],
       "@chinmaymk/ra/*": ["./src/*"]
     }
   },

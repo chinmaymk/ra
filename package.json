@@ -1,17 +1,16 @@
 {
   "name": "@chinmaymk/ra",
   "version": "0.1.0",
-  "description": "One loop. Infinite agents.",
-  "module": "src/index.ts",
+  "description": "One loop. Infinite agents. Type definitions for the ra AI agent framework.",
   "type": "module",
-  "bin": {
-    "ra": "src/index.ts"
-  },
+  "types": "dist/types.d.ts",
   "exports": {
-    "./*": "./src/*"
+    ".": {
+      "types": "./dist/types.d.ts"
+    }
   },
   "files": [
-    "src",
+    "dist/**/*.d.ts",
     "LICENSE",
     "README.md"
   ],
@@ -29,9 +28,11 @@
     "anthropic",
     "openai",
     "google",
-    "ollama"
+    "ollama",
+    "types"
   ],
   "scripts": {
+    "build:types": "tsc -p tsconfig.build.json",
     "compile": "bun build src/index.ts --compile --target bun --outfile dist/ra",
     "ra": "bun run src/index.ts"
   },
