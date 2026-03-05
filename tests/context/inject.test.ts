@@ -15,8 +15,8 @@ describe('buildContextMessages', () => {
     ]
     const messages = buildContextMessages(files)
     expect(messages).toHaveLength(2)
-    expect(messages[0].role).toBe('user')
-    expect(messages[1].role).toBe('user')
+    expect(messages[0]!.role).toBe('user')
+    expect(messages[1]!.role).toBe('user')
   })
 
   it('wraps content in context-file XML tags with path', () => {
@@ -24,7 +24,7 @@ describe('buildContextMessages', () => {
       { path: '/p/CLAUDE.md', relativePath: 'CLAUDE.md', content: '# Be helpful' },
     ]
     const messages = buildContextMessages(files)
-    expect(messages[0].content).toBe(
+    expect(messages[0]!.content).toBe(
       '<context-file path="CLAUDE.md">\n# Be helpful\n</context-file>'
     )
   })

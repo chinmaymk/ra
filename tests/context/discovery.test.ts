@@ -47,8 +47,8 @@ describe('discoverContextFiles', () => {
     writeFileSync(join(tmp, 'CLAUDE.md'), '# Instructions')
     const files = await discoverContextFiles({ cwd: tmp, patterns: ['CLAUDE.md'] })
     expect(files).toHaveLength(1)
-    expect(files[0].relativePath).toBe('CLAUDE.md')
-    expect(files[0].content).toBe('# Instructions')
+    expect(files[0]!.relativePath).toBe('CLAUDE.md')
+    expect(files[0]!.content).toBe('# Instructions')
   })
 
   it('finds files in parent directories up to git root', async () => {
@@ -57,7 +57,7 @@ describe('discoverContextFiles', () => {
     mkdirSync(sub, { recursive: true })
     const files = await discoverContextFiles({ cwd: sub, patterns: ['CLAUDE.md'] })
     expect(files).toHaveLength(1)
-    expect(files[0].content).toBe('root instructions')
+    expect(files[0]!.content).toBe('root instructions')
   })
 
   it('finds files at multiple levels', async () => {
@@ -67,8 +67,8 @@ describe('discoverContextFiles', () => {
     writeFileSync(join(sub, 'CLAUDE.md'), 'src level')
     const files = await discoverContextFiles({ cwd: sub, patterns: ['CLAUDE.md'] })
     expect(files).toHaveLength(2)
-    expect(files[0].content).toBe('src level')
-    expect(files[1].content).toBe('root')
+    expect(files[0]!.content).toBe('src level')
+    expect(files[1]!.content).toBe('root')
   })
 
   it('supports glob patterns like .cursor/rules/*', async () => {
