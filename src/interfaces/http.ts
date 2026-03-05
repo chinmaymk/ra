@@ -5,6 +5,7 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
+import { buildAvailableSkillsXml } from '../skills/loader'
 
 export interface HttpOptions {
   port: number
@@ -95,9 +96,15 @@ export class HttpServer {
   }
 
   private prependSystem(messages: IMessage[]): IMessage[] {
-    return this.options.systemPrompt
-      ? [{ role: 'system', content: this.options.systemPrompt }, ...messages]
-      : messages
+    const prefix: IMessage[] = []
+    if (this.options.systemPrompt) {
+      prefix.push({ role: 'system', content: this.options.systemPrompt })
+    }
+    if (this.options.skillMap && this.options.skillMap.size > 0) {
+      const xml = buildAvailableSkillsXml(this.options.skillMap)
+      if (xml) prefix.push({ role: 'user', content: xml })
+    }
+    return [...prefix, ...messages]
   }
 
   private async handleChatSync(req: Request): Promise<Response> {
