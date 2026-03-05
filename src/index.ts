@@ -71,6 +71,11 @@ PROVIDER OPTIONS
   --exec <script>                     Execute a JS/TS file and exit
   --help, -h                          Print this help message
 
+SUBCOMMANDS
+  skill install <github-url>          Install skills from a GitHub repository
+                                      URL formats: owner/repo, github.com/owner/repo
+                                      Optional ref: owner/repo@v2
+
 ENV VARS
   RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
   RA_HTTP_PORT, RA_HTTP_TOKEN
@@ -121,6 +126,25 @@ async function main(): Promise<void> {
 
   if (parsed.meta.help) {
     console.log(HELP)
+    process.exit(0)
+  }
+
+  if (parsed.meta.subcommand?.name === 'skill') {
+    const { installSkillsFromGithub } = await import('./skills/install')
+    const args = parsed.meta.subcommand.args
+    if (args[0] === 'install' && args[1]) {
+      const config = await loadConfig({ cwd: process.cwd(), env: process.env as Record<string, string | undefined> })
+      const targetDir = config.skillDirs[0] || join(process.cwd(), 'skills')
+      console.log(`Installing skills from ${args[1]} into ${targetDir}...`)
+      const installed = await installSkillsFromGithub(args[1], targetDir)
+      if (installed.length === 0) {
+        console.log('No valid skills found.')
+      } else {
+        console.log(`Installed ${installed.length} skill(s): ${installed.join(', ')}`)
+      }
+    } else {
+      console.log('Usage: ra skill install <github-url>')
+    }
     process.exit(0)
   }
 

@@ -9,6 +9,7 @@ export interface ParsedArgsMeta {
   resume?: string
   configPath?: string
   exec?: string
+  subcommand?: { name: string; args: string[] }
 }
 
 export interface ParsedArgs {
@@ -36,6 +37,19 @@ export function parseArgs(argv: string[]): ParsedArgs {
     /\.(ts|js|mjs|cjs)$/.test(argv[1]) || argv[1].startsWith('/$bunfs/')
   )
   const userArgs = argv.slice(isScriptPath ? 2 : 1)
+
+  // Detect subcommands (e.g., "skill install github.com/org/repo")
+  if (userArgs[0] === 'skill') {
+    return {
+      config: {} as Partial<RaConfig>,
+      meta: {
+        help: false,
+        files: [],
+        skills: [],
+        subcommand: { name: 'skill', args: userArgs.slice(1) },
+      },
+    }
+  }
 
   const { values, positionals } = utilParseArgs({
     args: userArgs,
