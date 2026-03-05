@@ -72,8 +72,8 @@ describe('runCli', () => {
       skillMap,
     })
 
-    // Should have skill body as user message before the prompt
-    expect(messages.some((m: any) => m.role === 'user' && m.content === 'Do this task')).toBe(true)
+    // Should have skill body wrapped in XML as user message before the prompt
+    expect(messages.some((m: any) => m.role === 'user' && m.content.includes('<skill name="test-skill">') && m.content.includes('Do this task'))).toBe(true)
     // Last message should be the user prompt
     const lastUser = messages.filter((m: any) => m.role === 'user').pop()
     expect(lastUser?.content).toBe('go')

@@ -4,7 +4,7 @@ import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { Skill } from '../skills/types'
 import { AgentLoop } from '../agent/loop'
-import { buildSkillMessages } from '../skills/runner'
+import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import { fileToContentPart } from '../utils/files'
 
 export interface CliOptions {
@@ -35,11 +35,22 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
+  // Inject always-on skills as user messages with full body
+  const activeSkillNames = new Set<string>()
   if (skills.length && skillMap) {
     for (const name of skills) {
       const skill = skillMap.get(name)
-      if (skill) initialMessages.push(...await buildSkillMessages(skill, {}))
+      if (skill) {
+        initialMessages.push({ role: 'user', content: buildActiveSkillXml(skill) })
+        activeSkillNames.add(name)
+      }
     }
+  }
+
+  // Inject discovered (non-active) skills as available_skills XML
+  if (skillMap && skillMap.size > activeSkillNames.size) {
+    const xml = buildAvailableSkillsXml(skillMap, activeSkillNames)
+    if (xml) initialMessages.push({ role: 'user', content: xml })
   }
   initialMessages.push(...sessionMessages)
 
