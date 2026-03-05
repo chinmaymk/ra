@@ -1,3 +1,4 @@
+import type { ContextConfig } from '../context/types'
 import type { AnthropicProviderOptions } from '../providers/anthropic'
 import type { OpenAIProviderOptions } from '../providers/openai'
 import type { GoogleProviderOptions } from '../providers/google'
@@ -37,6 +38,7 @@ export interface RaConfig {
   toolTimeout: number
   middleware: Record<string, string[]>
   thinking?: 'low' | 'medium' | 'high'
+  context: ContextConfig
   compaction: {
     enabled: boolean
     threshold: number      // 0-1, trigger ratio of context window

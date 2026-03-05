@@ -36,6 +36,10 @@ export const defaultConfig: RaConfig = {
   maxIterations: 50,
   toolTimeout: 30000,
   middleware: {},
+  context: {
+    enabled: true,
+    patterns: [],
+  },
   compaction: {
     enabled: true,
     threshold: 0.80,
