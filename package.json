@@ -1,7 +1,7 @@
 {
   "name": "@chinmaymk/ra",
   "version": "0.1.0",
-  "description": "AI agent CLI and framework — multi-provider, extensible with skills, MCP, and middleware",
+  "description": "One loop. Infinite agents.",
   "module": "src/index.ts",
   "type": "module",
   "bin": {
