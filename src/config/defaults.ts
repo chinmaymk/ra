@@ -37,6 +37,10 @@ export const defaultConfig: RaConfig = {
   toolTimeout: 30000,
   builtinTools: true,
   middleware: {},
+  context: {
+    enabled: true,
+    patterns: [],
+  },
   compaction: {
     enabled: true,
     threshold: 0.80,

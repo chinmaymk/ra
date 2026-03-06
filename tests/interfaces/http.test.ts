@@ -290,6 +290,42 @@ describe('HttpServer', () => {
     expect(data.error).toContain('sync explosion')
   })
 
+  it('prepends context messages when configured', async () => {
+    let capturedMessages: any[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream(req) {
+        capturedMessages = req.messages
+        yield { type: 'text', delta: 'ok' }
+        yield { type: 'done' }
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 14,
+      model: 'test',
+      provider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+      systemPrompt: 'sys',
+      contextMessages: [
+        { role: 'user', content: '<context-file path="README.md">hello</context-file>' },
+      ],
+    })
+    await server.start()
+    await fetch(`http://localhost:${TEST_PORT + 14}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    // system prompt first, then context message, then user message
+    expect(capturedMessages[0]?.role).toBe('system')
+    expect(capturedMessages[1]?.role).toBe('user')
+    expect(capturedMessages[1]?.content).toContain('context-file')
+    expect(capturedMessages[2]?.role).toBe('user')
+    expect(capturedMessages[2]?.content).toBe('hi')
+  })
+
   it('POST /chat/sync extracts text from ContentPart[] responses', async () => {
     const arrayContentProvider: IProvider = {
       name: 'mock',

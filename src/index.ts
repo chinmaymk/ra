@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { loadConfig } from './config'
+import { discoverContextFiles, buildContextMessages } from './context'
 import { loadMiddleware } from './middleware/loader'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { ToolRegistry } from './agent/tool-registry'
@@ -71,6 +72,7 @@ PROVIDER OPTIONS
   --ollama-host <url>                 Ollama host URL
 
   --builtin-tools                     Enable built-in tools (filesystem, shell, network)
+  --show-context                      Show discovered context files and exit
   --exec <script>                     Execute a JS/TS file and exit
   --help, -h                          Print this help message
 
@@ -171,6 +173,14 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
+  // Discover project context files
+  const contextMessages = config.context.enabled
+    ? buildContextMessages(await discoverContextFiles({
+        cwd: process.cwd(),
+        patterns: config.context.patterns,
+      }))
+    : []
+
   const middleware = await loadMiddleware(config, process.cwd())
 
   // Create provider
@@ -227,6 +237,20 @@ async function main(): Promise<void> {
   process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
   process.on('SIGTERM', async () => { await shutdown(); process.exit(0) })
 
+  if (parsed.meta.showContext) {
+    if (contextMessages.length === 0) {
+      console.log('No context files discovered.')
+    } else {
+      for (const msg of contextMessages) {
+        const content = typeof msg.content === 'string' ? msg.content : ''
+        console.log(content)
+        console.log()
+      }
+    }
+    await shutdown()
+    process.exit(0)
+  }
+
   // Determine which interface to launch
   if (config.interface === 'mcp') {
     stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
@@ -267,6 +291,7 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      contextMessages,
       sessionMessages,
     })
     if (parsed.meta.resume) {
@@ -291,6 +316,7 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      contextMessages,
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${httpServer.port}`)
@@ -316,6 +342,7 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      contextMessages,
     })
     await repl.start()
     await shutdown()

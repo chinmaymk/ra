@@ -22,6 +22,7 @@ export interface HttpOptions {
   toolTimeout?: number
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  contextMessages?: IMessage[]
 }
 
 export class HttpServer {
@@ -104,6 +105,9 @@ export class HttpServer {
     if (this.options.skillMap && this.options.skillMap.size > 0) {
       const xml = buildAvailableSkillsXml(this.options.skillMap)
       if (xml) prefix.push({ role: 'user', content: xml })
+    }
+    if (this.options.contextMessages?.length) {
+      prefix.push(...this.options.contextMessages)
     }
     return [...prefix, ...messages]
   }

@@ -13,6 +13,7 @@
   <a href="#built-in-tools">Tools</a> &middot;
   <a href="#skills">Skills</a> &middot;
   <a href="#mcp">MCP</a> &middot;
+  <a href="#context-discovery">Context</a> &middot;
   <a href="#configuration">Configuration</a>
 </p>
 
@@ -507,6 +508,43 @@ ra
 
 Sessions auto-prune by TTL and max count.
 
+## Context Discovery
+
+ra automatically discovers project context files and injects them into every conversation. Files like `CLAUDE.md`, `AGENTS.md`, `COPILOT.md`, `CONVENTIONS.md`, and `CURSORRULES` are loaded from your project root and sent as user messages before your prompt.
+
+```yaml
+# ra.config.yml
+context:
+  enabled: true   # default
+  patterns:
+    - "CLAUDE.md"
+    - "AGENTS.md"
+    - "CONVENTIONS.md"
+    - "COPILOT.md"
+    - "CURSORRULES"
+    - ".cursorrules"
+    - ".github/copilot-instructions.md"
+```
+
+Each discovered file becomes a user message wrapped in XML tags:
+
+```xml
+<context-file path="CLAUDE.md">
+file contents here
+</context-file>
+```
+
+Context files are injected once at the start of a conversation in all interfaces (CLI, REPL, HTTP).
+
+### CLI flags and REPL commands
+
+```bash
+# Preview discovered context files without starting a session
+ra --show-context
+```
+
+In the REPL, use `/context` to list discovered files for the current session.
+
 ## Architecture
 
 ```
@@ -518,6 +556,7 @@ src/
     middleware.ts       # Middleware chain execution
   providers/            # Anthropic, OpenAI, Azure OpenAI, Google, Ollama, Bedrock
   interfaces/           # CLI, REPL, HTTP, MCP server
+  context/              # Context file discovery and injection
   config/               # Layered config system
   mcp/                  # MCP client + server
   skills/               # Skill loader, runner, types
