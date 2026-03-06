@@ -101,7 +101,7 @@ export function createCompactionMiddleware(
     if (!config.enabled) return
 
     const messages = ctx.request.messages
-    const estimated = estimateTokens(messages)
+    const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
 
     const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
     const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)

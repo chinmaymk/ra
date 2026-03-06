@@ -409,6 +409,32 @@ describe('createCompactionMiddleware', () => {
     expect(chatModel).toBe('claude-haiku-4-5-20251001')
   })
 
+  it('uses real inputTokens from loop.lastUsage when available for threshold check', async () => {
+    let chatCalled = false
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => {
+        chatCalled = true
+        return { message: { role: 'assistant' as const, content: 'Summary.' } }
+      },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8, maxTokens: 500, contextWindow: 1000,
+    })
+    const longText = 'word '.repeat(600)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    ctx.loop.lastUsage = { inputTokens: 100, outputTokens: 50 }
+    await mw(ctx)
+    expect(chatCalled).toBe(false)
+  })
+
   it('skips when nothing to compact (all pinned)', async () => {
     const provider: IProvider = {
       name: 'mock',
