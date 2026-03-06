@@ -381,6 +381,34 @@ describe('createCompactionMiddleware', () => {
     expect(allText).toContain('[Context Summary]')
   })
 
+  it('uses compaction.model for summarization instead of request model', async () => {
+    let chatModel = ''
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async (req) => {
+        chatModel = req.model
+        return { message: { role: 'assistant' as const, content: 'Summary.' } }
+      },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      model: 'claude-haiku-4-5-20251001',
+    })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages, 'claude-opus-4-6')
+    await mw(ctx)
+    expect(chatModel).toBe('claude-haiku-4-5-20251001')
+  })
+
   it('skips when nothing to compact (all pinned)', async () => {
     const provider: IProvider = {
       name: 'mock',

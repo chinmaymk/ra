@@ -26,3 +26,16 @@ export function getContextWindowSize(model: string, userOverride?: number): numb
   }
   return DEFAULT_CONTEXT_WINDOW
 }
+
+const DEFAULT_COMPACTION_MODELS: Record<string, string> = {
+  anthropic: 'claude-haiku-4-5-20251001',
+  openai: 'gpt-4o-mini',
+  google: 'gemini-2.0-flash',
+  ollama: '',
+  bedrock: 'anthropic.claude-haiku-4-5-20251001',
+  azure: 'gpt-4o-mini',
+}
+
+export function getDefaultCompactionModel(provider: string): string {
+  return DEFAULT_COMPACTION_MODELS[provider] ?? ''
+}
