@@ -4,7 +4,7 @@ import type { LoopContext } from '../../src/agent/types'
 
 function makeCtx(controller: AbortController): LoopContext {
   return {
-    messages: [], iteration: 0, maxIterations: 10, sessionId: 'test',
+    messages: [], iteration: 0, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined,
     stop: () => controller.abort(),
     signal: controller.signal,
   }

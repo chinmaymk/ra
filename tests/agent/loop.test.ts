@@ -434,6 +434,63 @@ describe('AgentLoop', () => {
     expect(toolResult!.content).toContain('nonexistent_tool')
   })
 
+  it('tracks token usage in LoopResult', async () => {
+    const provider = mockProvider([[{ type: 'text', delta: 'hello' }, { type: 'done', usage: { inputTokens: 100, outputTokens: 50 } }]])
+    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'hi' }])
+    expect(result.usage).toEqual({ inputTokens: 100, outputTokens: 50 })
+  })
+
+  it('accumulates token usage across iterations', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'noop' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done', usage: { inputTokens: 100, outputTokens: 30 } },
+      ],
+      [{ type: 'text', delta: 'done' }, { type: 'done', usage: { inputTokens: 200, outputTokens: 40 } }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'noop', description: '', inputSchema: {}, execute: async () => 'ok' })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    expect(result.usage).toEqual({ inputTokens: 300, outputTokens: 70 })
+  })
+
+  it('exposes lastUsage and cumulative usage to middleware via LoopContext', async () => {
+    const usages: { last: any; cumulative: any }[] = []
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'noop' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done', usage: { inputTokens: 100, outputTokens: 30 } },
+      ],
+      [{ type: 'text', delta: 'done' }, { type: 'done', usage: { inputTokens: 200, outputTokens: 40 } }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'noop', description: '', inputSchema: {}, execute: async () => 'ok' })
+    const loop = new AgentLoop({
+      provider, tools, maxIterations: 10,
+      middleware: {
+        afterModelResponse: [async (ctx) => {
+          usages.push({ last: ctx.loop.lastUsage, cumulative: { ...ctx.loop.usage } })
+        }],
+      },
+    })
+    await loop.run([{ role: 'user', content: 'go' }])
+    expect(usages[0]!.last).toEqual({ inputTokens: 100, outputTokens: 30 })
+    expect(usages[0]!.cumulative).toEqual({ inputTokens: 100, outputTokens: 30 })
+    expect(usages[1]!.last).toEqual({ inputTokens: 200, outputTokens: 40 })
+    expect(usages[1]!.cumulative).toEqual({ inputTokens: 300, outputTokens: 70 })
+  })
+
+  it('handles missing usage in done chunk gracefully', async () => {
+    const provider = mockProvider([[{ type: 'text', delta: 'hello' }, { type: 'done' }]])
+    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'hi' }])
+    expect(result.usage).toEqual({ inputTokens: 0, outputTokens: 0 })
+  })
+
   it('malformed tool args (invalid JSON) are handled as empty object — tool still executes', async () => {
     let receivedInput: unknown
     const provider = mockProvider([

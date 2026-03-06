@@ -191,6 +191,8 @@ function makeCtx(messages: IMessage[], model = 'claude-sonnet-4-6'): ModelCallCo
       iteration: 1,
       maxIterations: 10,
       sessionId: 'test',
+      usage: { inputTokens: 0, outputTokens: 0 },
+      lastUsage: undefined,
     },
   }
 }

@@ -1,4 +1,4 @@
-import type { IToolCall, IToolResult, StreamChunk, IMessage, ChatRequest } from '../providers/types'
+import type { IToolCall, IToolResult, StreamChunk, IMessage, ChatRequest, TokenUsage } from '../providers/types'
 
 export interface StoppableContext {
   stop: () => void
@@ -10,6 +10,8 @@ export interface LoopContext extends StoppableContext {
   iteration: number
   maxIterations: number
   sessionId: string
+  usage: TokenUsage
+  lastUsage: TokenUsage | undefined
 }
 
 export interface ModelCallContext extends StoppableContext {
