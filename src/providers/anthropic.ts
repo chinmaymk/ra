@@ -23,7 +23,7 @@ export class AnthropicProvider implements IProvider {
       model: request.model,
       max_tokens: (request.providerOptions?.maxTokens as number) ?? 4096,
       messages: this.mapMessages(filtered),
-      ...(system && { system }),
+      ...(system && { system: [{ type: 'text' as const, text: system, cache_control: { type: 'ephemeral' as const } }] }),
       ...(request.tools?.length && { tools: this.mapTools(request.tools) }),
       ...(request.thinking && { thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[request.thinking] } }),
     }
@@ -96,7 +96,12 @@ export class AnthropicProvider implements IProvider {
   }
 
   mapTools(tools: ITool[]): Anthropic.Tool[] {
-    return tools.map(t => ({ name: t.name, description: t.description, input_schema: t.inputSchema as Anthropic.Tool['input_schema'] }))
+    return tools.map((t, i) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.inputSchema as Anthropic.Tool['input_schema'],
+      ...(i === tools.length - 1 && { cache_control: { type: 'ephemeral' as const } }),
+    }))
   }
 
   mapContentParts(parts: ContentPart[]): Anthropic.ContentBlockParam[] {
