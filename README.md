@@ -20,8 +20,6 @@
 
 ---
 
-Most agent frameworks give you a `chat()` function and hope for the best. ra gives you the whole loop.
-
 Every message, every tool call, every stream chunk — visible and interceptable. Start with a config file and add code only where you need it. One binary becomes a CLI tool, an interactive REPL, a streaming HTTP API, or an MCP server.
 
 ```bash
