@@ -101,6 +101,26 @@ storage:
   ttlDays: 30             # auto-prune sessions older than this
 ```
 
+## Context & Pattern Resolution
+
+```yaml
+context:
+  enabled: true             # enable context file discovery
+  patterns:                 # glob patterns for context files
+    - "CLAUDE.md"
+    - "AGENTS.md"
+  resolvers:                # pattern resolvers for inline references
+    - name: file            # @path — resolve file contents
+      enabled: true
+    - name: url             # url:https://... — fetch URL
+      enabled: true
+    - name: custom          # custom resolver from file
+      enabled: true
+      path: ./resolvers/my-resolver.ts
+```
+
+Built-in resolvers (`file` and `url`) are enabled by default. See the [Pattern Resolution](#pattern-resolution) section below for usage and custom resolver examples.
+
 ## HTTP config
 
 ```yaml

@@ -47,6 +47,7 @@ ra
 - **Config-driven identity** — One binary becomes a code reviewer, a support bot, a CI agent, or anything else. Drop a `ra.config.yml` and the agent reshapes itself.
 - **Provider portable** — Anthropic, OpenAI, Google, Bedrock, Ollama. Same config, any backend. Switch with a flag when one is down or slow.
 - **Skills** — Package expertise into reusable bundles with instructions, scripts, and reference docs. Inject at runtime or wire always-on. Skills can include shell scripts in any language that run at activation and feed context to the model.
+- **Pattern resolution** — Reference files with `@src/auth.ts`, URLs with `url:https://...`, or build custom resolvers for GitHub issues, database records, or anything else. References resolve automatically before the model sees the message.
 - **MCP in both directions** — Pull tools from external MCP servers *and* expose ra itself as a tool for Cursor, Claude Desktop, or your own agents. Give the model access to databases, file systems, or your own custom tools — all through config.
 - **Multiple deployment modes** — CLI for scripts, REPL for conversations, HTTP for apps, MCP for agent-to-agent. One binary, every context.
 
@@ -544,6 +545,90 @@ ra --show-context
 ```
 
 In the REPL, use `/context` to list discovered files for the current session.
+
+## Pattern Resolution
+
+Pattern resolvers let you reference files, URLs, and custom sources inline in your prompts using short prefixes. ra resolves these references before the model sees the message, appending the resolved content automatically.
+
+Two built-in resolvers are enabled by default:
+
+| Pattern | Example | Resolves to |
+|---------|---------|-------------|
+| `@<path>` | `@src/index.ts` | File contents |
+| `@<glob>` | `@src/**/*.ts` | All matching file contents |
+| `url:<url>` | `url:https://example.com` | Fetched page content |
+
+### Usage
+
+```bash
+# Reference a file — its contents are injected as context
+ra "explain what @src/auth.ts does"
+
+# Reference multiple files with a glob
+ra "review @src/utils/*.ts for consistency"
+
+# Fetch a URL
+ra "summarize url:https://example.com/api-docs"
+
+# Mix them
+ra "compare @lib/old.ts with the approach described at url:https://blog.example.com/new-pattern"
+```
+
+Resolved content is appended to your message as XML blocks:
+
+```xml
+<resolved-context ref="@src/auth.ts">
+[file contents]
+</resolved-context>
+```
+
+### Configuration
+
+Resolvers are configured under `context.resolvers`. Both built-in resolvers are on by default.
+
+```yaml
+# ra.config.yml
+context:
+  resolvers:
+    - name: file
+      enabled: true       # @ prefix — on by default
+    - name: url
+      enabled: true       # url: prefix — on by default
+    - name: issues
+      enabled: true
+      path: ./resolvers/github-issues.ts   # custom resolver
+```
+
+To disable a built-in resolver:
+
+```yaml
+context:
+  resolvers:
+    - name: file
+      enabled: false
+```
+
+### Custom Resolvers
+
+Write a TypeScript file that exports a `PatternResolver`:
+
+```ts
+// resolvers/github-issues.ts
+import type { PatternResolver } from '@chinmaymk/ra'
+
+export default {
+  name: 'issues',
+  pattern: /#(\d+)/g,
+  resolve: async (ref) => {
+    const res = await fetch(`https://api.github.com/repos/myorg/myrepo/issues/${ref}`)
+    if (!res.ok) return null
+    const issue = await res.json()
+    return `[Issue #${ref}] ${issue.title}\n\n${issue.body}`
+  },
+} satisfies PatternResolver
+```
+
+The `pattern` regex must have one capture group — the captured value is passed to `resolve()`. Return `null` to skip a match.
 
 ## Architecture
 

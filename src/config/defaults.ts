@@ -40,6 +40,10 @@ export const defaultConfig: RaConfig = {
   context: {
     enabled: true,
     patterns: [],
+    resolvers: [
+      { name: 'file', enabled: true },
+      { name: 'url', enabled: true },
+    ],
   },
   compaction: {
     enabled: true,

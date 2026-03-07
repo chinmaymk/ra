@@ -79,5 +79,6 @@ Same config. Same skills. Same binary. The interface changes, the agent doesn't.
 | **Middleware** | Hooks at every loop stage — before model call, after tool execution, on stream chunks, on errors |
 | **Skills** | Reusable instruction bundles — roles, behaviors, and assets |
 | **File attachments** | Attach files in CLI and REPL |
+| **Pattern resolution** | Reference files (`@path`), URLs (`url:...`), or custom sources inline in prompts — resolved automatically before the model sees the message |
 | **Session storage** | Persist conversations, resume later, auto-prune old ones |
 | **Layered config** | File → env → CLI override order; commit a baseline, tweak per-run |
