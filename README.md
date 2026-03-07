@@ -327,6 +327,24 @@ ra skill install github:user/repo@v2                  # pin to a tag
 
 Skills support multi-runtime scripts — bash, python, typescript, javascript, go — with shebang detection. Script output is injected into the conversation as context.
 
+### Built-in skills
+
+ra ships with six ready-to-use skills:
+
+| Skill | Purpose |
+|-------|---------|
+| `code-review` | Bug, security, performance, and readability review |
+| `architect` | System design with trade-off evaluation |
+| `planner` | Task breakdown and planning |
+| `debugger` | Bug investigation and root cause analysis |
+| `code-style` | Code style enforcement |
+| `writer` | Technical writing |
+
+```bash
+ra --skill architect "Design a queue system for email notifications"
+ra --skill debugger --file crash.log "Find the root cause"
+```
+
 ## Sessions
 
 ra persists every conversation as JSONL. Resume any session from any interface.
