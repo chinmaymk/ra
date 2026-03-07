@@ -35,12 +35,16 @@ async function resolveGlob(ref: string, cwd: string): Promise<string | null> {
     matches.push(match)
   }
   if (matches.length === 0) return null
-  const parts = await Promise.all(
+  const results = await Promise.allSettled(
     matches.map(async (match) => {
       const content = await Bun.file(resolve(cwd, match)).text()
       return `[${match}]\n${content}`
     })
   )
+  const parts = results
+    .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+    .map(r => r.value)
+  if (parts.length === 0) return null
   return parts.join('\n\n')
 }
 

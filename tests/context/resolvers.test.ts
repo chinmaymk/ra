@@ -94,6 +94,33 @@ describe('resolvePatterns', () => {
     const result = await resolvePatterns('', [echoResolver], '/tmp')
     expect(result.references).toEqual([])
   })
+
+  it('handles resolver with non-global pattern (no infinite loop)', async () => {
+    const nonGlobal: PatternResolver = {
+      name: 'nong',
+      pattern: /@(\w+)/, // no 'g' flag
+      async resolve(ref: string) {
+        return `resolved ${ref}`
+      },
+    }
+    const result = await resolvePatterns('@hello world', [nonGlobal], '/tmp')
+    expect(result.references).toHaveLength(1)
+    expect(result.references[0]!.ref).toBe('hello')
+  })
+
+  it('does not mutate the original resolver pattern lastIndex', async () => {
+    const resolver: PatternResolver = {
+      name: 'test',
+      pattern: /@(\w+)/g,
+      async resolve(ref: string) {
+        return `content of ${ref}`
+      },
+    }
+    resolver.pattern.lastIndex = 5
+    await resolvePatterns('@foo @bar', [resolver], '/tmp')
+    // Original regex should not have been mutated
+    expect(resolver.pattern.lastIndex).toBe(5)
+  })
 })
 
 describe('formatResolvedReferences', () => {
