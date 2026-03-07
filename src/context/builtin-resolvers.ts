@@ -11,7 +11,6 @@ export const fileResolver: PatternResolver = {
   // Stops at whitespace, commas, or end of string
   pattern: /@([\w.\/\-*{}[\]]+)/g,
   async resolve(ref: string, cwd: string): Promise<string | null> {
-    // Check if it's a glob pattern
     if (ref.includes('*') || ref.includes('{') || ref.includes('[')) {
       return resolveGlob(ref, cwd)
     }
@@ -21,22 +20,27 @@ export const fileResolver: PatternResolver = {
 
 async function resolveFile(ref: string, cwd: string): Promise<string | null> {
   const absPath = resolve(cwd, ref)
-  const file = Bun.file(absPath)
-  if (!(await file.exists())) return null
-  const content = await file.text()
-  const relPath = relative(cwd, absPath)
-  return `[${relPath}]\n${content}`
+  try {
+    const content = await Bun.file(absPath).text()
+    return `[${relative(cwd, absPath)}]\n${content}`
+  } catch {
+    return null
+  }
 }
 
 async function resolveGlob(ref: string, cwd: string): Promise<string | null> {
   const glob = new Bun.Glob(ref)
-  const parts: string[] = []
+  const matches: string[] = []
   for await (const match of glob.scan({ cwd, absolute: false, onlyFiles: true })) {
-    const absPath = resolve(cwd, match)
-    const content = await Bun.file(absPath).text()
-    parts.push(`[${match}]\n${content}`)
+    matches.push(match)
   }
-  if (parts.length === 0) return null
+  if (matches.length === 0) return null
+  const parts = await Promise.all(
+    matches.map(async (match) => {
+      const content = await Bun.file(resolve(cwd, match)).text()
+      return `[${match}]\n${content}`
+    })
+  )
   return parts.join('\n\n')
 }
 
@@ -53,18 +57,16 @@ export const urlResolver: PatternResolver = {
       const response = await fetch(ref)
       if (!response.ok) return `[${ref}] HTTP ${response.status}`
       const contentType = response.headers.get('content-type') ?? ''
+      const text = await response.text()
       if (contentType.includes('text/html')) {
-        // Simple HTML to text — strip tags
-        const html = await response.text()
-        const text = html
+        const stripped = text
           .replace(/<script[\s\S]*?<\/script>/gi, '')
           .replace(/<style[\s\S]*?<\/style>/gi, '')
           .replace(/<[^>]+>/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
-        return `[${ref}]\n${text.slice(0, 50_000)}`
+        return `[${ref}]\n${stripped.slice(0, 50_000)}`
       }
-      const text = await response.text()
       return `[${ref}]\n${text.slice(0, 50_000)}`
     } catch (err) {
       return `[${ref}] Error: ${err instanceof Error ? err.message : String(err)}`

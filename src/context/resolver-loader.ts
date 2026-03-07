@@ -1,8 +1,7 @@
-import { join, isAbsolute } from 'path'
-import { homedir } from 'os'
 import type { ResolverConfig } from './types'
 import type { PatternResolver } from './resolvers'
 import { builtinResolvers } from './builtin-resolvers'
+import { resolvePath } from '../utils/paths'
 
 /**
  * Load pattern resolvers from config.
@@ -25,17 +24,14 @@ export async function loadResolvers(
 
     // Custom resolver from file
     if (config.path) {
-      let resolved = isAbsolute(config.path) ? config.path : join(cwd, config.path)
-      if (config.path.startsWith('~/')) resolved = join(homedir(), config.path.slice(2))
+      const resolved = resolvePath(config.path, cwd)
       const mod = await import(resolved)
       const resolver = mod.default as PatternResolver
       if (!resolver || !resolver.pattern || typeof resolver.resolve !== 'function') {
         console.warn(`[ra] Resolver file "${resolved}" must export a default PatternResolver — skipping`)
         continue
       }
-      // Use the config name if the resolver doesn't have one
-      if (!resolver.name) resolver.name = config.name
-      resolvers.push(resolver)
+      resolvers.push({ ...resolver, name: resolver.name || config.name })
       continue
     }
 

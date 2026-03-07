@@ -49,25 +49,18 @@ export async function resolvePatterns(
   resolvers: PatternResolver[],
   cwd: string,
 ): Promise<ResolutionResult> {
-  interface PendingMatch {
-    original: string
-    ref: string
-    resolverName: string
-    resolve: Promise<string | null>
-  }
-
-  const pending: PendingMatch[] = []
+  const pending: { original: string; ref: string; resolverName: string; resolve: Promise<string | null> }[] = []
+  const seen = new Set<string>()
 
   for (const resolver of resolvers) {
-    // Clone regex to reset lastIndex (must be global)
-    const re = new RegExp(resolver.pattern.source, resolver.pattern.flags.includes('g') ? resolver.pattern.flags : resolver.pattern.flags + 'g')
+    // Reset lastIndex for stateful global regexes
+    resolver.pattern.lastIndex = 0
     let match: RegExpExecArray | null
-    while ((match = re.exec(text)) !== null) {
+    while ((match = resolver.pattern.exec(text)) !== null) {
       const original = match[0]!
       const ref = match[1]
-      if (!ref) continue
-      // Deduplicate: skip if we already have this exact original
-      if (pending.some(p => p.original === original)) continue
+      if (!ref || seen.has(original)) continue
+      seen.add(original)
       pending.push({
         original,
         ref,

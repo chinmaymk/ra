@@ -79,4 +79,20 @@ describe('createResolverMiddleware', () => {
     await mw(ctx)
     expect(ctx.request.messages[0]!.content).toBe('@foo')
   })
+
+  it('skips already-resolved messages on subsequent loop iterations', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      { role: 'user', content: 'look at @readme' },
+    ])
+    // First call — resolves
+    await mw(ctx)
+    const afterFirst = ctx.request.messages[0]!.content as string
+    expect(afterFirst).toContain('content of readme')
+
+    // Second call — should skip (marker present)
+    await mw(ctx)
+    const afterSecond = ctx.request.messages[0]!.content as string
+    expect(afterSecond).toBe(afterFirst) // unchanged
+  })
 })

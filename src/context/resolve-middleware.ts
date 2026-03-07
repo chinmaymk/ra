@@ -2,12 +2,14 @@ import type { ModelCallContext, Middleware } from '../agent/types'
 import type { PatternResolver } from './resolvers'
 import { resolvePatterns, formatResolvedReferences } from './resolvers'
 
+const RESOLVED_MARKER = '\n<!-- ra:resolved -->'
+
 /**
  * Creates a beforeModelCall middleware that resolves pattern references
  * in the last user message and appends resolved content.
  *
- * Only processes the last user message to avoid re-resolving
- * already-processed messages from earlier turns.
+ * Only processes the last user message. Skips messages already resolved
+ * (marked in a previous iteration) to avoid duplicate work in agentic loops.
  */
 export function createResolverMiddleware(
   resolvers: PatternResolver[],
@@ -30,7 +32,7 @@ export function createResolverMiddleware(
 
     const msg = messages[lastUserIdx]!
     const text = typeof msg.content === 'string' ? msg.content : null
-    if (!text) return
+    if (!text || text.includes(RESOLVED_MARKER)) return
 
     const result = await resolvePatterns(text, resolvers, cwd)
     if (result.references.length === 0) return
@@ -38,7 +40,7 @@ export function createResolverMiddleware(
     const resolved = formatResolvedReferences(result.references)
     messages[lastUserIdx] = {
       ...msg,
-      content: `${text}\n\n${resolved}`,
+      content: `${text}\n\n${resolved}${RESOLVED_MARKER}`,
     }
   }
 }
