@@ -61,6 +61,8 @@ export async function resolvePatterns(
     const re = new RegExp(resolver.pattern.source, flags)
     let match: RegExpExecArray | null
     while ((match = re.exec(text)) !== null) {
+      // Guard against zero-length matches that would loop forever
+      if (match[0]!.length === 0) { re.lastIndex++; continue }
       const original = match[0]!
       const ref = match[1]
       if (!ref || seen.has(original)) continue

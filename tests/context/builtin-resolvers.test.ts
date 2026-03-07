@@ -59,4 +59,44 @@ describe('fileResolver', () => {
     const result = await fileResolver.resolve('*.xyz', dir)
     expect(result).toBeNull()
   })
+
+  it('does not match email addresses', () => {
+    const re = new RegExp(fileResolver.pattern.source, fileResolver.pattern.flags)
+    const text = 'send to user@example.com for help'
+    const m = re.exec(text)
+    expect(m).toBeNull()
+  })
+
+  it('matches @ at start of line', () => {
+    const re = new RegExp(fileResolver.pattern.source, fileResolver.pattern.flags)
+    const text = '@src/index.ts is the entry point'
+    const m = re.exec(text)
+    expect(m).not.toBeNull()
+    expect(m![1]).toBe('src/index.ts')
+  })
+
+  it('matches @ after whitespace', () => {
+    const re = new RegExp(fileResolver.pattern.source, fileResolver.pattern.flags)
+    const text = 'check @src/utils.ts please'
+    const m = re.exec(text)
+    expect(m).not.toBeNull()
+    expect(m![1]).toBe('src/utils.ts')
+  })
+
+  it('blocks path traversal outside cwd', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ra-test-'))
+    await writeFile(join(dir, 'safe.txt'), 'safe content')
+    // Traversal attempt
+    const result = await fileResolver.resolve('../../etc/passwd', dir)
+    expect(result).toBeNull()
+  })
+
+  it('allows files within cwd', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ra-test-'))
+    await mkdir(join(dir, 'sub'))
+    await writeFile(join(dir, 'sub', 'file.txt'), 'nested content')
+    const result = await fileResolver.resolve('sub/file.txt', dir)
+    expect(result).not.toBeNull()
+    expect(result).toContain('nested content')
+  })
 })

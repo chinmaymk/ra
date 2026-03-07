@@ -108,6 +108,19 @@ describe('resolvePatterns', () => {
     expect(result.references[0]!.ref).toBe('hello')
   })
 
+  it('handles zero-length match patterns without infinite loop', async () => {
+    const zeroLen: PatternResolver = {
+      name: 'zerolen',
+      pattern: /()/g, // matches empty string at every position
+      async resolve() {
+        return 'should not accumulate'
+      },
+    }
+    // Should terminate without hanging
+    const result = await resolvePatterns('hello', [zeroLen], '/tmp')
+    expect(result.references).toEqual([])
+  })
+
   it('does not mutate the original resolver pattern lastIndex', async () => {
     const resolver: PatternResolver = {
       name: 'test',

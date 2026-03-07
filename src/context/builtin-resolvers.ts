@@ -7,9 +7,9 @@ import type { PatternResolver } from './resolvers'
  */
 export const fileResolver: PatternResolver = {
   name: 'file',
-  // Matches @<path> where path is word chars, dots, slashes, hyphens, asterisks, braces
-  // Stops at whitespace, commas, or end of string
-  pattern: /@([\w.\/\-*{}[\]]+)/g,
+  // Matches @<path> where path is word chars, dots, slashes, hyphens, asterisks, braces.
+  // Negative lookbehind prevents matching email addresses (user@domain.com).
+  pattern: /(?<!\w)@([\w.\/\-*{}[\]]+)/g,
   async resolve(ref: string, cwd: string): Promise<string | null> {
     if (ref.includes('*') || ref.includes('{') || ref.includes('[')) {
       return resolveGlob(ref, cwd)
@@ -20,6 +20,8 @@ export const fileResolver: PatternResolver = {
 
 async function resolveFile(ref: string, cwd: string): Promise<string | null> {
   const absPath = resolve(cwd, ref)
+  // Prevent path traversal outside the working directory
+  if (!absPath.startsWith(cwd + '/') && absPath !== cwd) return null
   try {
     const content = await Bun.file(absPath).text()
     return `[${relative(cwd, absPath)}]\n${content}`

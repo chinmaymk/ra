@@ -2,7 +2,6 @@
 import { loadConfig } from './config'
 import { discoverContextFiles, buildContextMessages } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
-import { builtinResolvers } from './context/builtin-resolvers'
 import { loadResolvers } from './context/resolver-loader'
 import { loadMiddleware } from './middleware/loader'
 import { createProvider, buildProviderConfig } from './providers/registry'
