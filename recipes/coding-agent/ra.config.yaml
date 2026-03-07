@@ -5,7 +5,6 @@ interface: repl
 skills:
   - coding-agent
 skillDirs:
-  - ./recipes/coding-agent/skills
   - ./skills
 
 builtinTools: true

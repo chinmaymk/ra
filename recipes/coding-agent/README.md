@@ -10,14 +10,15 @@ A general-purpose coding agent built with ra. Reads, writes, debugs, and navigat
 ## Quick Start
 
 ```bash
-# From the repository root
-bun install
+# Copy the recipe into your project
+cp -r recipes/coding-agent /path/to/your/project/.ra
 
-# Start interactive session (REPL)
-ra --config recipes/coding-agent/ra.config.yaml
+# Or use it directly
+cd recipes/coding-agent
+ra
 
 # One-shot mode
-ra --config recipes/coding-agent/ra.config.yaml --interface cli "add error handling to src/server.ts"
+ra --interface cli "add error handling to src/server.ts"
 ```
 
 ## Capabilities
