@@ -1,0 +1,18 @@
+provider: anthropic
+model: claude-opus-4-6
+interface: repl
+
+skills:
+  - coding-agent
+skillDirs:
+  - ./skills
+
+builtinTools: true
+
+maxIterations: 200
+
+thinking: high
+
+compaction:
+  enabled: true
+  threshold: 0.8
