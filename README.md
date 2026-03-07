@@ -20,7 +20,11 @@
 
 ---
 
-Every message, every tool call, every stream chunk — visible and interceptable. Start with a config file and add code only where you need it. One binary becomes a CLI tool, an interactive REPL, a streaming HTTP API, or an MCP server.
+## What is ra?
+
+ra is an open-source AI agent framework that gives you full control over the agentic loop. It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server.
+
+Most agent frameworks hide the conversation behind high-level abstractions. ra takes the opposite approach: every message, every tool call, every stream chunk is visible and interceptable through middleware hooks. You configure the common stuff in YAML and drop down to TypeScript only where you need custom logic.
 
 ```bash
 ra "What is the capital of France?"
