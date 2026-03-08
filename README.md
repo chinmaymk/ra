@@ -15,6 +15,7 @@
   <a href="#skills">Skills</a> &middot;
   <a href="#mcp">MCP</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
+  <a href="#observability">Observability</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
   <a href="#configuration">Configuration</a>
 </p>

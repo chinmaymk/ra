@@ -18,6 +18,24 @@ function mockProvider(responses: StreamChunk[][]): IProvider {
   }
 }
 
+function throwingProvider(error: Error): IProvider {
+  return {
+    name: 'mock',
+    chat: async () => { throw error },
+    async *stream() { throw error },
+  }
+}
+
+function parseOutput(captured: string[]) {
+  const all = captured
+    .map(line => { try { return JSON.parse(line.trim()) } catch { return null } })
+    .filter(Boolean) as Record<string, unknown>[]
+  return {
+    logs: all.filter(e => e.level),
+    spans: all.filter(e => e.type === 'span'),
+  }
+}
+
 describe('observability middleware', () => {
   let captured: string[]
   let originalWrite: typeof process.stderr.write
@@ -56,24 +74,19 @@ describe('observability middleware', () => {
 
     await loop.run([{ role: 'user', content: 'hi' }])
 
-    const logs = captured
-      .map(line => { try { return JSON.parse(line.trim()) } catch { return null } })
-      .filter(Boolean)
-
-    const logEntries = logs.filter((e: Record<string, unknown>) => e.level)
-    const traceRecords = logs.filter((e: Record<string, unknown>) => e.type === 'span')
+    const { logs, spans } = parseOutput(captured)
 
     // Should have logs for: loop start, iteration start (debug), model response, iteration complete (debug), loop complete
-    expect(logEntries.length).toBeGreaterThanOrEqual(3)
-    expect(logEntries.some((e: Record<string, unknown>) => e.message === 'agent loop starting')).toBe(true)
-    expect(logEntries.some((e: Record<string, unknown>) => e.message === 'model responded')).toBe(true)
-    expect(logEntries.some((e: Record<string, unknown>) => e.message === 'agent loop complete')).toBe(true)
+    expect(logs.length).toBeGreaterThanOrEqual(3)
+    expect(logs.some(e => e.message === 'agent loop starting')).toBe(true)
+    expect(logs.some(e => e.message === 'model responded')).toBe(true)
+    expect(logs.some(e => e.message === 'agent loop complete')).toBe(true)
 
     // Should have trace spans: agent.loop, agent.iteration, agent.model_call
-    expect(traceRecords.length).toBe(3)
-    expect(traceRecords.some((r: Record<string, unknown>) => r.name === 'agent.loop')).toBe(true)
-    expect(traceRecords.some((r: Record<string, unknown>) => r.name === 'agent.iteration')).toBe(true)
-    expect(traceRecords.some((r: Record<string, unknown>) => r.name === 'agent.model_call')).toBe(true)
+    expect(spans.length).toBe(3)
+    expect(spans.some(r => r.name === 'agent.loop')).toBe(true)
+    expect(spans.some(r => r.name === 'agent.iteration')).toBe(true)
+    expect(spans.some(r => r.name === 'agent.model_call')).toBe(true)
   })
 
   it('logs tool execution via middleware hooks', async () => {
@@ -106,14 +119,15 @@ describe('observability middleware', () => {
 
     await loop.run([{ role: 'user', content: 'echo hi' }])
 
-    const logs = captured
-      .map(line => { try { return JSON.parse(line.trim()) } catch { return null } })
-      .filter(Boolean)
+    const { logs, spans } = parseOutput(captured)
 
-    const logEntries = logs.filter((e: Record<string, unknown>) => e.level)
+    expect(logs.some(e => e.message === 'executing tool' && e.tool === 'echo')).toBe(true)
+    expect(logs.some(e => e.message === 'tool execution complete' && e.tool === 'echo')).toBe(true)
 
-    expect(logEntries.some((e: Record<string, unknown>) => e.message === 'executing tool' && e.tool === 'echo')).toBe(true)
-    expect(logEntries.some((e: Record<string, unknown>) => e.message === 'tool execution complete' && e.tool === 'echo')).toBe(true)
+    // Tool execution span should be emitted
+    expect(spans.some(r => r.name === 'agent.tool_execution')).toBe(true)
+    const toolSpan = spans.find(r => r.name === 'agent.tool_execution')
+    expect(toolSpan!.status).toBe('ok')
   })
 
   it('does not touch the loop when using noop logger/tracer', async () => {
@@ -132,5 +146,106 @@ describe('observability middleware', () => {
     await loop.run([{ role: 'user', content: 'test' }])
     // No output captured
     expect(captured).toHaveLength(0)
+  })
+
+  it('ends all child spans on error and includes stack trace', async () => {
+    const logger = new Logger({ level: 'info', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    const boom = new Error('provider exploded')
+    const provider = throwingProvider(boom)
+
+    const loop = new AgentLoop({
+      provider,
+      tools: new ToolRegistry(),
+      maxIterations: 10,
+      middleware: obsMw,
+    })
+
+    await expect(loop.run([{ role: 'user', content: 'hi' }])).rejects.toThrow('provider exploded')
+
+    const { logs, spans } = parseOutput(captured)
+
+    // Error log should include stack trace
+    const errorLog = logs.find(e => e.message === 'agent loop failed')
+    expect(errorLog).toBeDefined()
+    expect(errorLog!.stack).toContain('provider exploded')
+    expect(errorLog!.phase).toBe('stream')
+
+    // All opened spans should be closed (model_call, iteration, loop)
+    // model_call and iteration are opened in beforeModelCall, then drained in onError
+    const modelSpan = spans.find(r => r.name === 'agent.model_call')
+    const iterSpan = spans.find(r => r.name === 'agent.iteration')
+    const loopSpan = spans.find(r => r.name === 'agent.loop')
+
+    expect(modelSpan).toBeDefined()
+    expect(modelSpan!.status).toBe('error')
+    expect(iterSpan).toBeDefined()
+    expect(iterSpan!.status).toBe('error')
+    expect(loopSpan).toBeDefined()
+    expect(loopSpan!.status).toBe('error')
+
+    // Loop span should include stack in attributes
+    expect((loopSpan!.attributes as Record<string, unknown>).stack).toContain('provider exploded')
+  })
+
+  it('is safe to reuse across multiple loop runs', async () => {
+    const logger = new Logger({ level: 'info', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    // Run 1: succeeds
+    const provider1 = mockProvider([
+      [{ type: 'text', delta: 'ok' }, { type: 'done', usage: { inputTokens: 5, outputTokens: 3 } }],
+    ])
+    const loop1 = new AgentLoop({ provider: provider1, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
+    await loop1.run([{ role: 'user', content: 'run1' }])
+
+    const firstRunOutput = [...captured]
+    captured.length = 0
+
+    // Run 2: succeeds with same middleware
+    const provider2 = mockProvider([
+      [{ type: 'text', delta: 'ok' }, { type: 'done', usage: { inputTokens: 5, outputTokens: 3 } }],
+    ])
+    const loop2 = new AgentLoop({ provider: provider2, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
+    await loop2.run([{ role: 'user', content: 'run2' }])
+
+    const { logs, spans } = parseOutput(captured)
+
+    // Second run should have its own complete set of spans
+    expect(spans.filter(r => r.name === 'agent.loop')).toHaveLength(1)
+    expect(spans.filter(r => r.name === 'agent.iteration')).toHaveLength(1)
+    expect(spans.filter(r => r.name === 'agent.model_call')).toHaveLength(1)
+
+    // All spans should be ok (no error leakage from previous run)
+    expect(spans.every(r => r.status === 'ok')).toBe(true)
+  })
+
+  it('is safe to reuse after a failed run', async () => {
+    const logger = new Logger({ level: 'info', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    // Run 1: fails
+    const badProvider = throwingProvider(new Error('crash'))
+    const loop1 = new AgentLoop({ provider: badProvider, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
+    await loop1.run([{ role: 'user', content: 'run1' }]).catch(() => {})
+
+    captured.length = 0
+
+    // Run 2: succeeds with same middleware
+    const goodProvider = mockProvider([
+      [{ type: 'text', delta: 'ok' }, { type: 'done', usage: { inputTokens: 5, outputTokens: 3 } }],
+    ])
+    const loop2 = new AgentLoop({ provider: goodProvider, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
+    await loop2.run([{ role: 'user', content: 'run2' }])
+
+    const { spans } = parseOutput(captured)
+
+    // Second run should produce clean spans with no error status leakage
+    expect(spans.filter(r => r.name === 'agent.loop')).toHaveLength(1)
+    expect(spans.find(r => r.name === 'agent.loop')!.status).toBe('ok')
   })
 })

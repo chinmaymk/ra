@@ -8,13 +8,33 @@ import type { Tracer, Span } from './tracer'
  * need to be threaded through the rest of the codebase.
  */
 export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): Partial<MiddlewareConfig> {
-  let loopSpan: Span
-  let iterationSpan: Span
-  let modelSpan: Span
+  let loopSpan: Span | undefined
+  let iterationSpan: Span | undefined
+  let modelSpan: Span | undefined
   const toolSpans = new Map<string, Span>()
   let iterationStartMessageCount = 0
 
+  /** End all open child spans with error status and clear state for reuse. */
+  function drainOpenSpans(status: 'ok' | 'error', attrs?: Record<string, unknown>): void {
+    for (const [id, span] of toolSpans) {
+      tracer.endSpan(span, status, attrs)
+      toolSpans.delete(id)
+    }
+    if (modelSpan) {
+      tracer.endSpan(modelSpan, status, attrs)
+      modelSpan = undefined
+    }
+    if (iterationSpan) {
+      tracer.endSpan(iterationSpan, status, attrs)
+      iterationSpan = undefined
+    }
+  }
+
   const beforeLoopBegin = async (ctx: LoopContext): Promise<void> => {
+    // Reset state for reuse across multiple loop runs
+    drainOpenSpans('error', { reason: 'stale_from_previous_run' })
+    loopSpan = undefined
+
     logger.setSessionId(ctx.sessionId)
     tracer.setSessionId(ctx.sessionId)
 
@@ -35,7 +55,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     iterationSpan = tracer.startSpan('agent.iteration', {
       iteration: ctx.loop.iteration,
       messageCount: ctx.request.messages.length,
-    }, loopSpan.spanId)
+    }, loopSpan?.spanId)
 
     modelSpan = tracer.startSpan('agent.model_call', {
       model: ctx.request.model,
@@ -56,14 +76,17 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     const toolNames = toolCalls?.map(t => t.name) ?? []
     const responseText = typeof lastMsg?.content === 'string' ? lastMsg.content : ''
 
-    tracer.endSpan(modelSpan, 'ok', {
-      inputTokens: usage?.inputTokens,
-      outputTokens: usage?.outputTokens,
-      thinkingTokens: usage?.thinkingTokens ?? null,
-      toolCallCount: toolNames.length,
-      toolNames,
-      responseLength: responseText.length,
-    })
+    if (modelSpan) {
+      tracer.endSpan(modelSpan, 'ok', {
+        inputTokens: usage?.inputTokens,
+        outputTokens: usage?.outputTokens,
+        thinkingTokens: usage?.thinkingTokens ?? null,
+        toolCallCount: toolNames.length,
+        toolNames,
+        responseLength: responseText.length,
+      })
+      modelSpan = undefined
+    }
 
     logger.info('model responded', {
       iteration: ctx.loop.iteration,
@@ -79,7 +102,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     const span = tracer.startSpan('agent.tool_execution', {
       tool: ctx.toolCall.name,
       toolCallId: ctx.toolCall.id,
-    }, iterationSpan.spanId)
+    }, iterationSpan?.spanId)
     toolSpans.set(ctx.toolCall.id, span)
 
     logger.info('executing tool', {
@@ -116,10 +139,13 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
 
   const afterLoopIteration = async (ctx: LoopContext): Promise<void> => {
     const messagesAdded = ctx.messages.length - iterationStartMessageCount
-    tracer.endSpan(iterationSpan, 'ok', {
-      iteration: ctx.iteration,
-      messagesAdded,
-    })
+    if (iterationSpan) {
+      tracer.endSpan(iterationSpan, 'ok', {
+        iteration: ctx.iteration,
+        messagesAdded,
+      })
+      iterationSpan = undefined
+    }
 
     logger.debug('iteration complete', {
       iteration: ctx.iteration,
@@ -129,12 +155,15 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
   }
 
   const afterLoopComplete = async (ctx: LoopContext): Promise<void> => {
-    tracer.endSpan(loopSpan, 'ok', {
-      iterations: ctx.iteration,
-      inputTokens: ctx.usage.inputTokens,
-      outputTokens: ctx.usage.outputTokens,
-      totalMessages: ctx.messages.length,
-    })
+    if (loopSpan) {
+      tracer.endSpan(loopSpan, 'ok', {
+        iterations: ctx.iteration,
+        inputTokens: ctx.usage.inputTokens,
+        outputTokens: ctx.usage.outputTokens,
+        totalMessages: ctx.messages.length,
+      })
+      loopSpan = undefined
+    }
 
     logger.info('agent loop complete', {
       iterations: ctx.iteration,
@@ -145,11 +174,19 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
   }
 
   const onError = async (ctx: ErrorContext): Promise<void> => {
-    tracer.endSpan(loopSpan, 'error', {
-      error: ctx.error.message,
-      phase: ctx.phase,
-      iterations: ctx.loop.iteration,
-    })
+    const errorAttrs = { error: ctx.error.message, phase: ctx.phase }
+
+    // End any open child spans before closing the root
+    drainOpenSpans('error', errorAttrs)
+
+    if (loopSpan) {
+      tracer.endSpan(loopSpan, 'error', {
+        ...errorAttrs,
+        stack: ctx.error.stack,
+        iterations: ctx.loop.iteration,
+      })
+      loopSpan = undefined
+    }
 
     logger.error('agent loop failed', {
       error: ctx.error.message,
