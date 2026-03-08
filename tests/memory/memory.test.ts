@@ -29,6 +29,11 @@ describe('MemoryStore', () => {
     expect(store.count()).toBe(1)
   })
 
+  it('saves with empty tags by default', () => {
+    const m = store.save('hello')
+    expect(m.tags).toBe('')
+  })
+
   it('searches via FTS', () => {
     store.save('User prefers dark mode', 'preference')
     store.save('Project uses React and TypeScript', 'tech')
@@ -55,6 +60,22 @@ describe('MemoryStore', () => {
     expect(store.search('golang')).toHaveLength(0)
   })
 
+  it('returns empty for empty query', () => {
+    store.save('hello world')
+    expect(store.search('')).toHaveLength(0)
+  })
+
+  it('handles FTS5 special characters gracefully', () => {
+    store.save('User said "hello world"')
+    store.save('React AND TypeScript')
+
+    // These would throw without try/catch — FTS5 syntax errors
+    expect(store.search('"unmatched')).toHaveLength(0)
+    expect(store.search('(unclosed')).toHaveLength(0)
+    expect(store.search('***')).toHaveLength(0)
+    expect(store.search('OR')).toHaveLength(0)
+  })
+
   it('forgets by search query', () => {
     store.save('User prefers tabs', 'preference')
     store.save('User prefers dark mode', 'preference')
@@ -78,6 +99,28 @@ describe('MemoryStore', () => {
     expect(store.forget('nonexistent')).toBe(0)
   })
 
+  it('forget returns 0 for empty query', () => {
+    store.save('hello')
+    expect(store.forget('')).toBe(0)
+    expect(store.count()).toBe(1)
+  })
+
+  it('forget handles FTS5 special characters gracefully', () => {
+    store.save('test memory')
+    expect(store.forget('"unmatched')).toBe(0)
+    expect(store.count()).toBe(1)
+  })
+
+  it('FTS index stays in sync after forget', () => {
+    store.save('React is great', 'tech')
+    store.save('React is fast', 'tech')
+    store.forget('great')
+
+    const results = store.search('React')
+    expect(results).toHaveLength(1)
+    expect(results[0]!.content).toBe('React is fast')
+  })
+
   it('lists recent memories', () => {
     store.save('first')
     store.save('second')
@@ -97,6 +140,34 @@ describe('MemoryStore', () => {
     expect(list[2]!.content).toBe('Mem 2')
     small.close()
   })
+
+  it('trim is no-op when under maxMemories', () => {
+    store.save('one')
+    store.save('two')
+    store.trim()
+    expect(store.count()).toBe(2)
+  })
+
+  it('prune is no-op when no memories are expired', () => {
+    store.save('recent')
+    store.prune()
+    expect(store.count()).toBe(1)
+  })
+
+  it('persists data across close and reopen', () => {
+    store.save('persistent fact', 'important')
+    store.close()
+
+    const reopened = new MemoryStore({ path: DB_PATH, maxMemories: 100, ttlDays: 30 })
+    expect(reopened.count()).toBe(1)
+    const results = reopened.search('persistent')
+    expect(results).toHaveLength(1)
+    expect(results[0]!.content).toBe('persistent fact')
+    reopened.close()
+
+    // Prevent afterEach from double-closing
+    store = new MemoryStore({ path: join(TMP, 'dummy.db'), maxMemories: 100, ttlDays: 30 })
+  })
 })
 
 describe('memory tools', () => {
@@ -115,6 +186,12 @@ describe('memory tools', () => {
     expect(await search.execute({ query: 'nothing' })).toBe('No memories found.')
   })
 
+  it('memory_search handles bad FTS queries gracefully', async () => {
+    const search = memorySearchTool(store)
+    store.save('some data')
+    expect(await search.execute({ query: '"unmatched' })).toBe('No memories found.')
+  })
+
   it('memory_forget deletes matching memories', async () => {
     store.save('User prefers tabs')
     store.save('User prefers dark mode')
@@ -130,6 +207,22 @@ describe('memory tools', () => {
     const forget = memoryForgetTool(store)
     const result = await forget.execute({ query: 'nothing' }) as string
     expect(result).toContain('No matching')
+  })
+
+  it('memory_forget handles bad FTS queries gracefully', async () => {
+    store.save('some data')
+    const forget = memoryForgetTool(store)
+    const result = await forget.execute({ query: '(unclosed' }) as string
+    expect(result).toContain('No matching')
+    expect(store.count()).toBe(1)
+  })
+
+  it('memory_save trims when over limit', async () => {
+    const small = new MemoryStore({ path: join(TMP, 'tool-trim.db'), maxMemories: 3, ttlDays: 30 })
+    const save = memorySaveTool(small)
+    for (let i = 0; i < 5; i++) await save.execute({ content: `Item ${i}` })
+    expect(small.count()).toBe(3)
+    small.close()
   })
 })
 

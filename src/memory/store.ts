@@ -23,6 +23,7 @@ export class MemoryStore {
     this.db = new Database(options.path)
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS memories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         content TEXT NOT NULL,
@@ -48,9 +49,14 @@ export class MemoryStore {
   }
 
   search(query: string, limit = 10): Memory[] {
-    return this.db.prepare(
-      'SELECT m.id, m.content, m.tags, m.created_at AS createdAt FROM memories_fts f JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?',
-    ).all(query, limit) as Memory[]
+    if (!query) return []
+    try {
+      return this.db.prepare(
+        'SELECT m.id, m.content, m.tags, m.created_at AS createdAt FROM memories_fts f JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?',
+      ).all(query, limit) as Memory[]
+    } catch {
+      return []
+    }
   }
 
   list(limit = 20): Memory[] {
@@ -60,9 +66,15 @@ export class MemoryStore {
   }
 
   forget(query: string, limit = 10): number {
-    const ids = this.db.prepare(
-      'SELECT m.id FROM memories_fts f JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?',
-    ).all(query, limit) as { id: number }[]
+    if (!query) return 0
+    let ids: { id: number }[]
+    try {
+      ids = this.db.prepare(
+        'SELECT m.id FROM memories_fts f JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?',
+      ).all(query, limit) as { id: number }[]
+    } catch {
+      return 0
+    }
     if (ids.length === 0) return 0
     this.db.prepare(`DELETE FROM memories WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids.map(r => r.id))
     return ids.length
