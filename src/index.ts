@@ -275,10 +275,12 @@ async function main(): Promise<void> {
     provider,
     tools,
     model: config.model,
+    systemPrompt: config.systemPrompt,
     middleware,
     thinking: config.thinking,
     compaction: config.compaction,
     toolTimeout: config.toolTimeout,
+    config: config.toolConfig.subagent,
   }))
 
   // Agent handler shared by MCP transports

@@ -5,7 +5,7 @@ import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions } from './types'
 
 export { defaultConfig } from './defaults'
-export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig } from './types'
+export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig, ToolConfig, SubagentConfig } from './types'
 
 const CONFIG_FILES = [
   'ra.config.json',

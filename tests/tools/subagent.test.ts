@@ -38,11 +38,11 @@ describe('subagent tool', () => {
     const tool = subagentTool(baseOptions({
       responses: [[{ type: 'text', delta: 'answer-42' }, { type: 'done' }]],
     }))
-    const results = await tool.execute({ tasks: [{ task: 'What is 6*7?' }] }) as any[]
-    expect(results).toHaveLength(1)
-    expect(results[0].status).toBe('completed')
-    expect(results[0].result).toBe('answer-42')
-    expect(results[0].task).toBe('What is 6*7?')
+    const out = await tool.execute({ tasks: [{ task: 'What is 6*7?' }] }) as any
+    expect(out.results).toHaveLength(1)
+    expect(out.results[0].status).toBe('completed')
+    expect(out.results[0].result).toBe('answer-42')
+    expect(out.results[0].task).toBe('What is 6*7?')
   })
 
   it('runs multiple tasks in parallel', async () => {
@@ -58,12 +58,12 @@ describe('subagent tool', () => {
     }
 
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
-    const results = await tool.execute({
+    const out = await tool.execute({
       tasks: [{ task: 'task-a' }, { task: 'task-b' }, { task: 'task-c' }],
-    }) as any[]
+    }) as any
 
-    expect(results).toHaveLength(3)
-    expect(results.every((r: any) => r.status === 'completed')).toBe(true)
+    expect(out.results).toHaveLength(3)
+    expect(out.results.every((r: any) => r.status === 'completed')).toBe(true)
   })
 
   it('passes systemPrompt to subagent messages', async () => {
@@ -92,13 +92,34 @@ describe('subagent tool', () => {
       [{ type: 'text', delta: 'hi' }, { type: 'done', usage: { inputTokens: 100, outputTokens: 50 } }],
     ])
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
-    const results = await tool.execute({ tasks: [{ task: 'test' }] }) as any[]
-    expect(results[0].usage.inputTokens).toBe(100)
-    expect(results[0].usage.outputTokens).toBe(50)
+    const out = await tool.execute({ tasks: [{ task: 'test' }] }) as any
+    expect(out.results[0].usage.inputTokens).toBe(100)
+    expect(out.results[0].usage.outputTokens).toBe(50)
   })
 
-  it('maxConcurrency is reflected in schema maxItems', () => {
-    const tool = subagentTool(baseOptions({ maxConcurrency: 2 }))
+  it('returns aggregate usage across all tasks', async () => {
+    let callIndex = 0
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream() {
+        callIndex++
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const, usage: { inputTokens: 100, outputTokens: 50 } }
+      },
+    }
+
+    const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
+    const out = await tool.execute({
+      tasks: [{ task: 'a' }, { task: 'b' }, { task: 'c' }],
+    }) as any
+
+    expect(out.usage.inputTokens).toBe(300)
+    expect(out.usage.outputTokens).toBe(150)
+  })
+
+  it('maxConcurrency from config is reflected in schema maxItems', () => {
+    const tool = subagentTool(baseOptions({ config: { maxConcurrency: 2 } }))
     const tasksSchema = (tool.inputSchema.properties as any).tasks
     expect(tasksSchema.maxItems).toBe(2)
   })
@@ -121,12 +142,12 @@ describe('subagent tool', () => {
     }
 
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
-    const results = await tool.execute({
+    const out = await tool.execute({
       tasks: [{ task: 'good task' }, { task: 'bad task' }],
-    }) as any[]
+    }) as any
 
-    expect(results).toHaveLength(2)
-    const statuses = results.map((r: any) => r.status).sort()
+    expect(out.results).toHaveLength(2)
+    const statuses = out.results.map((r: any) => r.status).sort()
     expect(statuses).toEqual(['completed', 'error'])
   })
 
@@ -144,9 +165,9 @@ describe('subagent tool', () => {
     // The loop always pushes an assistant message even with empty text
     const provider = mockProvider([[{ type: 'done' as const }]])
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
-    const results = await tool.execute({ tasks: [{ task: 'silent' }] }) as any[]
-    expect(results[0].status).toBe('completed')
-    expect(results[0].result).toBe('')
+    const out = await tool.execute({ tasks: [{ task: 'silent' }] }) as any
+    expect(out.results[0].status).toBe('completed')
+    expect(out.results[0].result).toBe('')
   })
 
   // ── Tool isolation (bug fixes) ──────────────────────────────────
@@ -178,11 +199,11 @@ describe('subagent tool', () => {
     }
 
     const tool = subagentTool({ provider, tools, model: 'test' })
-    const results = await tool.execute({ tasks: [{ task: 'greet world' }] }) as any[]
+    const out = await tool.execute({ tasks: [{ task: 'greet world' }] }) as any
 
     expect(toolExecuted).toBe(true)
-    expect(results[0].status).toBe('completed')
-    expect(results[0].iterations).toBe(2)
+    expect(out.results[0].status).toBe('completed')
+    expect(out.results[0].iterations).toBe(2)
   })
 
   it('excludes ask_user from subagent child tools', async () => {
@@ -280,7 +301,7 @@ describe('subagent tool', () => {
 
   // ── maxIterations ────────────────────────────────────────────────
 
-  it('respects maxIterations per subagent', async () => {
+  it('respects maxTurns per subagent from config', async () => {
     const infiniteToolCall: StreamChunk[] = [
       { type: 'tool_call_start', id: 'tc1', name: 'noop' },
       { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
@@ -291,10 +312,200 @@ describe('subagent tool', () => {
     tools.register({ name: 'noop', description: 'noop', inputSchema: {}, execute: async () => 'ok' })
     const provider = mockProvider(Array(100).fill(infiniteToolCall))
 
-    const tool = subagentTool({ provider, tools, model: 'test', maxIterations: 3 })
-    const results = await tool.execute({ tasks: [{ task: 'loop forever' }] }) as any[]
+    const tool = subagentTool({ provider, tools, model: 'test', config: { maxTurns: 3 } })
+    const out = await tool.execute({ tasks: [{ task: 'loop forever' }] }) as any
 
-    expect(results[0].status).toBe('completed')
-    expect(results[0].iterations).toBeLessThanOrEqual(3)
+    expect(out.results[0].status).toBe('completed')
+    expect(out.results[0].iterations).toBeLessThanOrEqual(3)
+  })
+
+  // ── Config: model override ──────────────────────────────────────
+
+  it('uses config model override for subagent', async () => {
+    let capturedModel = ''
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req: ChatRequest) {
+        capturedModel = req.model
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({
+      provider, tools: new ToolRegistry(), model: 'parent-model',
+      config: { model: 'child-model' },
+    })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedModel).toBe('child-model')
+  })
+
+  it('falls back to parent model when config.model not set', async () => {
+    let capturedModel = ''
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req: ChatRequest) {
+        capturedModel = req.model
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'parent-model' })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedModel).toBe('parent-model')
+  })
+
+  // ── Config: system prompt ──────────────────────────────────────
+
+  it('system defaults to none — no system message injected', async () => {
+    const capturedMessages: any[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req) {
+        capturedMessages.push(...req.messages)
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({
+      provider, tools: new ToolRegistry(), model: 'test',
+      systemPrompt: 'Parent system prompt',
+    })
+    await tool.execute({ tasks: [{ task: 'do something' }] })
+
+    expect(capturedMessages.some((m: any) => m.role === 'system')).toBe(false)
+  })
+
+  it('system=inherit passes parent system prompt', async () => {
+    const capturedMessages: any[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req) {
+        capturedMessages.push(...req.messages)
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({
+      provider, tools: new ToolRegistry(), model: 'test',
+      systemPrompt: 'You are a coding assistant.',
+      config: { system: 'inherit' },
+    })
+    await tool.execute({ tasks: [{ task: 'do something' }] })
+
+    expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'You are a coding assistant.')).toBe(true)
+  })
+
+  it('system=custom string uses that string', async () => {
+    const capturedMessages: any[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req) {
+        capturedMessages.push(...req.messages)
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({
+      provider, tools: new ToolRegistry(), model: 'test',
+      systemPrompt: 'Parent prompt',
+      config: { system: 'Be concise and helpful.' },
+    })
+    await tool.execute({ tasks: [{ task: 'do something' }] })
+
+    expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'Be concise and helpful.')).toBe(true)
+  })
+
+  it('per-task systemPrompt overrides config system', async () => {
+    const capturedMessages: any[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req) {
+        capturedMessages.push(...req.messages)
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({
+      provider, tools: new ToolRegistry(), model: 'test',
+      systemPrompt: 'Parent prompt',
+      config: { system: 'inherit' },
+    })
+    await tool.execute({
+      tasks: [{ task: 'do something', systemPrompt: 'Task-specific prompt.' }],
+    })
+
+    expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'Task-specific prompt.')).toBe(true)
+    expect(capturedMessages.some((m: any) => m.content === 'Parent prompt')).toBe(false)
+  })
+
+  // ── Config: allowedTools ──────────────────────────────────────
+
+  it('allowedTools restricts which tools subagents get', async () => {
+    const capturedTools: string[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req: ChatRequest) {
+        for (const t of req.tools ?? []) capturedTools.push(t.name)
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tools = new ToolRegistry()
+    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
+    tools.register({ name: 'write_file', description: 'write', inputSchema: {}, execute: async () => 'ok' })
+    tools.register({ name: 'shell', description: 'shell', inputSchema: {}, execute: async () => 'ok' })
+
+    const tool = subagentTool({
+      provider, tools, model: 'test',
+      config: { allowedTools: ['read_file', 'write_file'] },
+    })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedTools).toContain('read_file')
+    expect(capturedTools).toContain('write_file')
+    expect(capturedTools).not.toContain('shell')
+  })
+
+  it('allowedTools does not override EXCLUDED_TOOLS', async () => {
+    const capturedTools: string[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req: ChatRequest) {
+        for (const t of req.tools ?? []) capturedTools.push(t.name)
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tools = new ToolRegistry()
+    tools.register({ name: 'ask_user', description: 'ask', inputSchema: {}, execute: async () => 'answer' })
+    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
+
+    // Even if allowedTools includes ask_user, it should still be excluded
+    const tool = subagentTool({
+      provider, tools, model: 'test',
+      config: { allowedTools: ['ask_user', 'read_file'] },
+    })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedTools).toContain('read_file')
+    expect(capturedTools).not.toContain('ask_user')
   })
 })

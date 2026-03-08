@@ -143,6 +143,17 @@ export class AgentLoop {
                 ? await withTimeout(this.tools.execute(tc.name, input), this.toolTimeout, `Tool '${tc.name}'`)
                 : await this.tools.execute(tc.name, input)
               content = typeof value === 'string' ? value : JSON.stringify(value)
+              // Roll up child usage (e.g. from subagent tool) into parent totals
+              if (value && typeof value === 'object' && 'usage' in value) {
+                const childUsage = (value as { usage: TokenUsage }).usage
+                if (childUsage) {
+                  usage.inputTokens += childUsage.inputTokens
+                  usage.outputTokens += childUsage.outputTokens
+                  if (childUsage.thinkingTokens) {
+                    usage.thinkingTokens = (usage.thinkingTokens ?? 0) + childUsage.thinkingTokens
+                  }
+                }
+              }
               await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             } catch (err) {
               isError = true
