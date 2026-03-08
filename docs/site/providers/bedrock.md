@@ -16,9 +16,9 @@ ra --provider bedrock "Hello"
 
 If `RA_BEDROCK_API_KEY` is not set, ra falls back to the standard AWS credential chain:
 
-- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars
-- `~/.aws/credentials` file
-- IAM instance roles
+1. `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars
+2. `~/.aws/credentials` file
+3. IAM instance roles
 
 ```bash
 export AWS_ACCESS_KEY_ID=...
@@ -27,17 +27,30 @@ export RA_BEDROCK_REGION=us-east-1
 ra --provider bedrock "Hello"
 ```
 
-## Env vars
+## Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RA_BEDROCK_API_KEY` | No | Bearer token (if not using AWS credential chain) |
 | `RA_BEDROCK_REGION` | Yes | AWS region (e.g. `us-east-1`) |
 
-## Thinking tokens
+## Models
+
+Use the full Bedrock model ID:
+
+```bash
+ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Triage this bug"
+```
+
+## Extended thinking
 
 Supported levels: `low`, `medium`, `high`.
 
 ```bash
 ra --provider bedrock --thinking medium "Analyze this architecture"
 ```
+
+## See also
+
+- [Context Control](/core/context-control) — extended thinking details
+- [Configuration](/configuration/) — provider credentials reference

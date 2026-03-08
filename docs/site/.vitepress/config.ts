@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'ra',
-  description: 'raw agent. role agent. run-anything agent.',
+  description: 'One Loop. Infinite Agents. An open-source AI agent framework with full control over the agentic loop.',
   base: '/ra/',
   appearance: 'dark',
   head: [
@@ -14,6 +14,7 @@ export default defineConfig({
     logo: '/logo.svg',
     nav: [
       { text: 'Guide', link: '/getting-started/install' },
+      { text: 'Providers', link: '/providers/anthropic' },
       { text: 'Config', link: '/configuration/' },
       { text: 'API', link: '/api/' },
     ],
@@ -26,37 +27,22 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Concepts',
+        text: 'Core',
         items: [
           { text: 'What is ra?', link: '/concepts/' },
-          { text: 'Layered Config', link: '/concepts/config' },
-          { text: 'Providers', link: '/concepts/providers' },
+          { text: 'The Agent Loop', link: '/core/agent-loop' },
+          { text: 'Context Control', link: '/core/context-control' },
+          { text: 'Sessions', link: '/core/sessions' },
+          { text: 'File Attachments', link: '/core/file-attachments' },
         ],
       },
       {
-        text: 'Modes',
+        text: 'Interfaces',
         items: [
-          { text: 'CLI (one-shot)', link: '/modes/cli' },
+          { text: 'CLI (One-Shot)', link: '/modes/cli' },
           { text: 'REPL', link: '/modes/repl' },
           { text: 'HTTP Server', link: '/modes/http' },
-          { text: 'MCP Server', link: '/modes/mcp' },
-        ],
-      },
-      {
-        text: 'Configuration',
-        items: [
-          { text: 'Reference', link: '/configuration/' },
-        ],
-      },
-      {
-        text: 'Providers',
-        items: [
-          { text: 'Anthropic', link: '/providers/anthropic' },
-          { text: 'OpenAI', link: '/providers/openai' },
-          { text: 'Azure OpenAI', link: '/providers/azure' },
-          { text: 'Google Gemini', link: '/providers/google' },
-          { text: 'Ollama', link: '/providers/ollama' },
-          { text: 'AWS Bedrock', link: '/providers/bedrock' },
+          { text: 'MCP', link: '/modes/mcp' },
         ],
       },
       {
@@ -68,8 +54,20 @@ export default defineConfig({
         ],
       },
       {
+        text: 'Providers',
+        items: [
+          { text: 'Anthropic', link: '/providers/anthropic' },
+          { text: 'OpenAI', link: '/providers/openai' },
+          { text: 'Azure OpenAI', link: '/providers/azure' },
+          { text: 'Google Gemini', link: '/providers/google' },
+          { text: 'AWS Bedrock', link: '/providers/bedrock' },
+          { text: 'Ollama', link: '/providers/ollama' },
+        ],
+      },
+      {
         text: 'Reference',
         items: [
+          { text: 'Configuration', link: '/configuration/' },
           { text: 'HTTP API', link: '/api/' },
           { text: 'Recipes', link: '/recipes/' },
           { text: 'Dynamic Prompts', link: '/recipes/dynamic-prompts' },
@@ -80,5 +78,13 @@ export default defineConfig({
       { icon: 'github', link: 'https://github.com/chinmaymk/ra' },
     ],
     search: { provider: 'local' },
+    footer: {
+      message: 'Released under the MIT License.',
+      copyright: 'Copyright © 2026',
+    },
+    editLink: {
+      pattern: 'https://github.com/chinmaymk/ra/edit/main/docs/site/:path',
+      text: 'Edit this page on GitHub',
+    },
   },
 })

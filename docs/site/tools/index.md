@@ -2,18 +2,12 @@
 
 ra ships with 14 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
 
+Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
+
 ```yaml
 # ra.config.yml
 builtinTools: true   # default
 ```
-
-Or via environment variable:
-
-```bash
-export RA_BUILTIN_TOOLS=true
-```
-
-Tools are self-describing — each one includes a description and input schema that the model uses to decide when and how to invoke it. No system prompt is needed to explain them.
 
 When ra runs as an [MCP server](/modes/mcp), all built-in tools (except `ask_user`) are automatically exposed as MCP tools.
 
@@ -190,7 +184,9 @@ Make an HTTP request and return the response as JSON with `status`, `headers`, a
 
 Pause the agent loop and ask the user a question. The loop suspends until the user responds.
 
-In the REPL, the question is printed and the next input resumes the conversation. In CLI mode, the session ID is printed so the user can resume with `--resume`. In HTTP mode, the response includes the question and session ID for the client to handle.
+- **REPL** — the question is printed and the next input resumes the conversation
+- **CLI** — the session ID is printed so the user can resume with `--resume`
+- **HTTP** — an `ask_user` SSE event is emitted with the question and session ID
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -222,18 +218,20 @@ The dynamic description looks like:
 
 > Track tasks with a checklist. Actions: "add" (item text), "check"/"uncheck"/"remove" (by 0-based index), "list" (show all). Remaining (2/3): 1: Fix bug, 2: Deploy
 
-## Disabling Built-in Tools
+## Disabling built-in tools
 
-To run ra without built-in tools (e.g., when using only MCP tools):
+To run ra without built-in tools (e.g., when using only [MCP tools](/modes/mcp)):
 
 ```yaml
 builtinTools: false
 ```
 
 ```bash
-export RA_BUILTIN_TOOLS=false
-```
-
-```bash
 ra --no-builtin-tools
 ```
+
+## See also
+
+- [The Agent Loop](/core/agent-loop) — how tools are executed within the loop
+- [Middleware](/middleware/) — `beforeToolExecution` and `afterToolExecution` hooks
+- [MCP](/modes/mcp) — connecting external MCP tools

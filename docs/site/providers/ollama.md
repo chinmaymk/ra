@@ -2,7 +2,7 @@
 
 **Provider value:** `ollama`
 
-Run models locally. No API key required.
+Run models locally with [Ollama](https://ollama.ai). No API key required.
 
 ## Setup
 
@@ -14,7 +14,7 @@ Run models locally. No API key required.
 ra --provider ollama --model llama3 "Write a haiku"
 ```
 
-## Env vars
+## Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -22,7 +22,19 @@ ra --provider ollama --model llama3 "Write a haiku"
 
 ## Remote Ollama
 
+Point ra at an Ollama instance running on another machine:
+
 ```bash
 export RA_OLLAMA_HOST=http://my-server:11434
 ra --provider ollama --model llama3 "Hello"
 ```
+
+Or via CLI flag:
+
+```bash
+ra --provider ollama --ollama-host http://my-server:11434 --model llama3 "Hello"
+```
+
+## See also
+
+- [Configuration](/configuration/) — provider credentials reference

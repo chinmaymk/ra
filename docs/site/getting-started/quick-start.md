@@ -12,6 +12,13 @@ export RA_ANTHROPIC_API_KEY="sk-..."
 ra "Summarize the key points of this file" --file report.pdf
 ```
 
+## Pipe stdin
+
+```bash
+cat error.log | ra "Explain this error"
+git diff | ra --skill code-review "Review these changes"
+```
+
 ## Interactive REPL
 
 ```bash
@@ -27,7 +34,7 @@ ra --http
 ## MCP server for Cursor / Claude Desktop
 
 ```bash
-ra --mcp
+ra --mcp-stdio
 ```
 
 ## More examples
@@ -41,10 +48,15 @@ ra --provider openai --model gpt-4.1 "Explain this error"
 
 # Enable extended thinking
 ra --thinking high "Design a distributed cache"
+
+# Reference files inline
+ra "explain what @src/auth.ts does"
 ```
 
 ## Next steps
 
+- [The Agent Loop](/core/agent-loop) — understand how ra works
+- [Context Control](/core/context-control) — compaction, thinking, pattern resolution
 - [Configure a provider](/providers/anthropic) — set your API key
 - [Learn the interfaces](/modes/cli) — CLI, REPL, HTTP, MCP
-- [Explore layered config](/concepts/config) — file → env → CLI
+- [Configuration reference](/configuration/) — all fields, env vars, CLI flags

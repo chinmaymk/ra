@@ -1,37 +1,49 @@
 # What is ra?
 
-> **ra** is a **r**aw **a**gent. A **r**ole **a**gent. A **r**un-**a**nything **a**gent.
->
-> An extensible agentic loop you configure into whatever agent you need — without rewriting anything.
+ra is an open-source AI agent framework that gives you a configurable agentic loop and stays out of your way. It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server.
 
-At its core, ra is an **agentic loop**: model → tools → repeat. But unlike most frameworks, every step is customizable. Skills inject domain expertise, MCP connects external tools, middleware hooks let you intercept and modify the loop at every stage, and the whole thing is driven by config — not code.
+Every message, every tool call, every stream chunk is visible and interceptable through [middleware hooks](/middleware/). You configure agents in YAML — define tools, skills, system prompts, and context — and drop down to TypeScript only where you need custom logic.
 
-Same binary. Different config. Different agent.
+```bash
+ra "What is the capital of France?"
+ra --provider openai --model gpt-4.1 "Explain this error"
+ra --skill code-review --file diff.patch "Review this diff"
+cat server.log | ra "Find the root cause of these errors"
+ra   # interactive REPL
+```
 
-- Drop a `ra.config.yml` in a repo → a project-specific assistant with its own system prompt, skills, and tools
-- Set env vars → a different provider, a different persona, the same CLI
-- Pass `--skill` → inject a role or behavior at runtime
-- Run `--mcp-stdio` → expose it as a tool to Cursor, Claude Desktop, or anything MCP-aware
+## The config is the agent
 
-## Why ra?
+Drop a `ra.config.yml` in a repo and that directory becomes a project-specific assistant. Set env vars for a different persona. Pass `--skill` to inject a role at runtime. Run `--mcp-stdio` to expose it as a tool for Cursor or Claude Desktop. Same binary, different agent — every time.
 
-Most agent frameworks give you a locked-down loop you can't inspect or modify. Most CLI tools give you prompt-in, text-out with no agent capabilities. You end up choosing between power and flexibility.
+## What's in the box
 
-ra gives you both — a real agentic loop that's fully extensible through config, skills, middleware, and MCP.
+| Feature | Description |
+|---------|-------------|
+| [The Agent Loop](/core/agent-loop) | Model → tools → repeat, with streaming, middleware hooks at every step, and configurable iteration limits |
+| [Context Control](/core/context-control) | Smart compaction, token tracking, prompt caching, extended thinking, context discovery, pattern resolution |
+| [CLI](/modes/cli) | One-shot prompts, piping, chaining, scriptable |
+| [REPL](/modes/repl) | Interactive sessions with history, slash commands, file attachments |
+| [HTTP API](/modes/http) | Sync and streaming chat, session management |
+| [MCP](/modes/mcp) | Client (pull tools from MCP servers) and server (expose ra as a tool) |
+| [Built-in Tools](/tools/) | 14 tools for filesystem, shell, network, and user interaction |
+| [Skills](/skills/) | Reusable instruction bundles — roles, behaviors, scripts, and reference docs |
+| [Middleware](/middleware/) | Hooks at every loop stage — intercept, modify, or stop the loop |
+| [Sessions](/core/sessions) | Persist conversations as JSONL, resume from any interface, auto-prune |
+| [File Attachments](/core/file-attachments) | Images, PDFs, text files — auto-detected and sent in the right format |
+| [Configuration](/configuration/) | Layered: defaults → file → env → CLI. The config is the agent |
+
+## Use cases
 
 ### CI caught a flaky test
-
-Your pipeline fails at 3am. Add one step:
 
 ```bash
 ra --skill debugger --file test-output.log "Why is this test failing?"
 ```
 
-It reads the logs, explains the root cause, and exits. Pipe the output to Slack, write it to a PR comment, or just read it in the morning.
+Reads the logs, explains the root cause, and exits. Pipe the output to Slack or a PR comment.
 
 ### You're building a feature
-
-Drop into the REPL and think out loud:
 
 ```bash
 ra
@@ -43,42 +55,16 @@ Attach files, ask follow-ups, keep context. Resume the session tomorrow with `/r
 
 ### Your product needs AI
 
-Start a streaming API server:
-
 ```bash
 ra --http --http-port 3000
 ```
 
-POST a message, get SSE chunks back. No Express, no framework — just `Bun.serve()` under the hood.
+POST a message, get SSE chunks back. No framework — just `Bun.serve()` under the hood.
 
 ### Your editor needs a specialist
-
-Run ra as an MCP server and Cursor or Claude Desktop can call it directly:
 
 ```bash
 ra --mcp-stdio --skill code-review
 ```
 
-Now your editor has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt.
-
----
-
-Same config. Same skills. Same binary. The interface changes, the agent doesn't.
-
-## What's in the box
-
-| Feature | Description |
-|---------|-------------|
-| **REPL** | Interactive sessions with history |
-| **One-shot CLI** | Scriptable prompts, streams to stdout |
-| **HTTP API** | Sync + streaming chat, session management |
-| **MCP client** | Pull tools from other MCP servers |
-| **MCP server** | Expose ra as a tool to other apps |
-| **Agentic loop** | Model → tools → repeat with streaming, context compaction, and configurable iteration limits |
-| **Tool calling** | Model invokes functions, ra executes them |
-| **Middleware** | Hooks at every loop stage — before model call, after tool execution, on stream chunks, on errors |
-| **Skills** | Reusable instruction bundles — roles, behaviors, and assets |
-| **File attachments** | Attach files in CLI and REPL |
-| **Pattern resolution** | Reference files (`@path`), URLs (`url:...`), or custom sources inline in prompts — resolved automatically before the model sees the message |
-| **Session storage** | Persist conversations, resume later, auto-prune old ones |
-| **Layered config** | File → env → CLI override order; commit a baseline, tweak per-run |
+Now Cursor or Claude Desktop has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt.
