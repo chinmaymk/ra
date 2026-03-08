@@ -2,6 +2,7 @@ import type { ITool, IMessage, IProvider, TokenUsage } from '../providers/types'
 import type { MiddlewareConfig } from '../agent/types'
 import { AgentLoop, type AgentLoopOptions } from '../agent/loop'
 import { ToolRegistry } from '../agent/tool-registry'
+import { accumulateUsage } from '../providers/utils'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { SubagentConfig } from '../config/types'
 
@@ -31,6 +32,12 @@ export function subagentTool(options: SubagentToolOptions): ITool {
   const cfg = options.config ?? {}
   const maxConcurrency = cfg.maxConcurrency ?? 4
   const maxIterations = cfg.maxTurns ?? 5
+
+  // Static config — resolved once at tool creation, not per-execute()
+  const allowedSet = cfg.allowedTools ? new Set(cfg.allowedTools) : null
+  const childModel = cfg.model ?? options.model
+  const configSystem = resolveSystemPrompt(cfg.system, options.systemPrompt)
+  const childThinking = cfg.thinking ?? options.thinking
 
   return {
     name: 'subagent',
@@ -66,7 +73,6 @@ export function subagentTool(options: SubagentToolOptions): ITool {
       // Build child tool registry lazily so we pick up tools registered
       // after subagentTool() was constructed (e.g. MCP tools)
       const childTools = new ToolRegistry()
-      const allowedSet = cfg.allowedTools ? new Set(cfg.allowedTools) : null
       for (const tool of options.tools.all()) {
         if (EXCLUDED_TOOLS.has(tool.name)) continue
         if (allowedSet && !allowedSet.has(tool.name)) continue
@@ -75,15 +81,6 @@ export function subagentTool(options: SubagentToolOptions): ITool {
       if (depth + 1 < maxDepth) {
         childTools.register(subagentTool({ ...options, tools: childTools, _depth: depth + 1 }))
       }
-
-      // Resolve model — config override or parent's model
-      const childModel = cfg.model ?? options.model
-
-      // Resolve system prompt from config
-      const configSystem = resolveSystemPrompt(cfg.system, options.systemPrompt)
-
-      // Resolve thinking level
-      const childThinking = cfg.thinking ?? options.thinking
 
       const loopOptions: AgentLoopOptions = {
         provider: options.provider,
@@ -130,13 +127,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
 
       // Compute aggregate usage for parent rollup
       const totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
-      for (const r of results) {
-        totalUsage.inputTokens += r.usage.inputTokens
-        totalUsage.outputTokens += r.usage.outputTokens
-        if (r.usage.thinkingTokens) {
-          totalUsage.thinkingTokens = (totalUsage.thinkingTokens ?? 0) + r.usage.thinkingTokens
-        }
-      }
+      for (const r of results) accumulateUsage(totalUsage, r.usage)
 
       return { results, usage: totalUsage }
     },

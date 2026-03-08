@@ -3,6 +3,7 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
+import { accumulateUsage } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
 
@@ -109,11 +110,7 @@ export class AgentLoop {
             if (tc) tc.argsRaw += chunk.argsDelta
           } else if (chunk.type === 'done') {
             if (chunk.usage) {
-              usage.inputTokens += chunk.usage.inputTokens
-              usage.outputTokens += chunk.usage.outputTokens
-              if (chunk.usage.thinkingTokens) {
-                usage.thinkingTokens = (usage.thinkingTokens ?? 0) + chunk.usage.thinkingTokens
-              }
+              accumulateUsage(usage, chunk.usage)
               lastUsage = chunk.usage
             }
             break
@@ -146,13 +143,7 @@ export class AgentLoop {
               // Roll up child usage (e.g. from subagent tool) into parent totals
               if (value && typeof value === 'object' && 'usage' in value) {
                 const childUsage = (value as { usage: TokenUsage }).usage
-                if (childUsage) {
-                  usage.inputTokens += childUsage.inputTokens
-                  usage.outputTokens += childUsage.outputTokens
-                  if (childUsage.thinkingTokens) {
-                    usage.thinkingTokens = (usage.thinkingTokens ?? 0) + childUsage.thinkingTokens
-                  }
-                }
+                if (childUsage) accumulateUsage(usage, childUsage)
               }
               await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             } catch (err) {

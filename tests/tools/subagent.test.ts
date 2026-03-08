@@ -15,6 +15,19 @@ function mockProvider(responses: StreamChunk[][]): IProvider {
   }
 }
 
+/** Mock provider that calls onStream for each request, then yields 'ok' */
+function capturingProvider(onStream: (req: ChatRequest) => void): IProvider {
+  return {
+    name: 'mock',
+    chat: async () => { throw new Error('use stream') },
+    async *stream(req: ChatRequest) {
+      onStream(req)
+      yield { type: 'text' as const, delta: 'ok' }
+      yield { type: 'done' as const }
+    },
+  }
+}
+
 function baseOptions(overrides?: Partial<SubagentToolOptions> & { responses?: StreamChunk[][] }): SubagentToolOptions {
   const responses = overrides?.responses ?? [[{ type: 'text', delta: 'hello' }, { type: 'done' }]]
   return {
@@ -47,16 +60,7 @@ describe('subagent tool', () => {
 
   it('runs multiple tasks in parallel', async () => {
     let callIndex = 0
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream() {
-        const idx = callIndex++
-        yield { type: 'text' as const, delta: `result-${idx}` }
-        yield { type: 'done' as const }
-      },
-    }
-
+    const provider = capturingProvider(() => { callIndex++ })
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
     const out = await tool.execute({
       tasks: [{ task: 'task-a' }, { task: 'task-b' }, { task: 'task-c' }],
@@ -68,15 +72,7 @@ describe('subagent tool', () => {
 
   it('passes systemPrompt to subagent messages', async () => {
     const capturedMessages: any[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req) {
-        capturedMessages.push(...req.messages)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
 
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
     await tool.execute({
@@ -98,12 +94,10 @@ describe('subagent tool', () => {
   })
 
   it('returns aggregate usage across all tasks', async () => {
-    let callIndex = 0
     const provider: IProvider = {
       name: 'mock',
       chat: async () => { throw new Error('use stream') },
       async *stream() {
-        callIndex++
         yield { type: 'text' as const, delta: 'ok' }
         yield { type: 'done' as const, usage: { inputTokens: 100, outputTokens: 50 } }
       },
@@ -162,7 +156,6 @@ describe('subagent tool', () => {
   })
 
   it('returns empty string when model produces empty assistant message', async () => {
-    // The loop always pushes an assistant message even with empty text
     const provider = mockProvider([[{ type: 'done' as const }]])
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
     const out = await tool.execute({ tasks: [{ task: 'silent' }] }) as any
@@ -208,15 +201,9 @@ describe('subagent tool', () => {
 
   it('excludes ask_user from subagent child tools', async () => {
     const capturedTools: string[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        for (const t of req.tools ?? []) capturedTools.push(t.name)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => {
+      for (const t of req.tools ?? []) capturedTools.push(t.name)
+    })
 
     const tools = new ToolRegistry()
     tools.register({ name: 'ask_user', description: 'ask', inputSchema: {}, execute: async () => 'answer' })
@@ -233,15 +220,9 @@ describe('subagent tool', () => {
 
   it('picks up tools registered after construction (lazy registry)', async () => {
     const capturedTools: string[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        for (const t of req.tools ?? []) capturedTools.push(t.name)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => {
+      for (const t of req.tools ?? []) capturedTools.push(t.name)
+    })
 
     const tools = new ToolRegistry()
     tools.register({ name: 'tool_a', description: 'a', inputSchema: {}, execute: async () => 'a' })
@@ -263,15 +244,9 @@ describe('subagent tool', () => {
 
   it('children at max depth do not have subagent tool', async () => {
     const capturedTools: string[][] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        capturedTools.push((req.tools ?? []).map(t => t.name))
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => {
+      capturedTools.push((req.tools ?? []).map(t => t.name))
+    })
 
     // depth=0, maxDepth=1 → children should NOT get subagent
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test', maxDepth: 1, _depth: 0 })
@@ -282,15 +257,9 @@ describe('subagent tool', () => {
 
   it('children below max depth DO have subagent tool', async () => {
     const capturedTools: string[][] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        capturedTools.push((req.tools ?? []).map(t => t.name))
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => {
+      capturedTools.push((req.tools ?? []).map(t => t.name))
+    })
 
     // depth=0, maxDepth=3 → children at depth 1 should still get subagent
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test', maxDepth: 3, _depth: 0 })
@@ -323,15 +292,7 @@ describe('subagent tool', () => {
 
   it('uses config model override for subagent', async () => {
     let capturedModel = ''
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        capturedModel = req.model
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => { capturedModel = req.model })
 
     const tool = subagentTool({
       provider, tools: new ToolRegistry(), model: 'parent-model',
@@ -344,15 +305,7 @@ describe('subagent tool', () => {
 
   it('falls back to parent model when config.model not set', async () => {
     let capturedModel = ''
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        capturedModel = req.model
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => { capturedModel = req.model })
 
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'parent-model' })
     await tool.execute({ tasks: [{ task: 'test' }] })
@@ -364,15 +317,7 @@ describe('subagent tool', () => {
 
   it('system defaults to none — no system message injected', async () => {
     const capturedMessages: any[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req) {
-        capturedMessages.push(...req.messages)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
 
     const tool = subagentTool({
       provider, tools: new ToolRegistry(), model: 'test',
@@ -385,15 +330,7 @@ describe('subagent tool', () => {
 
   it('system=inherit passes parent system prompt', async () => {
     const capturedMessages: any[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req) {
-        capturedMessages.push(...req.messages)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
 
     const tool = subagentTool({
       provider, tools: new ToolRegistry(), model: 'test',
@@ -407,15 +344,7 @@ describe('subagent tool', () => {
 
   it('system=custom string uses that string', async () => {
     const capturedMessages: any[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req) {
-        capturedMessages.push(...req.messages)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
 
     const tool = subagentTool({
       provider, tools: new ToolRegistry(), model: 'test',
@@ -429,15 +358,7 @@ describe('subagent tool', () => {
 
   it('per-task systemPrompt appends to config system', async () => {
     const capturedMessages: any[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req) {
-        capturedMessages.push(...req.messages)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
 
     const tool = subagentTool({
       provider, tools: new ToolRegistry(), model: 'test',
@@ -456,15 +377,7 @@ describe('subagent tool', () => {
 
   it('per-task systemPrompt alone works when config system is none', async () => {
     const capturedMessages: any[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req) {
-        capturedMessages.push(...req.messages)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
 
     const tool = subagentTool({
       provider, tools: new ToolRegistry(), model: 'test',
@@ -484,15 +397,9 @@ describe('subagent tool', () => {
 
   it('allowedTools restricts which tools subagents get', async () => {
     const capturedTools: string[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        for (const t of req.tools ?? []) capturedTools.push(t.name)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => {
+      for (const t of req.tools ?? []) capturedTools.push(t.name)
+    })
 
     const tools = new ToolRegistry()
     tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
@@ -512,15 +419,9 @@ describe('subagent tool', () => {
 
   it('allowedTools does not override EXCLUDED_TOOLS', async () => {
     const capturedTools: string[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        for (const t of req.tools ?? []) capturedTools.push(t.name)
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
+    const provider = capturingProvider(req => {
+      for (const t of req.tools ?? []) capturedTools.push(t.name)
+    })
 
     const tools = new ToolRegistry()
     tools.register({ name: 'ask_user', description: 'ask', inputSchema: {}, execute: async () => 'answer' })
