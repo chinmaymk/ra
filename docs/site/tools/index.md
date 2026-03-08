@@ -1,6 +1,6 @@
 # Built-in Tools
 
-ra ships with 14 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
+ra ships with 15 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
 
 Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 
@@ -217,6 +217,47 @@ Track tasks with a checklist. The tool description dynamically updates to show r
 The dynamic description looks like:
 
 > Track tasks with a checklist. Actions: "add" (item text), "check"/"uncheck"/"remove" (by 0-based index), "list" (show all). Remaining (2/3): 1: Fix bug, 2: Deploy
+
+## Parallelization
+
+### `subagent`
+
+Run one or more tasks in parallel using independent sub-agents. Each task gets its own agent loop with a fresh conversation history while sharing the parent's provider and tool registry.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tasks` | array | yes | Tasks to run in parallel |
+| `tasks[].task` | string | yes | The task prompt for the sub-agent |
+| `tasks[].systemPrompt` | string | no | Optional system prompt override |
+
+```json
+{
+  "tasks": [
+    { "task": "Read src/auth.ts and summarize the authentication flow" },
+    { "task": "Find all TODO comments in the codebase" },
+    { "task": "Check for unused exports in src/utils/", "systemPrompt": "You are a code linter." }
+  ]
+}
+```
+
+Returns an array of results, one per task:
+
+```json
+[
+  { "task": "...", "status": "completed", "result": "...", "iterations": 2, "usage": { "inputTokens": 500, "outputTokens": 120 } },
+  { "task": "...", "status": "error", "result": "error message", "iterations": 0, "usage": { "inputTokens": 0, "outputTokens": 0 } }
+]
+```
+
+**Configuration:** The subagent tool is registered automatically and accepts options via `subagentTool()`:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `maxIterations` | 5 | Max loop iterations per sub-agent |
+| `maxDepth` | 2 | Max recursion depth (sub-agents spawning sub-agents) |
+| `maxConcurrency` | 4 | Max parallel tasks per invocation |
+
+Sub-agents at the maximum depth don't get the `subagent` tool, preventing infinite recursion. Individual task failures don't affect other tasks — each result reports `completed` or `error` independently.
 
 ## Disabling built-in tools
 

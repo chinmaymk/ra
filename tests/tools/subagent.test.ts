@@ -95,11 +95,10 @@ describe('subagent tool', () => {
     await expect(tool.execute({ tasks: [] })).rejects.toThrow('At least one task')
   })
 
-  it('rejects tasks exceeding maxConcurrency', async () => {
+  it('maxConcurrency is reflected in schema maxItems', () => {
     const tool = subagentTool(baseOptions({ maxConcurrency: 2 }))
-    await expect(
-      tool.execute({ tasks: [{ task: 'a' }, { task: 'b' }, { task: 'c' }] })
-    ).rejects.toThrow('Maximum 2 concurrent tasks')
+    const tasksSchema = (tool.inputSchema.properties as any).tasks
+    expect(tasksSchema.maxItems).toBe(2)
   })
 
   it('subagents can use parent tools', async () => {
