@@ -7,10 +7,8 @@ import {
   type Tool as BedrockTool,
   type ToolInputSchema,
 } from '@aws-sdk/client-bedrock-runtime'
-import { extractSystemMessages } from './utils'
+import { extractSystemMessages, THINKING_BUDGETS, parseToolArgs } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
-
-const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
 
 export interface BedrockProviderOptions {
   region?: string
@@ -93,8 +91,7 @@ export class BedrockProvider implements IProvider {
         if (typeof msg.content === 'string' && msg.content) content.push({ text: msg.content })
         else if (Array.isArray(msg.content)) content.push(...this.mapContentParts(msg.content))
         for (const tc of msg.toolCalls) {
-          let input: Record<string, unknown>
-          try { input = JSON.parse(tc.arguments) } catch { input = {} }
+          const input = parseToolArgs(tc.arguments)
           content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: input as any } })
         }
         return { role: 'assistant', content }

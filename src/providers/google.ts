@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Content, Part, Tool as GeminiTool, GenerateContentResponse } from '@google/generative-ai'
-import { extractSystemMessages } from './utils'
+import { extractSystemMessages, parseToolArgs } from './utils'
 import { getMimeType } from '../utils/mime'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
@@ -103,9 +103,7 @@ export class GoogleProvider implements IProvider {
         if (typeof msg.content === 'string' && msg.content) parts.push({ text: msg.content })
         else if (Array.isArray(msg.content)) parts.push(...this.mapContentParts(msg.content))
         for (const tc of msg.toolCalls) {
-          let args: Record<string, unknown>
-          try { args = JSON.parse(tc.arguments) } catch { args = {} }
-          parts.push({ functionCall: { name: tc.name, args } })
+          parts.push({ functionCall: { name: tc.name, args: parseToolArgs(tc.arguments) } })
         }
       } else if (typeof msg.content === 'string') {
         if (msg.content) parts.push({ text: msg.content })

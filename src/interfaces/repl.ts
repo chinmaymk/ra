@@ -8,7 +8,7 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
-import { ASK_USER_SIGNAL } from '../tools/ask-user'
+import { findAskUserQuestion } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
 import * as tui from './tui'
 
@@ -174,17 +174,9 @@ export class Repl {
       }
 
       // Detect ask_user — in REPL, just print the question; next input resumes naturally
-      let askMsg: IMessage | undefined
-      for (let i = result.messages.length - 1; i >= 0; i--) {
-        const m = result.messages[i]!
-        if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-          askMsg = m
-          break
-        }
-      }
-      if (askMsg && typeof askMsg.content === 'string') {
-        const question = askMsg.content.slice(ASK_USER_SIGNAL.length)
-        tui.printCommandResponse(`[Question for you] ${question}`)
+      const askQuestion = findAskUserQuestion(result.messages)
+      if (askQuestion) {
+        tui.printCommandResponse(`[Question for you] ${askQuestion}`)
       }
     } catch (err) {
       tui.stopSpinner(true)

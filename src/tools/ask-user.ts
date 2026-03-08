@@ -1,6 +1,17 @@
-import type { ITool } from '../providers/types'
+import type { ITool, IMessage } from '../providers/types'
 
 export const ASK_USER_SIGNAL = '__RA_ASK_USER__'
+
+/** Extract the ask_user question from the last tool message, if any. */
+export function findAskUserQuestion(messages: IMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!
+    if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
+      return m.content.slice(ASK_USER_SIGNAL.length)
+    }
+  }
+  return undefined
+}
 
 export function askUserTool(): ITool {
   return {

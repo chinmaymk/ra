@@ -1,4 +1,5 @@
 import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
+import { parseToolArgs } from '../providers/utils'
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
@@ -134,8 +135,7 @@ export class AgentLoop {
             if (signal.aborted) break
             await runMiddlewareChain({ ...stoppable, toolCall: tc, loop: loopCtx() } satisfies ToolExecutionContext, this.middleware.beforeToolExecution, this.toolTimeout)
             if (signal.aborted) break
-            let input: unknown
-            try { input = JSON.parse(tc.arguments || '{}') } catch { input = {} }
+            const input = parseToolArgs(tc.arguments)
             let content: string
             let isError = false
             try {

@@ -115,6 +115,15 @@ async function installSkillDirs(
   return installed
 }
 
+/** Find the single extracted subdirectory in a temp dir (common tarball pattern), or fall back to the dir itself. */
+async function findExtractedRoot(tmpDir: string): Promise<string> {
+  const entries: string[] = []
+  for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
+    if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
+  }
+  return entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
+}
+
 // ── Registry installers ─────────────────────────────────────────────
 
 async function installFromNpm(packageName: string, version: string | undefined, installDir: string): Promise<string[]> {
@@ -161,13 +170,7 @@ async function installFromGithub(repo: string, installDir: string): Promise<stri
   const fallbackName = name.replace(/^ra-skill-/, '')
 
   return withTempExtract(installDir, tarballUrl, `github`, async (tmpDir) => {
-    // GitHub extracts to <owner>-<repo>-<sha>/ directory
-    const entries: string[] = []
-    for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
-      if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
-    }
-    const repoDir = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
-
+    const repoDir = await findExtractedRoot(tmpDir)
     const installed = await installSkillDirs(repoDir, installDir, source, fallbackName)
     if (installed.length === 0) throw new Error(`github: no skills found in "${repo}"`)
     return installed
@@ -178,13 +181,7 @@ async function installFromUrl(url: string, installDir: string): Promise<string[]
   const source: Omit<SkillSource, 'installedAt'> = { registry: 'url', url }
 
   return withTempExtract(installDir, url, 'url', async (tmpDir) => {
-    // Check for a single extracted directory (common tarball pattern)
-    const entries: string[] = []
-    for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
-      if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
-    }
-    const extractedRoot = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
-
+    const extractedRoot = await findExtractedRoot(tmpDir)
     const installed = await installSkillDirs(extractedRoot, installDir, source, undefined)
     if (installed.length === 0) throw new Error(`url: no skills found at "${url}"`)
     return installed

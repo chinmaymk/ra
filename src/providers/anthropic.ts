@@ -1,8 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { extractSystemMessages } from './utils'
+import { extractSystemMessages, THINKING_BUDGETS, parseToolArgs } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
-
-const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
 
 export interface AnthropicProviderOptions {
   apiKey: string
@@ -84,8 +82,7 @@ export class AnthropicProvider implements IProvider {
         if (typeof msg.content === 'string' && msg.content) content.push({ type: 'text', text: msg.content })
         else if (Array.isArray(msg.content)) content.push(...this.mapContentParts(msg.content))
         for (const tc of msg.toolCalls) {
-          let input: Record<string, unknown>
-          try { input = JSON.parse(tc.arguments) } catch { input = {} }
+          const input = parseToolArgs(tc.arguments)
           content.push({ type: 'tool_use', id: tc.id, name: tc.name, input })
         }
         return { role: 'assistant', content }
