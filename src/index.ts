@@ -258,7 +258,7 @@ async function main(): Promise<void> {
       : join(process.cwd(), config.memory.path)
     memoryStore = new MemoryStore({
       path: memoryPath,
-      maxSizeMB: config.memory.maxSizeMB,
+      maxMemories: config.memory.maxMemories,
       ttlDays: config.memory.ttlDays,
     })
     tools.register(memorySearchTool(memoryStore))

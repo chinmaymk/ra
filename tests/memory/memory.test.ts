@@ -13,7 +13,7 @@ let store: MemoryStore
 
 beforeEach(() => {
   rmSync(TMP, { recursive: true, force: true })
-  store = new MemoryStore({ path: DB_PATH, maxSizeMB: 1, ttlDays: 30 })
+  store = new MemoryStore({ path: DB_PATH, maxMemories: 100, ttlDays: 30 })
 })
 
 afterEach(() => {
@@ -87,8 +87,15 @@ describe('MemoryStore', () => {
     expect(list[0]!.content).toBe('third')
   })
 
-  it('reports db size', () => {
-    expect(store.dbSize()).toBeGreaterThan(0)
+  it('trims oldest when over maxMemories', () => {
+    const small = new MemoryStore({ path: join(TMP, 'trim.db'), maxMemories: 3, ttlDays: 30 })
+    for (let i = 0; i < 5; i++) small.save(`Mem ${i}`)
+    small.trim()
+    expect(small.count()).toBe(3)
+    const list = small.list()
+    expect(list[0]!.content).toBe('Mem 4')
+    expect(list[2]!.content).toBe('Mem 2')
+    small.close()
   })
 })
 

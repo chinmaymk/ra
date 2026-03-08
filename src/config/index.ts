@@ -112,7 +112,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   // Memory
   if (env.RA_MEMORY_ENABLED !== undefined)       set(['memory', 'enabled'], env.RA_MEMORY_ENABLED === 'true')
   if (env.RA_MEMORY_PATH !== undefined)          set(['memory', 'path'], env.RA_MEMORY_PATH)
-  if (env.RA_MEMORY_MAX_SIZE_MB !== undefined)   setInt(['memory', 'maxSizeMB'], env.RA_MEMORY_MAX_SIZE_MB)
+  if (env.RA_MEMORY_MAX_MEMORIES !== undefined)  setInt(['memory', 'maxMemories'], env.RA_MEMORY_MAX_MEMORIES)
   if (env.RA_MEMORY_TTL_DAYS !== undefined)      setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
   if (env.RA_MEMORY_INJECT_LIMIT !== undefined)  setInt(['memory', 'injectLimit'], env.RA_MEMORY_INJECT_LIMIT)
 

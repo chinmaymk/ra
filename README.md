@@ -481,6 +481,31 @@ middleware:
 
 All hooks support a configurable timeout via `toolTimeout` (default: 30s).
 
+## Memory
+
+ra can persist facts across conversations using an SQLite-backed memory store with full-text search. The agent gets three tools — `memory_save`, `memory_search`, and `memory_forget` — and recent memories are automatically injected at the start of each loop.
+
+```yaml
+# ra.config.yml
+memory:
+  enabled: true
+  path: .ra/memory.db     # SQLite database location
+  maxMemories: 1000        # oldest trimmed first
+  ttlDays: 90              # auto-prune after 90 days
+  injectLimit: 20          # inject top-N recent memories (0 to disable)
+```
+
+```bash
+# Environment variables
+export RA_MEMORY_ENABLED=true
+export RA_MEMORY_PATH=.ra/memory.db
+export RA_MEMORY_MAX_MEMORIES=1000
+export RA_MEMORY_TTL_DAYS=90
+export RA_MEMORY_INJECT_LIMIT=20
+```
+
+The agent decides when to save and forget — tool descriptions guide it to capture user preferences, project decisions, and corrections, and to forget outdated information when told.
+
 ## Recipes
 
 Pre-built agent configurations you can use directly or fork.
@@ -538,6 +563,13 @@ storage:
   path: .ra/sessions
   maxSessions: 100
   ttlDays: 30
+
+memory:
+  enabled: true
+  path: .ra/memory.db
+  maxMemories: 1000
+  ttlDays: 90
+  injectLimit: 20
 
 middleware:
   beforeModelCall:

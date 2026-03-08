@@ -218,6 +218,37 @@ The dynamic description looks like:
 
 > Track tasks with a checklist. Actions: "add" (item text), "check"/"uncheck"/"remove" (by 0-based index), "list" (show all). Remaining (2/3): 1: Fix bug, 2: Deploy
 
+## Memory
+
+When [memory](/configuration/#memory) is enabled, three additional tools are registered.
+
+### `memory_save`
+
+Save information to memory for future conversations. The agent uses this when it notices user preferences, corrections, project decisions, or technical choices.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `content` | string | yes | What to remember (concise, self-contained) |
+| `tags` | string | no | Comma-separated tags for categorization |
+
+### `memory_search`
+
+Search memories from past conversations via full-text search.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Full-text search query |
+| `limit` | number | no | Max results (default: 10) |
+
+### `memory_forget`
+
+Forget memories matching a search query. The agent uses this when the user says something is no longer true or should be forgotten.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Search query to match memories to forget |
+| `limit` | number | no | Max memories to delete (default: 10) |
+
 ## Disabling built-in tools
 
 To run ra without built-in tools (e.g., when using only [MCP tools](/modes/mcp)):

@@ -50,7 +50,7 @@ export interface RaConfig {
   memory: {
     enabled: boolean
     path: string         // SQLite database path
-    maxSizeMB: number    // max database size in MB
+    maxMemories: number  // max stored memories (oldest trimmed first)
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
   }

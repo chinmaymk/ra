@@ -54,6 +54,13 @@ middleware:
   afterToolExecution:
     - "./middleware/audit.ts"
 
+memory:
+  enabled: true
+  path: .ra/memory.db
+  maxMemories: 1000
+  ttlDays: 90
+  injectLimit: 20
+
 mcp:
   client:
     - name: filesystem
@@ -106,6 +113,16 @@ mcp:
 | `storage.path` | — | — | `.ra/sessions` | Session storage directory |
 | `storage.maxSessions` | — | — | `100` | Max sessions before auto-pruning |
 | `storage.ttlDays` | — | — | `30` | Auto-expire sessions older than this |
+
+### Memory
+
+| Field | Env var | CLI flag | Default | Description |
+|-------|---------|----------|---------|-------------|
+| `memory.enabled` | `RA_MEMORY_ENABLED` | — | `false` | Enable persistent memory |
+| `memory.path` | `RA_MEMORY_PATH` | — | `.ra/memory.db` | SQLite database path |
+| `memory.maxMemories` | `RA_MEMORY_MAX_MEMORIES` | — | `1000` | Max stored memories (oldest trimmed) |
+| `memory.ttlDays` | `RA_MEMORY_TTL_DAYS` | — | `90` | Auto-prune memories older than this |
+| `memory.injectLimit` | `RA_MEMORY_INJECT_LIMIT` | — | `20` | Memories to inject as context per loop (0 to disable) |
 
 ### HTTP
 

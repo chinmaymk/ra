@@ -43,7 +43,7 @@ export function memorySaveTool(store: MemoryStore): ITool {
     async execute(input: unknown) {
       const { content, tags } = input as { content: string; tags?: string }
       store.save(content, tags ?? '')
-      store.enforceMaxSize()
+      store.trim()
       return 'Saved.'
     },
   }
