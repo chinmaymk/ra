@@ -1,0 +1,177 @@
+import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext } from '../agent/types'
+import type { Logger } from './logger'
+import type { Tracer, Span } from './tracer'
+
+/**
+ * Creates a complete set of observability middleware hooks.
+ * This is the single integration point — no logger/tracer params
+ * need to be threaded through the rest of the codebase.
+ */
+export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): Partial<MiddlewareConfig> {
+  let loopSpan: Span
+  let iterationSpan: Span
+  let modelSpan: Span
+  const toolSpans = new Map<string, Span>()
+  let iterationStartMessageCount = 0
+
+  const beforeLoopBegin = async (ctx: LoopContext): Promise<void> => {
+    logger.setSessionId(ctx.sessionId)
+    tracer.setSessionId(ctx.sessionId)
+
+    loopSpan = tracer.startSpan('agent.loop', {
+      maxIterations: ctx.maxIterations,
+      initialMessageCount: ctx.messages.length,
+    })
+
+    logger.info('agent loop starting', {
+      maxIterations: ctx.maxIterations,
+      messageCount: ctx.messages.length,
+    })
+  }
+
+  const beforeModelCall = async (ctx: ModelCallContext): Promise<void> => {
+    iterationStartMessageCount = ctx.request.messages.length
+
+    iterationSpan = tracer.startSpan('agent.iteration', {
+      iteration: ctx.loop.iteration,
+      messageCount: ctx.request.messages.length,
+    }, loopSpan.spanId)
+
+    modelSpan = tracer.startSpan('agent.model_call', {
+      model: ctx.request.model,
+      messageCount: ctx.request.messages.length,
+    }, iterationSpan.spanId)
+
+    logger.debug('calling model', {
+      iteration: ctx.loop.iteration,
+      model: ctx.request.model,
+      messageCount: ctx.request.messages.length,
+    })
+  }
+
+  const onStreamChunk = async (_ctx: StreamChunkContext): Promise<void> => {
+    // Streaming is captured by the model_call span timing.
+    // Individual chunks are too noisy to log.
+  }
+
+  const afterModelResponse = async (ctx: ModelCallContext): Promise<void> => {
+    const usage = ctx.loop.lastUsage
+    const lastMsg = ctx.request.messages[ctx.request.messages.length - 1]
+    const toolCalls = lastMsg?.role === 'assistant' ? lastMsg.toolCalls : undefined
+    const toolNames = toolCalls?.map(t => t.name) ?? []
+    const responseText = typeof lastMsg?.content === 'string' ? lastMsg.content : ''
+
+    tracer.endSpan(modelSpan, 'ok', {
+      inputTokens: usage?.inputTokens,
+      outputTokens: usage?.outputTokens,
+      thinkingTokens: usage?.thinkingTokens ?? null,
+      toolCallCount: toolNames.length,
+      toolNames,
+      responseLength: responseText.length,
+    })
+
+    logger.info('model responded', {
+      iteration: ctx.loop.iteration,
+      inputTokens: usage?.inputTokens,
+      outputTokens: usage?.outputTokens,
+      toolCallCount: toolNames.length,
+      toolNames,
+      responseLength: responseText.length,
+    })
+  }
+
+  const beforeToolExecution = async (ctx: ToolExecutionContext): Promise<void> => {
+    const span = tracer.startSpan('agent.tool_execution', {
+      tool: ctx.toolCall.name,
+      toolCallId: ctx.toolCall.id,
+    }, iterationSpan.spanId)
+    toolSpans.set(ctx.toolCall.id, span)
+
+    logger.info('executing tool', {
+      tool: ctx.toolCall.name,
+      toolCallId: ctx.toolCall.id,
+      input: ctx.toolCall.arguments ? ctx.toolCall.arguments.slice(0, 200) : '{}',
+    })
+  }
+
+  const afterToolExecution = async (ctx: ToolResultContext): Promise<void> => {
+    const span = toolSpans.get(ctx.toolCall.id)
+    if (span) {
+      tracer.endSpan(span, ctx.result.isError ? 'error' : 'ok', {
+        resultLength: ctx.result.content.length,
+        ...(ctx.result.isError && { error: ctx.result.content.slice(0, 200) }),
+      })
+      toolSpans.delete(ctx.toolCall.id)
+    }
+
+    if (ctx.result.isError) {
+      logger.error('tool execution failed', {
+        tool: ctx.toolCall.name,
+        toolCallId: ctx.toolCall.id,
+        error: ctx.result.content.slice(0, 200),
+      })
+    } else {
+      logger.info('tool execution complete', {
+        tool: ctx.toolCall.name,
+        toolCallId: ctx.toolCall.id,
+        resultLength: ctx.result.content.length,
+      })
+    }
+  }
+
+  const afterLoopIteration = async (ctx: LoopContext): Promise<void> => {
+    const messagesAdded = ctx.messages.length - iterationStartMessageCount
+    tracer.endSpan(iterationSpan, 'ok', {
+      iteration: ctx.iteration,
+      messagesAdded,
+    })
+
+    logger.debug('iteration complete', {
+      iteration: ctx.iteration,
+      messagesAdded,
+      totalMessages: ctx.messages.length,
+    })
+  }
+
+  const afterLoopComplete = async (ctx: LoopContext): Promise<void> => {
+    tracer.endSpan(loopSpan, 'ok', {
+      iterations: ctx.iteration,
+      inputTokens: ctx.usage.inputTokens,
+      outputTokens: ctx.usage.outputTokens,
+      totalMessages: ctx.messages.length,
+    })
+
+    logger.info('agent loop complete', {
+      iterations: ctx.iteration,
+      inputTokens: ctx.usage.inputTokens,
+      outputTokens: ctx.usage.outputTokens,
+      totalMessages: ctx.messages.length,
+    })
+  }
+
+  const onError = async (ctx: ErrorContext): Promise<void> => {
+    tracer.endSpan(loopSpan, 'error', {
+      error: ctx.error.message,
+      phase: ctx.phase,
+      iterations: ctx.loop.iteration,
+    })
+
+    logger.error('agent loop failed', {
+      error: ctx.error.message,
+      phase: ctx.phase,
+      iterations: ctx.loop.iteration,
+    })
+  }
+
+  return {
+    beforeLoopBegin: [beforeLoopBegin],
+    beforeModelCall: [beforeModelCall],
+    onStreamChunk: [onStreamChunk],
+    afterModelResponse: [afterModelResponse],
+    beforeToolExecution: [beforeToolExecution],
+    afterToolExecution: [afterToolExecution],
+    afterLoopIteration: [afterLoopIteration],
+    afterLoopComplete: [afterLoopComplete],
+    onError: [onError],
+  }
+}

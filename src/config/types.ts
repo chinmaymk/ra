@@ -5,6 +5,7 @@ import type { GoogleProviderOptions } from '../providers/google'
 import type { OllamaProviderOptions } from '../providers/ollama'
 import type { BedrockProviderOptions } from '../providers/bedrock'
 import type { AzureProviderOptions } from '../providers/azure'
+import type { LogLevel } from '../observability/logger'
 
 export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedrock' | 'azure'
 
@@ -53,6 +54,18 @@ export interface RaConfig {
     maxMemories: number  // max stored memories (oldest trimmed first)
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
+  }
+  observability: {
+    enabled: boolean
+    logs: {
+      level: LogLevel      // minimum log level: 'debug' | 'info' | 'warn' | 'error'
+      output: 'stderr' | 'stdout' | 'file'
+      filePath?: string    // required when output is 'file'
+    }
+    traces: {
+      output: 'stderr' | 'stdout' | 'file'
+      filePath?: string    // required when output is 'file'
+    }
   }
 }
 

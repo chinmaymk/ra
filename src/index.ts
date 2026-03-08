@@ -20,6 +20,9 @@ import { registerBuiltinTools } from './tools'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
 import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
+import { createObservability } from './observability'
+import { createObservabilityMiddleware } from './observability/middleware'
+import type { MiddlewareConfig } from './agent/types'
 
 async function readStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined
@@ -141,6 +144,20 @@ async function execScript(scriptPath: string): Promise<void> {
   }
 }
 
+/** Merge observability middleware into user middleware, running observability hooks first. */
+function mergeMiddleware(
+  userMw: Partial<MiddlewareConfig>,
+  obsMw: Partial<MiddlewareConfig>,
+): Partial<MiddlewareConfig> {
+  const merged: Partial<MiddlewareConfig> = { ...userMw }
+  for (const key of Object.keys(obsMw) as (keyof MiddlewareConfig)[]) {
+    const obsHooks = obsMw[key] ?? []
+    const userHooks = userMw[key] ?? []
+    ;(merged as Record<string, unknown[]>)[key] = [...obsHooks, ...userHooks]
+  }
+  return merged
+}
+
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv)
 
@@ -225,18 +242,30 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
+  // Create observability (logger + tracer)
+  const { logger, tracer } = createObservability(config.observability)
+
+  // Create observability middleware — the single integration point for the agent loop
+  const obsMw = createObservabilityMiddleware(logger, tracer)
+
   // Resolve compaction model default from provider if not set
   if (!config.compaction.model) {
     config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
   }
 
   // Discover project context files
-  const contextMessages = config.context.enabled
-    ? buildContextMessages(await discoverContextFiles({
-        cwd: process.cwd(),
-        patterns: config.context.patterns,
-      }))
+  const contextFiles = config.context.enabled
+    ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
     : []
+  const contextMessages = buildContextMessages(contextFiles)
+
+  if (contextFiles.length > 0) {
+    logger.info('context files discovered', {
+      fileCount: contextFiles.length,
+      patterns: config.context.patterns,
+      files: contextFiles.map(f => f.relativePath),
+    })
+  }
 
   const middleware = await loadMiddleware(config, process.cwd())
 
@@ -251,12 +280,18 @@ async function main(): Promise<void> {
 
   // Create provider
   const provider = createProvider(buildProviderConfig(config.provider, config.providers[config.provider]))
+  logger.info('provider initialized', { provider: config.provider, model: config.model })
 
   // Create tool registry
   const tools = new ToolRegistry()
 
   if (config.builtinTools) {
     registerBuiltinTools(tools)
+  }
+
+  const toolNames = tools.all().map(t => t.name)
+  if (toolNames.length > 0) {
+    logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames })
   }
 
   // Set up memory system
@@ -277,6 +312,7 @@ async function main(): Promise<void> {
       injectLimit: config.memory.injectLimit,
     })
     middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
+    logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
 
   // Create session storage
@@ -286,6 +322,9 @@ async function main(): Promise<void> {
 
   // Load skills from configured directories
   const skillMap = await loadSkills(config.skillDirs)
+  if (skillMap.size > 0) {
+    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+  }
 
   // Active skills for this run (always-on from config + per-run --skill flags)
   const activeSkills = [...config.skills, ...parsed.meta.skills]
@@ -293,12 +332,17 @@ async function main(): Promise<void> {
   // Connect MCP clients
   const mcpClient = new McpClient()
   if (config.mcp.client && config.mcp.client.length > 0) {
+    logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
     await mcpClient.connect(config.mcp.client, tools)
+    logger.info('MCP servers connected', { totalTools: tools.all().length })
   }
+
+  // Merge observability middleware with user middleware
+  const fullMiddleware = mergeMiddleware(middleware, obsMw)
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware, compaction: config.compaction })
+    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware: fullMiddleware, compaction: config.compaction })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
@@ -317,6 +361,8 @@ async function main(): Promise<void> {
     try { await mcpClient.disconnect() } catch { /* best-effort cleanup */ }
     try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort cleanup */ }
     if (memoryStore) memoryStore.close()
+    await logger.flush()
+    await tracer.flush()
   }
 
   process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
@@ -374,6 +420,8 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
+  logger.info('starting interface', { interface: config.interface })
+
   // Determine which interface to launch
   if (config.interface === 'mcp') {
     stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
@@ -410,7 +458,7 @@ async function main(): Promise<void> {
       tools,
       skillMap,
       maxIterations: config.maxIterations,
-      middleware,
+      middleware: fullMiddleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
@@ -435,7 +483,7 @@ async function main(): Promise<void> {
       skillMap,
       maxIterations: config.maxIterations,
       toolTimeout: config.toolTimeout,
-      middleware,
+      middleware: fullMiddleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
@@ -460,7 +508,7 @@ async function main(): Promise<void> {
       maxIterations: config.maxIterations,
       toolTimeout: config.toolTimeout,
       sessionId: parsed.meta.resume,
-      middleware,
+      middleware: fullMiddleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,

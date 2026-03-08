@@ -56,4 +56,14 @@ export const defaultConfig: RaConfig = {
     ttlDays: 90,
     injectLimit: 5,
   },
+  observability: {
+    enabled: true,
+    logs: {
+      level: 'info',
+      output: 'stderr',
+    },
+    traces: {
+      output: 'stderr',
+    },
+  },
 }
