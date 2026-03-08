@@ -110,12 +110,15 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_SKILLS !== undefined)     set(['skills'], env.RA_SKILLS.split(',').filter(Boolean))
 
   // Memory
-  if (env.RA_MEMORY_ENABLED !== undefined)      set(['memory', 'enabled'], env.RA_MEMORY_ENABLED === 'true')
-  if (env.RA_MEMORY_PATH !== undefined)         set(['memory', 'path'], env.RA_MEMORY_PATH)
-  if (env.RA_MEMORY_MAX_SIZE_MB !== undefined)  setInt(['memory', 'maxSizeMB'], env.RA_MEMORY_MAX_SIZE_MB)
-  if (env.RA_MEMORY_TTL_DAYS !== undefined)     setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
-  if (env.RA_MEMORY_EXTRACTOR !== undefined)    set(['memory', 'extractor'], env.RA_MEMORY_EXTRACTOR)
-  if (env.RA_MEMORY_AUTO_EXTRACT !== undefined) set(['memory', 'autoExtract'], env.RA_MEMORY_AUTO_EXTRACT === 'true')
+  if (env.RA_MEMORY_ENABLED !== undefined)          set(['memory', 'enabled'], env.RA_MEMORY_ENABLED === 'true')
+  if (env.RA_MEMORY_PATH !== undefined)             set(['memory', 'path'], env.RA_MEMORY_PATH)
+  if (env.RA_MEMORY_MAX_SIZE_MB !== undefined)      setInt(['memory', 'maxSizeMB'], env.RA_MEMORY_MAX_SIZE_MB)
+  if (env.RA_MEMORY_TTL_DAYS !== undefined)         setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
+  if (env.RA_MEMORY_SESSION_TTL_HOURS !== undefined) setInt(['memory', 'sessionTTLHours'], env.RA_MEMORY_SESSION_TTL_HOURS)
+  if (env.RA_MEMORY_EXTRACTOR !== undefined)        set(['memory', 'extractor'], env.RA_MEMORY_EXTRACTOR)
+  if (env.RA_MEMORY_AUTO_EXTRACT !== undefined)     set(['memory', 'autoExtract'], env.RA_MEMORY_AUTO_EXTRACT === 'true')
+  if (env.RA_MEMORY_REFLECT !== undefined)          set(['memory', 'reflect'], env.RA_MEMORY_REFLECT === 'true')
+  if (env.RA_MEMORY_REFLECTION_MODEL !== undefined) set(['memory', 'reflectionModel'], env.RA_MEMORY_REFLECTION_MODEL)
 
   // Provider credentials — env-only (not CLI flags, to avoid leaking in process list/shell history)
   if (env.RA_ANTHROPIC_API_KEY !== undefined)  set(['providers', 'anthropic', 'apiKey'], env.RA_ANTHROPIC_API_KEY)

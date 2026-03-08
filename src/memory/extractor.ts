@@ -1,55 +1,214 @@
-import type { IMessage } from '../providers/types'
+import type { IMessage, IProvider } from '../providers/types'
 
 /**
- * A memory extractor takes conversation messages and returns
- * extracted memories (content + optional tags).
+ * An extracted memory entry before it's saved.
+ */
+export interface MemoryEntry {
+  content: string
+  tags: string
+  layer: 'session' | 'long-term'
+}
+
+/**
+ * Pattern-based extraction rule. Each pattern is a regex
+ * applied to messages, with a tag and layer assignment.
+ */
+export interface ExtractionPattern {
+  /** Regex pattern to match against message content */
+  pattern: string
+  /** Which message roles to apply this to (default: all) */
+  roles?: ('user' | 'assistant' | 'tool' | 'system')[]
+  /** Tag to assign to extracted memories */
+  tag: string
+  /** Which layer to store in (default: session) */
+  layer?: 'session' | 'long-term'
+  /** Max content length to consider (skip long messages). 0 = no limit */
+  maxLength?: number
+  /**
+   * If 'match', store the matched group (first capture group or full match).
+   * If 'full', store the entire message content.
+   * Default: 'match'
+   */
+  capture?: 'match' | 'full'
+}
+
+/**
+ * A memory extractor pulls structured memories from conversation messages.
  */
 export interface MemoryExtractor {
   extract(messages: IMessage[]): MemoryEntry[]
 }
 
-export interface MemoryEntry {
-  content: string
-  tags: string
-}
+/** Default extraction patterns — the baseline set */
+export const DEFAULT_PATTERNS: ExtractionPattern[] = [
+  // Explicit [REMEMBER: ...] markers from any role
+  {
+    pattern: '\\[REMEMBER:\\s*(.+?)\\]',
+    tag: 'explicit',
+    layer: 'long-term',
+    capture: 'match',
+  },
+  // User corrections and preferences (short messages)
+  {
+    pattern: '^(actually|no,|instead|i prefer|always use|never use|remember that|don\'t forget|keep in mind|my name is|i use|i work with)\\b',
+    roles: ['user'],
+    tag: 'user-preference',
+    layer: 'long-term',
+    maxLength: 300,
+    capture: 'full',
+  },
+]
 
 /**
- * Default extractor: looks for assistant messages that contain
- * explicit memory markers like [REMEMBER: ...] or user corrections.
- * Also extracts key facts from tool results that resolve user questions.
+ * Pattern-based extractor. Applies configurable regex patterns to messages.
+ * You can extend the default patterns or replace them entirely.
  */
-export class DefaultMemoryExtractor implements MemoryExtractor {
-  private static REMEMBER_RE = /\[REMEMBER:\s*(.+?)\]/gi
+export class PatternExtractor implements MemoryExtractor {
+  private compiled: { re: RegExp; rule: ExtractionPattern }[]
+
+  constructor(patterns: ExtractionPattern[] = DEFAULT_PATTERNS) {
+    this.compiled = patterns.map(rule => ({
+      re: new RegExp(rule.pattern, 'gi'),
+      rule,
+    }))
+  }
 
   extract(messages: IMessage[]): MemoryEntry[] {
     const entries: MemoryEntry[] = []
+    const seen = new Set<string>()
 
     for (const msg of messages) {
       const text = typeof msg.content === 'string' ? msg.content : ''
       if (!text) continue
 
-      // Extract explicit [REMEMBER: ...] markers from any role
-      let match: RegExpExecArray | null
-      const re = new RegExp(DefaultMemoryExtractor.REMEMBER_RE.source, 'gi')
-      while ((match = re.exec(text)) !== null) {
-        entries.push({ content: match[1]!.trim(), tags: 'explicit' })
-      }
+      for (const { re, rule } of this.compiled) {
+        // Role filter
+        if (rule.roles && !rule.roles.includes(msg.role)) continue
+        // Length filter
+        if (rule.maxLength && text.length > rule.maxLength) continue
 
-      // Extract user preferences/corrections — short user messages that
-      // start with corrective phrases
-      if (msg.role === 'user' && text.length < 500) {
-        const lower = text.toLowerCase()
-        const corrective = [
-          'actually', 'no,', 'wrong', 'instead', 'i prefer',
-          'always use', 'never use', 'remember that', 'don\'t forget',
-          'keep in mind', 'my name is', 'i use', 'i work with',
-        ]
-        if (corrective.some(p => lower.startsWith(p) || lower.includes(p))) {
-          entries.push({ content: text, tags: 'user-preference' })
+        // Reset regex state for each message
+        const regex = new RegExp(re.source, re.flags)
+        let match: RegExpExecArray | null
+        while ((match = regex.exec(text)) !== null) {
+          const content = rule.capture === 'full'
+            ? text
+            : (match[1] ?? match[0]).trim()
+
+          // Deduplicate within this extraction pass
+          const key = `${rule.tag}:${content}`
+          if (seen.has(key)) continue
+          seen.add(key)
+
+          entries.push({
+            content,
+            tags: rule.tag,
+            layer: rule.layer ?? 'session',
+          })
+
+          // For 'full' capture, one match per message is enough
+          if (rule.capture === 'full') break
         }
       }
     }
 
     return entries
+  }
+}
+
+// Keep backward compat alias
+export { PatternExtractor as DefaultMemoryExtractor }
+
+const REFLECTION_PROMPT = `You are a memory extraction system. Analyze the following conversation and extract important learnings, facts, preferences, and decisions that would be valuable to remember for future conversations.
+
+For each memory, output a JSON array of objects with these fields:
+- "content": the memory text (concise, self-contained, factual)
+- "tags": comma-separated tags for categorization
+- "layer": "long-term" for durable facts/preferences, "session" for context relevant to this session only
+
+Focus on:
+- User preferences and working style
+- Technical decisions and their rationale
+- Project-specific facts (architecture, conventions, constraints)
+- Corrections the user made
+- Key outcomes of tasks
+
+Do NOT include:
+- Trivial conversational exchanges
+- Information that's already obvious from context
+- Duplicates of what was already explicitly remembered
+
+If there's nothing worth extracting, return an empty array: []
+
+Output ONLY valid JSON, no other text.
+
+<conversation>
+{CONVERSATION}
+</conversation>`
+
+/**
+ * LLM-driven reflective extractor. Sends the conversation to a model
+ * and asks it to extract structured learnings.
+ */
+export class ReflectiveExtractor implements MemoryExtractor {
+  private provider: IProvider
+  private model: string
+
+  constructor(provider: IProvider, model?: string) {
+    this.provider = provider
+    this.model = model ?? 'default'
+  }
+
+  /** Synchronous extract returns empty — use extractAsync for LLM-driven flow */
+  extract(_messages: IMessage[]): MemoryEntry[] {
+    return []
+  }
+
+  /** Async LLM-driven extraction */
+  async extractAsync(messages: IMessage[]): Promise<MemoryEntry[]> {
+    // Filter to substantive messages only
+    const substantive = messages.filter(m =>
+      (m.role === 'user' || m.role === 'assistant') &&
+      typeof m.content === 'string' &&
+      m.content.length > 10,
+    )
+    if (substantive.length < 2) return []
+
+    // Build a condensed conversation transcript
+    const transcript = substantive.slice(-30).map(m => {
+      const text = typeof m.content === 'string' ? m.content : ''
+      // Truncate very long messages
+      const truncated = text.length > 1000 ? text.slice(0, 1000) + '...' : text
+      return `[${m.role}]: ${truncated}`
+    }).join('\n\n')
+
+    const prompt = REFLECTION_PROMPT.replace('{CONVERSATION}', transcript)
+
+    try {
+      const response = await this.provider.chat({
+        model: this.model,
+        messages: [{ role: 'user', content: prompt }],
+      })
+
+      const text = typeof response.message.content === 'string'
+        ? response.message.content
+        : ''
+
+      // Extract JSON from response (handle markdown code blocks)
+      const jsonMatch = text.match(/\[[\s\S]*\]/)
+      if (!jsonMatch) return []
+
+      const parsed = JSON.parse(jsonMatch[0]) as Array<{ content: string; tags: string; layer?: string }>
+      return parsed
+        .filter(e => e.content && typeof e.content === 'string')
+        .map(e => ({
+          content: e.content,
+          tags: e.tags ?? '',
+          layer: (e.layer === 'session' ? 'session' : 'long-term') as 'session' | 'long-term',
+        }))
+    } catch {
+      // Reflection is best-effort — never fail the main flow
+      return []
+    }
   }
 }

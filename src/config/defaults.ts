@@ -54,6 +54,8 @@ export const defaultConfig: RaConfig = {
     path: '.ra/memory.db',
     maxSizeMB: 50,
     ttlDays: 90,
+    sessionTTLHours: 24,
     autoExtract: true,
+    reflect: false,
   },
 }

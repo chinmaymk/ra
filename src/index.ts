@@ -17,8 +17,8 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools } from './tools'
-import { MemoryStore, memorySearchTool, memorySaveTool, createMemoryMiddleware, DefaultMemoryExtractor } from './memory'
-import type { MemoryExtractor } from './memory'
+import { MemoryStore, memorySearchTool, memorySaveTool, memoryDeleteTool, createMemoryMiddleware, DEFAULT_PATTERNS } from './memory'
+import type { MemoryExtractor, ExtractionPattern } from './memory'
 import { join } from 'path'
 
 async function readStdin(): Promise<string | undefined> {
@@ -261,11 +261,14 @@ async function main(): Promise<void> {
       path: memoryPath,
       maxSizeMB: config.memory.maxSizeMB,
       ttlDays: config.memory.ttlDays,
+      sessionTTLHours: config.memory.sessionTTLHours,
     })
     tools.register(memorySearchTool(memoryStore))
     tools.register(memorySaveTool(memoryStore))
+    tools.register(memoryDeleteTool(memoryStore))
 
-    if (config.memory.autoExtract) {
+    if (config.memory.autoExtract || config.memory.reflect) {
+      // Load custom extractor if specified
       let extractor: MemoryExtractor | undefined
       if (config.memory.extractor) {
         const extractorPath = config.memory.extractor.startsWith('/')
@@ -274,9 +277,26 @@ async function main(): Promise<void> {
         const mod = await import(extractorPath)
         extractor = mod.default ?? mod
       }
-      const memMw = createMemoryMiddleware({ store: memoryStore, extractor })
+
+      // Merge user patterns with defaults
+      const patterns = config.memory.patterns
+        ? [...DEFAULT_PATTERNS, ...config.memory.patterns] as ExtractionPattern[]
+        : undefined
+
+      const memMw = createMemoryMiddleware({
+        store: memoryStore,
+        extractor,
+        patterns,
+        provider: config.memory.reflect ? provider : undefined,
+        reflectionModel: config.memory.reflectionModel,
+      })
       middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
-      middleware.afterLoopIteration = [...(middleware.afterLoopIteration ?? []), memMw.afterLoopIteration]
+      if (config.memory.autoExtract) {
+        middleware.afterLoopIteration = [...(middleware.afterLoopIteration ?? []), memMw.afterLoopIteration]
+      }
+      if (config.memory.reflect) {
+        middleware.afterLoopComplete = [...(middleware.afterLoopComplete ?? []), memMw.afterLoopComplete]
+      }
     }
   }
 
