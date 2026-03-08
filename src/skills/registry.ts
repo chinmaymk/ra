@@ -1,12 +1,11 @@
 import { join, basename } from 'path'
 import { mkdirSync, cpSync, rmSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { firstSegment } from '../utils/paths'
+import { homeDir, firstSegment } from '../utils/paths'
 import type { SkillSource } from './types'
 
 /** Default directory for installed skills */
 export function defaultSkillInstallDir(): string {
-  return join(homedir(), '.ra', 'skills')
+  return join(homeDir(), '.ra', 'skills')
 }
 
 /**

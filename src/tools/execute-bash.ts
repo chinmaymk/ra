@@ -5,7 +5,7 @@ export function executeBashTool(): ITool {
   return {
     name: 'execute_bash',
     description:
-      `Run a bash command on this ${process.platform === 'darwin' ? 'macOS' : 'Linux'} system. ` +
+      `Run a bash command on this ${process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows (WSL/Git Bash)' : 'Linux'} system. ` +
       'Returns stdout and stderr combined. Default timeout: 30s.',
     inputSchema: {
       type: 'object',

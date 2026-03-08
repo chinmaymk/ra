@@ -1,7 +1,7 @@
 import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
-import { resolvePath } from '../utils/paths'
+import { resolvePath, looksLikePath } from '../utils/paths'
 import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions } from './types'
 
@@ -162,17 +162,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   const config = merged as unknown as RaConfig
 
   // Only try loading systemPrompt as a file if it looks like a path
-  if (config.systemPrompt && (
-    isAbsolute(config.systemPrompt) ||
-    config.systemPrompt.startsWith('./') ||
-    config.systemPrompt.startsWith('../') ||
-    config.systemPrompt.startsWith('~/') ||
-    config.systemPrompt.startsWith('.\\') ||
-    config.systemPrompt.startsWith('..\\') ||
-    config.systemPrompt.startsWith('~\\') ||
-    config.systemPrompt.endsWith('.txt') ||
-    config.systemPrompt.endsWith('.md')
-  )) {
+  if (config.systemPrompt && looksLikePath(config.systemPrompt, ['.txt', '.md'])) {
     const resolved = resolvePath(config.systemPrompt, cwd)
     const f = Bun.file(resolved)
     if (await f.exists()) config.systemPrompt = await f.text()

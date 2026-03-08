@@ -18,7 +18,7 @@ import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools } from './tools'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
 
 async function readStdin(): Promise<string | undefined> {
@@ -133,7 +133,6 @@ EXAMPLES
 
 
 async function execScript(scriptPath: string): Promise<void> {
-  const { resolve } = await import('path')
   const resolved = resolve(scriptPath)
   const mod = await import(resolved)
   if (typeof mod.default === 'function') {
