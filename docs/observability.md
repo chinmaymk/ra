@@ -14,10 +14,11 @@ index.ts                         observability/middleware.ts
 ────────                         ──────────────────────────
 createObservability(config)  →   Logger + Tracer instances
 createObservabilityMiddleware()  →   { beforeLoopBegin, beforeModelCall, ... }
-mergeMiddleware(userMw, obsMw)  →   Combined middleware passed to AgentLoop
+Prepended into middleware chain  →   obs hooks run first, then user middleware
 
 No logger/tracer params threaded through the codebase.
-The loop, tools, compaction, memory — none know about observability.
+The loop, tools, memory — none know about observability.
+Compaction uses an onCompact callback for logging without coupling to Logger.
 ```
 
 ## Configuration
@@ -100,9 +101,10 @@ Logs are structured JSON events describing *what the agent did*. Each line is a 
 | `executing tool` | info | `tool`, `toolCallId`, `input` (preview, 200 chars) |
 | `tool execution complete` | info | `tool`, `toolCallId`, `resultLength` |
 | `tool execution failed` | error | `tool`, `toolCallId`, `error` |
+| `context compacted` | info | `originalMessages`, `compactedMessages`, `estimatedTokens`, `threshold` |
 | `iteration complete` | debug | `iteration`, `messagesAdded`, `totalMessages` |
 | `agent loop complete` | info | `iterations`, `inputTokens`, `outputTokens`, `totalMessages` |
-| `agent loop failed` | error | `error`, `phase`, `iterations` |
+| `agent loop failed` | error | `error`, `stack`, `phase`, `iterations` |
 
 ## Traces
 
