@@ -66,6 +66,7 @@ export interface RaConfig {
     reflect: boolean           // LLM-driven reflective extraction on loop complete
     reflectionModel?: string   // model for reflection (cheaper model recommended)
     reflectionPrompt?: string  // custom prompt for reflection (must contain {CONVERSATION})
+    injectLimit: number        // number of memories to inject as context (default: 20, 0 to disable)
   }
 }
 

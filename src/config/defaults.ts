@@ -57,5 +57,6 @@ export const defaultConfig: RaConfig = {
     sessionTTLHours: 24,
     autoExtract: true,
     reflect: false,
+    injectLimit: 20,
   },
 }

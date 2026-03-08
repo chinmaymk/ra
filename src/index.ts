@@ -290,6 +290,7 @@ async function main(): Promise<void> {
         provider: config.memory.reflect ? provider : undefined,
         reflectionModel: config.memory.reflectionModel,
         reflectionPrompt: config.memory.reflectionPrompt,
+        injectLimit: config.memory.injectLimit,
       })
       middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
       if (config.memory.autoExtract) {

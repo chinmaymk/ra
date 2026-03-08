@@ -120,6 +120,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_MEMORY_REFLECT !== undefined)            set(['memory', 'reflect'], env.RA_MEMORY_REFLECT === 'true')
   if (env.RA_MEMORY_REFLECTION_MODEL !== undefined)  set(['memory', 'reflectionModel'], env.RA_MEMORY_REFLECTION_MODEL)
   if (env.RA_MEMORY_REFLECTION_PROMPT !== undefined) set(['memory', 'reflectionPrompt'], env.RA_MEMORY_REFLECTION_PROMPT)
+  if (env.RA_MEMORY_INJECT_LIMIT !== undefined)    setInt(['memory', 'injectLimit'], env.RA_MEMORY_INJECT_LIMIT)
 
   // Provider credentials — env-only (not CLI flags, to avoid leaking in process list/shell history)
   if (env.RA_ANTHROPIC_API_KEY !== undefined)  set(['providers', 'anthropic', 'apiKey'], env.RA_ANTHROPIC_API_KEY)

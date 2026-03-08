@@ -452,9 +452,52 @@ describe('memory middleware — layered', () => {
     expect(store.count()).toBe(0)
   })
 
-  it('prunes on loop begin', async () => {
+  it('injects recalled memories as user message on loop begin', async () => {
+    store.save('User prefers dark mode', { layer: 'long-term', tags: 'preference' })
+    store.save('Working on auth service', { layer: 'session', sessionId: 'test-session', tags: 'context' })
+
     const mw = createMemoryMiddleware({ store })
-    await mw.beforeLoopBegin(makeCtx([], 0))
-    // Should not throw
+    const messages: IMessage[] = []
+    await mw.beforeLoopBegin(makeCtx(messages, 0))
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]!.role).toBe('user')
+    const content = messages[0]!.content as string
+    expect(content).toContain('<recalled-memories>')
+    expect(content).toContain('User prefers dark mode')
+    expect(content).toContain('Working on auth service')
+  })
+
+  it('respects injectLimit', async () => {
+    for (let i = 0; i < 10; i++) {
+      store.save(`Fact ${i}`, { layer: 'long-term' })
+    }
+
+    const mw = createMemoryMiddleware({ store, injectLimit: 3 })
+    const messages: IMessage[] = []
+    await mw.beforeLoopBegin(makeCtx(messages, 0))
+
+    const content = messages[0]!.content as string
+    // Should only have 3 lines (most recent)
+    const lines = content.split('\n').filter(l => l.startsWith('- '))
+    expect(lines).toHaveLength(3)
+  })
+
+  it('skips injection when injectLimit is 0', async () => {
+    store.save('Some fact', { layer: 'long-term' })
+
+    const mw = createMemoryMiddleware({ store, injectLimit: 0 })
+    const messages: IMessage[] = []
+    await mw.beforeLoopBegin(makeCtx(messages, 0))
+
+    expect(messages).toHaveLength(0)
+  })
+
+  it('skips injection when no memories exist', async () => {
+    const mw = createMemoryMiddleware({ store })
+    const messages: IMessage[] = []
+    await mw.beforeLoopBegin(makeCtx(messages, 0))
+
+    expect(messages).toHaveLength(0)
   })
 })
