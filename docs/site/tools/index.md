@@ -218,6 +218,37 @@ The dynamic description looks like:
 
 > Track tasks with a checklist. Actions: "add" (item text), "check"/"uncheck"/"remove" (by 0-based index), "list" (show all). Remaining (2/3): 1: Fix bug, 2: Deploy
 
+## Memory
+
+When [memory](/configuration/#memory) is enabled, three additional tools are registered.
+
+### `memory_save`
+
+Save a fact to persistent memory for future conversations. Proactively saves user preferences, project decisions, corrections, and key context. To update an existing memory, the agent forgets the old version first, then saves the new one.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `content` | string | yes | Self-contained fact, e.g. "User prefers tabs over spaces" |
+| `tags` | string | no | Category: `preference`, `project`, `convention`, `team`, or `tooling` |
+
+### `memory_search`
+
+Search persistent memories by keyword. Recent memories are automatically injected at conversation start — this tool is for targeted lookups beyond the recalled set.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Full-text search keywords, e.g. "typescript tabs" or "deployment" |
+| `limit` | number | no | Max results (default: 10) |
+
+### `memory_forget`
+
+Delete memories matching a search query. Used when the user corrects previous information, a fact becomes outdated, or before saving an updated version of an existing memory.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Search keywords to match memories to delete |
+| `limit` | number | no | Max memories to delete (default: 10) |
+
 ## Disabling built-in tools
 
 To run ra without built-in tools (e.g., when using only [MCP tools](/modes/mcp)):

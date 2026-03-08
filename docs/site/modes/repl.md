@@ -19,6 +19,8 @@ You get a `›` prompt. Type a message and ra streams the response, runs tools a
 | `/skill-ref <skill> <file>` | Load a skill reference into context |
 | `/attach <path>` | Attach a file to the next message |
 | `/context` | Show discovered context files |
+| `/memories [n]` | Show stored memories (default: last 20) |
+| `/forget <query>` | Delete memories matching a search query |
 
 ## Example session
 

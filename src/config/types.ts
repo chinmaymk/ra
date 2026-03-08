@@ -47,6 +47,13 @@ export interface RaConfig {
     contextWindow?: number // per-provider override for context window size
     model?: string         // cheaper model for summarization, defaults per provider
   }
+  memory: {
+    enabled: boolean
+    path: string         // SQLite database path
+    maxMemories: number  // max stored memories (oldest trimmed first)
+    ttlDays: number      // auto-prune memories older than this
+    injectLimit: number  // memories to inject as context per loop (0 to disable)
+  }
 }
 
 export interface McpClientConfig {
