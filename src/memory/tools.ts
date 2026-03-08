@@ -6,9 +6,9 @@ export function memorySearchTool(store: MemoryStore): ITool {
     name: 'memory_search',
     description:
       'Search memories for relevant information from past conversations. ' +
-      'Uses full-text search across both session and long-term memory layers. ' +
-      'Returns matching memories ranked by relevance. ' +
-      'Use this to recall user preferences, past decisions, project context, or any previously stored knowledge.',
+      'Uses full-text search across session and long-term memory layers. ' +
+      'PROACTIVELY search at the start of tasks to check for relevant prior context — ' +
+      'user preferences, project conventions, or past decisions that should inform your approach.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -34,9 +34,9 @@ export function memorySaveTool(store: MemoryStore): ITool {
     name: 'memory_save',
     description:
       'Save important information to memory for future reference. ' +
-      'Use layer="long-term" for durable facts (user preferences, project decisions, technical choices). ' +
-      'Use layer="session" for context relevant only to the current conversation. ' +
-      'Add comma-separated tags for categorization.',
+      'PROACTIVELY save when you notice user preferences, corrections, project decisions, or technical choices — ' +
+      'don\'t wait to be asked. Use layer="long-term" for durable facts, layer="session" for current conversation context. ' +
+      'Keep content concise and self-contained.',
     inputSchema: {
       type: 'object',
       properties: {

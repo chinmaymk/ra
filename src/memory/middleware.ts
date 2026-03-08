@@ -21,7 +21,7 @@ export interface MemoryMiddlewareOptions {
 /**
  * Creates middleware for the layered memory system.
  *
- * - beforeLoopBegin: prunes expired memories, injects relevant long-term context
+ * - beforeLoopBegin: prunes expired memories
  * - afterLoopIteration: pattern-based extraction into session layer
  * - afterLoopComplete: LLM-driven reflection to promote learnings to long-term
  */
