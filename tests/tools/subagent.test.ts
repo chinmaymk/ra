@@ -427,7 +427,7 @@ describe('subagent tool', () => {
     expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'Be concise and helpful.')).toBe(true)
   })
 
-  it('per-task systemPrompt overrides config system', async () => {
+  it('per-task systemPrompt appends to config system', async () => {
     const capturedMessages: any[] = []
     const provider: IProvider = {
       name: 'mock',
@@ -448,8 +448,36 @@ describe('subagent tool', () => {
       tasks: [{ task: 'do something', systemPrompt: 'Task-specific prompt.' }],
     })
 
-    expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'Task-specific prompt.')).toBe(true)
-    expect(capturedMessages.some((m: any) => m.content === 'Parent prompt')).toBe(false)
+    const systemMsg = capturedMessages.find((m: any) => m.role === 'system')
+    expect(systemMsg).toBeDefined()
+    expect(systemMsg.content).toContain('Parent prompt')
+    expect(systemMsg.content).toContain('Task-specific prompt.')
+  })
+
+  it('per-task systemPrompt alone works when config system is none', async () => {
+    const capturedMessages: any[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req) {
+        capturedMessages.push(...req.messages)
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({
+      provider, tools: new ToolRegistry(), model: 'test',
+      systemPrompt: 'Parent prompt',
+      // system defaults to 'none'
+    })
+    await tool.execute({
+      tasks: [{ task: 'do something', systemPrompt: 'Task-only prompt.' }],
+    })
+
+    const systemMsg = capturedMessages.find((m: any) => m.role === 'system')
+    expect(systemMsg).toBeDefined()
+    expect(systemMsg.content).toBe('Task-only prompt.')
   })
 
   // ── Config: allowedTools ──────────────────────────────────────

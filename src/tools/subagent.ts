@@ -99,8 +99,10 @@ export function subagentTool(options: SubagentToolOptions): ITool {
       const results = await Promise.all(tasks.map(async ({ task, systemPrompt }) => {
         const messages: IMessage[] = []
 
-        // System prompt priority: per-task override > config-level
-        const effectiveSystem = systemPrompt ?? configSystem
+        // Config system is the recipe author's base; per-task appends to it
+        const effectiveSystem = configSystem && systemPrompt
+          ? `${configSystem}\n\n${systemPrompt}`
+          : systemPrompt ?? configSystem
         if (effectiveSystem) messages.push({ role: 'system', content: effectiveSystem })
 
         messages.push({ role: 'user', content: task })
