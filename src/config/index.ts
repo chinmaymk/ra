@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { join, dirname } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { defaultConfig } from './defaults'
@@ -40,11 +40,21 @@ function deepMerge(
 }
 
 async function loadConfigFile(cwd: string, configPath?: string): Promise<Partial<RaConfig>> {
-  const candidates = configPath
-    ? [configPath.startsWith('/') ? configPath : join(cwd, configPath)]
-    : CONFIG_FILES.map(name => join(cwd, name))
-  for (const full of candidates) {
+  if (configPath) {
+    const full = configPath.startsWith('/') ? configPath : join(cwd, configPath)
     if (await Bun.file(full).exists()) return parseFile(full)
+    return {}
+  }
+  // Walk up the directory tree until a config file is found
+  let dir = cwd
+  while (true) {
+    for (const name of CONFIG_FILES) {
+      const full = join(dir, name)
+      if (await Bun.file(full).exists()) return parseFile(full)
+    }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
   }
   return {}
 }
