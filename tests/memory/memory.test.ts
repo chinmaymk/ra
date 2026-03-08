@@ -24,9 +24,9 @@ afterEach(() => {
 })
 
 describe('MemoryStore — layered', () => {
-  it('saves to long-term by default', () => {
+  it('saves to session by default', () => {
     const m = store.save('User prefers dark mode')
-    expect(m.layer).toBe('long-term')
+    expect(m.layer).toBe('session')
     expect(m.sessionId).toBe('')
   })
 
@@ -136,7 +136,7 @@ describe('MemoryStore — FTS', () => {
 describe('PatternExtractor', () => {
   const extractor = new PatternExtractor()
 
-  it('extracts [REMEMBER: ...] markers as long-term', () => {
+  it('extracts [REMEMBER: ...] markers as session', () => {
     const messages: IMessage[] = [
       { role: 'assistant', content: 'Sure! [REMEMBER: User prefers tabs over spaces] I will use tabs.' },
     ]
@@ -144,7 +144,7 @@ describe('PatternExtractor', () => {
     expect(entries).toHaveLength(1)
     expect(entries[0]!.content).toBe('User prefers tabs over spaces')
     expect(entries[0]!.tags).toBe('explicit')
-    expect(entries[0]!.layer).toBe('long-term')
+    expect(entries[0]!.layer).toBe('session')
   })
 
   it('extracts multiple markers from one message', () => {
@@ -154,14 +154,14 @@ describe('PatternExtractor', () => {
     expect(extractor.extract(messages)).toHaveLength(2)
   })
 
-  it('extracts user preferences as long-term', () => {
+  it('extracts user preferences as session', () => {
     const messages: IMessage[] = [
       { role: 'user', content: 'I prefer using vim over vscode' },
     ]
     const entries = extractor.extract(messages)
     expect(entries).toHaveLength(1)
     expect(entries[0]!.tags).toBe('user-preference')
-    expect(entries[0]!.layer).toBe('long-term')
+    expect(entries[0]!.layer).toBe('session')
   })
 
   it('extracts corrective statements', () => {
@@ -264,10 +264,10 @@ describe('ReflectiveExtractor', () => {
     }
   }
 
-  it('extracts learnings from conversation via LLM', async () => {
+  it('extracts learnings as long-term via LLM', async () => {
     const provider = mockProvider(JSON.stringify([
-      { content: 'User prefers functional style', tags: 'preference,code-style', layer: 'long-term' },
-      { content: 'Working on auth service refactor', tags: 'project', layer: 'session' },
+      { content: 'User prefers functional style', tags: 'preference,code-style' },
+      { content: 'Project uses TypeScript strictly', tags: 'project' },
     ]))
 
     const extractor = new ReflectiveExtractor(provider)
@@ -279,7 +279,7 @@ describe('ReflectiveExtractor', () => {
     const entries = await extractor.extractAsync(messages)
     expect(entries).toHaveLength(2)
     expect(entries[0]!.layer).toBe('long-term')
-    expect(entries[1]!.layer).toBe('session')
+    expect(entries[1]!.layer).toBe('long-term')
   })
 
   it('handles LLM returning markdown-wrapped JSON', async () => {
@@ -347,16 +347,16 @@ describe('ReflectiveExtractor', () => {
 })
 
 describe('memory tools — layered', () => {
-  it('memory_save defaults to long-term', async () => {
+  it('memory_save defaults to session', async () => {
     const tool = memorySaveTool(store)
     await tool.execute({ content: 'Always use bun', tags: 'tooling' })
-    expect(store.count('long-term')).toBe(1)
+    expect(store.count('session')).toBe(1)
   })
 
-  it('memory_save supports session layer', async () => {
+  it('memory_save supports long-term layer', async () => {
     const tool = memorySaveTool(store)
-    await tool.execute({ content: 'Current branch is feature-x', layer: 'session' })
-    expect(store.count('session')).toBe(1)
+    await tool.execute({ content: 'User prefers tabs', layer: 'long-term' })
+    expect(store.count('long-term')).toBe(1)
   })
 
   it('memory_search filters by layer', async () => {

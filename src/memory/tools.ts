@@ -35,20 +35,21 @@ export function memorySaveTool(store: MemoryStore): ITool {
     description:
       'Save important information to memory for future reference. ' +
       'PROACTIVELY save when you notice user preferences, corrections, project decisions, or technical choices — ' +
-      'don\'t wait to be asked. Use layer="long-term" for durable facts, layer="session" for current conversation context. ' +
+      'don\'t wait to be asked. Memories default to the session layer. ' +
+      'Only use layer="long-term" for facts that have proven importance across conversations. ' +
       'Keep content concise and self-contained.',
     inputSchema: {
       type: 'object',
       properties: {
         content: { type: 'string', description: 'The information to remember' },
         tags: { type: 'string', description: 'Comma-separated tags (e.g. "preference,editor,setup")' },
-        layer: { type: 'string', enum: ['session', 'long-term'], description: 'Memory layer (default: long-term)' },
+        layer: { type: 'string', enum: ['session', 'long-term'], description: 'Memory layer (default: session). Use long-term only for proven, durable facts.' },
       },
       required: ['content'],
     },
     async execute(input: unknown) {
       const { content, tags, layer } = input as { content: string; tags?: string; layer?: 'session' | 'long-term' }
-      const memory = store.save(content, { tags: tags ?? '', layer: layer ?? 'long-term' })
+      const memory = store.save(content, { tags: tags ?? '', layer: layer ?? 'session' })
       store.enforceMaxSize()
       return `Memory saved (id: ${memory.id}, layer: ${memory.layer}).`
     },

@@ -45,7 +45,7 @@ export const DEFAULT_PATTERNS: ExtractionPattern[] = [
   {
     pattern: '\\[REMEMBER:\\s*(.+?)\\]',
     tag: 'explicit',
-    layer: 'long-term',
+    layer: 'session',
     capture: 'match',
   },
   // User corrections and preferences (short messages)
@@ -53,7 +53,7 @@ export const DEFAULT_PATTERNS: ExtractionPattern[] = [
     pattern: '^(actually|no,|instead|i prefer|always use|never use|remember that|don\'t forget|keep in mind|my name is|i use|i work with)\\b',
     roles: ['user'],
     tag: 'user-preference',
-    layer: 'long-term',
+    layer: 'session',
     maxLength: 300,
     capture: 'full',
   },
@@ -119,26 +119,27 @@ export class PatternExtractor implements MemoryExtractor {
 // Keep backward compat alias
 export { PatternExtractor as DefaultMemoryExtractor }
 
-export const DEFAULT_REFLECTION_PROMPT = `You are a memory extraction system. Analyze the following conversation and extract important learnings, facts, preferences, and decisions that would be valuable to remember for future conversations.
+export const DEFAULT_REFLECTION_PROMPT = `You are a memory extraction system. Analyze the following conversation and identify learnings that deserve to be promoted to long-term memory — facts, preferences, and decisions that would be valuable across future conversations.
 
 For each memory, output a JSON array of objects with these fields:
 - "content": the memory text (concise, self-contained, factual)
 - "tags": comma-separated tags for categorization
-- "layer": "long-term" for durable facts/preferences, "session" for context relevant to this session only
 
-Focus on:
-- User preferences and working style
-- Technical decisions and their rationale
-- Project-specific facts (architecture, conventions, constraints)
-- Corrections the user made
-- Key outcomes of tasks
+The bar for long-term memory is high. Only extract things that have proven importance — patterns that recur, preferences the user has reinforced, or decisions with lasting impact.
 
-Do NOT include:
+Extract:
+- User preferences and working style that were reinforced or corrected
+- Technical decisions with lasting architectural impact
+- Project conventions or constraints that will apply going forward
+- Corrections the user made emphatically or repeatedly
+
+Do NOT extract:
+- One-off task context or ephemeral details
 - Trivial conversational exchanges
-- Information that's already obvious from context
-- Duplicates of what was already explicitly remembered
+- Information that's only relevant to the current session
+- Anything uncertain — when in doubt, leave it out
 
-If there's nothing worth extracting, return an empty array: []
+If there's nothing worth promoting to long-term memory, return an empty array: []
 
 Output ONLY valid JSON, no other text.
 
@@ -202,13 +203,13 @@ export class ReflectiveExtractor implements MemoryExtractor {
       const jsonMatch = text.match(/\[[\s\S]*\]/)
       if (!jsonMatch) return []
 
-      const parsed = JSON.parse(jsonMatch[0]) as Array<{ content: string; tags: string; layer?: string }>
+      const parsed = JSON.parse(jsonMatch[0]) as Array<{ content: string; tags: string }>
       return parsed
         .filter(e => e.content && typeof e.content === 'string')
         .map(e => ({
           content: e.content,
           tags: e.tags ?? '',
-          layer: (e.layer === 'session' ? 'session' : 'long-term') as 'session' | 'long-term',
+          layer: 'long-term' as const,
         }))
     } catch {
       // Reflection is best-effort — never fail the main flow

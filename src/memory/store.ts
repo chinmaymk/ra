@@ -73,7 +73,7 @@ export class MemoryStore {
 
   /** Save a memory to a specific layer */
   save(content: string, opts: { tags?: string; layer?: 'session' | 'long-term'; sessionId?: string } = {}): Memory {
-    const { tags = '', layer = 'long-term', sessionId = '' } = opts
+    const { tags = '', layer = 'session', sessionId = '' } = opts
     const stmt = this.db.prepare(
       `INSERT INTO memories (content, tags, layer, session_id)
        VALUES (?, ?, ?, ?)

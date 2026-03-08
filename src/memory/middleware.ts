@@ -87,8 +87,7 @@ export function createMemoryMiddleware(options: MemoryMiddlewareOptions) {
       for (const entry of entries) {
         store.save(entry.content, {
           tags: entry.tags,
-          layer: entry.layer,
-          sessionId: entry.layer === 'session' ? (sessionId || ctx.sessionId) : '',
+          layer: 'long-term',
         })
       }
       store.enforceMaxSize()
