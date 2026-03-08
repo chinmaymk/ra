@@ -27,7 +27,7 @@ export async function loadResolvers(
       const resolved = resolvePath(config.path, cwd)
       const mod = await import(resolved)
       const resolver = mod.default as PatternResolver
-      if (!resolver || !resolver.pattern || typeof resolver.resolve !== 'function') {
+      if (!resolver || !(resolver.pattern instanceof RegExp) || typeof resolver.resolve !== 'function') {
         console.warn(`[ra] Resolver file "${resolved}" must export a default PatternResolver — skipping`)
         continue
       }

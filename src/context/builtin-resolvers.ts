@@ -21,7 +21,7 @@ export const fileResolver: PatternResolver = {
 async function resolveFile(ref: string, cwd: string): Promise<string | null> {
   const absPath = resolve(cwd, ref)
   // Prevent path traversal outside the working directory
-  if (!absPath.startsWith(cwd + '/') && absPath !== cwd) return null
+  if (relative(cwd, absPath).startsWith('..')) return null
   try {
     const content = await Bun.file(absPath).text()
     return `[${relative(cwd, absPath)}]\n${content}`
