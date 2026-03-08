@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Content, Part, Tool as GeminiTool, GenerateContentResponse } from '@google/generative-ai'
 import { extractSystemMessages } from './utils'
+import { getMimeType } from '../utils/mime'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
@@ -124,19 +125,12 @@ export class GoogleProvider implements IProvider {
       if (part.type === 'text') return { text: part.text }
       if (part.type === 'image') {
         const src = part.source
-        return src.type === 'base64' ? { inlineData: { mimeType: src.mediaType, data: src.data } } : { fileData: { mimeType: this.inferMimeType(src.url), fileUri: src.url } }
+        return src.type === 'base64' ? { inlineData: { mimeType: src.mediaType, data: src.data } } : { fileData: { mimeType: getMimeType(src.url), fileUri: src.url } }
       }
       return { inlineData: { mimeType: part.mimeType, data: typeof part.data === 'string' ? part.data : Buffer.from(part.data).toString('base64') } }
     })
   }
 
-  private inferMimeType(url: string): string {
-    if (url.endsWith('.png')) return 'image/png'
-    if (url.endsWith('.gif')) return 'image/gif'
-    if (url.endsWith('.webp')) return 'image/webp'
-    if (url.endsWith('.svg')) return 'image/svg+xml'
-    return 'image/jpeg'
-  }
 
   mapResponseToMessage(response: GenerateContentResponse): IMessage {
     const toolCalls: IToolCall[] = []

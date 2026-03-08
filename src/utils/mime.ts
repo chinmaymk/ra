@@ -4,6 +4,7 @@ const MIME_MAP: Record<string, string> = {
   jpeg: 'image/jpeg',
   gif: 'image/gif',
   webp: 'image/webp',
+  svg: 'image/svg+xml',
   pdf: 'application/pdf',
   txt: 'text/plain',
   md: 'text/markdown',

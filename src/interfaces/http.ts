@@ -121,7 +121,7 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const messages = this.prependSystem(body.messages ?? [])
+    const messages = this.prependSystem(body.messages)
 
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -174,7 +174,7 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const messages = this.prependSystem(body.messages ?? [])
+    const messages = this.prependSystem(body.messages)
     const opts = this.options
     const stream = new ReadableStream({
       async start(controller) {

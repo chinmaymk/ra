@@ -1,4 +1,4 @@
-import type { IMessage, IProvider } from '../providers/types'
+import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { Middleware, ModelCallContext } from './types'
 import { estimateTokens } from './token-estimator'
 import { getContextWindowSize } from './model-registry'
@@ -138,58 +138,44 @@ export function createCompactionMiddleware(
     const summaryText = `[Context Summary]\n${summaryContent}`
 
     // Merge summary into the last pinned user message to avoid consecutive user messages.
-    // Pinned always ends with a user message. If recent also starts with user, merge that too.
     const mergedPinned = [...pinned]
     let mergedRecent = [...recent]
 
-    // Build the combined content: pinned user text + summary + (optionally) first recent user text
-    for (let i = mergedPinned.length - 1; i >= 0; i--) {
-      if (mergedPinned[i]!.role === 'user') {
-        const orig = mergedPinned[i]!
+    // Find last pinned user message to merge into
+    const lastUserIdx = mergedPinned.findLastIndex(m => m.role === 'user')
+    if (lastUserIdx >= 0) {
+      const orig = mergedPinned[lastUserIdx]!
 
-        // Build extra text parts to append (summary + optional absorbed user)
-        let extraText = summaryText
-        if (mergedRecent.length > 0 && mergedRecent[0]!.role === 'user') {
-          const recentMsg = mergedRecent[0]!
-          if (typeof recentMsg.content === 'string') {
-            extraText += `\n\n${recentMsg.content}`
-          } else {
-            // Preserve non-text parts (images, files) by keeping them in the merged message
-            const textParts = recentMsg.content.filter(p => p.type === 'text')
-            const nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
-            const recentText = textParts.map(p => (p as { type: 'text'; text: string }).text).join('\n')
-            if (recentText) extraText += `\n\n${recentText}`
-            if (nonTextParts.length > 0) {
-              // Append non-text parts to the merged pinned message content
-              if (typeof orig.content === 'string') {
-                mergedPinned[i] = { ...orig, content: [{ type: 'text' as const, text: `${orig.content}\n\n${extraText}` }, ...nonTextParts] }
-                mergedRecent = mergedRecent.slice(1)
-                break
-              } else {
-                mergedPinned[i] = {
-                  ...orig,
-                  content: [...orig.content, { type: 'text' as const, text: `\n\n${extraText}` }, ...nonTextParts],
-                }
-                mergedRecent = mergedRecent.slice(1)
-                break
-              }
-            }
-          }
-          mergedRecent = mergedRecent.slice(1)
-        }
-
-        // Preserve ContentPart[] structure if original uses it
-        if (typeof orig.content === 'string') {
-          mergedPinned[i] = { ...orig, content: `${orig.content}\n\n${extraText}` }
+      // Build extra text and collect any non-text parts from absorbed recent message
+      let extraText = summaryText
+      const nonTextParts: ContentPart[] = []
+      if (mergedRecent[0]?.role === 'user') {
+        const recentMsg = mergedRecent[0]!
+        if (typeof recentMsg.content === 'string') {
+          extraText += `\n\n${recentMsg.content}`
         } else {
-          mergedPinned[i] = {
-            ...orig,
-            content: [...orig.content, { type: 'text' as const, text: `\n\n${extraText}` }],
+          for (const p of recentMsg.content) {
+            if (p.type === 'text') extraText += `\n\n${p.text}`
+            else nonTextParts.push(p)
           }
         }
-        break
+        mergedRecent = mergedRecent.slice(1)
+      }
+
+      // Merge into the original message, preserving string format when possible
+      if (nonTextParts.length > 0) {
+        // Must use ContentPart[] to hold non-text parts
+        const origParts: ContentPart[] = typeof orig.content === 'string'
+          ? [{ type: 'text' as const, text: orig.content }]
+          : [...orig.content]
+        mergedPinned[lastUserIdx] = { ...orig, content: [...origParts, { type: 'text' as const, text: `\n\n${extraText}` }, ...nonTextParts] }
+      } else if (typeof orig.content === 'string') {
+        mergedPinned[lastUserIdx] = { ...orig, content: `${orig.content}\n\n${extraText}` }
+      } else {
+        mergedPinned[lastUserIdx] = { ...orig, content: [...orig.content, { type: 'text' as const, text: `\n\n${extraText}` }] }
       }
     }
+
     ctx.request.messages.length = 0
     ctx.request.messages.push(...mergedPinned, ...mergedRecent)
   }

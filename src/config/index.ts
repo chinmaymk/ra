@@ -2,6 +2,8 @@ import { join, dirname } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { defaultConfig } from './defaults'
+import { resolvePath } from '../utils/paths'
+import { setPath, safeParseInt } from '../utils/config-helpers'
 import type { RaConfig, LoadConfigOptions } from './types'
 
 export { defaultConfig } from './defaults'
@@ -67,21 +69,6 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
   return {}
 }
 
-// Sets a deeply nested value at a dot-path without clobbering sibling keys
-function setPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
-  let cur = obj
-  for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i]!
-    if (cur[key] === undefined || typeof cur[key] !== 'object') cur[key] = {}
-    cur = cur[key] as Record<string, unknown>
-  }
-  cur[path[path.length - 1]!] = value
-}
-
-function safeParseInt(value: string): number | undefined {
-  const n = parseInt(value, 10)
-  return Number.isNaN(n) ? undefined : n
-}
 
 function loadEnvVars(env: Record<string, string | undefined>): Record<string, unknown> {
   const r: Record<string, unknown> = {}
@@ -162,15 +149,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
     config.systemPrompt.endsWith('.txt') ||
     config.systemPrompt.endsWith('.md')
   )) {
-    let resolved: string
-    if (config.systemPrompt.startsWith('/')) {
-      resolved = config.systemPrompt
-    } else if (config.systemPrompt.startsWith('~/')) {
-      const { homedir } = await import('os')
-      resolved = join(homedir(), config.systemPrompt.slice(2))
-    } else {
-      resolved = join(cwd, config.systemPrompt)
-    }
+    const resolved = resolvePath(config.systemPrompt, cwd)
     const f = Bun.file(resolved)
     if (await f.exists()) config.systemPrompt = await f.text()
   }
