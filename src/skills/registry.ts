@@ -1,11 +1,11 @@
 import { join } from 'path'
-import { mkdirSync, existsSync, writeFileSync } from 'fs'
+import { mkdirSync, cpSync, rmSync, writeFileSync } from 'fs'
+import { homedir } from 'os'
 import type { SkillSource } from './types'
 
 /** Default directory for installed skills */
 export function defaultSkillInstallDir(): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? '~'
-  return join(home, '.ra', 'skills')
+  return join(homedir(), '.ra', 'skills')
 }
 
 /**
@@ -20,11 +20,7 @@ export function defaultSkillInstallDir(): string {
 export function parseSkillSource(source: string): { registry: 'npm' | 'github' | 'url'; identifier: string; version?: string } {
   if (source.startsWith('npm:')) {
     const rest = source.slice(4)
-    const atIdx = rest.lastIndexOf('@')
-    if (atIdx > 0) {
-      return { registry: 'npm', identifier: rest.slice(0, atIdx), version: rest.slice(atIdx + 1) }
-    }
-    return { registry: 'npm', identifier: rest }
+    return splitNpmVersion(rest)
   }
   if (source.startsWith('github:')) {
     return { registry: 'github', identifier: source.slice(7) }
@@ -33,266 +29,169 @@ export function parseSkillSource(source: string): { registry: 'npm' | 'github' |
     return { registry: 'url', identifier: source }
   }
   // Default: treat as npm package
-  const atIdx = source.lastIndexOf('@')
-  if (atIdx > 0) {
-    return { registry: 'npm', identifier: source.slice(0, atIdx), version: source.slice(atIdx + 1) }
-  }
-  return { registry: 'npm', identifier: source }
+  return splitNpmVersion(source)
 }
 
-/**
- * Install a skill from npm.
- * Downloads the package tarball to a temp dir, extracts skills, and copies to installDir.
- */
-async function installFromNpm(packageName: string, version: string | undefined, installDir: string): Promise<string[]> {
-  const versionSpec = version ?? 'latest'
-  const tmpDir = join(installDir, '.tmp-install-' + Date.now())
-  mkdirSync(tmpDir, { recursive: true })
-
-  try {
-    // Use bun/npm to download the package info
-    const registryUrl = `https://registry.npmjs.org/${encodeURIComponent(packageName)}`
-    const metaResp = await fetch(registryUrl)
-    if (!metaResp.ok) throw new Error(`npm: package "${packageName}" not found (${metaResp.status})`)
-    const meta = await metaResp.json() as Record<string, unknown>
-
-    // Resolve version
-    const distTags = meta['dist-tags'] as Record<string, string> | undefined
-    const versions = meta['versions'] as Record<string, unknown> | undefined
-    let resolvedVersion = versionSpec
-    if (distTags && distTags[versionSpec]) {
-      resolvedVersion = distTags[versionSpec]
-    }
-    if (!versions?.[resolvedVersion]) {
-      throw new Error(`npm: version "${resolvedVersion}" not found for "${packageName}"`)
-    }
-    const versionMeta = versions[resolvedVersion] as Record<string, unknown>
-    const dist = versionMeta['dist'] as { tarball: string } | undefined
-    if (!dist?.tarball) throw new Error(`npm: no tarball URL for "${packageName}@${resolvedVersion}"`)
-
-    // Download and extract tarball
-    const tarballResp = await fetch(dist.tarball)
-    if (!tarballResp.ok) throw new Error(`npm: failed to download tarball (${tarballResp.status})`)
-    const tarballPath = join(tmpDir, 'package.tgz')
-    await Bun.write(tarballPath, tarballResp)
-
-    // Extract with tar
-    const extract = Bun.spawnSync(['tar', 'xzf', tarballPath, '-C', tmpDir])
-    if (extract.exitCode !== 0) throw new Error('Failed to extract tarball')
-
-    // Look for skills in the extracted package
-    // Convention: skills are in the package root or in a "skills/" subdirectory
-    // Each directory with a SKILL.md is a skill
-    const installed: string[] = []
-    const packageDir = join(tmpDir, 'package')
-    const skillDirs = await findSkillDirsIn(packageDir)
-
-    for (const skillDir of skillDirs) {
-      const skillName = skillDir.split('/').pop()!
-      const targetDir = join(installDir, skillName)
-
-      // Copy skill directory
-      await copyDir(skillDir, targetDir)
-
-      // Write source metadata
-      const source: SkillSource = {
-        registry: 'npm',
-        package: packageName,
-        version: resolvedVersion,
-        installedAt: new Date().toISOString(),
-      }
-      writeFileSync(join(targetDir, '.source.json'), JSON.stringify(source, null, 2))
-      installed.push(skillName)
-    }
-
-    // If no skill subdirectories found, check if the package root itself is a skill
-    if (installed.length === 0 && existsSync(join(packageDir, 'SKILL.md'))) {
-      const skillName = packageName.replace(/^@[^/]+\//, '').replace(/^ra-skill-/, '')
-      const targetDir = join(installDir, skillName)
-      await copyDir(packageDir, targetDir)
-
-      const source: SkillSource = {
-        registry: 'npm',
-        package: packageName,
-        version: resolvedVersion,
-        installedAt: new Date().toISOString(),
-      }
-      writeFileSync(join(targetDir, '.source.json'), JSON.stringify(source, null, 2))
-      installed.push(skillName)
-    }
-
-    if (installed.length === 0) {
-      throw new Error(`npm: no skills found in "${packageName}@${resolvedVersion}"`)
-    }
-
-    return installed
-  } finally {
-    // Clean up temp directory
-    try {
-      const rm = Bun.spawnSync(['rm', '-rf', tmpDir])
-      if (rm.exitCode !== 0) { /* best effort */ }
-    } catch { /* ignore */ }
+function splitNpmVersion(pkg: string): { registry: 'npm'; identifier: string; version?: string } {
+  // For scoped packages (@scope/name@version), the last @ after the scope is the version separator
+  const scopeEnd = pkg.startsWith('@') ? pkg.indexOf('/') : -1
+  const atIdx = pkg.lastIndexOf('@')
+  if (atIdx > scopeEnd && atIdx > 0) {
+    return { registry: 'npm', identifier: pkg.slice(0, atIdx), version: pkg.slice(atIdx + 1) }
   }
+  return { registry: 'npm', identifier: pkg }
 }
 
-/**
- * Install a skill from a GitHub repository.
- * Downloads the default branch tarball, extracts, and copies skills.
- */
-async function installFromGithub(repo: string, installDir: string): Promise<string[]> {
-  const [owner, name] = repo.split('/')
-  if (!owner || !name) throw new Error(`github: invalid repo format "${repo}", expected "owner/repo"`)
+// ── Shared helpers ──────────────────────────────────────────────────
 
-  const tmpDir = join(installDir, '.tmp-install-' + Date.now())
-  mkdirSync(tmpDir, { recursive: true })
-
-  try {
-    // Download tarball of default branch
-    const tarballUrl = `https://github.com/${owner}/${name}/archive/refs/heads/main.tar.gz`
-    let resp = await fetch(tarballUrl)
-    if (!resp.ok) {
-      // Try master branch
-      const masterUrl = `https://github.com/${owner}/${name}/archive/refs/heads/master.tar.gz`
-      resp = await fetch(masterUrl)
-      if (!resp.ok) throw new Error(`github: failed to download "${repo}" (tried main and master branches)`)
-    }
-
-    const tarballPath = join(tmpDir, 'repo.tgz')
-    await Bun.write(tarballPath, resp)
-
-    const extract = Bun.spawnSync(['tar', 'xzf', tarballPath, '-C', tmpDir])
-    if (extract.exitCode !== 0) throw new Error('Failed to extract GitHub tarball')
-
-    // Find the extracted directory (github names it <repo>-<branch>)
-    const entries: string[] = []
-    for await (const entry of new Bun.Glob('*').scan({ cwd: tmpDir, onlyFiles: false })) {
-      if (entry !== 'repo.tgz') entries.push(entry)
-    }
-    const repoDir = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
-
-    // Find and install skills
-    const installed: string[] = []
-    const skillDirs = await findSkillDirsIn(repoDir)
-
-    for (const skillDir of skillDirs) {
-      const skillName = skillDir.split('/').pop()!
-      const targetDir = join(installDir, skillName)
-      await copyDir(skillDir, targetDir)
-
-      const source: SkillSource = {
-        registry: 'github',
-        repo,
-        installedAt: new Date().toISOString(),
-      }
-      writeFileSync(join(targetDir, '.source.json'), JSON.stringify(source, null, 2))
-      installed.push(skillName)
-    }
-
-    // Check if repo root is a skill
-    if (installed.length === 0 && existsSync(join(repoDir, 'SKILL.md'))) {
-      const skillName = name.replace(/^ra-skill-/, '')
-      const targetDir = join(installDir, skillName)
-      await copyDir(repoDir, targetDir)
-
-      const source: SkillSource = {
-        registry: 'github',
-        repo,
-        installedAt: new Date().toISOString(),
-      }
-      writeFileSync(join(targetDir, '.source.json'), JSON.stringify(source, null, 2))
-      installed.push(skillName)
-    }
-
-    if (installed.length === 0) {
-      throw new Error(`github: no skills found in "${repo}"`)
-    }
-
-    return installed
-  } finally {
-    try {
-      Bun.spawnSync(['rm', '-rf', tmpDir])
-    } catch { /* ignore */ }
-  }
-}
-
-/**
- * Install a skill from a URL (tarball).
- */
-async function installFromUrl(url: string, installDir: string): Promise<string[]> {
+/** Download a URL to a temp dir, extract it, and run a callback with the extracted path. Cleans up on completion. */
+async function withTempExtract<T>(
+  installDir: string,
+  url: string,
+  errorPrefix: string,
+  fn: (extractedDir: string) => Promise<T>,
+): Promise<T> {
   const tmpDir = join(installDir, '.tmp-install-' + Date.now())
   mkdirSync(tmpDir, { recursive: true })
 
   try {
     const resp = await fetch(url)
-    if (!resp.ok) throw new Error(`url: failed to download "${url}" (${resp.status})`)
+    if (!resp.ok) throw new Error(`${errorPrefix}: download failed (${resp.status})`)
 
-    const tarballPath = join(tmpDir, 'download.tgz')
+    const tarballPath = join(tmpDir, 'archive.tgz')
     await Bun.write(tarballPath, resp)
 
     const extract = Bun.spawnSync(['tar', 'xzf', tarballPath, '-C', tmpDir])
-    if (extract.exitCode !== 0) throw new Error('Failed to extract tarball from URL')
+    if (extract.exitCode !== 0) throw new Error(`${errorPrefix}: failed to extract tarball`)
 
-    const installed: string[] = []
-    const skillDirs = await findSkillDirsIn(tmpDir)
-
-    for (const skillDir of skillDirs) {
-      const skillName = skillDir.split('/').pop()!
-      const targetDir = join(installDir, skillName)
-      await copyDir(skillDir, targetDir)
-
-      const source: SkillSource = {
-        registry: 'url',
-        url,
-        installedAt: new Date().toISOString(),
-      }
-      writeFileSync(join(targetDir, '.source.json'), JSON.stringify(source, null, 2))
-      installed.push(skillName)
-    }
-
-    if (installed.length === 0) {
-      throw new Error(`url: no skills found at "${url}"`)
-    }
-
-    return installed
+    return await fn(tmpDir)
   } finally {
-    try {
-      Bun.spawnSync(['rm', '-rf', tmpDir])
-    } catch { /* ignore */ }
+    rmSync(tmpDir, { recursive: true, force: true })
   }
 }
 
-/**
- * Find all directories containing a SKILL.md within a root directory.
- */
+/** Find all directories containing a SKILL.md within a root directory (one level deep + skills/ convention). */
 async function findSkillDirsIn(root: string): Promise<string[]> {
-  const dirs: string[] = []
+  const dirs = new Set<string>()
   try {
-    for await (const rel of new Bun.Glob('*/SKILL.md').scan({ cwd: root, onlyFiles: true })) {
-      dirs.push(join(root, rel.split('/')[0]!))
-    }
-    // Also check subdirectory "skills/" convention
-    for await (const rel of new Bun.Glob('skills/*/SKILL.md').scan({ cwd: root, onlyFiles: true })) {
+    for await (const rel of new Bun.Glob('{,skills/}*/SKILL.md').scan({ cwd: root, onlyFiles: true })) {
       const parts = rel.split('/')
-      dirs.push(join(root, parts[0]!, parts[1]!))
+      // For "skills/foo/SKILL.md" → join(root, "skills", "foo"), for "foo/SKILL.md" → join(root, "foo")
+      dirs.add(join(root, ...parts.slice(0, -1)))
     }
   } catch { /* not a directory */ }
-  return [...new Set(dirs)]
+  return [...dirs]
 }
 
-/**
- * Copy a directory recursively.
- */
-async function copyDir(src: string, dest: string): Promise<void> {
-  mkdirSync(dest, { recursive: true })
-  const result = Bun.spawnSync(['cp', '-r', src + '/.', dest])
-  if (result.exitCode !== 0) {
-    // Fallback: try without /. suffix
-    const result2 = Bun.spawnSync(['cp', '-rT', src, dest])
-    if (result2.exitCode !== 0) {
-      throw new Error(`Failed to copy ${src} to ${dest}`)
+/** Copy skill directories into installDir and write .source.json metadata. Returns installed skill names. */
+async function installSkillDirs(
+  extractedRoot: string,
+  installDir: string,
+  source: Omit<SkillSource, 'installedAt'>,
+  rootFallbackName?: string,
+): Promise<string[]> {
+  const installed: string[] = []
+  const skillDirs = await findSkillDirsIn(extractedRoot)
+
+  for (const skillDir of skillDirs) {
+    const skillName = skillDir.split('/').pop()!
+    const targetDir = join(installDir, skillName)
+    cpSync(skillDir, targetDir, { recursive: true })
+    writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
+    installed.push(skillName)
+  }
+
+  // Root-as-skill fallback: if no subdirectory skills found, check if root itself is a skill
+  if (installed.length === 0 && rootFallbackName) {
+    const rootSkill = Bun.file(join(extractedRoot, 'SKILL.md'))
+    if (await rootSkill.exists()) {
+      const targetDir = join(installDir, rootFallbackName)
+      cpSync(extractedRoot, targetDir, { recursive: true })
+      writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
+      installed.push(rootFallbackName)
     }
   }
+
+  return installed
 }
+
+// ── Registry installers ─────────────────────────────────────────────
+
+async function installFromNpm(packageName: string, version: string | undefined, installDir: string): Promise<string[]> {
+  const versionSpec = version ?? 'latest'
+
+  // Fetch package metadata — scoped packages use URL encoding on the full name
+  const registryUrl = `https://registry.npmjs.org/${packageName.startsWith('@') ? packageName : encodeURIComponent(packageName)}`
+  const metaResp = await fetch(registryUrl)
+  if (!metaResp.ok) throw new Error(`npm: package "${packageName}" not found (${metaResp.status})`)
+  const meta = await metaResp.json() as Record<string, unknown>
+
+  // Resolve version
+  const distTags = meta['dist-tags'] as Record<string, string> | undefined
+  const versions = meta['versions'] as Record<string, unknown> | undefined
+  let resolvedVersion = versionSpec
+  if (distTags?.[versionSpec]) {
+    resolvedVersion = distTags[versionSpec]
+  }
+  if (!versions?.[resolvedVersion]) {
+    throw new Error(`npm: version "${resolvedVersion}" not found for "${packageName}"`)
+  }
+  const versionMeta = versions[resolvedVersion] as Record<string, unknown>
+  const dist = versionMeta['dist'] as { tarball: string } | undefined
+  if (!dist?.tarball) throw new Error(`npm: no tarball URL for "${packageName}@${resolvedVersion}"`)
+
+  const fallbackName = packageName.replace(/^@[^/]+\//, '').replace(/^ra-skill-/, '')
+  const source: Omit<SkillSource, 'installedAt'> = { registry: 'npm', package: packageName, version: resolvedVersion }
+
+  return withTempExtract(installDir, dist.tarball, `npm`, async (tmpDir) => {
+    const packageDir = join(tmpDir, 'package')
+    const installed = await installSkillDirs(packageDir, installDir, source, fallbackName)
+    if (installed.length === 0) throw new Error(`npm: no skills found in "${packageName}@${resolvedVersion}"`)
+    return installed
+  })
+}
+
+async function installFromGithub(repo: string, installDir: string): Promise<string[]> {
+  const [owner, name] = repo.split('/')
+  if (!owner || !name) throw new Error(`github: invalid repo format "${repo}", expected "owner/repo"`)
+
+  // GitHub API tarball endpoint auto-resolves the default branch
+  const tarballUrl = `https://api.github.com/repos/${owner}/${name}/tarball`
+  const source: Omit<SkillSource, 'installedAt'> = { registry: 'github', repo }
+  const fallbackName = name.replace(/^ra-skill-/, '')
+
+  return withTempExtract(installDir, tarballUrl, `github`, async (tmpDir) => {
+    // GitHub extracts to <owner>-<repo>-<sha>/ directory
+    const entries: string[] = []
+    for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
+      if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
+    }
+    const repoDir = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
+
+    const installed = await installSkillDirs(repoDir, installDir, source, fallbackName)
+    if (installed.length === 0) throw new Error(`github: no skills found in "${repo}"`)
+    return installed
+  })
+}
+
+async function installFromUrl(url: string, installDir: string): Promise<string[]> {
+  const source: Omit<SkillSource, 'installedAt'> = { registry: 'url', url }
+
+  return withTempExtract(installDir, url, 'url', async (tmpDir) => {
+    // Check for a single extracted directory (common tarball pattern)
+    const entries: string[] = []
+    for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
+      if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
+    }
+    const extractedRoot = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
+
+    const installed = await installSkillDirs(extractedRoot, installDir, source, undefined)
+    if (installed.length === 0) throw new Error(`url: no skills found at "${url}"`)
+    return installed
+  })
+}
+
+// ── Public API ──────────────────────────────────────────────────────
 
 /**
  * Install a skill from a source string.
@@ -319,12 +218,10 @@ export async function installSkill(source: string, installDir?: string): Promise
 export async function removeSkill(skillName: string, installDir?: string): Promise<void> {
   const dir = installDir ?? defaultSkillInstallDir()
   const skillDir = join(dir, skillName)
-  if (!existsSync(skillDir)) {
+  try {
+    rmSync(skillDir, { recursive: true })
+  } catch {
     throw new Error(`Skill not found: ${skillName} in ${dir}`)
-  }
-  const result = Bun.spawnSync(['rm', '-rf', skillDir])
-  if (result.exitCode !== 0) {
-    throw new Error(`Failed to remove skill directory: ${skillDir}`)
   }
 }
 

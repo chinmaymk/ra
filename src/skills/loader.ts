@@ -1,6 +1,6 @@
 import { join } from 'path'
 import yaml from 'js-yaml'
-import type { Skill, SkillMetadata } from './types'
+import { resolveSkillAsset, type Skill, type SkillMetadata } from './types'
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
@@ -85,7 +85,7 @@ export function buildActiveSkillXml(skill: Skill): string {
  * Read the content of a reference file from a skill.
  */
 export async function readSkillReference(skill: Skill, refName: string): Promise<string> {
-  const rel = skill.references.find(r => r === refName || r === `references/${refName}`)
+  const rel = resolveSkillAsset(skill.references, refName, 'references')
   if (!rel) throw new Error(`Reference not found: ${refName} in skill ${skill.metadata.name}`)
   return Bun.file(join(skill.dir, rel)).text()
 }

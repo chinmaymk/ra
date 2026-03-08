@@ -1,5 +1,5 @@
 import { join } from 'path'
-import type { Skill } from './types'
+import { resolveSkillAsset, type Skill } from './types'
 
 /**
  * Find the first available binary from candidates via Bun.which.
@@ -81,7 +81,7 @@ export async function runSkillScript(scriptPath: string, env: Record<string, str
  * Accepts either "scripts/run.ts" or just "run.ts".
  */
 export async function runSkillScriptByName(skill: Skill, scriptName: string, env: Record<string, string>): Promise<string> {
-  const rel = skill.scripts.find(s => s === scriptName || s === `scripts/${scriptName}`)
+  const rel = resolveSkillAsset(skill.scripts, scriptName, 'scripts')
   if (!rel) throw new Error(`Script not found: ${scriptName} in skill ${skill.metadata.name}`)
   return runSkillScript(join(skill.dir, rel), env)
 }

@@ -8,7 +8,6 @@ import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoop } from './agent/loop'
 import { SessionStorage } from './storage/sessions'
 import { loadSkills } from './skills/loader'
-import { installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir } from './skills/registry'
 import { McpClient } from './mcp/client'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { runCli } from './interfaces/cli'
@@ -143,8 +142,9 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  // Handle skill management subcommands
+  // Handle skill management subcommands (lazy-load registry module)
   if (parsed.meta.skillCommand) {
+    const { installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir } = await import('./skills/registry')
     const { action, args } = parsed.meta.skillCommand
     switch (action) {
       case 'install': {
