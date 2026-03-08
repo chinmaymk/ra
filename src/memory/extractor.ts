@@ -119,7 +119,7 @@ export class PatternExtractor implements MemoryExtractor {
 // Keep backward compat alias
 export { PatternExtractor as DefaultMemoryExtractor }
 
-const REFLECTION_PROMPT = `You are a memory extraction system. Analyze the following conversation and extract important learnings, facts, preferences, and decisions that would be valuable to remember for future conversations.
+export const DEFAULT_REFLECTION_PROMPT = `You are a memory extraction system. Analyze the following conversation and extract important learnings, facts, preferences, and decisions that would be valuable to remember for future conversations.
 
 For each memory, output a JSON array of objects with these fields:
 - "content": the memory text (concise, self-contained, factual)
@@ -149,14 +149,18 @@ Output ONLY valid JSON, no other text.
 /**
  * LLM-driven reflective extractor. Sends the conversation to a model
  * and asks it to extract structured learnings.
+ *
+ * The prompt must contain {CONVERSATION} which gets replaced with the transcript.
  */
 export class ReflectiveExtractor implements MemoryExtractor {
   private provider: IProvider
   private model: string
+  private prompt: string
 
-  constructor(provider: IProvider, model?: string) {
+  constructor(provider: IProvider, model?: string, prompt?: string) {
     this.provider = provider
     this.model = model ?? 'default'
+    this.prompt = prompt ?? DEFAULT_REFLECTION_PROMPT
   }
 
   /** Synchronous extract returns empty — use extractAsync for LLM-driven flow */
@@ -182,7 +186,7 @@ export class ReflectiveExtractor implements MemoryExtractor {
       return `[${m.role}]: ${truncated}`
     }).join('\n\n')
 
-    const prompt = REFLECTION_PROMPT.replace('{CONVERSATION}', transcript)
+    const prompt = this.prompt.replace('{CONVERSATION}', transcript)
 
     try {
       const response = await this.provider.chat({

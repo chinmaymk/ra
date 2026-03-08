@@ -65,6 +65,7 @@ export interface RaConfig {
     autoExtract: boolean       // pattern-based extraction per iteration
     reflect: boolean           // LLM-driven reflective extraction on loop complete
     reflectionModel?: string   // model for reflection (cheaper model recommended)
+    reflectionPrompt?: string  // custom prompt for reflection (must contain {CONVERSATION})
   }
 }
 

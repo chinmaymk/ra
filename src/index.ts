@@ -289,6 +289,7 @@ async function main(): Promise<void> {
         patterns,
         provider: config.memory.reflect ? provider : undefined,
         reflectionModel: config.memory.reflectionModel,
+        reflectionPrompt: config.memory.reflectionPrompt,
       })
       middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
       if (config.memory.autoExtract) {

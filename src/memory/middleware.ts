@@ -14,6 +14,8 @@ export interface MemoryMiddlewareOptions {
   provider?: IProvider
   /** Model to use for reflection (defaults to provider default) */
   reflectionModel?: string
+  /** Custom prompt for reflection. Must contain {CONVERSATION} placeholder. */
+  reflectionPrompt?: string
   /** Session ID for tagging session memories */
   sessionId?: string
 }
@@ -26,9 +28,9 @@ export interface MemoryMiddlewareOptions {
  * - afterLoopComplete: LLM-driven reflection to promote learnings to long-term
  */
 export function createMemoryMiddleware(options: MemoryMiddlewareOptions) {
-  const { store, provider, reflectionModel, sessionId = '' } = options
+  const { store, provider, reflectionModel, reflectionPrompt, sessionId = '' } = options
   const patternExtractor = options.extractor ?? new PatternExtractor(options.patterns ?? DEFAULT_PATTERNS)
-  const reflectiveExtractor = provider ? new ReflectiveExtractor(provider, reflectionModel) : null
+  const reflectiveExtractor = provider ? new ReflectiveExtractor(provider, reflectionModel, reflectionPrompt) : null
 
   return {
     /** Prune expired memories at loop start */

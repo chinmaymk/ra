@@ -321,6 +321,29 @@ describe('ReflectiveExtractor', () => {
     const extractor = new ReflectiveExtractor(provider)
     expect(extractor.extract([])).toHaveLength(0)
   })
+
+  it('uses custom reflection prompt', async () => {
+    let capturedPrompt = ''
+    const provider: IProvider = {
+      name: 'mock',
+      async chat(req) {
+        capturedPrompt = typeof req.messages[0]!.content === 'string' ? req.messages[0]!.content : ''
+        return { message: { role: 'assistant', content: '[]' } } as ChatResponse
+      },
+      async *stream(): AsyncIterable<StreamChunk> { yield { type: 'done' } },
+    }
+
+    const customPrompt = 'Extract key facts from this conversation:\n{CONVERSATION}\nReturn JSON array.'
+    const extractor = new ReflectiveExtractor(provider, undefined, customPrompt)
+    await extractor.extractAsync([
+      { role: 'user', content: 'I like TypeScript' },
+      { role: 'assistant', content: 'TypeScript is great!' },
+    ])
+
+    expect(capturedPrompt).toContain('Extract key facts')
+    expect(capturedPrompt).toContain('I like TypeScript')
+    expect(capturedPrompt).not.toContain('memory extraction system')
+  })
 })
 
 describe('memory tools — layered', () => {
