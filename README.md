@@ -170,6 +170,25 @@ context:
 
 ra walks the directory tree upward to the git root, finds matching files, and injects them as context.
 
+### Pattern resolution
+
+Reference files and URLs inline in your prompts — ra resolves them before the model sees the message.
+
+```bash
+ra "explain what @src/auth.ts does"            # file contents injected
+ra "review @src/utils/*.ts for consistency"     # glob expansion
+ra "summarize url:https://example.com/api-docs" # fetched page content
+```
+
+Two built-in resolvers (`@` for files/globs, `url:` for URLs) are enabled by default. Add custom resolvers for GitHub issues, database records, or anything else:
+
+```yaml
+context:
+  resolvers:
+    - name: issues
+      path: ./resolvers/github-issues.ts
+```
+
 ## Providers
 
 Same config, any backend. Switch with a flag.
