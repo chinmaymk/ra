@@ -6,16 +6,16 @@ The default mode when you run `ra` without a prompt. Full interactive sessions w
 ra
 ```
 
-You get a `›` prompt. Type a message, and ra streams back the response, runs tools, and saves the conversation automatically.
+You get a `›` prompt. Type a message and ra streams the response, runs tools as the model requests, and saves the conversation automatically.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/clear` | Clear history, start fresh |
+| `/clear` | Clear history and start a fresh session |
 | `/resume <session-id>` | Load and continue a previous session |
 | `/skill <name>` | Activate a skill for the next message |
-| `/skill-run <skill> <script>` | Run a skill script and attach output to next message |
+| `/skill-run <skill> <script>` | Run a skill script and attach output to the next message |
 | `/skill-ref <skill> <file>` | Load a skill reference into context |
 | `/attach <path>` | Attach a file to the next message |
 | `/context` | Show discovered context files |
@@ -35,7 +35,7 @@ ra
 
 ## Sessions
 
-Conversations are automatically saved after each turn. Resume with `/resume` inside the REPL, or start in a resumed state from the shell:
+Conversations are saved automatically after each turn. Resume with `/resume` inside the REPL, or start in a resumed state from the shell:
 
 ```bash
 ra --resume abc-123
@@ -45,7 +45,13 @@ Sessions are pruned automatically after the configured retention period. See [Se
 
 ## Tips
 
-- Use `/attach` to give the model context from files mid-conversation
-- Use `/skill` to switch the model's behavior on the fly without restarting
-- Thinking output streams in real time when `--thinking` is enabled — watch the model reason before responding
-- Pipe content in: `cat file.txt | ra` auto-switches to CLI mode, but `ra` without input starts the REPL
+- Use `/attach` to give the model context from files mid-conversation. See [File Attachments](/core/file-attachments) for supported formats.
+- Use `/skill` to switch the model's behavior on the fly without restarting. See [Skills](/skills/) for available skills.
+- Thinking output streams in real time when `--thinking` is enabled — watch the model reason before responding.
+- Pipe content in: `cat file.txt | ra` auto-switches to CLI mode, but `ra` without input starts the REPL.
+
+## See also
+
+- [CLI](/modes/cli) — for one-shot, non-interactive usage
+- [Sessions](/core/sessions) — session persistence and storage
+- [Skills](/skills/) — creating and using skills

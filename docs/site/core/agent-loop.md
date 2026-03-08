@@ -1,6 +1,6 @@
 # The Agent Loop
 
-ra runs a single, transparent loop: send messages to the model, stream the response, execute tool calls, repeat. Every step fires a middleware hook you can intercept.
+ra's core is deliberately simple: send messages to the model, stream the response, execute any tool calls, repeat. No workflow graphs, no forced structure — the model decides what to do next. Every step fires a [middleware hook](/middleware/) you can intercept, but by default ra stays out of the way.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -37,13 +37,13 @@ ra runs a single, transparent loop: send messages to the model, stream the respo
 
 1. **Start** — `beforeLoopBegin` fires once. Your middleware can set up logging, validate config, or inject initial context.
 
-2. **Model call** — `beforeModelCall` fires with the full request (messages, tools, model). The model streams its response, firing `onStreamChunk` for every token. When done, `afterModelResponse` fires.
+2. **Model call** — `beforeModelCall` fires with the full request (messages, tools, model). The model streams its response, firing `onStreamChunk` for every token. When the response is complete, `afterModelResponse` fires.
 
-3. **Tool execution** — If the model called tools, `beforeToolExecution` fires for each one, then the tool runs, then `afterToolExecution` fires with the result.
+3. **Tool execution** — If the model requested tool calls, `beforeToolExecution` fires for each one, then the tool runs, then `afterToolExecution` fires with the result.
 
-4. **Iterate or complete** — If tools were called, `afterLoopIteration` fires and the loop goes back to step 2. If no tools were called, `afterLoopComplete` fires and the loop ends.
+4. **Iterate or complete** — If tools were called, `afterLoopIteration` fires and the loop goes back to step 2 with the tool results appended to the conversation. If no tools were called, `afterLoopComplete` fires and the loop ends.
 
-5. **Suspend** — The `ask_user` tool is special: it suspends the loop and returns control to the caller. The session is saved so you can resume later.
+5. **Suspend** — The `ask_user` tool is special: it suspends the loop and returns control to the caller without firing `afterLoopComplete`. The session is saved so you can [resume later](/core/sessions).
 
 ## Loop controls
 
@@ -63,4 +63,9 @@ export default async (ctx) => {
 }
 ```
 
-See [Middleware](/middleware/) for all available hooks and their context shapes.
+## See also
+
+- [Middleware](/middleware/) — all available hooks and their context shapes
+- [Built-in Tools](/tools/) — the 14 tools available to the agent
+- [Context Control](/core/context-control) — how ra manages what the model sees
+- [Configuration](/configuration/) — `maxIterations` and `toolTimeout` settings

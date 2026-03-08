@@ -23,7 +23,9 @@
 
 ## What is ra?
 
-ra is an open-source AI agent framework that gives you full control over the agentic loop. It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server.
+ra is an open-source AI agent framework built on a simple philosophy: **get out of the model's way**. Modern LLMs are capable enough to drive complex workflows — they just need the right tools, context, and a loop that doesn't fight them. ra provides exactly that.
+
+It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server. No prompt engineering gymnastics, no rigid workflow graphs. Give the model tools and context, let it work.
 
 Every message, every tool call, every stream chunk is visible and interceptable through middleware hooks. You configure agents in YAML — define tools, skills, system prompts, and context — and drop down to TypeScript only where you need custom logic.
 
@@ -57,7 +59,7 @@ ra --mcp-stdio                                                  # MCP server for
 
 ## The Agent Loop
 
-ra runs a single, transparent loop: send messages to the model, stream the response, execute tool calls, repeat. Every step fires a middleware hook you can intercept.
+ra's core is deliberately simple: send messages to the model, stream the response, execute any tool calls, repeat. No workflow graphs, no forced structure — the model decides what to do next. Every step fires a middleware hook you can intercept, but by default ra stays out of the way.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -288,7 +290,7 @@ When built-in tools are enabled, they're also exposed as individual MCP tools �
 
 ## Built-in Tools
 
-14 tools enabled by default (platform-specific: `execute_bash` on Linux/macOS, `execute_powershell` on Windows). The agent can read, write, search, execute, and interact out of the box.
+14 tools enabled by default (platform-specific: `execute_bash` on Linux/macOS, `execute_powershell` on Windows). Tools are self-describing — each includes a detailed schema and description so the model decides when and how to use them. No system prompt engineering needed.
 
 | Category | Tools |
 |----------|-------|

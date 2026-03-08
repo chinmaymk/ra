@@ -1,10 +1,10 @@
 # Context Control
 
-ra gives you full control over what the model sees and when. Middleware hooks let you intercept every step, but ra also has built-in mechanisms for managing context automatically.
+ra gives you full control over what the model sees and when. Built-in mechanisms handle the common cases automatically — compaction, caching, thinking, context discovery — and [middleware hooks](/middleware/) let you intercept everything else.
 
 ## Smart context compaction
 
-When conversations grow, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then summarizes the middle with a cheap model. You keep the context that matters.
+When conversations grow long, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then summarizes the middle with a cheap model. You keep the context that matters.
 
 ```yaml
 compaction:
@@ -13,10 +13,12 @@ compaction:
   model: claude-haiku-4-5-20251001  # cheap model for summarization
 ```
 
+Key properties:
+
 - **Token-aware** — Uses real token counts from the provider when available, falls back to estimation.
 - **Pinned zones** — System prompts and initial context never get compacted.
 - **Tool-call-aware** — Boundaries never split an assistant message from its tool results.
-- **Provider-portable** — Works the same across all providers. Default compaction models per provider (Haiku for Anthropic, GPT-4o-mini for OpenAI, Gemini Flash for Google).
+- **Provider-portable** — Works the same across all providers. Default compaction models: Haiku for Anthropic, GPT-4o-mini for OpenAI, Gemini Flash for Google.
 
 ## Token tracking
 
@@ -32,7 +34,7 @@ export default async (ctx) => {
 
 ## Prompt caching
 
-Automatic cache hints on system prompts and tool definitions for Anthropic, reducing costs on multi-turn sessions without any config.
+For Anthropic, ra automatically applies cache hints to system prompts and tool definitions. This reduces costs on multi-turn sessions without any configuration — cached tokens are billed at a reduced rate.
 
 ## Extended thinking
 
@@ -46,11 +48,11 @@ ra --thinking high "Design a database schema for a social network"
 thinking: high  # low | medium | high (token budgets vary by provider)
 ```
 
-Thinking output streams to the terminal in the REPL, so you can watch the model reason in real time.
+Thinking output streams to the terminal in the REPL, so you can watch the model reason in real time. In the [HTTP API](/api/), thinking tokens are emitted as `{"type":"thinking","delta":"..."}` SSE events.
 
 ## Context discovery
 
-ra can discover and inject project context files into the conversation before your prompt. Configure which files to look for via the `context.patterns` config:
+ra discovers and injects project context files into the conversation before your prompt. Configure which files to look for:
 
 ```yaml
 context:
@@ -61,7 +63,7 @@ context:
     - "CONVENTIONS.md"
 ```
 
-ra walks the directory tree upward to the git root, finds matching files, and injects them as context.
+ra walks the directory tree upward to the git root, finds matching files, and injects them as system context. This is useful for project conventions, coding standards, or any persistent instructions.
 
 ## Pattern resolution
 
@@ -73,7 +75,14 @@ ra "review @src/utils/*.ts for consistency"     # glob expansion
 ra "summarize url:https://example.com/api-docs" # fetched page content
 ```
 
-Two built-in resolvers (`@` for files/globs, `url:` for URLs) are enabled by default. Add custom resolvers for GitHub issues, database records, or anything else:
+Two built-in resolvers are enabled by default:
+
+| Resolver | Syntax | Description |
+|----------|--------|-------------|
+| File | `@path` or `@glob` | Resolves file contents, supports glob patterns |
+| URL | `url:https://...` | Fetches and inlines page content |
+
+Add custom resolvers for GitHub issues, database records, or anything else:
 
 ```yaml
 context:
@@ -84,7 +93,7 @@ context:
 
 ## Middleware hooks
 
-For full programmatic control over context, use middleware. Every hook receives the full conversation history and can mutate it.
+For full programmatic control over context, use [middleware](/middleware/). Every hook receives the full conversation history and can mutate it.
 
 ```yaml
 middleware:
@@ -102,4 +111,8 @@ export default async (ctx) => {
 }
 ```
 
-See [Middleware](/middleware/) for all hook types and context shapes.
+## See also
+
+- [Middleware](/middleware/) — all hook types and context shapes
+- [Dynamic Prompts](/recipes/dynamic-prompts) — advanced middleware patterns for context injection
+- [Configuration](/configuration/) — compaction and context settings

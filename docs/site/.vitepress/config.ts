@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'ra',
-  description: 'raw agent. role agent. run-anything agent.',
+  description: 'One Loop. Infinite Agents. An open-source AI agent framework with full control over the agentic loop.',
   base: '/ra/',
   appearance: 'dark',
   head: [
@@ -14,6 +14,7 @@ export default defineConfig({
     logo: '/logo.svg',
     nav: [
       { text: 'Guide', link: '/getting-started/install' },
+      { text: 'Providers', link: '/providers/anthropic' },
       { text: 'Config', link: '/configuration/' },
       { text: 'API', link: '/api/' },
     ],
@@ -32,12 +33,13 @@ export default defineConfig({
           { text: 'The Agent Loop', link: '/core/agent-loop' },
           { text: 'Context Control', link: '/core/context-control' },
           { text: 'Sessions', link: '/core/sessions' },
+          { text: 'File Attachments', link: '/core/file-attachments' },
         ],
       },
       {
         text: 'Interfaces',
         items: [
-          { text: 'CLI (one-shot)', link: '/modes/cli' },
+          { text: 'CLI (One-Shot)', link: '/modes/cli' },
           { text: 'REPL', link: '/modes/repl' },
           { text: 'HTTP Server', link: '/modes/http' },
           { text: 'MCP', link: '/modes/mcp' },
@@ -49,7 +51,6 @@ export default defineConfig({
           { text: 'Built-in Tools', link: '/tools/' },
           { text: 'Skills', link: '/skills/' },
           { text: 'Middleware', link: '/middleware/' },
-          { text: 'File Attachments', link: '/core/file-attachments' },
         ],
       },
       {
@@ -77,5 +78,13 @@ export default defineConfig({
       { icon: 'github', link: 'https://github.com/chinmaymk/ra' },
     ],
     search: { provider: 'local' },
+    footer: {
+      message: 'Released under the MIT License.',
+      copyright: 'Copyright © 2026',
+    },
+    editLink: {
+      pattern: 'https://github.com/chinmaymk/ra/edit/main/docs/site/:path',
+      text: 'Edit this page on GitHub',
+    },
   },
 })

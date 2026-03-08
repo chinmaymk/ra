@@ -169,3 +169,9 @@ middleware:
 ```
 
 Each middleware independently reads and modifies the request. Keep each focused on one concern.
+
+## See also
+
+- [Middleware](/middleware/) — all hook types and context shapes
+- [Context Control](/core/context-control) — built-in context management
+- [Recipes](/recipes/) — more usage patterns

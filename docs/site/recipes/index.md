@@ -4,7 +4,7 @@ Common patterns and pre-built agent configurations.
 
 ## Pre-built recipes
 
-ra ships with ready-to-use agent configurations in the `recipes/` directory.
+ra ships with ready-to-use agent configurations in the `recipes/` directory. These are complete `ra.config.yaml` files that compose skills, middleware, and settings into purpose-built agents.
 
 ### Coding Agent
 
@@ -109,3 +109,10 @@ Use `--exec` to run a TypeScript or JavaScript file that imports ra's internals 
 ```bash
 ra --exec ./scripts/batch-review.ts
 ```
+
+## See also
+
+- [Dynamic Prompts](/recipes/dynamic-prompts) — advanced middleware patterns for context injection
+- [Skills](/skills/) — creating and using skills
+- [Middleware](/middleware/) — hooks for custom behavior
+- [Configuration](/configuration/) — all config fields

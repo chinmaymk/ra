@@ -1,6 +1,6 @@
 # Middleware
 
-Lifecycle hooks that let you intercept and modify the agent loop. Define them inline or as file paths.
+Lifecycle hooks that let you intercept and modify every step of the [agent loop](/core/agent-loop). Define them inline in config or as TypeScript files.
 
 ```yaml
 # ra.config.yml
@@ -18,19 +18,21 @@ ctx.stop()          // halt the agent loop
 ctx.signal.aborted  // check if already stopped
 ```
 
-## Hooks and context shapes
+## Hooks
 
-| Hook | Context | Description |
-|------|---------|-------------|
-| `beforeLoopBegin` | `LoopContext` | Once at loop start |
-| `beforeModelCall` | `ModelCallContext` | Before each LLM call |
-| `onStreamChunk` | `StreamChunkContext` | Per streaming chunk |
-| `afterModelResponse` | `ModelCallContext` | After model finishes |
-| `beforeToolExecution` | `ToolExecutionContext` | Before each tool call |
-| `afterToolExecution` | `ToolResultContext` | After each tool returns |
-| `afterLoopIteration` | `LoopContext` | After each loop iteration |
-| `afterLoopComplete` | `LoopContext` | After the final iteration |
-| `onError` | `ErrorContext` | On exceptions |
+| Hook | When | Context type |
+|------|------|--------------|
+| `beforeLoopBegin` | Once at loop start | `LoopContext` |
+| `beforeModelCall` | Before each LLM call | `ModelCallContext` |
+| `onStreamChunk` | Per streaming token | `StreamChunkContext` |
+| `afterModelResponse` | After model finishes | `ModelCallContext` |
+| `beforeToolExecution` | Before each tool call | `ToolExecutionContext` |
+| `afterToolExecution` | After each tool returns | `ToolResultContext` |
+| `afterLoopIteration` | After each full iteration | `LoopContext` |
+| `afterLoopComplete` | After the final iteration | `LoopContext` |
+| `onError` | On exceptions | `ErrorContext` |
+
+Middleware runs in array order. Multiple hooks of the same type are executed sequentially.
 
 ## Context types
 
@@ -44,6 +46,10 @@ Available on all hooks via `ctx.loop` (or directly for loop-level hooks like `be
   iteration: number        // current loop iteration (0-indexed)
   maxIterations: number
   sessionId: string
+  usage: {
+    inputTokens: number
+    outputTokens: number
+  }
   stop(): void
   signal: AbortSignal
 }
@@ -117,31 +123,6 @@ Used by `onError`. Fires when an exception occurs during the loop.
 }
 ```
 
-## Stopping the loop
-
-Any middleware can call `ctx.stop()` to halt the agent loop early:
-
-```ts
-// middleware/guard.ts
-export default async (ctx) => {
-  if (ctx.loop.iteration > 10) {
-    ctx.stop()
-  }
-}
-```
-
-## Inline middleware
-
-Inline expressions are TypeScript strings in your config. They're transpiled at load time.
-
-```yaml
-middleware:
-  beforeModelCall:
-    - "(ctx) => { console.log('Messages:', ctx.request.messages.length); }"
-  onError:
-    - "(ctx) => { console.error(`[${ctx.phase}]`, ctx.error.message); }"
-```
-
 ## File-based middleware
 
 Export a default async function from a `.ts` or `.js` file:
@@ -149,7 +130,12 @@ Export a default async function from a `.ts` or `.js` file:
 ```ts
 // middleware/audit-log.ts
 export default async (ctx) => {
-  console.log(`Tool ${ctx.toolCall.name} returned:`, ctx.result.content)
+  await Bun.file('audit.jsonl').writer().write(JSON.stringify({
+    tool: ctx.toolCall.name,
+    args: ctx.toolCall.arguments,
+    result: ctx.result.content,
+    timestamp: Date.now()
+  }) + '\n')
 }
 ```
 
@@ -159,8 +145,44 @@ Reference it by path in config:
 middleware:
   afterToolExecution:
     - "./middleware/audit-log.ts"
-  beforeModelCall:
-    - "./middleware/rate-limiter.ts"
 ```
 
 Paths can be relative (to project root), absolute, or use `~` for home directory. Both `.ts` and `.js` files are supported — TypeScript is transpiled automatically by Bun.
+
+## Inline middleware
+
+Inline expressions are TypeScript strings in your config. They're transpiled at load time. Best for simple, single-expression hooks.
+
+```yaml
+middleware:
+  beforeModelCall:
+    - "(ctx) => { console.log('Messages:', ctx.request.messages.length); }"
+  onStreamChunk:
+    - "(ctx) => { process.stdout.write(ctx.chunk.type === 'text' ? ctx.chunk.delta : '') }"
+  onError:
+    - "(ctx) => { console.error(`[${ctx.phase}]`, ctx.error.message); }"
+```
+
+## Stopping the loop
+
+Any middleware can call `ctx.stop()` to halt the agent loop early:
+
+```ts
+// middleware/token-budget.ts — stop if we've used too many tokens
+export default async (ctx) => {
+  if (ctx.loop.usage.inputTokens + ctx.loop.usage.outputTokens > 100_000) {
+    ctx.stop()
+  }
+}
+```
+
+## Timeout
+
+All hooks support a configurable timeout via `toolTimeout` (default: 30 seconds). If a middleware function exceeds the timeout, the loop continues without waiting.
+
+## See also
+
+- [The Agent Loop](/core/agent-loop) — understand the loop lifecycle
+- [Dynamic Prompts](/recipes/dynamic-prompts) — advanced `beforeModelCall` patterns
+- [Context Control](/core/context-control) — how context flows through the loop
+- [Configuration](/configuration/) — `toolTimeout` and middleware config

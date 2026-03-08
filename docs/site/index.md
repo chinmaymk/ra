@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "ra"
   text: "One Loop. Infinite Agents."
-  tagline: An open-source AI agent framework that gives you full control over the agentic loop.
+  tagline: Get out of the model's way. Give it tools and context, let it work.
   actions:
     - theme: brand
       text: Get Started

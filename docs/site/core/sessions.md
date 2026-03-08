@@ -1,20 +1,22 @@
 # Sessions
 
-ra persists every conversation as JSONL. Resume any session from any interface.
+ra persists every conversation as JSONL. Resume any session from any interface — CLI, REPL, or HTTP.
 
-## Resuming sessions
+## Resuming a session
+
+**CLI:**
 
 ```bash
 ra --resume <session-id> "Continue with the next step"
 ```
 
-In the REPL:
+**REPL:**
 
 ```
-> /resume abc-123
+› /resume abc-123
 ```
 
-In the HTTP API, pass `sessionId` in the request body:
+**HTTP API:**
 
 ```json
 {
@@ -23,9 +25,27 @@ In the HTTP API, pass `sessionId` in the request body:
 }
 ```
 
-## How it works
+## Auto-save
 
-Sessions are auto-saved after each turn. When `ask_user` suspends a CLI run, the session ID is printed to stderr so you can resume later.
+Sessions are saved automatically after each turn. You never need to explicitly save.
+
+When `ask_user` suspends a CLI run, the session ID is printed to stderr so you can resume later:
+
+```
+Session suspended. Resume with: ra --resume ses_abc123
+```
+
+## Listing sessions
+
+```bash
+ra session list
+```
+
+Via the HTTP API:
+
+```bash
+curl http://localhost:3000/sessions
+```
 
 ## Configuration
 
@@ -36,4 +56,17 @@ storage:
   ttlDays: 30           # auto-expire sessions older than this
 ```
 
-Sessions are stored as JSONL files — one line per message. This makes them easy to inspect, grep, or process with standard tools.
+## Storage format
+
+Sessions are stored as JSONL files — one line per message. This makes them easy to inspect, grep, or process with standard tools:
+
+```bash
+cat .ra/sessions/ses_abc123.jsonl | head -5
+```
+
+## See also
+
+- [CLI](/modes/cli) — resuming sessions from the command line
+- [REPL](/modes/repl) — `/resume` and `/clear` commands
+- [HTTP API](/api/) — `sessionId` field in requests
+- [Configuration](/configuration/) — storage settings

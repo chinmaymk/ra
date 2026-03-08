@@ -1,10 +1,12 @@
 # CLI (One-Shot)
 
-Run a prompt, stream output, exit. The default mode when you pass a prompt.
+Run a prompt, stream the response, exit. This is the default mode when you pass a prompt on the command line.
 
 ```bash
 ra "What is the capital of France?"
 ```
+
+ra streams the model's response to stdout, executes any tool calls the model makes, and exits when the agent loop completes.
 
 ## Common flags
 
@@ -44,6 +46,8 @@ ra --file screenshot.png "What's wrong with this UI?"
 ra --file report.pdf --file data.csv "Summarize both files"
 ```
 
+See [File Attachments](/core/file-attachments) for supported formats and provider compatibility.
+
 ## Resuming sessions
 
 When the agent calls `ask_user`, the session ID is printed to stderr so you can resume later:
@@ -52,7 +56,17 @@ When the agent calls `ask_user`, the session ID is printed to stderr so you can 
 ra --resume <session-id> "Continue from where we left off"
 ```
 
+See [Sessions](/core/sessions) for more on session persistence.
+
 ## Exit codes
 
-- `0` — success
-- non-zero — error (provider failure, config error, etc.)
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| Non-zero | Error (provider failure, config error, etc.) |
+
+## See also
+
+- [REPL](/modes/repl) — for interactive sessions
+- [Configuration](/configuration/) — all CLI flags and their config equivalents
+- [Recipes](/recipes/) — piping and chaining patterns

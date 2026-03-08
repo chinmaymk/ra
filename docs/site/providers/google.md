@@ -9,7 +9,7 @@ export RA_GOOGLE_API_KEY=AIza...
 ra --provider google "Hello"
 ```
 
-## Env vars
+## Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -20,12 +20,22 @@ ra --provider google "Hello"
 | Model | Notes |
 |-------|-------|
 | `gemini-2.5-pro` | Most capable |
-| `gemini-2.0-flash` | Fast and efficient |
+| `gemini-2.0-flash` | Fast and efficient. Used as default compaction model for Google |
 
-## Thinking tokens
+```bash
+ra --provider google --model gemini-2.5-pro "Design a system"
+ra --provider google --model gemini-2.0-flash "Quick question"
+```
+
+## Extended thinking
 
 Supported levels: `low`, `medium`, `high`.
 
 ```bash
 ra --provider google --model gemini-2.5-pro --thinking high "Reason through this carefully"
 ```
+
+## See also
+
+- [Context Control](/core/context-control) — extended thinking and compaction details
+- [Configuration](/configuration/) — provider credentials reference
