@@ -31,6 +31,7 @@ export class OllamaProvider implements IProvider {
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
     const stream = await this.client.chat({ ...this.buildParams(request), stream: true })
     let toolCallIndex = 0
+    let emittedDone = false
 
     for await (const chunk of stream) {
       const msg = chunk.message
@@ -48,9 +49,11 @@ export class OllamaProvider implements IProvider {
         const usage = chunk.prompt_eval_count != null && chunk.eval_count != null
           ? { inputTokens: chunk.prompt_eval_count, outputTokens: chunk.eval_count }
           : undefined
+        emittedDone = true
         yield { type: 'done', usage }
       }
     }
+    if (!emittedDone) yield { type: 'done' }
   }
 
   mapMessages(messages: IMessage[]): OllamaMessage[] {

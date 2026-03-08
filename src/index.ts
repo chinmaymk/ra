@@ -286,8 +286,8 @@ async function main(): Promise<void> {
 
   // Shutdown helpers
   const shutdown = async () => {
-    await mcpClient.disconnect()
-    if (stopMcpHttp) await stopMcpHttp()
+    try { await mcpClient.disconnect() } catch { /* best-effort cleanup */ }
+    try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort cleanup */ }
   }
 
   process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
@@ -375,7 +375,8 @@ async function main(): Promise<void> {
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${httpServer.port}`)
-    const httpShutdown = async () => { await httpServer.stop(); await shutdown() }
+    // Keep process alive; clean up on signal
+    const httpShutdown = async () => { try { await httpServer.stop() } catch { /* best-effort */ } await shutdown() }
     process.removeAllListeners('SIGINT')
     process.removeAllListeners('SIGTERM')
     process.on('SIGINT', async () => { await httpShutdown(); process.exit(0) })

@@ -158,14 +158,14 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
     config.systemPrompt.startsWith('/') ||
     config.systemPrompt.startsWith('./') ||
     config.systemPrompt.startsWith('../') ||
-    config.systemPrompt.startsWith('~') ||
+    config.systemPrompt.startsWith('~/') ||
     config.systemPrompt.endsWith('.txt') ||
     config.systemPrompt.endsWith('.md')
   )) {
     let resolved: string
     if (config.systemPrompt.startsWith('/')) {
       resolved = config.systemPrompt
-    } else if (config.systemPrompt.startsWith('~')) {
+    } else if (config.systemPrompt.startsWith('~/')) {
       const { homedir } = await import('os')
       resolved = join(homedir(), config.systemPrompt.slice(2))
     } else {
