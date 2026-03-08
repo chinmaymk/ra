@@ -55,21 +55,3 @@ export function memorySaveTool(store: MemoryStore): ITool {
     },
   }
 }
-
-export function memoryDeleteTool(store: MemoryStore): ITool {
-  return {
-    name: 'memory_delete',
-    description: 'Delete a specific memory by its ID. Use memory_search first to find the ID.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'number', description: 'The memory ID to delete' },
-      },
-      required: ['id'],
-    },
-    async execute(input: unknown) {
-      const { id } = input as { id: number }
-      return store.delete(id) ? `Memory #${id} deleted.` : `Memory #${id} not found.`
-    },
-  }
-}

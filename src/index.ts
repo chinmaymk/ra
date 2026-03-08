@@ -17,7 +17,7 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools } from './tools'
-import { MemoryStore, memorySearchTool, memorySaveTool, memoryDeleteTool, createMemoryMiddleware, DEFAULT_PATTERNS } from './memory'
+import { MemoryStore, memorySearchTool, memorySaveTool, createMemoryMiddleware, DEFAULT_PATTERNS } from './memory'
 import type { MemoryExtractor, ExtractionPattern } from './memory'
 import { join } from 'path'
 
@@ -265,7 +265,6 @@ async function main(): Promise<void> {
     })
     tools.register(memorySearchTool(memoryStore))
     tools.register(memorySaveTool(memoryStore))
-    tools.register(memoryDeleteTool(memoryStore))
 
     if (config.memory.autoExtract || config.memory.reflect) {
       // Load custom extractor if specified

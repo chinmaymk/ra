@@ -4,7 +4,7 @@ import { join } from 'path'
 import { MemoryStore } from '../../src/memory/store'
 import { PatternExtractor, ReflectiveExtractor, DEFAULT_PATTERNS } from '../../src/memory/extractor'
 import type { ExtractionPattern } from '../../src/memory/extractor'
-import { memorySearchTool, memorySaveTool, memoryDeleteTool } from '../../src/memory/tools'
+import { memorySearchTool, memorySaveTool } from '../../src/memory/tools'
 import { createMemoryMiddleware } from '../../src/memory/middleware'
 import type { IMessage, IProvider, ChatResponse, StreamChunk } from '../../src/providers/types'
 
@@ -376,19 +376,6 @@ describe('memory tools — layered', () => {
     expect(result).toContain('long-term')
   })
 
-  it('memory_delete removes a memory', async () => {
-    const m = store.save('to delete')
-    const tool = memoryDeleteTool(store)
-    const result = await tool.execute({ id: m.id }) as string
-    expect(result).toContain('deleted')
-    expect(store.count()).toBe(0)
-  })
-
-  it('memory_delete handles missing id', async () => {
-    const tool = memoryDeleteTool(store)
-    const result = await tool.execute({ id: 999 }) as string
-    expect(result).toContain('not found')
-  })
 })
 
 describe('memory middleware — layered', () => {
