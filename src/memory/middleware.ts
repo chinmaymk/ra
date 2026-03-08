@@ -28,7 +28,12 @@ export function createMemoryMiddleware(options: MemoryMiddlewareOptions) {
       )
       ctx.messages.push({
         role: 'user',
-        content: `<recalled-memories>\n${lines.join('\n')}\n</recalled-memories>`,
+        content:
+          '<recalled-memories>\n' +
+          'Facts saved from previous conversations. Use these to personalize responses. ' +
+          'If any are outdated, use memory_forget to remove them.\n' +
+          lines.join('\n') +
+          '\n</recalled-memories>',
       })
     },
   }

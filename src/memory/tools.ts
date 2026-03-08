@@ -5,12 +5,13 @@ export function memorySearchTool(store: MemoryStore): ITool {
   return {
     name: 'memory_search',
     description:
-      'Search memories from past conversations. ' +
-      'Use this to recall user preferences, project decisions, or prior context.',
+      'Search persistent memories by keyword. ' +
+      'Recent memories are automatically recalled at conversation start — ' +
+      'use this for targeted lookups when you need specific context not in the recalled set.',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Full-text search query' },
+        query: { type: 'string', description: 'Full-text search query (single keywords work best)' },
         limit: { type: 'number', description: 'Max results (default: 10)' },
       },
       required: ['query'],
@@ -30,13 +31,16 @@ export function memorySaveTool(store: MemoryStore): ITool {
   return {
     name: 'memory_save',
     description:
-      'Save information to memory for future conversations. ' +
-      'Use when you notice user preferences, corrections, project decisions, or technical choices.',
+      'Save a fact to persistent memory for future conversations. ' +
+      'Proactively save when you learn: user preferences (tools, style, conventions), ' +
+      'project decisions (tech stack, architecture), corrections ("actually we use X not Y"), ' +
+      'or key context (team, deployment, constraints). ' +
+      'To update an existing memory, use memory_forget to remove the old version first, then save the new one.',
     inputSchema: {
       type: 'object',
       properties: {
-        content: { type: 'string', description: 'What to remember (concise, self-contained)' },
-        tags: { type: 'string', description: 'Comma-separated tags for categorization' },
+        content: { type: 'string', description: 'Self-contained fact to remember, e.g. "User prefers tabs over spaces"' },
+        tags: { type: 'string', description: 'Category tag: preference, project, convention, team, or tooling' },
       },
       required: ['content'],
     },
@@ -53,12 +57,13 @@ export function memoryForgetTool(store: MemoryStore): ITool {
   return {
     name: 'memory_forget',
     description:
-      'Forget memories matching a search query. ' +
-      'Use when the user says something is no longer true, outdated, or should be forgotten.',
+      'Delete memories matching a search query. Use when: ' +
+      'the user corrects previous information, a fact becomes outdated, ' +
+      'or before saving an updated version of an existing memory.',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Search query to match memories to forget' },
+        query: { type: 'string', description: 'Search query to match memories to delete (single keywords work best)' },
         limit: { type: 'number', description: 'Max memories to delete (default: 10)' },
       },
       required: ['query'],
