@@ -1,8 +1,30 @@
 # Recipes
 
-Common patterns for using ra in real workflows.
+Common patterns and pre-built agent configurations.
 
-## Project-specific agent
+## Pre-built recipes
+
+ra ships with ready-to-use agent configurations in the `recipes/` directory.
+
+### Coding Agent
+
+A general-purpose coding agent with file editing, shell execution, codebase navigation, extended thinking, and smart context compaction. Uses 200 max iterations and high thinking budget.
+
+```bash
+ra --config recipes/coding-agent/ra.config.yaml
+```
+
+### Code Review Agent
+
+Reviews diffs for correctness, style, and performance. Connects to GitHub via MCP, includes a diff-gathering script and style guide, and enforces a token budget via middleware.
+
+```bash
+ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review this"
+```
+
+## Common patterns
+
+### Project-specific agent
 
 Drop a `ra.config.yml` in your repo:
 
@@ -18,7 +40,7 @@ skillDirs:
 
 Now `ra` in that directory becomes a project-aware agent.
 
-## CI code reviewer
+### CI code reviewer
 
 ```yaml
 # .github/workflows/review.yml
@@ -26,7 +48,7 @@ Now `ra` in that directory becomes a project-aware agent.
   run: git diff origin/main | ra --skill code-review "Review this PR diff"
 ```
 
-## Pipe and chain
+### Pipe and chain
 
 ```bash
 # Summarize a log file
@@ -39,32 +61,32 @@ git diff | ra --skill code-review "Review this diff"
 ra "List all TODO comments" | ra "Group by priority and format as a table"
 ```
 
-## Rate limit fallback
+### Rate limit fallback
 
 ```bash
 # Primary provider fails? Flip and keep going
 RA_PROVIDER=openai ra "Continue where we left off"
 ```
 
-## MCP tool in Claude Desktop
+### MCP tool in Claude Desktop
 
 ```json
 {
   "mcpServers": {
     "project-agent": {
       "command": "ra",
-      "args": ["--mcp"],
+      "args": ["--mcp-stdio"],
       "cwd": "/path/to/your/project"
     }
   }
 }
 ```
 
-## Middleware for audit logging
+### Middleware for audit logging
 
 ```ts
 // middleware/audit.ts
-export default (ctx) => {
+export default async (ctx) => {
   const entry = {
     ts: new Date().toISOString(),
     messages: ctx.messages.length,
@@ -78,4 +100,12 @@ export default (ctx) => {
 middleware:
   afterLoopComplete:
     - "./middleware/audit.ts"
+```
+
+### Scripting with --exec
+
+Use `--exec` to run a TypeScript or JavaScript file that imports ra's internals programmatically:
+
+```bash
+ra --exec ./scripts/batch-review.ts
 ```

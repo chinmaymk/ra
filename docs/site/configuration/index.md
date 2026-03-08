@@ -2,6 +2,12 @@
 
 ra uses a layered config system: **defaults → file → env → CLI**. Each layer overrides the previous.
 
+```
+defaults → config file → env vars → CLI flags
+```
+
+Commit a `ra.config.yml` for a team or project baseline. Use environment variables for secrets and per-environment behavior. Use CLI flags for one-off overrides.
+
 ## Config file
 
 Place in your project root. Supports JSON, YAML, or TOML.
@@ -14,25 +20,40 @@ Place in your project root. Supports JSON, YAML, or TOML.
 Full example:
 
 ```yaml
+# ra.config.yml
 provider: anthropic
 model: claude-sonnet-4-6
 systemPrompt: You are a helpful coding assistant.
 maxIterations: 50
 thinking: medium
+toolTimeout: 30000
 
 skills:
   - code-review
 skillDirs:
   - ./skills
 
+compaction:
+  enabled: true
+  threshold: 0.8
+  model: claude-haiku-4-5-20251001
+
+context:
+  enabled: true
+  patterns:
+    - "CLAUDE.md"
+    - "AGENTS.md"
+
 storage:
   path: .ra/sessions
   maxSessions: 100
   ttlDays: 30
 
-http:
-  port: 3000
-  token: my-secret-token
+middleware:
+  beforeModelCall:
+    - "./middleware/budget.ts"
+  afterToolExecution:
+    - "./middleware/audit.ts"
 
 mcp:
   client:
@@ -51,6 +72,8 @@ mcp:
 | `systemPrompt` | `RA_SYSTEM_PROMPT` | `--system-prompt` | — | System prompt |
 | `maxIterations` | `RA_MAX_ITERATIONS` | `--max-iterations` | `50` | Max agent loop iterations |
 | `thinking` | `RA_THINKING` | `--thinking` | — | Thinking depth: `low`, `medium`, `high` |
+| `toolTimeout` | — | — | `30000` | Per-tool timeout in milliseconds |
+| `builtinTools` | `RA_BUILTIN_TOOLS` | `--no-builtin-tools` | `true` | Enable/disable built-in tools |
 
 ## Environment variables
 
@@ -101,7 +124,18 @@ storage:
   ttlDays: 30             # auto-prune sessions older than this
 ```
 
-## Context & Pattern Resolution
+## Compaction
+
+```yaml
+compaction:
+  enabled: true               # enable automatic context compaction
+  threshold: 0.8              # trigger at 80% of context window
+  model: claude-haiku-4-5-20251001  # cheap model for summarization
+```
+
+See [Context Control](/core/context-control) for details.
+
+## Context & pattern resolution
 
 ```yaml
 context:
@@ -119,7 +153,7 @@ context:
       path: ./resolvers/my-resolver.ts
 ```
 
-Built-in resolvers (`file` and `url`) are enabled by default. See the [Pattern Resolution](#pattern-resolution) section below for usage and custom resolver examples.
+Built-in resolvers (`file` and `url`) are enabled by default. See [Context Control](/core/context-control) for usage.
 
 ## HTTP config
 

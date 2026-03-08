@@ -26,26 +26,30 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Concepts',
+        text: 'Core',
         items: [
           { text: 'What is ra?', link: '/concepts/' },
-          { text: 'Layered Config', link: '/concepts/config' },
-          { text: 'Providers', link: '/concepts/providers' },
+          { text: 'The Agent Loop', link: '/core/agent-loop' },
+          { text: 'Context Control', link: '/core/context-control' },
+          { text: 'Sessions', link: '/core/sessions' },
         ],
       },
       {
-        text: 'Modes',
+        text: 'Interfaces',
         items: [
           { text: 'CLI (one-shot)', link: '/modes/cli' },
           { text: 'REPL', link: '/modes/repl' },
           { text: 'HTTP Server', link: '/modes/http' },
-          { text: 'MCP Server', link: '/modes/mcp' },
+          { text: 'MCP', link: '/modes/mcp' },
         ],
       },
       {
-        text: 'Configuration',
+        text: 'Features',
         items: [
-          { text: 'Reference', link: '/configuration/' },
+          { text: 'Built-in Tools', link: '/tools/' },
+          { text: 'Skills', link: '/skills/' },
+          { text: 'Middleware', link: '/middleware/' },
+          { text: 'File Attachments', link: '/core/file-attachments' },
         ],
       },
       {
@@ -55,21 +59,14 @@ export default defineConfig({
           { text: 'OpenAI', link: '/providers/openai' },
           { text: 'Azure OpenAI', link: '/providers/azure' },
           { text: 'Google Gemini', link: '/providers/google' },
-          { text: 'Ollama', link: '/providers/ollama' },
           { text: 'AWS Bedrock', link: '/providers/bedrock' },
-        ],
-      },
-      {
-        text: 'Features',
-        items: [
-          { text: 'Built-in Tools', link: '/tools/' },
-          { text: 'Skills', link: '/skills/' },
-          { text: 'Middleware', link: '/middleware/' },
+          { text: 'Ollama', link: '/providers/ollama' },
         ],
       },
       {
         text: 'Reference',
         items: [
+          { text: 'Configuration', link: '/configuration/' },
           { text: 'HTTP API', link: '/api/' },
           { text: 'Recipes', link: '/recipes/' },
           { text: 'Dynamic Prompts', link: '/recipes/dynamic-prompts' },
