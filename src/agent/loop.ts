@@ -10,6 +10,8 @@ export interface AgentLoopOptions {
   provider: IProvider
   tools: ToolRegistry
   maxIterations?: number
+  maxRetries?: number
+  maxDuration?: number
   model?: string
   middleware?: Partial<MiddlewareConfig>
   sessionId?: string
@@ -30,10 +32,30 @@ const EMPTY_MW: MiddlewareConfig = {
   afterLoopIteration: [], afterLoopComplete: [], onError: [],
 }
 
+function isRetryable(err: unknown): boolean {
+  if (err && typeof err === 'object') {
+    const status = (err as { status?: number }).status
+    if (status === 429 || status === 503 || status === 529) return true
+    const code = (err as { code?: string }).code
+    if (code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'UND_ERR_SOCKET') return true
+  }
+  return false
+}
+
+function retryDelay(attempt: number): number {
+  return Math.min(1000 * 2 ** attempt, 60000)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 export class AgentLoop {
   private provider: IProvider
   private tools: ToolRegistry
   private maxIterations: number
+  private maxRetries: number
+  private maxDuration: number
   private model: string
   private middleware: MiddlewareConfig
   private sessionId: string
@@ -44,6 +66,8 @@ export class AgentLoop {
     this.provider = options.provider
     this.tools = options.tools
     this.maxIterations = options.maxIterations ?? 10
+    this.maxRetries = options.maxRetries ?? 0
+    this.maxDuration = options.maxDuration ?? 0
     this.model = options.model ?? 'default'
     this.sessionId = options.sessionId ?? randomUUID()
     this.middleware = { ...EMPTY_MW, ...options.middleware }
@@ -63,6 +87,12 @@ export class AgentLoop {
     const controller = new AbortController()
     const stop = () => controller.abort()
     const { signal } = controller
+
+    // Wall-clock limit: abort when maxDuration elapses
+    if (this.maxDuration > 0) {
+      const timer = setTimeout(() => controller.abort(), this.maxDuration)
+      signal.addEventListener('abort', () => clearTimeout(timer), { once: true })
+    }
 
     const stoppable: StoppableContext = { stop, signal }
 
@@ -94,29 +124,46 @@ export class AgentLoop {
         const toolCallBuf: { id: string; name: string; argsRaw: string }[] = []
 
         currentPhase = 'stream'
-        for await (const chunk of this.provider.stream(request)) {
-          if (chunk.type === 'thinking') {
-            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-            if (signal.aborted) break
-          } else if (chunk.type === 'text') {
-            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-            if (signal.aborted) break
-            textAccumulator += chunk.delta
-          } else if (chunk.type === 'tool_call_start') {
-            toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
-          } else if (chunk.type === 'tool_call_delta') {
-            const tc = toolCallBuf.find(t => t.id === chunk.id)
-            if (tc) tc.argsRaw += chunk.argsDelta
-          } else if (chunk.type === 'done') {
-            if (chunk.usage) {
-              usage.inputTokens += chunk.usage.inputTokens
-              usage.outputTokens += chunk.usage.outputTokens
-              if (chunk.usage.thinkingTokens) {
-                usage.thinkingTokens = (usage.thinkingTokens ?? 0) + chunk.usage.thinkingTokens
+
+        // Retry loop around provider.stream()
+        let attempt = 0
+        while (true) {
+          try {
+            for await (const chunk of this.provider.stream(request)) {
+              if (chunk.type === 'thinking') {
+                await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
+                if (signal.aborted) break
+              } else if (chunk.type === 'text') {
+                await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
+                if (signal.aborted) break
+                textAccumulator += chunk.delta
+              } else if (chunk.type === 'tool_call_start') {
+                toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
+              } else if (chunk.type === 'tool_call_delta') {
+                const tc = toolCallBuf.find(t => t.id === chunk.id)
+                if (tc) tc.argsRaw += chunk.argsDelta
+              } else if (chunk.type === 'done') {
+                if (chunk.usage) {
+                  usage.inputTokens += chunk.usage.inputTokens
+                  usage.outputTokens += chunk.usage.outputTokens
+                  if (chunk.usage.thinkingTokens) {
+                    usage.thinkingTokens = (usage.thinkingTokens ?? 0) + chunk.usage.thinkingTokens
+                  }
+                  lastUsage = chunk.usage
+                }
+                break
               }
-              lastUsage = chunk.usage
             }
-            break
+            break // stream completed successfully
+          } catch (err) {
+            if (attempt < this.maxRetries && isRetryable(err) && !signal.aborted) {
+              attempt++
+              textAccumulator = ''
+              toolCallBuf.length = 0
+              await sleep(retryDelay(attempt - 1))
+              continue
+            }
+            throw err
           }
         }
 

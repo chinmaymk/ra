@@ -10,6 +10,8 @@ skillDirs:
 builtinTools: true
 
 maxIterations: 200
+maxRetries: 3
+maxDuration: 7200000
 
 thinking: high
 

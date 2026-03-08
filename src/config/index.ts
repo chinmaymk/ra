@@ -87,6 +87,8 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_THINKING !== undefined && ['low', 'medium', 'high'].includes(env.RA_THINKING)) {
     set(['thinking'], env.RA_THINKING)
   }
+  if (env.RA_MAX_RETRIES !== undefined) setInt(['maxRetries'], env.RA_MAX_RETRIES)
+  if (env.RA_MAX_DURATION !== undefined) setInt(['maxDuration'], env.RA_MAX_DURATION)
   if (env.RA_TOOL_TIMEOUT !== undefined) setInt(['toolTimeout'], env.RA_TOOL_TIMEOUT)
   if (env.RA_BUILTIN_TOOLS !== undefined) set(['builtinTools'], env.RA_BUILTIN_TOOLS === 'true')
 

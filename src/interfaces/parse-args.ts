@@ -83,6 +83,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'system-prompt':               { type: 'string' },
       'max-iterations':              { type: 'string' },
       'thinking':                    { type: 'string' },
+      'max-retries':                 { type: 'string' },
+      'max-duration':                { type: 'string' },
       'tool-timeout':                { type: 'string' },
       'builtin-tools':               { type: 'boolean' },
       // HTTP server
@@ -127,6 +129,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values['system-prompt'])   set(['systemPrompt'], values['system-prompt'])
   if (values['max-iterations'])  { const n = safeParseInt(values['max-iterations'] as string); if (n !== undefined) set(['maxIterations'], n) }
   if (values['thinking'])        set(['thinking'], values['thinking'])
+  if (values['max-retries'])     { const n = safeParseInt(values['max-retries'] as string); if (n !== undefined) set(['maxRetries'], n) }
+  if (values['max-duration'])    { const n = safeParseInt(values['max-duration'] as string); if (n !== undefined) set(['maxDuration'], n) }
   if (values['tool-timeout'])    { const n = safeParseInt(values['tool-timeout'] as string); if (n !== undefined) set(['toolTimeout'], n) }
   if (values['builtin-tools']) set(['builtinTools'], true)
 

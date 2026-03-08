@@ -38,6 +38,8 @@ OPTIONS
   --model <name>                      Model name
   --system-prompt <text>              System prompt text or path to file
   --max-iterations <n>                Max agent loop iterations
+  --max-retries <n>                   Max retries on provider errors (429, 503, network)
+  --max-duration <ms>                 Max wall-clock time for the agent loop (ms)
   --config <path>                     Path to config file
   --skill <name>                      Skill to activate for this run (repeatable)
   --skill-dir <path>                  Directory to load skills from (repeatable)
@@ -92,6 +94,7 @@ SKILL MANAGEMENT
 
 ENV VARS
   RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
+  RA_MAX_RETRIES, RA_MAX_DURATION
   RA_HTTP_PORT, RA_HTTP_TOKEN
   RA_MCP_SERVER_ENABLED, RA_MCP_SERVER_PORT
   RA_MCP_SERVER_TOOL_NAME, RA_MCP_SERVER_TOOL_DESCRIPTION
@@ -270,7 +273,7 @@ async function main(): Promise<void> {
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware, compaction: config.compaction })
+    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, maxRetries: config.maxRetries, maxDuration: config.maxDuration, toolTimeout: config.toolTimeout, middleware, compaction: config.compaction })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
@@ -343,6 +346,8 @@ async function main(): Promise<void> {
       tools,
       skillMap,
       maxIterations: config.maxIterations,
+      maxRetries: config.maxRetries,
+      maxDuration: config.maxDuration,
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
@@ -367,6 +372,8 @@ async function main(): Promise<void> {
       systemPrompt: config.systemPrompt,
       skillMap,
       maxIterations: config.maxIterations,
+      maxRetries: config.maxRetries,
+      maxDuration: config.maxDuration,
       toolTimeout: config.toolTimeout,
       middleware,
       thinking: config.thinking,
@@ -390,6 +397,8 @@ async function main(): Promise<void> {
       systemPrompt: config.systemPrompt,
       skillMap,
       maxIterations: config.maxIterations,
+      maxRetries: config.maxRetries,
+      maxDuration: config.maxDuration,
       toolTimeout: config.toolTimeout,
       sessionId: parsed.meta.resume,
       middleware,

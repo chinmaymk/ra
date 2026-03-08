@@ -21,6 +21,8 @@ export interface ReplOptions {
   skillMap?: Map<string, Skill>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
+  maxRetries?: number
+  maxDuration?: number
   toolTimeout?: number
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
@@ -123,6 +125,8 @@ export class Repl {
       tools: this.options.tools,
       model: this.options.model,
       maxIterations: this.options.maxIterations,
+      maxRetries: this.options.maxRetries,
+      maxDuration: this.options.maxDuration,
       toolTimeout: this.options.toolTimeout,
       sessionId: this.sessionId,
       thinking: this.options.thinking,

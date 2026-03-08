@@ -35,6 +35,8 @@ export interface RaConfig {
     ttlDays: number
   }
   maxIterations: number
+  maxRetries: number
+  maxDuration: number
   toolTimeout: number
   builtinTools: boolean
   middleware: Record<string, string[]>

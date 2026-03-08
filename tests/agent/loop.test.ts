@@ -531,6 +531,108 @@ describe('AgentLoop', () => {
     expect((toolMsg as any)?.isError).toBe(true)
   })
 
+  it('retries on retryable provider errors', async () => {
+    let callCount = 0
+    const retryProvider: IProvider = {
+      name: 'retry-mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream() {
+        callCount++
+        if (callCount <= 2) {
+          const err = new Error('rate limited') as any
+          err.status = 429
+          throw err
+        }
+        yield { type: 'text' as const, delta: 'success' }
+        yield { type: 'done' as const }
+      },
+    }
+    const loop = new AgentLoop({ provider: retryProvider, tools: new ToolRegistry(), maxRetries: 3 })
+    const result = await loop.run([{ role: 'user', content: 'hi' }])
+    expect(result.messages.at(-1)?.content).toBe('success')
+    expect(callCount).toBe(3)
+  })
+
+  it('throws after exhausting retries', async () => {
+    const retryProvider: IProvider = {
+      name: 'retry-mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream() {
+        const err = new Error('overloaded') as any
+        err.status = 529
+        throw err
+      },
+    }
+    const loop = new AgentLoop({ provider: retryProvider, tools: new ToolRegistry(), maxRetries: 2 })
+    await expect(loop.run([{ role: 'user', content: 'hi' }])).rejects.toThrow('overloaded')
+  })
+
+  it('does not retry non-retryable errors', async () => {
+    let callCount = 0
+    const failProvider: IProvider = {
+      name: 'fail-mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream() {
+        callCount++
+        const err = new Error('bad request') as any
+        err.status = 400
+        throw err
+      },
+    }
+    const loop = new AgentLoop({ provider: failProvider, tools: new ToolRegistry(), maxRetries: 3 })
+    await expect(loop.run([{ role: 'user', content: 'hi' }])).rejects.toThrow('bad request')
+    expect(callCount).toBe(1)
+  })
+
+  it('resets partial state on retry', async () => {
+    let callCount = 0
+    const retryProvider: IProvider = {
+      name: 'retry-mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream() {
+        callCount++
+        if (callCount === 1) {
+          yield { type: 'text' as const, delta: 'partial' }
+          const err = new Error('connection reset') as any
+          err.code = 'ECONNRESET'
+          throw err
+        }
+        yield { type: 'text' as const, delta: 'complete' }
+        yield { type: 'done' as const }
+      },
+    }
+    const loop = new AgentLoop({ provider: retryProvider, tools: new ToolRegistry(), maxRetries: 2 })
+    const result = await loop.run([{ role: 'user', content: 'hi' }])
+    expect(result.messages.at(-1)?.content).toBe('complete')
+  })
+
+  it('maxDuration aborts the loop', async () => {
+    const tools = new ToolRegistry()
+    tools.register({
+      name: 'slow',
+      description: 'slow tool',
+      inputSchema: {},
+      execute: () => new Promise(resolve => setTimeout(() => resolve('done'), 5000)),
+    })
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'slow' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+    ])
+    const loop = new AgentLoop({ provider, tools, maxIterations: 100, maxDuration: 50 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    expect(result.iterations).toBeLessThanOrEqual(1)
+  })
+
+  it('maxDuration 0 means no time limit', async () => {
+    const provider = mockProvider([[{ type: 'text', delta: 'hello' }, { type: 'done' }]])
+    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), maxDuration: 0 })
+    const result = await loop.run([{ role: 'user', content: 'hi' }])
+    expect(result.messages.at(-1)?.content).toBe('hello')
+  })
+
   it('compacts messages when exceeding token threshold', async () => {
     let chatCallCount = 0
     let streamCallCount = 0
