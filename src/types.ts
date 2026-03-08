@@ -51,6 +51,14 @@ export type {
   Skill,
 } from './skills/types.ts'
 
+// Context / resolver types
+export type {
+  PatternResolver,
+  ResolvedReference,
+  ResolutionResult,
+} from './context/resolvers.ts'
+export type { ResolverConfig } from './context/types.ts'
+
 // Provider option types
 export type { AnthropicProviderOptions } from './providers/anthropic.ts'
 export type { OpenAIProviderOptions } from './providers/openai.ts'

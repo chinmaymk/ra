@@ -2,6 +2,8 @@
 import { loadConfig } from './config'
 import { getDefaultCompactionModel } from './agent/model-registry'
 import { discoverContextFiles, buildContextMessages } from './context'
+import { createResolverMiddleware } from './context/resolve-middleware'
+import { loadResolvers } from './context/resolver-loader'
 import { loadMiddleware } from './middleware/loader'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { ToolRegistry } from './agent/tool-registry'
@@ -227,6 +229,15 @@ async function main(): Promise<void> {
     : []
 
   const middleware = await loadMiddleware(config, process.cwd())
+
+  // Set up pattern resolvers (e.g. @file, url:)
+  if (config.context.resolvers?.length) {
+    const resolvers = await loadResolvers(config.context.resolvers, process.cwd())
+    if (resolvers.length > 0) {
+      const resolverMw = createResolverMiddleware(resolvers, process.cwd())
+      middleware.beforeModelCall = [resolverMw, ...(middleware.beforeModelCall ?? [])]
+    }
+  }
 
   // Create provider
   const provider = createProvider(buildProviderConfig(config.provider, config.providers[config.provider]))

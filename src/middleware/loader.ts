@@ -1,5 +1,4 @@
-import { join, isAbsolute } from 'path'
-import { homedir } from 'os'
+import { resolvePath } from '../utils/paths'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '../agent/types'
 
@@ -16,8 +15,7 @@ function isFilePath(s: string): boolean {
 
 async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
   if (isFilePath(entry)) {
-    let resolved = isAbsolute(entry) ? entry : join(cwd, entry)
-    if (entry.startsWith('~/')) resolved = join(homedir(), entry.slice(2))
+    const resolved = resolvePath(entry, cwd)
     const mod = await import(resolved)
     if (typeof mod.default !== 'function') {
       throw new Error(`Middleware file "${resolved}" must export a default function`)

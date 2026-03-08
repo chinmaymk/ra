@@ -10,6 +10,7 @@ describe('context types', () => {
     const config: ContextConfig = {
       enabled: true,
       patterns: ['CLAUDE.md', '.cursorrules'],
+      resolvers: [],
     }
     expect(config.enabled).toBe(true)
     expect(config.patterns).toHaveLength(2)
