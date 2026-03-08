@@ -290,6 +290,8 @@ When built-in tools are enabled, they're also exposed as individual MCP tools �
 
 14 tools enabled by default (platform-specific: `execute_bash` on Linux/macOS, `execute_powershell` on Windows). Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them.
 
+> **Security note:** Built-in tools have full filesystem and shell access within the user's permissions — same as running a local CLI tool. When exposing ra via the HTTP API, always set `--http-token` and consider running in a sandboxed environment (container, VM). Use `builtinTools: false` and provide restricted tools via MCP if you need fine-grained access control.
+
 | Category | Tools |
 |----------|-------|
 | **Filesystem** | `read_file`, `write_file`, `update_file`, `append_file`, `list_directory`, `search_files`, `glob_files`, `move_file`, `copy_file`, `delete_file` |

@@ -239,6 +239,18 @@ async function main(): Promise<void> {
     }
   }
 
+  // Validate provider credentials before creating
+  const keyRequired: Record<string, string> = {
+    anthropic: 'RA_ANTHROPIC_API_KEY',
+    openai: 'RA_OPENAI_API_KEY',
+    google: 'RA_GOOGLE_API_KEY',
+  }
+  const envVar = keyRequired[config.provider]
+  if (envVar && !(config.providers[config.provider] as Record<string, unknown>).apiKey) {
+    console.error(`Error: No API key configured for ${config.provider}.\nSet ${envVar} environment variable and try again.`)
+    process.exit(1)
+  }
+
   // Create provider
   const provider = createProvider(buildProviderConfig(config.provider, config.providers[config.provider]))
 
@@ -290,7 +302,7 @@ async function main(): Promise<void> {
     if (stopMcpHttp) await stopMcpHttp()
   }
 
-  process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
+  process.on('SIGINT', async () => { console.error('\nInterrupted.'); await shutdown(); process.exit(0) })
   process.on('SIGTERM', async () => { await shutdown(); process.exit(0) })
 
   if (parsed.meta.showContext) {
@@ -328,8 +340,8 @@ async function main(): Promise<void> {
     await shutdown()
     return
   } else if (config.interface === 'cli' || (parsed.meta.prompt && !parsed.config.interface)) {
-    if (!parsed.meta.prompt) {
-      console.error('Error: --cli requires a prompt argument')
+    if (!parsed.meta.prompt || !parsed.meta.prompt.trim()) {
+      console.error('Error: CLI mode requires a prompt.\nUsage: ra "your prompt here"')
       process.exit(1)
     }
     const sessionMessages = parsed.meta.resume ? await storage.readMessages(parsed.meta.resume) : []

@@ -25,6 +25,12 @@ export interface HttpOptions {
   contextMessages?: IMessage[]
 }
 
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
 export class HttpServer {
   private options: HttpOptions
   private server: ReturnType<typeof Bun.serve> | null = null
@@ -43,6 +49,11 @@ export class HttpServer {
       fetch: async (req: Request): Promise<Response> => {
         const url = new URL(req.url)
 
+        // Handle CORS preflight
+        if (req.method === 'OPTIONS') {
+          return new Response(null, { status: 204, headers: CORS_HEADERS })
+        }
+
         // Auth check
         if (opts.token) {
           const authHeader = req.headers.get('Authorization') ?? ''
@@ -50,7 +61,7 @@ export class HttpServer {
           if (provided !== opts.token) {
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
               status: 401,
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             })
           }
         }
@@ -69,7 +80,7 @@ export class HttpServer {
 
         return new Response(JSON.stringify({ error: 'Not Found' }), {
           status: 404,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
         })
       },
     })
@@ -93,7 +104,7 @@ export class HttpServer {
   private static badRequest(): Response {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     })
   }
 
@@ -155,12 +166,12 @@ export class HttpServer {
         response: responseText,
         ...(askQuestion && { askUser: askQuestion, sessionId: body.sessionId }),
       }), {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       })
     } catch (err) {
       return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       })
     }
   }
@@ -230,6 +241,7 @@ export class HttpServer {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        ...CORS_HEADERS,
       },
     })
   }
@@ -237,7 +249,7 @@ export class HttpServer {
   private async handleSessions(): Promise<Response> {
     const sessions = await this.options.storage.list()
     return new Response(JSON.stringify({ sessions }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     })
   }
 }

@@ -1,15 +1,19 @@
 {
   "name": "@chinmaymk/ra",
-  "version": "0.0.1",
-  "description": "One loop. Infinite agents. Type definitions for the ra AI agent framework.",
+  "version": "1.0.0",
+  "description": "One loop. Infinite agents. An open-source AI agent framework with CLI, REPL, HTTP, and MCP interfaces.",
   "type": "module",
   "types": "dist/types.d.ts",
+  "bin": {
+    "ra": "dist/ra"
+  },
   "exports": {
     ".": {
       "types": "./dist/types.d.ts"
     }
   },
   "files": [
+    "dist/ra",
     "dist/**/*.d.ts",
     "LICENSE",
     "README.md"
