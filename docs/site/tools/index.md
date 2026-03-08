@@ -276,7 +276,38 @@ toolConfig:
 | `maxConcurrency` | `4` | Max parallel tasks per invocation |
 | `thinking` | parent's level | Thinking budget override |
 
-Sub-agents at the maximum nesting depth (default: 2) don't get the `subagent` tool, preventing infinite recursion. Individual task failures don't affect other tasks — each result reports `completed` or `error` independently.
+Sub-agents at the maximum nesting depth (default: 2) don't get the `subagent` tool, preventing infinite recursion. Memory tools (`memory_save`, `memory_search`, `memory_forget`) are excluded from sub-agents — only the parent agent manages persistent memory. Individual task failures don't affect other tasks — each result reports `completed` or `error` independently.
+
+## Memory
+
+When [memory](/configuration/#memory) is enabled, three additional tools are registered.
+
+### `memory_save`
+
+Save a fact to persistent memory for future conversations. Proactively saves user preferences, project decisions, corrections, and key context. To update an existing memory, the agent forgets the old version first, then saves the new one.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `content` | string | yes | Self-contained fact, e.g. "User prefers tabs over spaces" |
+| `tags` | string | no | Category: `preference`, `project`, `convention`, `team`, or `tooling` |
+
+### `memory_search`
+
+Search persistent memories by keyword. Recent memories are automatically injected at conversation start — this tool is for targeted lookups beyond the recalled set.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Full-text search keywords, e.g. "typescript tabs" or "deployment" |
+| `limit` | number | no | Max results (default: 10) |
+
+### `memory_forget`
+
+Delete memories matching a search query. Used when the user corrects previous information, a fact becomes outdated, or before saving an updated version of an existing memory.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Search keywords to match memories to delete |
+| `limit` | number | no | Max memories to delete (default: 10) |
 
 ## Disabling built-in tools
 

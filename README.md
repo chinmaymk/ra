@@ -246,6 +246,8 @@ ra
 > /skill code-review          # activate a skill for next message
 > /attach diff.patch          # attach a file to next message
 > /context                    # show discovered context files
+> /memories                   # see what the agent remembers
+> /forget dark mode           # delete memories matching a query
 > /resume abc-123             # resume a previous session
 > /clear                      # start fresh
 ```
@@ -496,6 +498,39 @@ middleware:
 
 All hooks support a configurable timeout via `toolTimeout` (default: 30s).
 
+## Memory
+
+ra can persist facts across conversations using an SQLite-backed memory store with full-text search. The agent gets three tools — `memory_save`, `memory_search`, and `memory_forget` — and recent memories are automatically injected at the start of each loop.
+
+```bash
+ra --memory                       # enable memory for this session
+ra --list-memories                # list all stored memories
+ra --memories "typescript"        # search memories
+ra --forget "dark mode"           # delete matching memories
+```
+
+In the REPL:
+
+```
+> /memories          # see what the agent remembers
+> /memories 5        # show last 5 memories
+> /forget dark mode  # manually delete memories matching "dark mode"
+```
+
+For persistent configuration:
+
+```yaml
+# ra.config.yml
+memory:
+  enabled: true
+  path: .ra/memory.db     # SQLite database location
+  maxMemories: 1000        # oldest trimmed first
+  ttlDays: 90              # auto-prune after 90 days
+  injectLimit: 5          # inject top-N recent memories (0 to disable)
+```
+
+The agent decides when to save and forget — tool descriptions guide it to capture user preferences, project decisions, and corrections, and to forget outdated information when told.
+
 ## Recipes
 
 Pre-built agent configurations you can use directly or fork.
@@ -553,6 +588,13 @@ storage:
   path: .ra/sessions
   maxSessions: 100
   ttlDays: 30
+
+memory:
+  enabled: true
+  path: .ra/memory.db
+  maxMemories: 1000
+  ttlDays: 90
+  injectLimit: 5
 
 toolConfig:
   subagent:

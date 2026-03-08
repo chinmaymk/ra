@@ -218,6 +218,27 @@ describe('subagent tool', () => {
     expect(capturedTools).toContain('subagent')
   })
 
+  it('excludes memory tools from subagent child tools', async () => {
+    const capturedTools: string[] = []
+    const provider = capturingProvider(req => {
+      for (const t of req.tools ?? []) capturedTools.push(t.name)
+    })
+
+    const tools = new ToolRegistry()
+    tools.register({ name: 'memory_save', description: 'save', inputSchema: {}, execute: async () => 'ok' })
+    tools.register({ name: 'memory_search', description: 'search', inputSchema: {}, execute: async () => '[]' })
+    tools.register({ name: 'memory_forget', description: 'forget', inputSchema: {}, execute: async () => '0' })
+    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
+
+    const tool = subagentTool({ provider, tools, model: 'test' })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedTools).toContain('read_file')
+    expect(capturedTools).not.toContain('memory_save')
+    expect(capturedTools).not.toContain('memory_search')
+    expect(capturedTools).not.toContain('memory_forget')
+  })
+
   it('picks up tools registered after construction (lazy registry)', async () => {
     const capturedTools: string[] = []
     const provider = capturingProvider(req => {

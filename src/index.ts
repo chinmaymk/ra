@@ -17,6 +17,7 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools, subagentTool } from './tools'
+import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
 import { join } from 'path'
 
 async function readStdin(): Promise<string | undefined> {
@@ -61,6 +62,12 @@ MCP SERVER
   --mcp-server-tool-name <name>       MCP tool name
   --mcp-server-tool-description <d>   MCP tool description
 
+MEMORY
+  --memory                            Enable persistent memory across conversations
+  --list-memories                     List all stored memories
+  --memories <query>                  Search memories by keyword
+  --forget <query>                    Forget memories matching query
+
 STORAGE
   --storage-path <path>               Session storage directory
   --storage-max-sessions <n>          Max stored sessions
@@ -102,6 +109,8 @@ ENV VARS
   RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
   RA_BUILTIN_TOOLS
   RA_THINKING
+  RA_MEMORY_ENABLED, RA_MEMORY_PATH, RA_MEMORY_MAX_MEMORIES
+  RA_MEMORY_TTL_DAYS, RA_MEMORY_INJECT_LIMIT
 
 STDIN
   When input is piped, ra reads stdin and auto-switches to CLI mode.
@@ -249,6 +258,28 @@ async function main(): Promise<void> {
     registerBuiltinTools(tools)
   }
 
+  // Set up memory system
+  let memoryStore: MemoryStore | undefined
+  if (config.memory.enabled) {
+    const memoryPath = config.memory.path.startsWith('/')
+      ? config.memory.path
+      : join(process.cwd(), config.memory.path)
+    memoryStore = new MemoryStore({
+      path: memoryPath,
+      maxMemories: config.memory.maxMemories,
+      ttlDays: config.memory.ttlDays,
+    })
+    tools.register(memorySearchTool(memoryStore))
+    tools.register(memorySaveTool(memoryStore))
+    tools.register(memoryForgetTool(memoryStore))
+
+    const memMw = createMemoryMiddleware({
+      store: memoryStore,
+      injectLimit: config.memory.injectLimit,
+    })
+    middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
+  }
+
   // Create session storage
   const storagePath = config.storage.path.startsWith('/')
     ? config.storage.path
@@ -303,6 +334,7 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     try { await mcpClient.disconnect() } catch { /* best-effort cleanup */ }
     try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort cleanup */ }
+    if (memoryStore) memoryStore.close()
   }
 
   process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
@@ -316,6 +348,44 @@ async function main(): Promise<void> {
         const content = typeof msg.content === 'string' ? msg.content : ''
         console.log(content)
         console.log()
+      }
+    }
+    await shutdown()
+    process.exit(0)
+  }
+
+  if (parsed.meta.listMemories || parsed.meta.memories !== undefined) {
+    if (!memoryStore) {
+      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
+    } else {
+      const query = parsed.meta.memories || ''
+      const memories = query ? memoryStore.search(query, 100) : memoryStore.list(100)
+      if (memories.length === 0) {
+        console.log(query ? 'No matching memories found.' : 'No memories stored.')
+      } else {
+        const total = memoryStore.count()
+        console.log(query
+          ? `${memories.length} matching memories (${total} total):\n`
+          : `${memories.length} memories (${total} total):\n`)
+        for (const m of memories) {
+          console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
+        }
+      }
+    }
+    await shutdown()
+    process.exit(0)
+  }
+
+  if (parsed.meta.forget !== undefined) {
+    if (!memoryStore) {
+      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
+    } else {
+      const query = parsed.meta.forget
+      if (!query) {
+        console.log('Usage: ra --forget "search query"')
+      } else {
+        const deleted = memoryStore.forget(query, 1000)
+        console.log(deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.')
       }
     }
     await shutdown()
@@ -412,6 +482,7 @@ async function main(): Promise<void> {
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
+      memoryStore,
     })
     await repl.start()
     await shutdown()
