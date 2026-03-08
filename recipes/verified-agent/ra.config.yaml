@@ -1,0 +1,33 @@
+provider: anthropic
+model: claude-sonnet-4-6
+interface: cli
+
+skills:
+  - verified-agent
+skillDirs:
+  - ./skills
+
+middleware:
+  beforeModelCall:
+    - ./middleware/decision-log.ts
+  afterModelResponse:
+    - ./middleware/hash-chain.ts
+    - ./middleware/decision-log.ts
+  beforeToolExecution:
+    - ./middleware/workflow-guard.ts
+    - ./middleware/decision-log.ts
+  afterToolExecution:
+    - ./middleware/hash-chain.ts
+    - ./middleware/decision-log.ts
+  afterLoopIteration:
+    - ./middleware/decision-log.ts
+  afterLoopComplete:
+    - ./middleware/decision-log.ts
+  onError:
+    - ./middleware/decision-log.ts
+
+maxIterations: 20
+
+compaction:
+  enabled: true
+  threshold: 0.8
