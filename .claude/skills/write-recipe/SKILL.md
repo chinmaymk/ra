@@ -46,6 +46,14 @@ middleware:
 maxIterations: 10
 ```
 
+## Key Rule: Recipes Must Be Self-Contained
+
+A recipe must be fully copy-pastable. Someone copying the recipe directory into their project should get everything they need — no external dependencies on shared directories.
+
+- **Bundle all skills inside the recipe's `skills/` directory**, including any specialist skills the agent references on-demand
+- **`skillDirs` should be `./skills`** (relative to the recipe directory)
+- Don't reference `../../skills` or any path outside the recipe
+
 ## Steps
 
 1. **Define the persona** — What agent are you building? One sentence: "A code reviewer that reads diffs and gives structured feedback."

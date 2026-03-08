@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { loadConfig } from './config'
+import { getDefaultCompactionModel } from './agent/model-registry'
 import { discoverContextFiles, buildContextMessages } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
@@ -174,6 +175,11 @@ async function main(): Promise<void> {
     cliArgs: parsed.config,
     env: process.env as Record<string, string | undefined>,
   })
+
+  // Resolve compaction model default from provider if not set
+  if (!config.compaction.model) {
+    config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
+  }
 
   // Discover project context files
   const contextMessages = config.context.enabled

@@ -1,43 +1,38 @@
 <h1 align="center">ra</h1>
 
 <p align="center">
-  <b>One loop. Infinite agents.</b><br>
-  An extensible agentic loop you shape through config.
+  <b>One Loop. Infinite Agents.</b><br>
 </p>
 
 <p align="center">
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#the-agent-loop">The Agent Loop</a> &middot;
+  <a href="#context-control">Context Control</a> &middot;
   <a href="#providers">Providers</a> &middot;
   <a href="#interfaces">Interfaces</a> &middot;
   <a href="#built-in-tools">Tools</a> &middot;
   <a href="#skills">Skills</a> &middot;
   <a href="#mcp">MCP</a> &middot;
-  <a href="#context-discovery">Context</a> &middot;
+  <a href="#middleware">Middleware</a> &middot;
+  <a href="#recipes">Recipes</a> &middot;
   <a href="#configuration">Configuration</a>
 </p>
 
 ---
 
-**ra** is a complete agentic loop you configure into any agent you need.
+## What is ra?
 
-Define behavior through skills and system prompts. Hook into every step — before the model call, after each tool result, on every stream chunk — with inline or file middleware. Connect any provider with a flag. Ship it as a one-shot CLI command, an interactive REPL, a streaming HTTP API, or an MCP server for Cursor and Claude Desktop. The config is the agent; change the config, change the agent.
+ra is an open-source AI agent framework that gives you full control over the agentic loop. It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server.
+
+Every message, every tool call, every stream chunk is visible and interceptable through middleware hooks. You configure agents in YAML — define tools, skills, system prompts, and context — and drop down to TypeScript only where you need custom logic.
 
 ```bash
-# One-off question
 ra "What is the capital of France?"
-
-# Code review with a skill and file attachment
-ra --skill code-review --file diff.patch "Review this diff"
-
-# Custom persona via system prompt
-ra --system-prompt "You are a concise technical writer" "Document this function"
-
-# Use a different provider
 ra --provider openai --model gpt-4.1 "Explain this error"
-
-# Interactive session
-ra
+ra --skill code-review --file diff.patch "Review this diff"
+cat server.log | ra "Find the root cause of these errors"
+ra   # interactive REPL
 ```
 
 ## Features
@@ -67,48 +62,150 @@ On top of that control sits everything you need to build real agents: skills for
 ## Install
 
 ```bash
-# Download and install
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
-
-# Or manually
-mv ra /usr/local/bin/ra && chmod +x /usr/local/bin/ra
-
-# Verify
 ra --help
 ```
 
 ## Quick Start
 
-Set your provider key and go:
-
 ```bash
 export RA_ANTHROPIC_API_KEY="sk-..."
 
-# One-shot — streams to stdout and exits
-ra "Summarize the key points of this file" --file report.pdf
-
-# Interactive REPL
-ra
-
-# HTTP API server
-ra --http
-
-# MCP server for Cursor / Claude Desktop
-ra --mcp
+ra "Summarize the key points of this file" --file report.pdf   # one-shot with file attachment
+ra                                                              # interactive REPL
+cat error.log | ra "Explain this error"                         # pipe stdin
+git diff | ra --skill code-review "Review these changes"        # pipe + skill
+ra --http                                                       # streaming HTTP API
+ra --mcp-stdio                                                  # MCP server for Cursor / Claude Desktop
 ```
+
+## The Agent Loop
+
+ra runs a single, transparent loop: send messages to the model, stream the response, execute tool calls, repeat. Every step fires a middleware hook you can intercept.
+
+```
+┌─────────────────────────────────────────────────┐
+│                  beforeLoopBegin                │
+└──────────────────────┬──────────────────────────┘
+                       ▼
+         ┌─── beforeModelCall ◄────────────┐
+         │                                 │
+         ▼                                 │
+    Stream response                        │
+    (onStreamChunk)                        │
+         │                                 │
+         ▼                                 │
+   afterModelResponse                      │
+         │                                 │
+         ├── No tool calls? ──► afterLoopComplete
+         │
+         ▼
+   beforeToolExecution
+         │
+         ▼
+    Execute tools
+         │
+         ├── ask_user? ──► suspend (loop exits without afterLoopComplete)
+         │
+         ▼
+   afterToolExecution
+         │
+         ▼
+   afterLoopIteration ────────────────────►┘
+```
+
+The loop tracks token usage per iteration, enforces `maxIterations`, and supports an `AbortController` — any middleware can call `ctx.stop()` to halt the loop cleanly.
+
+## Context Control
+
+### Middleware hooks
+
+Intercept the loop before the model call, after tool execution, on each stream chunk — or anywhere in between. Every hook receives the full conversation history and can mutate it.
+
+```yaml
+# ra.config.yml
+middleware:
+  beforeModelCall:
+    - "./middleware/enforce-budget.ts"
+  afterToolExecution:
+    - "./middleware/redact-secrets.ts"
+  onStreamChunk:
+    - "(ctx) => { process.stdout.write(ctx.chunk.type === 'text' ? ctx.chunk.delta : '') }"
+```
+
+```ts
+// middleware/enforce-budget.ts — reject if context is too large
+export default async (ctx) => {
+  const totalChars = ctx.request.messages.reduce((n, m) => n + JSON.stringify(m).length, 0)
+  if (totalChars > 500_000) ctx.stop()
+}
+```
+
+### Smart context compaction
+
+When conversations grow, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then summarizes the middle with a cheap model. You keep the context that matters.
+
+```yaml
+compaction:
+  enabled: true
+  threshold: 0.8               # trigger at 80% of context window
+  model: claude-haiku-4-5-20251001  # cheap model for summarization
+```
+
+- **Token-aware** — Uses real token counts from the provider when available, falls back to estimation.
+- **Pinned zones** — System prompts and initial context never get compacted.
+- **Tool-call-aware** — Boundaries never split an assistant message from its tool results.
+- **Provider-portable** — Works the same across all providers. Default compaction models per provider (Haiku for Anthropic, GPT-4o-mini for OpenAI, Gemini Flash for Google).
+
+### Token tracking
+
+ra tracks input and output tokens across every iteration of the loop. Your middleware can read cumulative usage via `ctx.loop.usage` and enforce budgets, log costs, or trigger compaction early.
+
+### Prompt caching
+
+Automatic cache hints on system prompts and tool definitions for Anthropic, reducing costs on multi-turn sessions without any config.
+
+### Extended thinking
+
+Enable extended thinking for models that support it. Three budget levels control how much the model reasons before responding.
+
+```bash
+ra --thinking high "Design a database schema for a social network"
+```
+
+```yaml
+thinking: high  # low | medium | high (token budgets vary by provider)
+```
+
+Thinking output streams to the terminal in the REPL, so you can watch the model reason in real time.
+
+### Context discovery
+
+ra can discover and inject project context files into the conversation before your prompt. Configure which files to look for via the `context.patterns` config:
+
+```yaml
+context:
+  enabled: true
+  patterns:
+    - "CLAUDE.md"
+    - "AGENTS.md"
+    - "CONVENTIONS.md"
+```
+
+ra walks the directory tree upward to the git root, finds matching files, and injects them as context.
 
 ## Providers
 
-ra works with any model from Anthropic, OpenAI, Azure OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch providers and models with a flag — the rest of your config stays the same.
+Same config, any backend. Switch with a flag.
 
 ```bash
+ra --provider anthropic --model claude-sonnet-4-6 "Review this PR"
+ra --provider openai --model gpt-4.1 "Explain this error"
 ra --provider google --model gemini-2.5-pro "Summarize this doc"
 ra --provider ollama --model llama3 "Write a haiku"
-ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Review this PR"
-ra --provider azure --azure-deployment my-gpt4o "Explain this error"
+ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Triage this bug"
+ra --provider azure --azure-deployment my-gpt4o "Analyze this log"
 ```
-
-Set your API key for the provider you want to use:
 
 | Provider | Env vars |
 |----------|---------|
@@ -117,110 +214,129 @@ Set your API key for the provider you want to use:
 | `google` | `RA_GOOGLE_API_KEY` |
 | `bedrock` | `RA_BEDROCK_REGION` |
 | `ollama` | `RA_OLLAMA_HOST` |
-| `azure` | `RA_AZURE_ENDPOINT`, `RA_AZURE_DEPLOYMENT`, `RA_AZURE_API_KEY` (optional), `RA_AZURE_API_VERSION` (optional) |
+| `azure` | `RA_AZURE_ENDPOINT`, `RA_AZURE_DEPLOYMENT`, `RA_AZURE_API_KEY` (optional) |
 
-> Bedrock falls back to the standard AWS credential chain (`~/.aws/credentials`, IAM roles, etc.) when `RA_BEDROCK_API_KEY` is not set.
-
-> Azure falls back to `DefaultAzureCredential` (covers managed identity, Azure CLI, environment variables) when `RA_AZURE_API_KEY` is not set.
+> Bedrock falls back to the standard AWS credential chain. Azure falls back to `DefaultAzureCredential`. Anthropic, OpenAI, and Google support `--<provider>-base-url` flags. Ollama uses `--ollama-host`, Azure uses `--azure-endpoint`.
 
 ## Interfaces
 
-Each interface serves a different context. Same agent, different entry point.
+Same agent, four entry points.
 
-### CLI (one-shot)
+| Interface | Flag | Use case |
+|-----------|------|----------|
+| **CLI** | `--interface cli` (default with a prompt) | Pipe it, chain it, cron it |
+| **REPL** | `--interface repl` (default without a prompt) | Interactive sessions with tool use and history |
+| **HTTP** | `--http` | Streaming SSE or sync JSON for your product |
+| **MCP** | `--mcp-stdio` / `--mcp` | Expose ra as a tool for Cursor, Claude Desktop, other agents |
 
-Scriptable prompts that stream to stdout and exit. Pipe it, chain it, cron it.
+### CLI
+
+Streams to stdout and exits. Supports piped stdin — when input is piped, ra reads it and auto-switches to CLI mode.
 
 ```bash
 ra "What's wrong with this code?" --file buggy.ts
-ra --skill summarizer --file notes.md "Three bullet summary"
 cat error.log | ra "Explain this error"
+git diff | ra "Summarize these changes"
+echo "hello world" | ra                             # stdin becomes the prompt
+ra --resume <session-id> "Continue from where we left off"
 ```
 
-### REPL (interactive)
+### REPL
 
-The default mode. Full conversational sessions with tool use, file attachments, and history.
+Full interactive sessions with slash commands.
 
 ```bash
 ra
+> How does the auth module work?
+> /skill code-review          # activate a skill for next message
+> /attach diff.patch          # attach a file to next message
+> /context                    # show discovered context files
+> /resume abc-123             # resume a previous session
+> /clear                      # start fresh
 ```
-
-| Command | Description |
-|---------|-------------|
-| `/clear` | Clear history, start fresh |
-| `/resume <id>` | Resume a previous session |
-| `/skill <name>` | Inject a skill for the next message |
-| `/attach <path>` | Attach a file to the next message |
 
 ### HTTP API
 
-A lightweight server built on `Bun.serve()`.
-
 ```bash
-ra --http                        # default port 3000
-ra --http --http-port 8080       # custom port
-ra --http --http-token secret    # with auth
+ra --http --http-port 8080 --http-token secret
 ```
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /chat` | SSE stream — `data: {"type":"text","delta":"..."}` |
-| `POST /chat/sync` | Blocking JSON — `{ "response": "..." }` |
-| `GET /sessions` | List stored sessions |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chat` | POST | SSE stream — `data: {"type":"text","delta":"..."}` |
+| `/chat/sync` | POST | Blocking JSON — `{"response":"..."}` |
+| `/sessions` | GET | List stored sessions |
 
-### MCP Server
+Both endpoints accept `{"messages": [...], "sessionId": "..."}`. The streaming endpoint also emits `ask_user` events when the agent needs input.
 
-Expose ra as a tool that other apps can call.
+### MCP server
+
+Expose the full agent loop as a tool for other agents.
 
 ```bash
-ra --mcp-stdio    # stdio transport (for Cursor, Claude Desktop)
-ra --mcp          # HTTP transport (default port 3001)
+ra --mcp-stdio   # stdio for Cursor / Claude Desktop
+ra --mcp         # HTTP transport
 ```
 
-When you run `--mcp-stdio`, ra prints the JSON config snippet you need to paste into your MCP client config.
+```json
+{
+  "mcpServers": {
+    "ra": {
+      "command": "ra",
+      "args": ["--mcp-stdio"]
+    }
+  }
+}
+```
+
+When built-in tools are enabled, they're also exposed as individual MCP tools — so other agents get access to ra's filesystem, shell, and network tools directly.
 
 ## Built-in Tools
 
-ra ships with 14 built-in tools that give the agent filesystem access, shell execution, HTTP requests, and user interaction out of the box. Enabled by default.
+14 tools enabled by default (platform-specific: `execute_bash` on Linux/macOS, `execute_powershell` on Windows). The agent can read, write, search, execute, and interact out of the box.
 
 | Category | Tools |
 |----------|-------|
 | **Filesystem** | `read_file`, `write_file`, `update_file`, `append_file`, `list_directory`, `search_files`, `glob_files`, `move_file`, `copy_file`, `delete_file` |
-| **Shell** | `execute_bash` (macOS/Linux) or `execute_powershell` (Windows) |
+| **Shell** | `execute_bash` (Linux/macOS) / `execute_powershell` (Windows) |
 | **Network** | `web_fetch` |
 | **Agent** | `ask_user`, `checklist` |
 
-Tools are self-describing — each includes a description and input schema so the model knows when and how to use them without any system prompt. The shell tool automatically includes the detected OS in its description.
+The `update_file` tool does exact string replacement — same pattern as Claude Code's Edit tool. The `checklist` tool dynamically updates its description to show remaining items, keeping the model aware of progress.
 
-The `checklist` tool dynamically updates its description to show remaining items, keeping the model aware of progress across turns.
+The `ask_user` tool suspends the agent loop and returns control to the caller. In the REPL, the question is printed and the next input resumes the conversation. In CLI mode, it prints the session ID so you can `--resume` later. In HTTP mode, it emits an `ask_user` SSE event.
 
-To disable built-in tools:
+To bring your own tools via MCP instead, set `builtinTools: false` in your config file.
+
+## File Attachments
+
+Attach images, PDFs, and text files to any prompt. ra detects the MIME type and sends the content in the right format for each provider.
 
 ```bash
-ra --no-builtin-tools
-# or
-export RA_BUILTIN_TOOLS=false
+ra --file screenshot.png "What's wrong with this UI?"
+ra --file report.pdf --file data.csv "Summarize both files"
 ```
 
-When ra runs as an MCP server, all built-in tools (except `ask_user`) are automatically exposed as MCP tools.
+In the REPL, use `/attach`:
 
-See the [full tools reference](https://chinmaymk.github.io/ra/tools/) for parameters and examples.
+```
+> /attach architecture.png
+> How should we refactor this?
+```
 
 ## Skills
 
-Skills are reusable instruction bundles — roles, behaviors, and assets packaged as directories.
+Reusable instruction bundles — roles, behaviors, scripts, and reference docs packaged as directories.
 
 ```
 skills/
   code-review/
-    SKILL.md           # Frontmatter + instructions
+    SKILL.md           # frontmatter + instructions
     scripts/
-      gather-diff.sh   # Runs at activation, output becomes context
+      gather-diff.sh   # runs at activation, output → context
     references/
-      style-guide.md   # Injected as reference context
+      style-guide.md   # injected as reference
 ```
-
-**SKILL.md** uses YAML frontmatter:
 
 ```yaml
 ---
@@ -234,42 +350,56 @@ You are a senior code reviewer. Focus on:
 - Naming and readability
 ```
 
-Use skills from the CLI, REPL, or config:
-
 ```bash
-# CLI
-ra --skill code-review "Review the latest changes"
-
-# REPL
-/skill code-review
-
-# Config (always-on)
-# ra.config.yml
-skills:
-  - code-review
-skillDirs:
-  - ./skills
+ra --skill code-review "Review the latest changes"   # CLI
+ra skill install github:user/repo                     # install from GitHub
+ra skill install github:user/repo@v2                  # pin to a tag
 ```
 
-**Multi-runtime scripts** — skill scripts support shebang detection. Write them in any language:
+Skills support multi-runtime scripts — bash, python, typescript, javascript, go — with shebang detection. Script output is injected into the conversation as context.
+
+### Built-in skills
+
+ra ships with six ready-to-use skills:
+
+| Skill | Purpose |
+|-------|---------|
+| `code-review` | Reviews code for bugs, security, style, and correctness |
+| `architect` | Designs systems and evaluates architecture decisions |
+| `planner` | Breaks work into concrete steps before implementation |
+| `debugger` | Systematically diagnoses bugs and unexpected behavior |
+| `code-style` | Reviews and writes code for clarity, simplicity, and correctness |
+| `writer` | Writes clear technical documentation, READMEs, and guides |
 
 ```bash
-#!/usr/bin/env python3
-# scripts/analyze.py — automatically runs with python3
+ra --skill architect "Design a queue system for email notifications"
+ra --skill debugger --file crash.log "Find the root cause"
 ```
 
-Supported: `bash`, `python`, `typescript`, `javascript`, `go`. TypeScript and JavaScript scripts prefer Bun, falling back to Node then Deno.
+## Sessions
+
+ra persists every conversation as JSONL. Resume any session from any interface.
+
+```bash
+ra --resume <session-id> "Continue with the next step"
+```
+
+```yaml
+storage:
+  path: .ra/sessions
+  maxSessions: 100     # auto-prune oldest
+  ttlDays: 30           # auto-expire
+```
+
+Sessions are auto-saved after each turn. The REPL has `/resume <id>` and the HTTP API accepts a `sessionId` field. When `ask_user` suspends a CLI run, the session ID is printed to stderr so you can resume later.
 
 ## MCP
 
 ra speaks MCP in both directions.
 
-### As a client
-
-Connect ra to external MCP servers. Their tools become available to the model automatically.
+**As a client** — connect to external MCP servers. Their tools become available to the model.
 
 ```yaml
-# ra.config.yml
 mcp:
   client:
     - name: filesystem
@@ -279,11 +409,15 @@ mcp:
     - name: database
       transport: sse
       url: http://localhost:8080/mcp
+    - name: github
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
 ```
 
-### As a server
-
-Run `ra --mcp-stdio` and it exposes itself as a single MCP tool. Other apps call it with a prompt and get the full agent loop.
+**As a server** — `ra --mcp-stdio` exposes the full agent loop as a single MCP tool, plus all built-in tools as individual MCP tools.
 
 ```json
 {
@@ -296,137 +430,86 @@ Run `ra --mcp-stdio` and it exposes itself as a single MCP tool. Other apps call
 }
 ```
 
+You can also run the MCP server alongside another interface — for example, a REPL with an MCP sidecar:
+
+```bash
+ra --mcp-server-enabled --mcp-server-port 4000 --repl
+```
+
 ## Middleware
 
-Lifecycle hooks that let you intercept and modify the agent loop. Define them inline or as file paths.
+Hook into every step of the agent loop. Define hooks as inline expressions in config or as TypeScript files when you need real logic. Every hook gets the full conversation history and can call `ctx.stop()` to halt the loop.
+
+| Hook | When | Context |
+|------|------|---------|
+| `beforeLoopBegin` | Once at start | messages, iteration, usage |
+| `beforeModelCall` | Before each LLM call | request (messages, model, tools), loop state |
+| `onStreamChunk` | Per streaming token | chunk (text/thinking/tool_call), loop state |
+| `afterModelResponse` | After model finishes | request, loop state |
+| `beforeToolExecution` | Before each tool call | toolCall (name, arguments, id), loop state |
+| `afterToolExecution` | After each tool returns | toolCall, result (content, isError), loop state |
+| `afterLoopIteration` | After each full iteration | messages, iteration, usage |
+| `afterLoopComplete` | After the loop ends | messages, iteration, usage |
+| `onError` | On exceptions | error, phase (model_call/tool_execution/stream), loop state |
+
+```ts
+// middleware/audit-log.ts
+export default async (ctx) => {
+  await appendFile('audit.jsonl', JSON.stringify({
+    tool: ctx.toolCall.name,
+    args: ctx.toolCall.arguments,
+    result: ctx.result.content,
+    timestamp: Date.now()
+  }) + '\n')
+}
+```
+
+```ts
+// middleware/token-budget.ts — stop if we've used too many tokens
+export default async (ctx) => {
+  if (ctx.loop.usage.inputTokens + ctx.loop.usage.outputTokens > 100_000) {
+    ctx.stop()
+  }
+}
+```
+
+Inline hooks work for simple cases:
 
 ```yaml
-# ra.config.yml
 middleware:
-  beforeModelCall:
-    - "(ctx) => { console.log('Calling model...'); }"
-  afterToolExecution:
-    - "./middleware/log-tools.ts"
+  onStreamChunk:
+    - "(ctx) => { process.stdout.write(ctx.chunk.type === 'text' ? ctx.chunk.delta : '') }"
 ```
 
-Each middleware is an `async (ctx) => void` function. Every context object has `stop()` and `signal`:
+All hooks support a configurable timeout via `toolTimeout` (default: 30s).
 
-```ts
-ctx.stop()          // halt the agent loop
-ctx.signal.aborted  // check if already stopped
+## Recipes
+
+Pre-built agent configurations you can use directly or fork.
+
+### [Coding Agent](recipes/coding-agent/)
+
+A general-purpose coding agent with file editing, shell execution, codebase navigation, extended thinking, and smart context compaction. Uses 200 max iterations and high thinking budget.
+
+```bash
+ra --config recipes/coding-agent/ra.config.yaml
 ```
 
-### Hooks and context shapes
+### [Code Review Agent](recipes/code-review-agent/)
 
-| Hook | Context | Description |
-|------|---------|-------------|
-| `beforeLoopBegin` | `LoopContext` | Once at start |
-| `beforeModelCall` | `ModelCallContext` | Before each LLM call |
-| `onStreamChunk` | `StreamChunkContext` | Per streaming chunk |
-| `afterModelResponse` | `ModelCallContext` | After model finishes |
-| `beforeToolExecution` | `ToolExecutionContext` | Before each tool call |
-| `afterToolExecution` | `ToolResultContext` | After each tool returns |
-| `afterLoopIteration` | `LoopContext` | After each loop iteration |
-| `afterLoopComplete` | `LoopContext` | After final iteration |
-| `onError` | `ErrorContext` | On exceptions |
+Reviews diffs for correctness, style, and performance. Connects to GitHub via MCP, includes a diff-gathering script and style guide, and enforces a token budget via middleware.
 
-### Context types
-
-**`LoopContext`** — available on all hooks via `ctx.loop` (or directly for loop-level hooks):
-
-```ts
-{
-  messages: IMessage[]     // full conversation history
-  iteration: number        // current loop iteration
-  maxIterations: number
-  sessionId: string
-  stop(): void
-  signal: AbortSignal
-}
+```bash
+ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review this"
 ```
-
-**`ModelCallContext`** — `beforeModelCall`, `afterModelResponse`:
-
-```ts
-{
-  request: {               // the ChatRequest about to be sent
-    model: string
-    messages: IMessage[]
-    tools?: ITool[]
-    thinking?: 'low' | 'medium' | 'high'
-  }
-  loop: LoopContext
-}
-```
-
-**`StreamChunkContext`** — `onStreamChunk`:
-
-```ts
-{
-  chunk:
-    | { type: 'text'; delta: string }
-    | { type: 'thinking'; delta: string }
-    | { type: 'tool_call_start'; id: string; name: string }
-    | { type: 'tool_call_delta'; id: string; argsDelta: string }
-    | { type: 'tool_call_end'; id: string }
-    | { type: 'done'; usage?: { inputTokens: number; outputTokens: number } }
-  loop: LoopContext
-}
-```
-
-**`ToolExecutionContext`** — `beforeToolExecution`:
-
-```ts
-{
-  toolCall: { id: string; name: string; arguments: string }
-  loop: LoopContext
-}
-```
-
-**`ToolResultContext`** — `afterToolExecution`:
-
-```ts
-{
-  toolCall: { id: string; name: string; arguments: string }
-  result: { toolCallId: string; content: string; isError?: boolean }
-  loop: LoopContext
-}
-```
-
-**`ErrorContext`** — `onError`:
-
-```ts
-{
-  error: Error
-  phase: 'model_call' | 'tool_execution' | 'stream'
-  loop: LoopContext
-}
-```
-
-### File middleware
-
-Export a default async function:
-
-```ts
-// middleware/log-tools.ts
-export default async (ctx) => {
-  console.log(`Tool ${ctx.toolCall.name} returned:`, ctx.result.content)
-}
-```
-
-Inline expressions and file paths both support TypeScript and JavaScript.
 
 ## Configuration
 
-Layered config, each overriding the previous. No surprise precedence.
+Layered config. Each layer overrides the previous.
 
 ```
 defaults → config file → env vars → CLI flags
 ```
-
-### Config file
-
-Place in your project root. Supports JSON, YAML, or TOML.
 
 ```yaml
 # ra.config.yml
@@ -435,20 +518,34 @@ model: claude-sonnet-4-6
 systemPrompt: You are a helpful coding assistant.
 maxIterations: 50
 thinking: medium
+toolTimeout: 30000
 
 skills:
   - code-review
 skillDirs:
   - ./skills
 
+compaction:
+  enabled: true
+  threshold: 0.8
+  model: claude-haiku-4-5-20251001
+
+context:
+  enabled: true
+  patterns:
+    - "CLAUDE.md"
+    - "AGENTS.md"
+
 storage:
   path: .ra/sessions
   maxSessions: 100
   ttlDays: 30
 
-http:
-  port: 3000
-  token: my-secret-token
+middleware:
+  beforeModelCall:
+    - "./middleware/budget.ts"
+  afterToolExecution:
+    - "./middleware/audit.ts"
 
 mcp:
   client:
@@ -458,30 +555,20 @@ mcp:
       args: ["-y", "@anthropic/mcp-filesystem"]
 ```
 
-### Environment variables
-
 ```bash
-# Provider
+# Environment variables
 export RA_PROVIDER=anthropic
 export RA_MODEL=claude-sonnet-4-6
-export RA_SYSTEM_PROMPT="You are a helpful assistant"
 export RA_MAX_ITERATIONS=50
-
-# API keys (env-only — kept out of shell history)
 export RA_ANTHROPIC_API_KEY=sk-...
-export RA_OPENAI_API_KEY=sk-...
-export RA_GOOGLE_API_KEY=...
-export RA_OLLAMA_HOST=http://localhost:11434
-export RA_BEDROCK_REGION=us-east-1
 
-# Azure OpenAI (RA_AZURE_API_KEY is optional — omit to use DefaultAzureCredential)
-export RA_AZURE_ENDPOINT=https://myresource.openai.azure.com/
-export RA_AZURE_DEPLOYMENT=my-gpt4o
-export RA_AZURE_API_KEY=...
-export RA_AZURE_API_VERSION=2024-12-01-preview
+# CLI flags override everything
+ra --provider openai --model gpt-4.1 --thinking high --max-iterations 10 "Review this"
 ```
 
-### CLI flags
+## Scripting
+
+Use `--exec` to run a TypeScript or JavaScript file that imports ra's internals programmatically.
 
 ```bash
 ra --provider openai \
@@ -652,10 +739,8 @@ src/
 
 ```bash
 bun install
-bun run compile
+bun run compile   # → dist/ra
 ```
-
-Then move `dist/ra` somewhere on your `PATH`.
 
 ## License
 
@@ -664,6 +749,5 @@ MIT
 ---
 
 <p align="center">
-  <b>ra</b> — raw agent, role agent, run-anything agent.<br>
-  One loop. Infinite agents.
+  <b>ra</b> — full control over the agentic loop.
 </p>

@@ -80,6 +80,7 @@ export interface CompactionConfig {
   threshold: number
   maxTokens?: number
   contextWindow?: number
+  model?: string
 }
 
 const SUMMARIZATION_PROMPT = `Summarize the following conversation concisely. Preserve:
@@ -100,7 +101,7 @@ export function createCompactionMiddleware(
     if (!config.enabled) return
 
     const messages = ctx.request.messages
-    const estimated = estimateTokens(messages)
+    const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
 
     const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
     const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
@@ -121,8 +122,9 @@ export function createCompactionMiddleware(
 
     let summaryResponse
     try {
+      const compactionModel = config.model || ctx.request.model
       summaryResponse = await provider.chat({
-        model: ctx.request.model,
+        model: compactionModel,
         messages: [{ role: 'user', content: `${SUMMARIZATION_PROMPT}\n\n${conversationText}` }],
       })
     } catch {

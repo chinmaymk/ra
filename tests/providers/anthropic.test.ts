@@ -147,6 +147,42 @@ describe('AnthropicProvider', () => {
     expect(params.tools).toHaveLength(1)
   })
 
+  it('adds cache_control to system prompt in buildParams', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const params = provider.buildParams({
+      model: 'claude-sonnet-4-6',
+      messages: [
+        { role: 'system', content: 'You are helpful.' },
+        { role: 'user', content: 'hi' },
+      ],
+    }) as any
+    // System should be an array with cache_control
+    expect(Array.isArray(params.system)).toBe(true)
+    expect(params.system[0].type).toBe('text')
+    expect(params.system[0].text).toBe('You are helpful.')
+    expect(params.system[0].cache_control).toEqual({ type: 'ephemeral' })
+  })
+
+  it('adds cache_control to last tool definition', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const tools = [
+      { name: 'tool_a', description: 'desc a', inputSchema: { type: 'object' }, execute: async () => '' },
+      { name: 'tool_b', description: 'desc b', inputSchema: { type: 'object' }, execute: async () => '' },
+    ]
+    const mapped = provider.mapTools(tools) as any[]
+    expect(mapped[0].cache_control).toBeUndefined()
+    expect(mapped[1].cache_control).toEqual({ type: 'ephemeral' })
+  })
+
+  it('adds cache_control to single tool', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const tools = [
+      { name: 'only_tool', description: 'desc', inputSchema: { type: 'object' }, execute: async () => '' },
+    ]
+    const mapped = provider.mapTools(tools) as any[]
+    expect(mapped[0].cache_control).toEqual({ type: 'ephemeral' })
+  })
+
   it('buildParams uses providerOptions maxTokens', () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
     const params = provider.buildParams({

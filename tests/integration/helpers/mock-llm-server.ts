@@ -23,12 +23,12 @@ export interface MockLLMServer {
   stop(): Promise<void>
 }
 
-function sseAnthropicText(content: string): string {
+function sseAnthropicText(content: string, inputTokens = 10): string {
   const lines: string[] = []
   const send = (event: string, data: unknown) =>
     lines.push(`event: ${event}\ndata: ${JSON.stringify(data)}\n`)
 
-  send('message_start', { type: 'message_start', message: { usage: { input_tokens: 10 } } })
+  send('message_start', { type: 'message_start', message: { usage: { input_tokens: inputTokens } } })
   send('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })
   send('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: content } })
   send('content_block_stop', { type: 'content_block_stop', index: 0 })
@@ -38,12 +38,12 @@ function sseAnthropicText(content: string): string {
   return lines.join('\n') + '\n'
 }
 
-function sseAnthropicToolCall(name: string, args: Record<string, unknown>): string {
+function sseAnthropicToolCall(name: string, args: Record<string, unknown>, inputTokens = 10): string {
   const lines: string[] = []
   const send = (event: string, data: unknown) =>
     lines.push(`event: ${event}\ndata: ${JSON.stringify(data)}\n`)
 
-  send('message_start', { type: 'message_start', message: { usage: { input_tokens: 10 } } })
+  send('message_start', { type: 'message_start', message: { usage: { input_tokens: inputTokens } } })
   send('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: `toolu_${name}`, name } })
   send('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: JSON.stringify(args) } })
   send('content_block_stop', { type: 'content_block_stop', index: 0 })
@@ -118,6 +118,9 @@ export async function startMockLLMServer(): Promise<MockLLMServer> {
 
       const isStreaming = (body as any)?.stream === true
 
+      // Estimate input tokens from request body size (more realistic than hardcoded 10)
+      const inputTokens = body ? Math.ceil(JSON.stringify(body).length / 4) : 10
+
       // For non-streaming Anthropic requests (e.g. compaction via provider.chat()), return JSON
       if (provider === 'anthropic' && !isStreaming) {
         const content = response.type === 'text'
@@ -128,15 +131,15 @@ export async function startMockLLMServer(): Promise<MockLLMServer> {
           model: 'claude-mock',
           stop_reason: response.type === 'text' ? 'end_turn' : 'tool_use',
           stop_sequence: null,
-          usage: { input_tokens: 10, output_tokens: 5 },
+          usage: { input_tokens: inputTokens, output_tokens: 5 },
         }), { headers: { 'Content-Type': 'application/json' } })
       }
 
       let sseBody: string
       if (provider === 'anthropic') {
         sseBody = response.type === 'text'
-          ? sseAnthropicText(response.content)
-          : sseAnthropicToolCall((response as any).name, (response as any).args)
+          ? sseAnthropicText(response.content, inputTokens)
+          : sseAnthropicToolCall((response as any).name, (response as any).args, inputTokens)
       } else if (provider === 'openai') {
         sseBody = response.type === 'text'
           ? sseOpenAIText(response.content)

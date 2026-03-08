@@ -45,6 +45,7 @@ export interface RaConfig {
     threshold: number      // 0-1, trigger ratio of context window
     maxTokens?: number     // absolute token trigger, overrides threshold * contextWindow
     contextWindow?: number // per-provider override for context window size
+    model?: string         // cheaper model for summarization, defaults per provider
   }
 }
 

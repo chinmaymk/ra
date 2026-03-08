@@ -1,4 +1,4 @@
-import type { IProvider, IMessage, IToolCall } from '../providers/types'
+import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
@@ -21,6 +21,7 @@ export interface AgentLoopOptions {
 export interface LoopResult {
   messages: IMessage[]
   iterations: number
+  usage: TokenUsage
 }
 
 const EMPTY_MW: MiddlewareConfig = {
@@ -65,13 +66,16 @@ export class AgentLoop {
 
     const stoppable: StoppableContext = { stop, signal }
 
-    const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId })
+    const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
+    let lastUsage: TokenUsage | undefined
+
+    const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId, usage, lastUsage })
 
     let currentPhase: 'model_call' | 'tool_execution' | 'stream' = 'model_call'
 
     try {
       await runMiddlewareChain(loopCtx(), this.middleware.beforeLoopBegin, this.toolTimeout)
-      if (signal.aborted) return { messages, iterations }
+      if (signal.aborted) return { messages, iterations, usage }
 
       while (iterations < this.maxIterations) {
         iterations++
@@ -104,6 +108,14 @@ export class AgentLoop {
             const tc = toolCallBuf.find(t => t.id === chunk.id)
             if (tc) tc.argsRaw += chunk.argsDelta
           } else if (chunk.type === 'done') {
+            if (chunk.usage) {
+              usage.inputTokens += chunk.usage.inputTokens
+              usage.outputTokens += chunk.usage.outputTokens
+              if (chunk.usage.thinkingTokens) {
+                usage.thinkingTokens = (usage.thinkingTokens ?? 0) + chunk.usage.thinkingTokens
+              }
+              lastUsage = chunk.usage
+            }
             break
           }
         }
@@ -112,6 +124,7 @@ export class AgentLoop {
 
         const toolCalls: IToolCall[] = toolCallBuf.map(tc => ({ id: tc.id, name: tc.name, arguments: tc.argsRaw }))
         messages.push({ role: 'assistant', content: textAccumulator, ...(toolCalls.length && { toolCalls }) })
+        modelCallCtx.loop = loopCtx()
         await runMiddlewareChain(modelCallCtx, this.middleware.afterModelResponse, this.toolTimeout)
         if (signal.aborted) break
 
@@ -158,6 +171,6 @@ export class AgentLoop {
       throw err
     }
 
-    return { messages, iterations }
+    return { messages, iterations, usage }
   }
 }
