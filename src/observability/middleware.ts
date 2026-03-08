@@ -1,4 +1,4 @@
-import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext } from '../agent/types'
+import type { MiddlewareConfig, LoopContext, ModelCallContext, ToolExecutionContext, ToolResultContext, ErrorContext } from '../agent/types'
 import type { Logger } from './logger'
 import type { Tracer, Span } from './tracer'
 
@@ -47,11 +47,6 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       model: ctx.request.model,
       messageCount: ctx.request.messages.length,
     })
-  }
-
-  const onStreamChunk = async (_ctx: StreamChunkContext): Promise<void> => {
-    // Streaming is captured by the model_call span timing.
-    // Individual chunks are too noisy to log.
   }
 
   const afterModelResponse = async (ctx: ModelCallContext): Promise<void> => {
@@ -158,6 +153,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
 
     logger.error('agent loop failed', {
       error: ctx.error.message,
+      stack: ctx.error.stack,
       phase: ctx.phase,
       iterations: ctx.loop.iteration,
     })
@@ -166,7 +162,6 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
   return {
     beforeLoopBegin: [beforeLoopBegin],
     beforeModelCall: [beforeModelCall],
-    onStreamChunk: [onStreamChunk],
     afterModelResponse: [afterModelResponse],
     beforeToolExecution: [beforeToolExecution],
     afterToolExecution: [afterToolExecution],

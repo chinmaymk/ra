@@ -483,6 +483,73 @@ middleware:
 
 All hooks support a configurable timeout via `toolTimeout` (default: 30s).
 
+## Observability
+
+Structured JSON logging and tracing are built in. Every agent loop emits logs and trace spans to stderr by default — no extra setup needed.
+
+```yaml
+# ra.config.yml
+observability:
+  enabled: true          # default: true
+  logs:
+    level: info          # debug | info | warn | error
+    output: stderr       # stderr | stdout | file
+    filePath: .ra/logs.jsonl
+  traces:
+    output: file
+    filePath: .ra/traces.jsonl
+```
+
+### What gets logged
+
+| Event | Level | Key fields |
+|-------|-------|------------|
+| `agent loop starting` | info | maxIterations, messageCount |
+| `calling model` | debug | iteration, model, messageCount |
+| `model responded` | info | inputTokens, outputTokens, toolCallCount, toolNames |
+| `executing tool` | info | tool, toolCallId, input (truncated) |
+| `tool execution complete` | info | tool, resultLength |
+| `tool execution failed` | error | tool, error |
+| `context compacted` | info | originalMessages, compactedMessages, estimatedTokens, threshold |
+| `iteration complete` | debug | iteration, messagesAdded |
+| `agent loop complete` | info | iterations, inputTokens, outputTokens, totalMessages |
+| `agent loop failed` | error | error, stack, phase, iterations |
+
+### Trace spans
+
+Spans follow an OpenTelemetry-inspired hierarchy:
+
+```
+agent.loop
+  └── agent.iteration (per loop iteration)
+        ├── agent.model_call
+        └── agent.tool_execution (per tool call)
+```
+
+Each span records duration, status (`ok`/`error`), and relevant attributes (token counts, tool names, result lengths).
+
+### Output format
+
+Both logs and traces emit one JSON object per line (JSONL). Logs include `timestamp`, `level`, `message`, and `sessionId`. Traces include `traceId`, `spanId`, `parentSpanId`, `name`, `durationMs`, and `attributes`.
+
+```bash
+# Watch logs in real time
+tail -f .ra/logs.jsonl | jq .
+
+# Filter to just errors
+tail -f .ra/logs.jsonl | jq 'select(.level == "error")'
+
+# Show trace span durations
+tail -f .ra/traces.jsonl | jq '{name, durationMs, status}'
+```
+
+To disable all observability output:
+
+```yaml
+observability:
+  enabled: false
+```
+
 ## Memory
 
 ra can persist facts across conversations using an SQLite-backed memory store with full-text search. The agent gets three tools — `memory_save`, `memory_search`, and `memory_forget` — and recent memories are automatically injected at the start of each loop.

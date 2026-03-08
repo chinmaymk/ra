@@ -238,6 +238,7 @@ async function main(): Promise<void> {
   if (!config.compaction.model) {
     config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
   }
+  config.compaction.onCompact = (info) => logger.info('context compacted', info)
 
   // Discover project context files
   const contextFiles = config.context.enabled
@@ -330,7 +331,7 @@ async function main(): Promise<void> {
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware: middleware, compaction: config.compaction })
+    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware, compaction: config.compaction })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
@@ -446,7 +447,7 @@ async function main(): Promise<void> {
       tools,
       skillMap,
       maxIterations: config.maxIterations,
-      middleware: middleware,
+      middleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
@@ -471,7 +472,7 @@ async function main(): Promise<void> {
       skillMap,
       maxIterations: config.maxIterations,
       toolTimeout: config.toolTimeout,
-      middleware: middleware,
+      middleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
@@ -496,7 +497,7 @@ async function main(): Promise<void> {
       maxIterations: config.maxIterations,
       toolTimeout: config.toolTimeout,
       sessionId: parsed.meta.resume,
-      middleware: middleware,
+      middleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
