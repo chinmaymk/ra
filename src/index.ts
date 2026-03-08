@@ -65,6 +65,8 @@ MCP SERVER
 MEMORY
   --memory                            Enable persistent memory across conversations
   --memories                          Show stored memories and exit
+  --forget <query>                    Forget memories matching query and exit
+  --dry-run                           With --forget, show matches without deleting
 
 STORAGE
   --storage-path <path>               Session storage directory
@@ -339,7 +341,7 @@ async function main(): Promise<void> {
 
   if (parsed.meta.showMemories) {
     if (!memoryStore) {
-      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
+      console.log('No memory database found. Use --memory to enable memory first.')
     } else {
       const memories = memoryStore.list(100)
       if (memories.length === 0) {
@@ -349,6 +351,28 @@ async function main(): Promise<void> {
         for (const m of memories) {
           console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
         }
+      }
+    }
+    await shutdown()
+    process.exit(0)
+  }
+
+  if (parsed.meta.forget) {
+    if (!memoryStore) {
+      console.log('No memory database found. Use --memory to enable memory first.')
+    } else {
+      const query = parsed.meta.forget
+      const matches = memoryStore.search(query, 1000)
+      if (matches.length === 0) {
+        console.log('No matching memories found.')
+      } else if (parsed.meta.dryRun) {
+        console.log(`Would forget ${matches.length} memory(s):\n`)
+        for (const m of matches) {
+          console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
+        }
+      } else {
+        const deleted = memoryStore.forget(query, 1000)
+        console.log(`Forgot ${deleted} memory(s).`)
       }
     }
     await shutdown()

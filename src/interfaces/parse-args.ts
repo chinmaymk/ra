@@ -16,6 +16,8 @@ export interface ParsedArgsMeta {
   exec?: string
   showContext: boolean
   showMemories: boolean
+  forget?: string
+  dryRun: boolean
   skillCommand?: SkillCommand
 }
 
@@ -55,6 +57,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         help: false,
         showContext: false,
         showMemories: false,
+        dryRun: false,
         files: [],
         skills: [],
         skillCommand: { action, args: subArgs },
@@ -74,6 +77,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       help:                          { type: 'boolean', short: 'h' },
       'show-context':                { type: 'boolean' },
       'memories':                    { type: 'boolean' },
+      'forget':                      { type: 'string' },
+      'dry-run':                     { type: 'boolean' },
       // Interface selection → config.interface
       http:                          { type: 'boolean' },
       cli:                           { type: 'boolean' },
@@ -153,8 +158,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // Skills
   if (values['skill-dir']) set(['skillDirs'], values['skill-dir'])
 
-  // Memory
-  if (values['memory']) set(['memory', 'enabled'], true)
+  // Memory — --memories and --forget imply --memory
+  if (values['memory'] || values['memories'] || values['forget']) set(['memory', 'enabled'], true)
 
   // Provider connection options
   if (values['anthropic-base-url']) set(['providers', 'anthropic', 'baseURL'], values['anthropic-base-url'])
@@ -170,6 +175,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       help:        (values.help as boolean | undefined) ?? false,
       showContext:  (values['show-context'] as boolean | undefined) ?? false,
       showMemories: (values['memories'] as boolean | undefined) ?? false,
+      forget:       values['forget'] as string | undefined,
+      dryRun:       (values['dry-run'] as boolean | undefined) ?? false,
       files:      (values.file as string[] | undefined) ?? [],
       skills:     (values.skill as string[] | undefined) ?? [],
       prompt:     positionals.join(' ') || undefined,
