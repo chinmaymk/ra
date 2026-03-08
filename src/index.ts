@@ -22,7 +22,7 @@ import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
 import { createObservability } from './observability'
 import { createObservabilityMiddleware } from './observability/middleware'
-import { mergeMiddleware } from './agent/middleware'
+import type { MiddlewareConfig } from './agent/types'
 
 async function readStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined
@@ -323,12 +323,14 @@ async function main(): Promise<void> {
     logger.info('MCP servers connected', { totalTools: tools.all().length })
   }
 
-  // Merge observability middleware with user middleware (obs hooks run first)
-  const fullMiddleware = mergeMiddleware(obsMw, middleware)
+  // Prepend observability hooks into the middleware chain (obs runs first)
+  for (const key of Object.keys(obsMw) as (keyof MiddlewareConfig)[]) {
+    middleware[key] = [...(obsMw[key] ?? []), ...(middleware[key] ?? [])]
+  }
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware: fullMiddleware, compaction: config.compaction })
+    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware: middleware, compaction: config.compaction })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
@@ -444,7 +446,7 @@ async function main(): Promise<void> {
       tools,
       skillMap,
       maxIterations: config.maxIterations,
-      middleware: fullMiddleware,
+      middleware: middleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
@@ -469,7 +471,7 @@ async function main(): Promise<void> {
       skillMap,
       maxIterations: config.maxIterations,
       toolTimeout: config.toolTimeout,
-      middleware: fullMiddleware,
+      middleware: middleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
@@ -494,7 +496,7 @@ async function main(): Promise<void> {
       maxIterations: config.maxIterations,
       toolTimeout: config.toolTimeout,
       sessionId: parsed.meta.resume,
-      middleware: fullMiddleware,
+      middleware: middleware,
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
