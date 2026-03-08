@@ -16,7 +16,7 @@ import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
-import { registerBuiltinTools } from './tools'
+import { registerBuiltinTools, subagentTool } from './tools'
 import { join } from 'path'
 
 async function readStdin(): Promise<string | undefined> {
@@ -248,6 +248,17 @@ async function main(): Promise<void> {
   if (config.builtinTools) {
     registerBuiltinTools(tools)
   }
+
+  // Register subagent tool (needs provider & tools to be set up first)
+  tools.register(subagentTool({
+    provider,
+    tools,
+    model: config.model,
+    middleware,
+    thinking: config.thinking,
+    compaction: config.compaction,
+    toolTimeout: config.toolTimeout,
+  }))
 
   // Create session storage
   const storagePath = config.storage.path.startsWith('/')
