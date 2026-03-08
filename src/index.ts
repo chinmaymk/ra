@@ -17,8 +17,7 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools } from './tools'
-import { MemoryStore, memorySearchTool, memorySaveTool, createMemoryMiddleware, DEFAULT_PATTERNS } from './memory'
-import type { MemoryExtractor, ExtractionPattern } from './memory'
+import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
 import { join } from 'path'
 
 async function readStdin(): Promise<string | undefined> {
@@ -261,44 +260,16 @@ async function main(): Promise<void> {
       path: memoryPath,
       maxSizeMB: config.memory.maxSizeMB,
       ttlDays: config.memory.ttlDays,
-      sessionTTLHours: config.memory.sessionTTLHours,
     })
     tools.register(memorySearchTool(memoryStore))
     tools.register(memorySaveTool(memoryStore))
+    tools.register(memoryForgetTool(memoryStore))
 
-    if (config.memory.autoExtract || config.memory.reflect) {
-      // Load custom extractor if specified
-      let extractor: MemoryExtractor | undefined
-      if (config.memory.extractor) {
-        const extractorPath = config.memory.extractor.startsWith('/')
-          ? config.memory.extractor
-          : join(process.cwd(), config.memory.extractor)
-        const mod = await import(extractorPath)
-        extractor = mod.default ?? mod
-      }
-
-      // Merge user patterns with defaults
-      const patterns = config.memory.patterns
-        ? [...DEFAULT_PATTERNS, ...config.memory.patterns] as ExtractionPattern[]
-        : undefined
-
-      const memMw = createMemoryMiddleware({
-        store: memoryStore,
-        extractor,
-        patterns,
-        provider: config.memory.reflect ? provider : undefined,
-        reflectionModel: config.memory.reflectionModel,
-        reflectionPrompt: config.memory.reflectionPrompt,
-        injectLimit: config.memory.injectLimit,
-      })
-      middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
-      if (config.memory.autoExtract) {
-        middleware.afterLoopIteration = [...(middleware.afterLoopIteration ?? []), memMw.afterLoopIteration]
-      }
-      if (config.memory.reflect) {
-        middleware.afterLoopComplete = [...(middleware.afterLoopComplete ?? []), memMw.afterLoopComplete]
-      }
-    }
+    const memMw = createMemoryMiddleware({
+      store: memoryStore,
+      injectLimit: config.memory.injectLimit,
+    })
+    middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
   }
 
   // Create session storage

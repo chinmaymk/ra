@@ -5,25 +5,22 @@ export function memorySearchTool(store: MemoryStore): ITool {
   return {
     name: 'memory_search',
     description:
-      'Search memories for relevant information from past conversations. ' +
-      'Uses full-text search across session and long-term memory layers. ' +
-      'PROACTIVELY search at the start of tasks to check for relevant prior context — ' +
-      'user preferences, project conventions, or past decisions that should inform your approach.',
+      'Search memories from past conversations. ' +
+      'Use this to recall user preferences, project decisions, or prior context.',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Search query (supports full-text search: AND, OR, NOT, "exact phrase", prefix*)' },
-        limit: { type: 'number', description: 'Max results to return (default: 10)' },
-        layer: { type: 'string', enum: ['session', 'long-term'], description: 'Filter by memory layer. Omit to search all layers.' },
+        query: { type: 'string', description: 'Full-text search query' },
+        limit: { type: 'number', description: 'Max results (default: 10)' },
       },
       required: ['query'],
     },
     async execute(input: unknown) {
-      const { query, limit, layer } = input as { query: string; limit?: number; layer?: 'session' | 'long-term' }
-      const results = store.search(query, { limit: limit ?? 10, layer })
-      if (results.length === 0) return 'No memories found matching that query.'
+      const { query, limit } = input as { query: string; limit?: number }
+      const results = store.search(query, limit ?? 10)
+      if (results.length === 0) return 'No memories found.'
       return results.map(m =>
-        `[#${m.id} | ${m.layer} | ${m.createdAt}${m.tags ? ` | ${m.tags}` : ''}]\n${m.content}`,
+        `[${m.createdAt}${m.tags ? ` | ${m.tags}` : ''}] ${m.content}`,
       ).join('\n\n')
     },
   }
@@ -33,25 +30,43 @@ export function memorySaveTool(store: MemoryStore): ITool {
   return {
     name: 'memory_save',
     description:
-      'Save important information to memory for future reference. ' +
-      'PROACTIVELY save when you notice user preferences, corrections, project decisions, or technical choices — ' +
-      'don\'t wait to be asked. Memories default to the session layer. ' +
-      'Only use layer="long-term" for facts that have proven importance across conversations. ' +
-      'Keep content concise and self-contained.',
+      'Save information to memory for future conversations. ' +
+      'Use when you notice user preferences, corrections, project decisions, or technical choices.',
     inputSchema: {
       type: 'object',
       properties: {
-        content: { type: 'string', description: 'The information to remember' },
-        tags: { type: 'string', description: 'Comma-separated tags (e.g. "preference,editor,setup")' },
-        layer: { type: 'string', enum: ['session', 'long-term'], description: 'Memory layer (default: session). Use long-term only for proven, durable facts.' },
+        content: { type: 'string', description: 'What to remember (concise, self-contained)' },
+        tags: { type: 'string', description: 'Comma-separated tags for categorization' },
       },
       required: ['content'],
     },
     async execute(input: unknown) {
-      const { content, tags, layer } = input as { content: string; tags?: string; layer?: 'session' | 'long-term' }
-      const memory = store.save(content, { tags: tags ?? '', layer: layer ?? 'session' })
+      const { content, tags } = input as { content: string; tags?: string }
+      store.save(content, tags ?? '')
       store.enforceMaxSize()
-      return `Memory saved (id: ${memory.id}, layer: ${memory.layer}).`
+      return 'Saved.'
+    },
+  }
+}
+
+export function memoryForgetTool(store: MemoryStore): ITool {
+  return {
+    name: 'memory_forget',
+    description:
+      'Forget memories matching a search query. ' +
+      'Use when the user says something is no longer true, outdated, or should be forgotten.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query to match memories to forget' },
+        limit: { type: 'number', description: 'Max memories to delete (default: 10)' },
+      },
+      required: ['query'],
+    },
+    async execute(input: unknown) {
+      const { query, limit } = input as { query: string; limit?: number }
+      const deleted = store.forget(query, limit ?? 10)
+      return deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.'
     },
   }
 }

@@ -1,7 +1,5 @@
 export { MemoryStore } from './store'
 export type { Memory, MemoryStoreOptions } from './store'
-export { PatternExtractor, DefaultMemoryExtractor, ReflectiveExtractor, DEFAULT_PATTERNS, DEFAULT_REFLECTION_PROMPT } from './extractor'
-export type { MemoryExtractor, MemoryEntry, ExtractionPattern } from './extractor'
-export { memorySearchTool, memorySaveTool } from './tools'
+export { memorySearchTool, memorySaveTool, memoryForgetTool } from './tools'
 export { createMemoryMiddleware } from './middleware'
 export type { MemoryMiddlewareOptions } from './middleware'

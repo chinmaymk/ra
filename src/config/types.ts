@@ -49,24 +49,10 @@ export interface RaConfig {
   }
   memory: {
     enabled: boolean
-    path: string               // SQLite database path
-    maxSizeMB: number          // max database size in MB
-    ttlDays: number            // long-term memory TTL
-    sessionTTLHours: number    // session memory TTL (default: 24)
-    extractor?: string         // path to custom extractor module
-    patterns?: Array<{         // custom extraction patterns (merged with defaults)
-      pattern: string
-      roles?: ('user' | 'assistant' | 'tool' | 'system')[]
-      tag: string
-      layer?: 'session' | 'long-term'
-      maxLength?: number
-      capture?: 'match' | 'full'
-    }>
-    autoExtract: boolean       // pattern-based extraction per iteration
-    reflect: boolean           // LLM-driven reflective extraction on loop complete
-    reflectionModel?: string   // model for reflection (cheaper model recommended)
-    reflectionPrompt?: string  // custom prompt for reflection (must contain {CONVERSATION})
-    injectLimit: number        // number of memories to inject as context (default: 20, 0 to disable)
+    path: string         // SQLite database path
+    maxSizeMB: number    // max database size in MB
+    ttlDays: number      // auto-prune memories older than this
+    injectLimit: number  // memories to inject as context per loop (0 to disable)
   }
 }
 
