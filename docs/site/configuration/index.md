@@ -48,10 +48,9 @@ storage:
   maxSessions: 100
   ttlDays: 30
 
-toolConfig:
-  subagent:
-    maxTurns: 10
-    maxConcurrency: 4
+subagent:
+  maxTurns: 10
+  maxConcurrency: 4
 
 middleware:
   beforeModelCall:
@@ -113,27 +112,12 @@ mcp:
 
 ### Subagent
 
-Configure sub-agent behavior via `toolConfig.subagent`. These settings control how the `subagent` tool spawns child agent loops.
+The `subagent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, and thinking level. These settings control fork limits.
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `toolConfig.subagent.model` | parent's model | Model for sub-agent LLM calls |
-| `toolConfig.subagent.system` | `none` | `inherit` copies parent's system prompt, `none` omits, or a custom string |
-| `toolConfig.subagent.allowedTools` | all parent tools | Tool allowlist — caps which tools sub-agents can access |
-| `toolConfig.subagent.maxTurns` | `5` | Max loop iterations per sub-agent |
-| `toolConfig.subagent.maxConcurrency` | `4` | Max parallel tasks per invocation |
-| `toolConfig.subagent.thinking` | parent's level | Thinking budget override |
-
-```yaml
-toolConfig:
-  subagent:
-    model: claude-haiku-4-5-20251001
-    system: inherit
-    allowedTools: [read_file, search_files, web_fetch]
-    maxTurns: 10
-    maxConcurrency: 6
-    thinking: low
-```
+| Field | Env var | CLI flag | Default | Description |
+|-------|---------|----------|---------|-------------|
+| `subagent.maxTurns` | — | — | `5` | Max iterations per fork |
+| `subagent.maxConcurrency` | — | — | `4` | Max parallel tasks per invocation |
 
 ### Storage
 

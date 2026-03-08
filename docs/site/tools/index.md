@@ -222,61 +222,32 @@ The dynamic description looks like:
 
 ### `subagent`
 
-Run one or more tasks in parallel using independent sub-agents. Each task gets its own agent loop with a fresh conversation history while sharing the parent's provider and tool registry.
+Fork parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `tasks` | array | yes | Tasks to run in parallel |
-| `tasks[].task` | string | yes | The task prompt for the sub-agent |
-| `tasks[].systemPrompt` | string | no | Optional system prompt override |
+| `tasks[].task` | string | yes | The task prompt for the fork |
 
 ```json
 {
   "tasks": [
     { "task": "Read src/auth.ts and summarize the authentication flow" },
     { "task": "Find all TODO comments in the codebase" },
-    { "task": "Check for unused exports in src/utils/", "systemPrompt": "You are a code linter." }
+    { "task": "Check for unused exports in src/utils/" }
   ]
 }
 ```
 
-Returns an object with `results` (one per task) and aggregate `usage`:
+Returns `{ results, usage }` where each result has `task`, `status`, `result`, `iterations`, and `usage`. Aggregate usage rolls up into the parent's token tracking automatically.
 
-```json
-{
-  "results": [
-    { "task": "...", "status": "completed", "result": "...", "iterations": 2, "usage": { "inputTokens": 500, "outputTokens": 120 } },
-    { "task": "...", "status": "error", "result": "error message", "iterations": 0, "usage": { "inputTokens": 0, "outputTokens": 0 } }
-  ],
-  "usage": { "inputTokens": 500, "outputTokens": 120 }
-}
-```
-
-Aggregate `usage` is rolled up into the parent loop's token tracking automatically.
-
-**Configuration:** Configure subagent behavior in your config file via `toolConfig.subagent`:
+Only `ask_user` and `subagent` are excluded from forks — `ask_user` can't work from a background fork, and `subagent` nesting is depth-limited (default: 2) to prevent infinite recursion. All other tools (including memory) are inherited. Task failures don't affect siblings.
 
 ```yaml
-toolConfig:
-  subagent:
-    model: claude-haiku-4-5-20251001   # cheaper model for subtasks (default: parent's model)
-    system: inherit                     # 'inherit' | 'none' | custom string (default: 'none')
-    allowedTools: [read_file, search_files]  # tool allowlist (default: all parent tools)
-    maxTurns: 10                        # max iterations per sub-agent (default: 5)
-    maxConcurrency: 6                   # max parallel tasks (default: 4)
-    thinking: low                       # thinking level override (default: parent's)
+subagent:
+  maxTurns: 10       # max iterations per fork (default: 5)
+  maxConcurrency: 6  # max parallel tasks (default: 4)
 ```
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `model` | parent's model | Model for sub-agent LLM calls |
-| `system` | `none` | System prompt: `inherit` copies parent's, `none` omits, or a custom string |
-| `allowedTools` | all parent tools | Tool allowlist — caps which tools sub-agents can access |
-| `maxTurns` | `5` | Max loop iterations per sub-agent |
-| `maxConcurrency` | `4` | Max parallel tasks per invocation |
-| `thinking` | parent's level | Thinking budget override |
-
-Sub-agents at the maximum nesting depth (default: 2) don't get the `subagent` tool, preventing infinite recursion. Sub-agents can search memories (`memory_search`) but cannot save or forget — only the parent agent manages persistent memory. Individual task failures don't affect other tasks — each result reports `completed` or `error` independently.
 
 ## Memory
 

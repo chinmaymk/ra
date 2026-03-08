@@ -59,8 +59,7 @@ describe('subagent tool', () => {
   })
 
   it('runs multiple tasks in parallel', async () => {
-    let callIndex = 0
-    const provider = capturingProvider(() => { callIndex++ })
+    const provider = capturingProvider(() => {})
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
     const out = await tool.execute({
       tasks: [{ task: 'task-a' }, { task: 'task-b' }, { task: 'task-c' }],
@@ -70,18 +69,61 @@ describe('subagent tool', () => {
     expect(out.results.every((r: any) => r.status === 'completed')).toBe(true)
   })
 
-  it('passes systemPrompt to subagent messages', async () => {
+  // ── Fork model: inherits parent config ─────────────────────────
+
+  it('inherits parent system prompt', async () => {
+    const capturedMessages: any[] = []
+    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
+
+    const tool = subagentTool({
+      provider, tools: new ToolRegistry(), model: 'test',
+      systemPrompt: 'You are a coding assistant.',
+    })
+    await tool.execute({ tasks: [{ task: 'do something' }] })
+
+    expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'You are a coding assistant.')).toBe(true)
+    expect(capturedMessages.some((m: any) => m.role === 'user' && m.content === 'do something')).toBe(true)
+  })
+
+  it('no system message when parent has none', async () => {
     const capturedMessages: any[] = []
     const provider = capturingProvider(req => capturedMessages.push(...req.messages))
 
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
-    await tool.execute({
-      tasks: [{ task: 'do something', systemPrompt: 'You are a pirate.' }],
-    })
+    await tool.execute({ tasks: [{ task: 'do something' }] })
 
-    expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'You are a pirate.')).toBe(true)
-    expect(capturedMessages.some((m: any) => m.role === 'user' && m.content === 'do something')).toBe(true)
+    expect(capturedMessages.some((m: any) => m.role === 'system')).toBe(false)
   })
+
+  it('inherits parent model', async () => {
+    let capturedModel = ''
+    const provider = capturingProvider(req => { capturedModel = req.model })
+
+    const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'parent-model' })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedModel).toBe('parent-model')
+  })
+
+  it('inherits parent thinking level', async () => {
+    let capturedThinking: any = undefined
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req: ChatRequest) {
+        capturedThinking = req.thinking
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test', thinking: 'high' })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedThinking).toBeDefined()
+  })
+
+  // ── Token usage ────────────────────────────────────────────────
 
   it('reports token usage from subagent runs', async () => {
     const provider = mockProvider([
@@ -112,8 +154,8 @@ describe('subagent tool', () => {
     expect(out.usage.outputTokens).toBe(150)
   })
 
-  it('maxConcurrency from config is reflected in schema maxItems', () => {
-    const tool = subagentTool(baseOptions({ config: { maxConcurrency: 2 } }))
+  it('maxConcurrency is reflected in schema maxItems', () => {
+    const tool = subagentTool(baseOptions({ maxConcurrency: 2 }))
     const tasksSchema = (tool.inputSchema.properties as any).tasks
     expect(tasksSchema.maxItems).toBe(2)
   })
@@ -163,9 +205,9 @@ describe('subagent tool', () => {
     expect(out.results[0].result).toBe('')
   })
 
-  // ── Tool isolation (bug fixes) ──────────────────────────────────
+  // ── Tool inheritance ──────────────────────────────────────────
 
-  it('subagents can use parent tools', async () => {
+  it('forks inherit parent tools', async () => {
     let toolExecuted = false
     const tools = new ToolRegistry()
     tools.register({
@@ -199,7 +241,7 @@ describe('subagent tool', () => {
     expect(out.results[0].iterations).toBe(2)
   })
 
-  it('excludes ask_user from subagent child tools', async () => {
+  it('excludes ask_user from forks', async () => {
     const capturedTools: string[] = []
     const provider = capturingProvider(req => {
       for (const t of req.tools ?? []) capturedTools.push(t.name)
@@ -214,11 +256,10 @@ describe('subagent tool', () => {
 
     expect(capturedTools).toContain('read_file')
     expect(capturedTools).not.toContain('ask_user')
-    // subagent IS present at depth 0 (since depth+1 < maxDepth=2)
     expect(capturedTools).toContain('subagent')
   })
 
-  it('excludes memory_save and memory_forget but allows memory_search', async () => {
+  it('forks inherit memory tools', async () => {
     const capturedTools: string[] = []
     const provider = capturingProvider(req => {
       for (const t of req.tools ?? []) capturedTools.push(t.name)
@@ -234,9 +275,9 @@ describe('subagent tool', () => {
     await tool.execute({ tasks: [{ task: 'test' }] })
 
     expect(capturedTools).toContain('read_file')
+    expect(capturedTools).toContain('memory_save')
     expect(capturedTools).toContain('memory_search')
-    expect(capturedTools).not.toContain('memory_save')
-    expect(capturedTools).not.toContain('memory_forget')
+    expect(capturedTools).toContain('memory_forget')
   })
 
   it('picks up tools registered after construction (lazy registry)', async () => {
@@ -248,7 +289,6 @@ describe('subagent tool', () => {
     const tools = new ToolRegistry()
     tools.register({ name: 'tool_a', description: 'a', inputSchema: {}, execute: async () => 'a' })
 
-    // Create subagent BEFORE tool_b is registered
     const tool = subagentTool({ provider, tools, model: 'test' })
 
     // Register tool_b AFTER subagent construction
@@ -256,7 +296,6 @@ describe('subagent tool', () => {
 
     await tool.execute({ tasks: [{ task: 'test' }] })
 
-    // Both tools should be available because registry is built lazily
     expect(capturedTools).toContain('tool_a')
     expect(capturedTools).toContain('tool_b')
   })
@@ -269,7 +308,6 @@ describe('subagent tool', () => {
       capturedTools.push((req.tools ?? []).map(t => t.name))
     })
 
-    // depth=0, maxDepth=1 → children should NOT get subagent
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test', maxDepth: 1, _depth: 0 })
     await tool.execute({ tasks: [{ task: 'test' }] })
 
@@ -282,16 +320,15 @@ describe('subagent tool', () => {
       capturedTools.push((req.tools ?? []).map(t => t.name))
     })
 
-    // depth=0, maxDepth=3 → children at depth 1 should still get subagent
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test', maxDepth: 3, _depth: 0 })
     await tool.execute({ tasks: [{ task: 'test' }] })
 
     expect(capturedTools[0]).toContain('subagent')
   })
 
-  // ── maxIterations ────────────────────────────────────────────────
+  // ── maxTurns ─────────────────────────────────────────────────────
 
-  it('respects maxTurns per subagent from config', async () => {
+  it('respects maxTurns per fork', async () => {
     const infiniteToolCall: StreamChunk[] = [
       { type: 'tool_call_start', id: 'tc1', name: 'noop' },
       { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
@@ -302,202 +339,10 @@ describe('subagent tool', () => {
     tools.register({ name: 'noop', description: 'noop', inputSchema: {}, execute: async () => 'ok' })
     const provider = mockProvider(Array(100).fill(infiniteToolCall))
 
-    const tool = subagentTool({ provider, tools, model: 'test', config: { maxTurns: 3 } })
+    const tool = subagentTool({ provider, tools, model: 'test', maxTurns: 3 })
     const out = await tool.execute({ tasks: [{ task: 'loop forever' }] }) as any
 
     expect(out.results[0].status).toBe('completed')
     expect(out.results[0].iterations).toBeLessThanOrEqual(3)
-  })
-
-  // ── Config: model override ──────────────────────────────────────
-
-  it('uses config model override for subagent', async () => {
-    let capturedModel = ''
-    const provider = capturingProvider(req => { capturedModel = req.model })
-
-    const tool = subagentTool({
-      provider, tools: new ToolRegistry(), model: 'parent-model',
-      config: { model: 'child-model' },
-    })
-    await tool.execute({ tasks: [{ task: 'test' }] })
-
-    expect(capturedModel).toBe('child-model')
-  })
-
-  it('falls back to parent model when config.model not set', async () => {
-    let capturedModel = ''
-    const provider = capturingProvider(req => { capturedModel = req.model })
-
-    const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'parent-model' })
-    await tool.execute({ tasks: [{ task: 'test' }] })
-
-    expect(capturedModel).toBe('parent-model')
-  })
-
-  // ── Config: system prompt ──────────────────────────────────────
-
-  it('system defaults to none — no system message injected', async () => {
-    const capturedMessages: any[] = []
-    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
-
-    const tool = subagentTool({
-      provider, tools: new ToolRegistry(), model: 'test',
-      systemPrompt: 'Parent system prompt',
-    })
-    await tool.execute({ tasks: [{ task: 'do something' }] })
-
-    expect(capturedMessages.some((m: any) => m.role === 'system')).toBe(false)
-  })
-
-  it('system=inherit passes parent system prompt', async () => {
-    const capturedMessages: any[] = []
-    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
-
-    const tool = subagentTool({
-      provider, tools: new ToolRegistry(), model: 'test',
-      systemPrompt: 'You are a coding assistant.',
-      config: { system: 'inherit' },
-    })
-    await tool.execute({ tasks: [{ task: 'do something' }] })
-
-    expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'You are a coding assistant.')).toBe(true)
-  })
-
-  it('system=custom string uses that string', async () => {
-    const capturedMessages: any[] = []
-    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
-
-    const tool = subagentTool({
-      provider, tools: new ToolRegistry(), model: 'test',
-      systemPrompt: 'Parent prompt',
-      config: { system: 'Be concise and helpful.' },
-    })
-    await tool.execute({ tasks: [{ task: 'do something' }] })
-
-    expect(capturedMessages.some((m: any) => m.role === 'system' && m.content === 'Be concise and helpful.')).toBe(true)
-  })
-
-  it('per-task systemPrompt appends to config system', async () => {
-    const capturedMessages: any[] = []
-    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
-
-    const tool = subagentTool({
-      provider, tools: new ToolRegistry(), model: 'test',
-      systemPrompt: 'Parent prompt',
-      config: { system: 'inherit' },
-    })
-    await tool.execute({
-      tasks: [{ task: 'do something', systemPrompt: 'Task-specific prompt.' }],
-    })
-
-    const systemMsg = capturedMessages.find((m: any) => m.role === 'system')
-    expect(systemMsg).toBeDefined()
-    expect(systemMsg.content).toContain('Parent prompt')
-    expect(systemMsg.content).toContain('Task-specific prompt.')
-  })
-
-  it('per-task systemPrompt alone works when config system is none', async () => {
-    const capturedMessages: any[] = []
-    const provider = capturingProvider(req => capturedMessages.push(...req.messages))
-
-    const tool = subagentTool({
-      provider, tools: new ToolRegistry(), model: 'test',
-      systemPrompt: 'Parent prompt',
-      // system defaults to 'none'
-    })
-    await tool.execute({
-      tasks: [{ task: 'do something', systemPrompt: 'Task-only prompt.' }],
-    })
-
-    const systemMsg = capturedMessages.find((m: any) => m.role === 'system')
-    expect(systemMsg).toBeDefined()
-    expect(systemMsg.content).toBe('Task-only prompt.')
-  })
-
-  // ── Config: allowedTools ──────────────────────────────────────
-
-  it('allowedTools restricts which tools subagents get', async () => {
-    const capturedTools: string[] = []
-    const provider = capturingProvider(req => {
-      for (const t of req.tools ?? []) capturedTools.push(t.name)
-    })
-
-    const tools = new ToolRegistry()
-    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
-    tools.register({ name: 'write_file', description: 'write', inputSchema: {}, execute: async () => 'ok' })
-    tools.register({ name: 'shell', description: 'shell', inputSchema: {}, execute: async () => 'ok' })
-
-    const tool = subagentTool({
-      provider, tools, model: 'test',
-      config: { allowedTools: ['read_file', 'write_file'] },
-    })
-    await tool.execute({ tasks: [{ task: 'test' }] })
-
-    expect(capturedTools).toContain('read_file')
-    expect(capturedTools).toContain('write_file')
-    expect(capturedTools).not.toContain('shell')
-  })
-
-  it('allowedTools does not override EXCLUDED_TOOLS', async () => {
-    const capturedTools: string[] = []
-    const provider = capturingProvider(req => {
-      for (const t of req.tools ?? []) capturedTools.push(t.name)
-    })
-
-    const tools = new ToolRegistry()
-    tools.register({ name: 'ask_user', description: 'ask', inputSchema: {}, execute: async () => 'answer' })
-    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
-
-    // Even if allowedTools includes ask_user, it should still be excluded
-    const tool = subagentTool({
-      provider, tools, model: 'test',
-      config: { allowedTools: ['ask_user', 'read_file'] },
-    })
-    await tool.execute({ tasks: [{ task: 'test' }] })
-
-    expect(capturedTools).toContain('read_file')
-    expect(capturedTools).not.toContain('ask_user')
-  })
-
-  it('allowedTools=[] gives subagent zero tools (including no nested subagent)', async () => {
-    const capturedTools: string[] = []
-    const provider = capturingProvider(req => {
-      for (const t of req.tools ?? []) capturedTools.push(t.name)
-    })
-
-    const tools = new ToolRegistry()
-    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
-
-    const tool = subagentTool({
-      provider, tools, model: 'test',
-      config: { allowedTools: [] },
-    })
-    await tool.execute({ tasks: [{ task: 'test' }] })
-
-    expect(capturedTools).toHaveLength(0)
-  })
-
-  // ── Config: thinking override ──────────────────────────────────
-
-  it('passes config thinking level to child agent', async () => {
-    let capturedThinking: any = undefined
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('use stream') },
-      async *stream(req: ChatRequest) {
-        capturedThinking = req.thinking
-        yield { type: 'text' as const, delta: 'ok' }
-        yield { type: 'done' as const }
-      },
-    }
-
-    const tool = subagentTool({
-      provider, tools: new ToolRegistry(), model: 'test',
-      thinking: 'low',
-      config: { thinking: 'high' },
-    })
-    await tool.execute({ tasks: [{ task: 'test' }] })
-
-    expect(capturedThinking).toBeDefined()
   })
 })

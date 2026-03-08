@@ -4,10 +4,9 @@ import { AgentLoop, type AgentLoopOptions } from '../agent/loop'
 import { ToolRegistry } from '../agent/tool-registry'
 import { accumulateUsage } from '../providers/utils'
 import type { CompactionConfig } from '../agent/context-compaction'
-import type { SubagentConfig } from '../config/types'
 
-/** Tools that should never be available to subagents */
-const EXCLUDED_TOOLS = new Set(['subagent', 'ask_user', 'memory_save', 'memory_forget'])
+/** Tools that can't work from a background fork */
+const EXCLUDED_TOOLS = new Set(['subagent', 'ask_user'])
 
 export interface SubagentToolOptions {
   provider: IProvider
@@ -18,8 +17,8 @@ export interface SubagentToolOptions {
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   toolTimeout?: number
-  /** Recipe-author config for subagent behavior */
-  config?: SubagentConfig
+  maxTurns?: number
+  maxConcurrency?: number
   /** Max nesting depth (default: 2) */
   maxDepth?: number
   /** @internal */
@@ -29,33 +28,25 @@ export interface SubagentToolOptions {
 export function subagentTool(options: SubagentToolOptions): ITool {
   const depth = options._depth ?? 0
   const maxDepth = options.maxDepth ?? 2
-  const cfg = options.config ?? {}
-  const maxConcurrency = cfg.maxConcurrency ?? 4
-  const maxIterations = cfg.maxTurns ?? 5
-
-  // Static config — resolved once at tool creation, not per-execute()
-  const allowedSet = cfg.allowedTools ? new Set(cfg.allowedTools) : null
-  const childModel = cfg.model ?? options.model
-  const configSystem = resolveSystemPrompt(cfg.system, options.systemPrompt)
-  const childThinking = cfg.thinking ?? options.thinking
+  const maxConcurrency = options.maxConcurrency ?? 4
+  const maxIterations = options.maxTurns ?? 5
 
   return {
     name: 'subagent',
     description:
-      'Run one or more tasks in parallel using independent sub-agents. ' +
-      'Each task gets its own agent loop with a fresh conversation. ' +
+      'Fork parallel copies of yourself to work on independent tasks simultaneously. ' +
+      'Each fork inherits your tools, model, and system prompt but gets a fresh conversation. ' +
       'Use this to parallelize independent work rather than doing things sequentially.',
     inputSchema: {
       type: 'object',
       properties: {
         tasks: {
           type: 'array',
-          description: 'Tasks to run in parallel.',
+          description: 'Tasks to run in parallel. Each gets a forked copy of yourself.',
           items: {
             type: 'object',
             properties: {
               task: { type: 'string', description: 'The task prompt. Be specific about what to do and return.' },
-              systemPrompt: { type: 'string', description: 'Optional system prompt for this task.' },
             },
             required: ['task'],
           },
@@ -67,7 +58,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
     },
 
     async execute(input: unknown) {
-      const { tasks } = input as { tasks: { task: string; systemPrompt?: string }[] }
+      const { tasks } = input as { tasks: { task: string }[] }
       if (!tasks?.length) throw new Error('At least one task is required')
 
       // Build child tool registry lazily so we pick up tools registered
@@ -75,33 +66,26 @@ export function subagentTool(options: SubagentToolOptions): ITool {
       const childTools = new ToolRegistry()
       for (const tool of options.tools.all()) {
         if (EXCLUDED_TOOLS.has(tool.name)) continue
-        if (allowedSet && !allowedSet.has(tool.name)) continue
         childTools.register(tool)
       }
-      if (depth + 1 < maxDepth && (!allowedSet || allowedSet.has('subagent'))) {
+      if (depth + 1 < maxDepth) {
         childTools.register(subagentTool({ ...options, tools: childTools, _depth: depth + 1 }))
       }
 
       const loopOptions: AgentLoopOptions = {
         provider: options.provider,
         tools: childTools,
-        model: childModel,
+        model: options.model,
         maxIterations,
         middleware: options.middleware,
-        thinking: childThinking,
+        thinking: options.thinking,
         compaction: options.compaction,
         toolTimeout: options.toolTimeout,
       }
 
-      const results = await Promise.all(tasks.map(async ({ task, systemPrompt }) => {
+      const results = await Promise.all(tasks.map(async ({ task }) => {
         const messages: IMessage[] = []
-
-        // Config system is the recipe author's base; per-task appends to it
-        const effectiveSystem = configSystem && systemPrompt
-          ? `${configSystem}\n\n${systemPrompt}`
-          : systemPrompt ?? configSystem
-        if (effectiveSystem) messages.push({ role: 'system', content: effectiveSystem })
-
+        if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt })
         messages.push({ role: 'user', content: task })
 
         try {
@@ -132,11 +116,4 @@ export function subagentTool(options: SubagentToolOptions): ITool {
       return { results, usage: totalUsage }
     },
   }
-}
-
-/** Resolve the system prompt based on config value */
-function resolveSystemPrompt(configValue: SubagentConfig['system'], parentSystem?: string): string | undefined {
-  if (configValue === undefined || configValue === 'none') return undefined
-  if (configValue === 'inherit') return parentSystem
-  return configValue // custom string
 }

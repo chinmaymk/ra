@@ -303,20 +303,7 @@ The `update_file` tool does exact string replacement — same pattern as Claude 
 
 The `ask_user` tool suspends the agent loop and returns control to the caller. In the REPL, the question is printed and the next input resumes the conversation. In CLI mode, it prints the session ID so you can `--resume` later. In HTTP mode, it emits an `ask_user` SSE event.
 
-The `subagent` tool runs multiple tasks in parallel, each in its own independent agent loop. Use it to fan out work — research, file analysis, code generation — instead of doing things sequentially. Subagents share the parent's provider and tools but get fresh message histories. Recursion depth is capped (default: 2 levels) to prevent infinite loops. Token usage from child agents rolls up into the parent automatically.
-
-Configure subagent behavior per-recipe via `toolConfig.subagent`:
-
-```yaml
-toolConfig:
-  subagent:
-    model: claude-haiku-4-5-20251001   # cheaper model for subtasks
-    system: inherit                     # 'inherit' | 'none' | custom string
-    allowedTools: [read_file, search_files, web_fetch]  # tool allowlist
-    maxTurns: 10                        # max iterations per sub-agent (default: 5)
-    maxConcurrency: 6                   # max parallel tasks (default: 4)
-    thinking: low                       # thinking level override
-```
+The `subagent` tool forks parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation. Token usage rolls up into the parent automatically. Recursion depth is capped (default: 2 levels).
 
 To bring your own tools via MCP instead, set `builtinTools: false` in your config file.
 
@@ -596,10 +583,9 @@ memory:
   ttlDays: 90
   injectLimit: 5
 
-toolConfig:
-  subagent:
-    maxTurns: 10
-    maxConcurrency: 4
+subagent:
+  maxTurns: 10
+  maxConcurrency: 4
 
 middleware:
   beforeModelCall:

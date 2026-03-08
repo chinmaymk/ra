@@ -37,7 +37,10 @@ export const defaultConfig: RaConfig = {
   toolTimeout: 30000,
   builtinTools: true,
   middleware: {},
-  toolConfig: {},
+  subagent: {
+    maxTurns: 5,
+    maxConcurrency: 4,
+  },
   context: {
     enabled: true,
     patterns: [],
