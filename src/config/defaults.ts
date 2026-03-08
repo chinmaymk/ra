@@ -49,4 +49,11 @@ export const defaultConfig: RaConfig = {
     enabled: true,
     threshold: 0.80,
   },
+  memory: {
+    enabled: false,
+    path: '.ra/memory.db',
+    maxSizeMB: 50,
+    ttlDays: 90,
+    autoExtract: true,
+  },
 }

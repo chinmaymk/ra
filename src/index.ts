@@ -17,6 +17,8 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools } from './tools'
+import { MemoryStore, memorySearchTool, memorySaveTool, createMemoryMiddleware, DefaultMemoryExtractor } from './memory'
+import type { MemoryExtractor } from './memory'
 import { join } from 'path'
 
 async function readStdin(): Promise<string | undefined> {
@@ -249,6 +251,35 @@ async function main(): Promise<void> {
     registerBuiltinTools(tools)
   }
 
+  // Set up memory system
+  let memoryStore: MemoryStore | undefined
+  if (config.memory.enabled) {
+    const memoryPath = config.memory.path.startsWith('/')
+      ? config.memory.path
+      : join(process.cwd(), config.memory.path)
+    memoryStore = new MemoryStore({
+      path: memoryPath,
+      maxSizeMB: config.memory.maxSizeMB,
+      ttlDays: config.memory.ttlDays,
+    })
+    tools.register(memorySearchTool(memoryStore))
+    tools.register(memorySaveTool(memoryStore))
+
+    if (config.memory.autoExtract) {
+      let extractor: MemoryExtractor | undefined
+      if (config.memory.extractor) {
+        const extractorPath = config.memory.extractor.startsWith('/')
+          ? config.memory.extractor
+          : join(process.cwd(), config.memory.extractor)
+        const mod = await import(extractorPath)
+        extractor = mod.default ?? mod
+      }
+      const memMw = createMemoryMiddleware({ store: memoryStore, extractor })
+      middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
+      middleware.afterLoopIteration = [...(middleware.afterLoopIteration ?? []), memMw.afterLoopIteration]
+    }
+  }
+
   // Create session storage
   const storagePath = config.storage.path.startsWith('/')
     ? config.storage.path
@@ -288,6 +319,7 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     await mcpClient.disconnect()
     if (stopMcpHttp) await stopMcpHttp()
+    if (memoryStore) memoryStore.close()
   }
 
   process.on('SIGINT', async () => { await shutdown(); process.exit(0) })

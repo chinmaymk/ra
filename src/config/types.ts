@@ -47,6 +47,14 @@ export interface RaConfig {
     contextWindow?: number // per-provider override for context window size
     model?: string         // cheaper model for summarization, defaults per provider
   }
+  memory: {
+    enabled: boolean
+    path: string           // SQLite database path
+    maxSizeMB: number      // max database size in MB
+    ttlDays: number        // auto-prune memories older than this
+    extractor?: string     // path to custom extractor module (default: built-in)
+    autoExtract: boolean   // auto-extract memories from conversations
+  }
 }
 
 export interface McpClientConfig {

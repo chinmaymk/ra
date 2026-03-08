@@ -109,6 +109,14 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_SKILL_DIRS !== undefined) set(['skillDirs'], env.RA_SKILL_DIRS.split(',').filter(Boolean))
   if (env.RA_SKILLS !== undefined)     set(['skills'], env.RA_SKILLS.split(',').filter(Boolean))
 
+  // Memory
+  if (env.RA_MEMORY_ENABLED !== undefined)      set(['memory', 'enabled'], env.RA_MEMORY_ENABLED === 'true')
+  if (env.RA_MEMORY_PATH !== undefined)         set(['memory', 'path'], env.RA_MEMORY_PATH)
+  if (env.RA_MEMORY_MAX_SIZE_MB !== undefined)  setInt(['memory', 'maxSizeMB'], env.RA_MEMORY_MAX_SIZE_MB)
+  if (env.RA_MEMORY_TTL_DAYS !== undefined)     setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
+  if (env.RA_MEMORY_EXTRACTOR !== undefined)    set(['memory', 'extractor'], env.RA_MEMORY_EXTRACTOR)
+  if (env.RA_MEMORY_AUTO_EXTRACT !== undefined) set(['memory', 'autoExtract'], env.RA_MEMORY_AUTO_EXTRACT === 'true')
+
   // Provider credentials — env-only (not CLI flags, to avoid leaking in process list/shell history)
   if (env.RA_ANTHROPIC_API_KEY !== undefined)  set(['providers', 'anthropic', 'apiKey'], env.RA_ANTHROPIC_API_KEY)
   if (env.RA_ANTHROPIC_BASE_URL !== undefined) set(['providers', 'anthropic', 'baseURL'], env.RA_ANTHROPIC_BASE_URL)
