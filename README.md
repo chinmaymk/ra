@@ -302,16 +302,16 @@ In the REPL, use `/attach`:
 
 ## Skills
 
-Reusable instruction bundles — roles, behaviors, scripts, and reference docs packaged as directories.
+Reusable instruction bundles — roles, behaviors, scripts, and reference docs packaged as directories. Skills use progressive disclosure: the model sees skill names and descriptions first, then reads the full SKILL.md on demand.
 
 ```
 skills/
   code-review/
     SKILL.md           # frontmatter + instructions
     scripts/
-      gather-diff.sh   # runs at activation, output → context
+      gather-diff.sh   # on-demand — model runs when needed
     references/
-      style-guide.md   # injected as reference
+      style-guide.md   # on-demand — read via /skill-ref
 ```
 
 ```yaml
@@ -327,12 +327,15 @@ You are a senior code reviewer. Focus on:
 ```
 
 ```bash
-ra --skill code-review "Review the latest changes"   # CLI
+ra --skill code-review "Review the latest changes"   # CLI — always-on
 ra skill install github:user/repo                     # install from GitHub
-ra skill install github:user/repo@v2                  # pin to a tag
+ra skill install npm:ra-skill-lint@1.0                # install from npm
+ra skill install https://example.com/skills.tgz       # install from URL
+ra skill list                                         # list installed skills
+ra skill remove code-review                           # remove a skill
 ```
 
-Skills support multi-runtime scripts — bash, python, typescript, javascript, go — with shebang detection. Script output is injected into the conversation as context.
+Scripts and references are loaded on demand — not eagerly at activation. In the REPL, use `/skill-run <skill> <script>` and `/skill-ref <skill> <reference>` to load them into context when needed. Skills support multi-runtime scripts (bash, python, typescript, javascript, go) with shebang detection.
 
 ### Built-in skills
 

@@ -77,10 +77,16 @@ PROVIDER OPTIONS
   --exec <script>                     Execute a JS/TS file and exit
   --help, -h                          Print this help message
 
-SUBCOMMANDS
-  skill install <github-url>          Install skills from a GitHub repository
-                                      URL formats: owner/repo, github.com/owner/repo
-                                      Optional ref: owner/repo@v2
+SKILL MANAGEMENT
+  ra skill install <source>           Install skill from npm, GitHub, or URL
+  ra skill remove <name>              Remove an installed skill
+  ra skill list                       List installed skills
+
+  Sources:
+    ra skill install code-review             npm package "code-review"
+    ra skill install npm:ra-skill-lint@1.0   npm with version
+    ra skill install github:user/repo        GitHub repository
+    ra skill install https://example.com/s.tgz  URL tarball
 
 ENV VARS
   RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
@@ -136,34 +142,67 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  if (parsed.meta.subcommand?.name === 'skill') {
-    const { installSkillsFromGithub } = await import('./skills/install')
-    const args = parsed.meta.subcommand.args
-    if (args[0] === 'install' && args[1]) {
-      const config = await loadConfig({ cwd: process.cwd(), env: process.env as Record<string, string | undefined> })
-      const targetDir = config.skillDirs[0] || join(process.cwd(), 'skills')
-      console.log(`Installing skills from ${args[1]} into ${targetDir}...`)
-      const installed = await installSkillsFromGithub(args[1], targetDir)
-      if (installed.length === 0) {
-        console.log('No valid skills found.')
-      } else {
-        console.log(`Installed ${installed.length} skill(s): ${installed.join(', ')}`)
+  // Handle skill management subcommands (lazy-load registry module)
+  if (parsed.meta.skillCommand) {
+    const { installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir } = await import('./skills/registry')
+    const { action, args } = parsed.meta.skillCommand
+    switch (action) {
+      case 'install': {
+        if (args.length === 0) {
+          console.error('Usage: ra skill install <source>')
+          process.exit(1)
+        }
+        for (const source of args) {
+          try {
+            const installed = await installSkill(source)
+            console.log(`Installed skills: ${installed.join(', ')} → ${defaultSkillInstallDir()}`)
+          } catch (err) {
+            console.error(`Failed to install "${source}": ${err instanceof Error ? err.message : String(err)}`)
+            process.exit(1)
+          }
+        }
+        process.exit(0)
       }
-    } else {
-      console.log('Usage: ra skill install <github-url>')
+      case 'remove': {
+        if (args.length === 0) {
+          console.error('Usage: ra skill remove <name>')
+          process.exit(1)
+        }
+        for (const name of args) {
+          try {
+            await removeSkill(name)
+            console.log(`Removed skill: ${name}`)
+          } catch (err) {
+            console.error(`Failed to remove "${name}": ${err instanceof Error ? err.message : String(err)}`)
+            process.exit(1)
+          }
+        }
+        process.exit(0)
+      }
+      case 'list': {
+        const skills = await listInstalledSkills()
+        if (skills.length === 0) {
+          console.log(`No skills installed in ${defaultSkillInstallDir()}`)
+        } else {
+          for (const s of skills) {
+            const src = s.source
+              ? ` (${s.source.registry}${s.source.package ? ': ' + s.source.package : ''}${s.source.repo ? ': ' + s.source.repo : ''}${s.source.version ? '@' + s.source.version : ''})`
+              : ''
+            console.log(`  ${s.name}${src}`)
+          }
+        }
+        process.exit(0)
+      }
     }
-    process.exit(0)
   }
 
   // Read piped stdin only for CLI/unspecified mode (http/repl/mcp manage stdin themselves)
   const isNonCliInterface = parsed.config.interface && parsed.config.interface !== 'cli'
   const stdinContent = isNonCliInterface ? undefined : await readStdin()
   if (stdinContent) {
-    // Merge: prompt first, then stdin content
     parsed.meta.prompt = parsed.meta.prompt
       ? `${parsed.meta.prompt}\n\n${stdinContent}`
       : stdinContent
-    // Force CLI mode when piping
     parsed.config.interface = 'cli' as const
   }
 
@@ -261,7 +300,6 @@ async function main(): Promise<void> {
   if (config.interface === 'mcp') {
     stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
     console.error(`MCP server (http) listening on port ${config.mcp.server.port}`)
-    // Keep process alive
     await new Promise(() => {})
   } else if (config.interface === 'mcp-stdio') {
     const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
@@ -326,15 +364,13 @@ async function main(): Promise<void> {
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${httpServer.port}`)
-    // Keep process alive; clean up on signal
     const httpShutdown = async () => { await httpServer.stop(); await shutdown() }
     process.removeAllListeners('SIGINT')
     process.removeAllListeners('SIGTERM')
     process.on('SIGINT', async () => { await httpShutdown(); process.exit(0) })
     process.on('SIGTERM', async () => { await httpShutdown(); process.exit(0) })
-    await new Promise(() => {}) // keep alive
+    await new Promise(() => {})
   } else {
-    // Default: interactive REPL mode
     const repl = new Repl({
       model: config.model,
       provider,

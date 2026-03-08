@@ -6,9 +6,10 @@ import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolRe
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
-import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
+import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { ASK_USER_SIGNAL } from '../tools/ask-user'
+import { runSkillScriptByName } from '../skills/runner'
 import * as tui from './tui'
 
 export interface ReplOptions {
@@ -162,7 +163,7 @@ export class Repl {
     try {
       const result = await loop.run(initialMessages)
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
-      tui.stopSpinner(true) // no-op if already stopped by first text chunk; clears spinner if tool-only
+      tui.stopSpinner(true)
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n')
 
@@ -210,7 +211,6 @@ export class Repl {
         if (!id) return 'Usage: /resume <session-id>'
         const messages = await this.options.storage.readMessages(id)
         if (messages.length === 0) {
-          // Verify session exists by checking if it's in the session list
           const sessions = await this.options.storage.list()
           if (!sessions.some(s => s.id === id)) {
             return `Session not found: ${id}`
@@ -229,6 +229,32 @@ export class Repl {
         if (!skill) return `Skill not found: ${name}`
         this.pendingSkill = skill
         return `Skill "${name}" will be injected with your next message.`
+      }
+      case '/skill-run': {
+        const skillName = parts[1]
+        const scriptName = parts[2]
+        if (!skillName || !scriptName) return 'Usage: /skill-run <skill> <script>'
+        const skill = this.options.skillMap?.get(skillName)
+        if (!skill) return `Skill not found: ${skillName}`
+        const output = await runSkillScriptByName(skill, scriptName, {})
+        if (output.trim()) {
+          this.pendingAttachments.push({ type: 'text', text: `<skill-script name="${scriptName}">\n${output.trim()}\n</skill-script>` })
+          return `Script output from "${scriptName}" will be attached to your next message.`
+        }
+        return `Script "${scriptName}" produced no output.`
+      }
+      case '/skill-ref': {
+        const skillName = parts[1]
+        const refName = parts[2]
+        if (!skillName || !refName) return 'Usage: /skill-ref <skill> <reference>'
+        const skill = this.options.skillMap?.get(skillName)
+        if (!skill) return `Skill not found: ${skillName}`
+        const content = await readSkillReference(skill, refName)
+        if (content.trim()) {
+          this.pendingAttachments.push({ type: 'text', text: `<skill-reference name="${refName}">\n${content.trim()}\n</skill-reference>` })
+          return `Reference "${refName}" will be attached to your next message.`
+        }
+        return `Reference "${refName}" is empty.`
       }
       case '/attach': {
         const filePath = parts.slice(1).join(' ')

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { loadSkills, loadSkillMetadata, buildAvailableSkillsXml, buildActiveSkillXml } from '../../src/skills/loader'
+import { loadSkills, loadSkillMetadata, buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../../src/skills/loader'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from '../tmpdir'
 
@@ -91,5 +91,35 @@ describe('buildActiveSkillXml', () => {
     const skills = await loadSkills([TEST_DIR])
     const xml = buildActiveSkillXml(skills.get('greet')!)
     expect(xml).toBe('<skill name="greet">\nHello! Greet the user.\n</skill>')
+  })
+})
+
+describe('readSkillReference', () => {
+  it('reads a reference file by full path', async () => {
+    mkdirSync(`${TEST_DIR}/review/references`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/review/SKILL.md`, '---\nname: review\ndescription: Review\n---\nBody')
+    writeFileSync(`${TEST_DIR}/review/references/guide.md`, '# Style Guide\nUse consistent naming.')
+    const skills = await loadSkills([TEST_DIR])
+    const skill = skills.get('review')!
+    const content = await readSkillReference(skill, 'references/guide.md')
+    expect(content).toContain('Style Guide')
+  })
+
+  it('reads a reference file by short name', async () => {
+    mkdirSync(`${TEST_DIR}/review/references`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/review/SKILL.md`, '---\nname: review\ndescription: Review\n---\nBody')
+    writeFileSync(`${TEST_DIR}/review/references/guide.md`, '# Style Guide')
+    const skills = await loadSkills([TEST_DIR])
+    const skill = skills.get('review')!
+    const content = await readSkillReference(skill, 'guide.md')
+    expect(content).toContain('Style Guide')
+  })
+
+  it('throws for nonexistent reference', async () => {
+    mkdirSync(`${TEST_DIR}/review`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/review/SKILL.md`, '---\nname: review\ndescription: Review\n---\nBody')
+    const skills = await loadSkills([TEST_DIR])
+    const skill = skills.get('review')!
+    await expect(readSkillReference(skill, 'nonexistent.md')).rejects.toThrow('Reference not found')
   })
 })
