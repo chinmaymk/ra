@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { join, basename, extname } from 'path'
 import { resolveSkillAsset, type Skill } from './types'
 
 /**
@@ -40,9 +40,7 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
     return [interpreter, scriptPath]
   }
 
-  const filename = scriptPath.split('/').pop() ?? ''
-  const dotIdx = filename.lastIndexOf('.')
-  const ext = dotIdx > 0 ? filename.slice(dotIdx + 1).toLowerCase() : null
+  const ext = extname(scriptPath).slice(1).toLowerCase() || null
 
   switch (ext) {
     case null:  return [shell(), scriptPath]

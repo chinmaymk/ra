@@ -1,4 +1,4 @@
-import { resolvePath } from '../utils/paths'
+import { looksLikePath, resolvePath } from '../utils/paths'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '../agent/types'
 
@@ -8,13 +8,8 @@ const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
   'afterLoopIteration', 'afterLoopComplete', 'onError',
 ])
 
-function isFilePath(s: string): boolean {
-  return s.startsWith('./') || s.startsWith('../') || s.startsWith('/') || s.startsWith('~/') ||
-    s.endsWith('.js') || s.endsWith('.ts')
-}
-
 async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
-  if (isFilePath(entry)) {
+  if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)
     const mod = await import(resolved)
     if (typeof mod.default !== 'function') {
