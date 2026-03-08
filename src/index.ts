@@ -249,17 +249,6 @@ async function main(): Promise<void> {
     registerBuiltinTools(tools)
   }
 
-  // Register subagent tool (needs provider & tools to be set up first)
-  tools.register(subagentTool({
-    provider,
-    tools,
-    model: config.model,
-    middleware,
-    thinking: config.thinking,
-    compaction: config.compaction,
-    toolTimeout: config.toolTimeout,
-  }))
-
   // Create session storage
   const storagePath = config.storage.path.startsWith('/')
     ? config.storage.path
@@ -278,6 +267,19 @@ async function main(): Promise<void> {
   if (config.mcp.client && config.mcp.client.length > 0) {
     await mcpClient.connect(config.mcp.client, tools)
   }
+
+  // Register subagent tool after all other tools (builtin + MCP) are set up.
+  // The child registry is built lazily at execution time, so it always sees
+  // the latest tools, but registering last makes the intent clear.
+  tools.register(subagentTool({
+    provider,
+    tools,
+    model: config.model,
+    middleware,
+    thinking: config.thinking,
+    compaction: config.compaction,
+    toolTimeout: config.toolTimeout,
+  }))
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {

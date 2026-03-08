@@ -4,6 +4,9 @@ import { AgentLoop, type AgentLoopOptions } from '../agent/loop'
 import { ToolRegistry } from '../agent/tool-registry'
 import type { CompactionConfig } from '../agent/context-compaction'
 
+/** Tools that should never be available to subagents */
+const EXCLUDED_TOOLS = new Set(['subagent', 'ask_user'])
+
 export interface SubagentToolOptions {
   provider: IProvider
   tools: ToolRegistry
@@ -24,26 +27,6 @@ export function subagentTool(options: SubagentToolOptions): ITool {
   const maxDepth = options.maxDepth ?? 2
   const maxConcurrency = options.maxConcurrency ?? 4
   const maxIterations = options.maxIterations ?? 5
-
-  // Build child tool registry once at construction
-  const childTools = new ToolRegistry()
-  for (const tool of options.tools.all()) {
-    if (tool.name !== 'subagent') childTools.register(tool)
-  }
-  if (depth + 1 < maxDepth) {
-    childTools.register(subagentTool({ ...options, tools: childTools, _depth: depth + 1 }))
-  }
-
-  const loopOptions: AgentLoopOptions = {
-    provider: options.provider,
-    tools: childTools,
-    model: options.model,
-    maxIterations,
-    middleware: options.middleware,
-    thinking: options.thinking,
-    compaction: options.compaction,
-    toolTimeout: options.toolTimeout,
-  }
 
   return {
     name: 'subagent',
@@ -75,6 +58,27 @@ export function subagentTool(options: SubagentToolOptions): ITool {
     async execute(input: unknown) {
       const { tasks } = input as { tasks: { task: string; systemPrompt?: string }[] }
       if (!tasks?.length) throw new Error('At least one task is required')
+
+      // Build child tool registry lazily so we pick up tools registered
+      // after subagentTool() was constructed (e.g. MCP tools)
+      const childTools = new ToolRegistry()
+      for (const tool of options.tools.all()) {
+        if (!EXCLUDED_TOOLS.has(tool.name)) childTools.register(tool)
+      }
+      if (depth + 1 < maxDepth) {
+        childTools.register(subagentTool({ ...options, tools: childTools, _depth: depth + 1 }))
+      }
+
+      const loopOptions: AgentLoopOptions = {
+        provider: options.provider,
+        tools: childTools,
+        model: options.model,
+        maxIterations,
+        middleware: options.middleware,
+        thinking: options.thinking,
+        compaction: options.compaction,
+        toolTimeout: options.toolTimeout,
+      }
 
       return Promise.all(tasks.map(async ({ task, systemPrompt }) => {
         const messages: IMessage[] = []
