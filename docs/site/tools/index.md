@@ -224,29 +224,29 @@ When [memory](/configuration/#memory) is enabled, three additional tools are reg
 
 ### `memory_save`
 
-Save information to memory for future conversations. The agent uses this when it notices user preferences, corrections, project decisions, or technical choices.
+Save a fact to persistent memory for future conversations. Proactively saves user preferences, project decisions, corrections, and key context. To update an existing memory, the agent forgets the old version first, then saves the new one.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `content` | string | yes | What to remember (concise, self-contained) |
-| `tags` | string | no | Comma-separated tags for categorization |
+| `content` | string | yes | Self-contained fact, e.g. "User prefers tabs over spaces" |
+| `tags` | string | no | Category: `preference`, `project`, `convention`, `team`, or `tooling` |
 
 ### `memory_search`
 
-Search memories from past conversations via full-text search.
+Search persistent memories by keyword. Recent memories are automatically injected at conversation start — this tool is for targeted lookups beyond the recalled set.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | yes | Full-text search query |
+| `query` | string | yes | Full-text search query (single keywords work best) |
 | `limit` | number | no | Max results (default: 10) |
 
 ### `memory_forget`
 
-Forget memories matching a search query. The agent uses this when the user says something is no longer true or should be forgotten.
+Delete memories matching a search query. Used when the user corrects previous information, a fact becomes outdated, or before saving an updated version of an existing memory.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | yes | Search query to match memories to forget |
+| `query` | string | yes | Search query to match memories to delete (single keywords work best) |
 | `limit` | number | no | Max memories to delete (default: 10) |
 
 ## Disabling built-in tools
