@@ -218,7 +218,7 @@ describe('subagent tool', () => {
     expect(capturedTools).toContain('subagent')
   })
 
-  it('excludes memory tools from subagent child tools', async () => {
+  it('excludes memory_save and memory_forget but allows memory_search', async () => {
     const capturedTools: string[] = []
     const provider = capturingProvider(req => {
       for (const t of req.tools ?? []) capturedTools.push(t.name)
@@ -234,8 +234,8 @@ describe('subagent tool', () => {
     await tool.execute({ tasks: [{ task: 'test' }] })
 
     expect(capturedTools).toContain('read_file')
+    expect(capturedTools).toContain('memory_search')
     expect(capturedTools).not.toContain('memory_save')
-    expect(capturedTools).not.toContain('memory_search')
     expect(capturedTools).not.toContain('memory_forget')
   })
 

@@ -276,7 +276,7 @@ toolConfig:
 | `maxConcurrency` | `4` | Max parallel tasks per invocation |
 | `thinking` | parent's level | Thinking budget override |
 
-Sub-agents at the maximum nesting depth (default: 2) don't get the `subagent` tool, preventing infinite recursion. Memory tools (`memory_save`, `memory_search`, `memory_forget`) are excluded from sub-agents — only the parent agent manages persistent memory. Individual task failures don't affect other tasks — each result reports `completed` or `error` independently.
+Sub-agents at the maximum nesting depth (default: 2) don't get the `subagent` tool, preventing infinite recursion. Sub-agents can search memories (`memory_search`) but cannot save or forget — only the parent agent manages persistent memory. Individual task failures don't affect other tasks — each result reports `completed` or `error` independently.
 
 ## Memory
 

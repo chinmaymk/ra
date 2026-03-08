@@ -7,7 +7,7 @@ import type { CompactionConfig } from '../agent/context-compaction'
 import type { SubagentConfig } from '../config/types'
 
 /** Tools that should never be available to subagents */
-const EXCLUDED_TOOLS = new Set(['subagent', 'ask_user', 'memory_save', 'memory_search', 'memory_forget'])
+const EXCLUDED_TOOLS = new Set(['subagent', 'ask_user', 'memory_save', 'memory_forget'])
 
 export interface SubagentToolOptions {
   provider: IProvider
