@@ -316,8 +316,8 @@ async function main(): Promise<void> {
 
   // Shutdown helpers
   const shutdown = async () => {
-    await mcpClient.disconnect()
-    if (stopMcpHttp) await stopMcpHttp()
+    try { await mcpClient.disconnect() } catch { /* best-effort cleanup */ }
+    try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort cleanup */ }
     if (memoryStore) memoryStore.close()
   }
 
@@ -340,7 +340,7 @@ async function main(): Promise<void> {
 
   if (parsed.meta.memories !== undefined) {
     if (!memoryStore) {
-      console.log('No memory database found. Use --memory to enable memory first.')
+      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
     } else {
       const query = parsed.meta.memories || ''
       const memories = query ? memoryStore.search(query, 100) : memoryStore.list(100)
@@ -362,7 +362,7 @@ async function main(): Promise<void> {
 
   if (parsed.meta.forget !== undefined) {
     if (!memoryStore) {
-      console.log('No memory database found. Use --memory to enable memory first.')
+      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
     } else {
       const query = parsed.meta.forget
       if (!query) {
@@ -444,7 +444,8 @@ async function main(): Promise<void> {
     })
     await httpServer.start()
     console.error(`HTTP server listening on port ${httpServer.port}`)
-    const httpShutdown = async () => { await httpServer.stop(); await shutdown() }
+    // Keep process alive; clean up on signal
+    const httpShutdown = async () => { try { await httpServer.stop() } catch { /* best-effort */ } await shutdown() }
     process.removeAllListeners('SIGINT')
     process.removeAllListeners('SIGTERM')
     process.on('SIGINT', async () => { await httpShutdown(); process.exit(0) })

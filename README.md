@@ -488,8 +488,10 @@ All hooks support a configurable timeout via `toolTimeout` (default: 30s).
 ra can persist facts across conversations using an SQLite-backed memory store with full-text search. The agent gets three tools — `memory_save`, `memory_search`, and `memory_forget` — and recent memories are automatically injected at the start of each loop.
 
 ```bash
-ra --memory                    # enable memory for this session
-ra --memory "I prefer TypeScript"  # quit, come back, it remembers
+ra --memory                       # enable memory for this session
+ra --memories                     # list all stored memories
+ra --memories "typescript"        # search memories
+ra --forget "dark mode"           # delete matching memories
 ```
 
 In the REPL:

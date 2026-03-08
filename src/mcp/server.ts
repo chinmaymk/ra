@@ -80,11 +80,21 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
       return
     }
 
+    // Register transport before handling request to avoid race conditions
+    // where concurrent requests can't find the session
+    if (isNew && transport.sessionId) transports.set(transport.sessionId, transport)
+
     try {
       await transport.handleRequest(req, res)
-      if (isNew && transport.sessionId) transports.set(transport.sessionId, transport)
+      // Session ID may be assigned during handleRequest for new transports
+      if (isNew && transport.sessionId && !transports.has(transport.sessionId)) {
+        transports.set(transport.sessionId, transport)
+      }
     } catch (err) {
-      if (isNew) await transport.close().catch(() => {})
+      if (isNew) {
+        if (transport.sessionId) transports.delete(transport.sessionId)
+        await transport.close().catch(() => {})
+      }
       if (!res.headersSent) {
         res.writeHead(500).end(`Internal server error: ${err instanceof Error ? err.message : String(err)}`)
       }

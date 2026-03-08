@@ -12,6 +12,7 @@ export interface IMessage {
   content: string | ContentPart[]
   toolCallId?: string
   toolCalls?: IToolCall[]
+  isError?: boolean
 }
 
 export interface IToolCall {

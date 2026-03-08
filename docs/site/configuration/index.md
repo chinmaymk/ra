@@ -118,7 +118,7 @@ mcp:
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `memory.enabled` | `RA_MEMORY_ENABLED` | — | `false` | Enable persistent memory |
+| `memory.enabled` | `RA_MEMORY_ENABLED` | `--memory` | `false` | Enable persistent memory |
 | `memory.path` | `RA_MEMORY_PATH` | — | `.ra/memory.db` | SQLite database path |
 | `memory.maxMemories` | `RA_MEMORY_MAX_MEMORIES` | — | `1000` | Max stored memories (oldest trimmed) |
 | `memory.ttlDays` | `RA_MEMORY_TTL_DAYS` | — | `90` | Auto-prune memories older than this |

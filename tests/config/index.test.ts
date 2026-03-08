@@ -62,6 +62,36 @@ describe('loadConfig', () => {
     })
   })
 
+  describe('upward directory walking', () => {
+    it('finds config in a parent directory', async () => {
+      writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google' }))
+      const child = join(tmp, 'a', 'b', 'c')
+      mkdirSync(child, { recursive: true })
+      const c = await loadConfig({ cwd: child })
+      expect(c.provider).toBe('google')
+    })
+
+    it('stops at the first config found while walking up', async () => {
+      writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google' }))
+      const mid = join(tmp, 'a')
+      mkdirSync(mid, { recursive: true })
+      writeFileSync(join(mid, 'ra.config.json'), JSON.stringify({ provider: 'ollama' }))
+      const child = join(mid, 'b')
+      mkdirSync(child, { recursive: true })
+      const c = await loadConfig({ cwd: child })
+      expect(c.provider).toBe('ollama')
+    })
+
+    it('prefers config in cwd over parent', async () => {
+      writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google' }))
+      const child = join(tmp, 'sub')
+      mkdirSync(child, { recursive: true })
+      writeFileSync(join(child, 'ra.config.json'), JSON.stringify({ provider: 'openai' }))
+      const c = await loadConfig({ cwd: child })
+      expect(c.provider).toBe('openai')
+    })
+  })
+
   describe('precedence: defaults < file < env < CLI', () => {
     it('env overrides file', async () => {
       writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google' }))
