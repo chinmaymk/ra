@@ -93,6 +93,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'mcp-server-port':             { type: 'string' },
       'mcp-server-tool-name':        { type: 'string' },
       'mcp-server-tool-description': { type: 'string' },
+      // Memory
+      'memory':                      { type: 'boolean' },
       // Storage
       'storage-path':                { type: 'string' },
       'storage-max-sessions':        { type: 'string' },
@@ -147,6 +149,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   // Skills
   if (values['skill-dir']) set(['skillDirs'], values['skill-dir'])
+
+  // Memory
+  if (values['memory']) set(['memory', 'enabled'], true)
 
   // Provider connection options
   if (values['anthropic-base-url']) set(['providers', 'anthropic', 'baseURL'], values['anthropic-base-url'])

@@ -62,6 +62,9 @@ MCP SERVER
   --mcp-server-tool-name <name>       MCP tool name
   --mcp-server-tool-description <d>   MCP tool description
 
+MEMORY
+  --memory                            Enable persistent memory across conversations
+
 STORAGE
   --storage-path <path>               Session storage directory
   --storage-max-sessions <n>          Max stored sessions
@@ -103,6 +106,8 @@ ENV VARS
   RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
   RA_BUILTIN_TOOLS
   RA_THINKING
+  RA_MEMORY_ENABLED, RA_MEMORY_PATH, RA_MEMORY_MAX_MEMORIES
+  RA_MEMORY_TTL_DAYS, RA_MEMORY_INJECT_LIMIT
 
 STDIN
   When input is piped, ra reads stdin and auto-switches to CLI mode.
@@ -420,6 +425,7 @@ async function main(): Promise<void> {
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
+      memoryStore,
     })
     await repl.start()
     await shutdown()

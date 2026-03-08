@@ -8,6 +8,7 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
+import type { MemoryStore } from '../memory/store'
 import { ASK_USER_SIGNAL } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
 import * as tui from './tui'
@@ -26,6 +27,7 @@ export interface ReplOptions {
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
+  memoryStore?: MemoryStore
 }
 
 export class Repl {
@@ -265,6 +267,23 @@ export class Repl {
         } catch (err) {
           return `Failed to attach file: ${err instanceof Error ? err.message : String(err)}`
         }
+      }
+      case '/memories': {
+        if (!this.options.memoryStore) return 'Memory is not enabled. Use --memory or set memory.enabled in config.'
+        const limit = parts[1] ? parseInt(parts[1], 10) : 20
+        const memories = this.options.memoryStore.list(Number.isNaN(limit) ? 20 : limit)
+        if (memories.length === 0) return 'No memories stored.'
+        const lines = memories.map(m =>
+          `  [${m.id}] [${m.tags || 'general'}] ${m.content}`
+        )
+        return `${memories.length} memories (${this.options.memoryStore.count()} total):\n${lines.join('\n')}`
+      }
+      case '/forget': {
+        if (!this.options.memoryStore) return 'Memory is not enabled. Use --memory or set memory.enabled in config.'
+        const query = parts.slice(1).join(' ')
+        if (!query) return 'Usage: /forget <search query>'
+        const deleted = this.options.memoryStore.forget(query)
+        return deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.'
       }
       case '/context': {
         if (!this.options.contextMessages?.length) return 'No context files discovered.'
