@@ -84,12 +84,16 @@ Logs are structured JSON events describing *what the agent did*. Each line is a 
 |---------|-------|-------------|
 | `provider initialized` | info | `provider`, `model` |
 | `tools registered` | info | `toolCount`, `tools` |
+| `custom middleware loaded` | info | `hookCount` |
+| `session storage initialized` | debug | `path` |
 | `skills loaded` | info | `skillCount`, `skills` |
 | `memory store initialized` | info | `path`, `memoriesStored` |
 | `connecting to MCP servers` | info | `serverCount`, `servers` |
 | `MCP servers connected` | info | `totalTools` |
 | `context files discovered` | info | `fileCount`, `patterns`, `files` |
+| `resuming session` | info | `sessionId`, `messageCount` |
 | `starting interface` | info | `interface` |
+| `shutting down` | info | — |
 
 **Agent loop** (emitted by observability middleware):
 

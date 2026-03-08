@@ -255,6 +255,10 @@ async function main(): Promise<void> {
   }
 
   const middleware = await loadMiddleware(config, process.cwd())
+  const userHookCount = Object.values(middleware).reduce((n, hooks) => n + (hooks?.length ?? 0), 0)
+  if (userHookCount > 0) {
+    logger.info('custom middleware loaded', { hookCount: userHookCount })
+  }
 
   // Set up pattern resolvers (e.g. @file, url:)
   if (config.context.resolvers?.length) {
@@ -306,6 +310,7 @@ async function main(): Promise<void> {
   const storagePath = resolvePath(config.storage.path, process.cwd())
   const storage = new SessionStorage(storagePath)
   await storage.init()
+  logger.debug('session storage initialized', { path: storagePath })
 
   // Load skills from configured directories
   const skillMap = await loadSkills(config.skillDirs)
@@ -347,6 +352,7 @@ async function main(): Promise<void> {
 
   // Shutdown helpers
   const shutdown = async () => {
+    logger.info('shutting down')
     try { await mcpClient.disconnect() } catch { /* best-effort cleanup */ }
     try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort cleanup */ }
     if (memoryStore) memoryStore.close()
@@ -437,6 +443,9 @@ async function main(): Promise<void> {
       process.exit(1)
     }
     const sessionMessages = parsed.meta.resume ? await storage.readMessages(parsed.meta.resume) : []
+    if (parsed.meta.resume) {
+      logger.info('resuming session', { sessionId: parsed.meta.resume, messageCount: sessionMessages.length })
+    }
     const cliResult = await runCli({
       prompt: parsed.meta.prompt,
       files: parsed.meta.files,

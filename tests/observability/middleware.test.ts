@@ -130,6 +130,44 @@ describe('observability middleware', () => {
     expect(toolSpan!.status).toBe('ok')
   })
 
+  it('logs tool execution failure with error span', async () => {
+    const logger = new Logger({ level: 'info', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'fail_tool' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'tool_call_end', id: 'tc1' },
+        { type: 'done', usage: { inputTokens: 10, outputTokens: 5 } },
+      ],
+      [
+        { type: 'text', delta: 'recovered' },
+        { type: 'done', usage: { inputTokens: 10, outputTokens: 5 } },
+      ],
+    ])
+
+    const tools = new ToolRegistry()
+    tools.register({ name: 'fail_tool', description: 'fails', inputSchema: {}, execute: async () => { throw new Error('disk full') } })
+
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10, middleware: obsMw })
+    await loop.run([{ role: 'user', content: 'do it' }])
+
+    const { logs, spans } = parseOutput(captured)
+
+    // Should log error for tool failure
+    const errorLog = logs.find(e => e.message === 'tool execution failed')
+    expect(errorLog).toBeDefined()
+    expect(errorLog!.tool).toBe('fail_tool')
+    expect(errorLog!.error).toContain('disk full')
+
+    // Tool span should be emitted with error status
+    const toolSpan = spans.find(r => r.name === 'agent.tool_execution')
+    expect(toolSpan).toBeDefined()
+    expect(toolSpan!.status).toBe('error')
+  })
+
   it('does not touch the loop when using noop logger/tracer', async () => {
     const { NoopLogger } = await import('../../src/observability/logger')
     const { NoopTracer } = await import('../../src/observability/tracer')
@@ -202,7 +240,6 @@ describe('observability middleware', () => {
     const loop1 = new AgentLoop({ provider: provider1, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
     await loop1.run([{ role: 'user', content: 'run1' }])
 
-    const firstRunOutput = [...captured]
     captured.length = 0
 
     // Run 2: succeeds with same middleware

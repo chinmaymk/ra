@@ -503,14 +503,18 @@ observability:
 
 ### What gets logged
 
+Startup events: `provider initialized`, `tools registered`, `custom middleware loaded`, `skills loaded`, `memory store initialized`, `MCP servers connected`, `context files discovered`, `resuming session`, `starting interface`, `shutting down`. See [docs/observability.md](docs/observability.md) for the full reference.
+
+Agent loop events (emitted per request):
+
 | Event | Level | Key fields |
 |-------|-------|------------|
 | `agent loop starting` | info | maxIterations, messageCount |
 | `calling model` | debug | iteration, model, messageCount |
 | `model responded` | info | inputTokens, outputTokens, toolCallCount, toolNames |
 | `executing tool` | info | tool, toolCallId, input (truncated) |
-| `tool execution complete` | info | tool, resultLength |
-| `tool execution failed` | error | tool, error |
+| `tool execution complete` | info | tool, toolCallId, resultLength |
+| `tool execution failed` | error | tool, toolCallId, error |
 | `context compacted` | info | originalMessages, compactedMessages, estimatedTokens, threshold |
 | `iteration complete` | debug | iteration, messagesAdded |
 | `agent loop complete` | info | iterations, inputTokens, outputTokens, totalMessages |
