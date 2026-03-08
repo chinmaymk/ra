@@ -54,6 +54,6 @@ export const defaultConfig: RaConfig = {
     path: '.ra/memory.db',
     maxMemories: 1000,
     ttlDays: 90,
-    injectLimit: 20,
+    injectLimit: 5,
   },
 }

@@ -511,7 +511,7 @@ memory:
   path: .ra/memory.db     # SQLite database location
   maxMemories: 1000        # oldest trimmed first
   ttlDays: 90              # auto-prune after 90 days
-  injectLimit: 20          # inject top-N recent memories (0 to disable)
+  injectLimit: 5          # inject top-N recent memories (0 to disable)
 ```
 
 The agent decides when to save and forget — tool descriptions guide it to capture user preferences, project decisions, and corrections, and to forget outdated information when told.
@@ -579,7 +579,7 @@ memory:
   path: .ra/memory.db
   maxMemories: 1000
   ttlDays: 90
-  injectLimit: 20
+  injectLimit: 5
 
 middleware:
   beforeModelCall:

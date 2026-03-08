@@ -59,7 +59,7 @@ memory:
   path: .ra/memory.db
   maxMemories: 1000
   ttlDays: 90
-  injectLimit: 20
+  injectLimit: 5
 
 mcp:
   client:
@@ -122,7 +122,7 @@ mcp:
 | `memory.path` | `RA_MEMORY_PATH` | — | `.ra/memory.db` | SQLite database path |
 | `memory.maxMemories` | `RA_MEMORY_MAX_MEMORIES` | — | `1000` | Max stored memories (oldest trimmed) |
 | `memory.ttlDays` | `RA_MEMORY_TTL_DAYS` | — | `90` | Auto-prune memories older than this |
-| `memory.injectLimit` | `RA_MEMORY_INJECT_LIMIT` | — | `20` | Memories to inject as context per loop (0 to disable) |
+| `memory.injectLimit` | `RA_MEMORY_INJECT_LIMIT` | — | `5` | Memories to inject as context per loop (0 to disable) |
 
 ### HTTP
 
