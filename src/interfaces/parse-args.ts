@@ -16,8 +16,8 @@ export interface ParsedArgsMeta {
   exec?: string
   showContext: boolean
   showMemories: boolean
-  forget?: string
-  dryRun: boolean
+  forget: boolean
+  memoryQuery?: string
   skillCommand?: SkillCommand
 }
 
@@ -57,7 +57,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         help: false,
         showContext: false,
         showMemories: false,
-        dryRun: false,
+        forget: false,
         files: [],
         skills: [],
         skillCommand: { action, args: subArgs },
@@ -77,8 +77,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       help:                          { type: 'boolean', short: 'h' },
       'show-context':                { type: 'boolean' },
       'memories':                    { type: 'boolean' },
-      'forget':                      { type: 'string' },
-      'dry-run':                     { type: 'boolean' },
+      'forget':                      { type: 'boolean' },
       // Interface selection → config.interface
       http:                          { type: 'boolean' },
       cli:                           { type: 'boolean' },
@@ -175,11 +174,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
       help:        (values.help as boolean | undefined) ?? false,
       showContext:  (values['show-context'] as boolean | undefined) ?? false,
       showMemories: (values['memories'] as boolean | undefined) ?? false,
-      forget:       values['forget'] as string | undefined,
-      dryRun:       (values['dry-run'] as boolean | undefined) ?? false,
+      forget:       (values['forget'] as boolean | undefined) ?? false,
+      memoryQuery:  (values['memories'] || values['forget']) ? (positionals.join(' ') || undefined) : undefined,
       files:      (values.file as string[] | undefined) ?? [],
       skills:     (values.skill as string[] | undefined) ?? [],
-      prompt:     positionals.join(' ') || undefined,
+      prompt:     (values['memories'] || values['forget']) ? undefined : (positionals.join(' ') || undefined),
       resume:     values.resume as string | undefined,
       configPath: values.config as string | undefined,
       exec:       values.exec as string | undefined,

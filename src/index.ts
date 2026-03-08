@@ -64,9 +64,8 @@ MCP SERVER
 
 MEMORY
   --memory                            Enable persistent memory across conversations
-  --memories                          Show stored memories and exit
-  --forget <query>                    Forget memories matching query and exit
-  --dry-run                           With --forget, show matches without deleting
+  --memories [query]                  List memories (or search with query) and exit
+  --forget [query]                    Forget memories matching query and exit
 
 STORAGE
   --storage-path <path>               Session storage directory
@@ -343,11 +342,15 @@ async function main(): Promise<void> {
     if (!memoryStore) {
       console.log('No memory database found. Use --memory to enable memory first.')
     } else {
-      const memories = memoryStore.list(100)
+      const query = parsed.meta.memoryQuery
+      const memories = query ? memoryStore.search(query, 100) : memoryStore.list(100)
       if (memories.length === 0) {
-        console.log('No memories stored.')
+        console.log(query ? 'No matching memories found.' : 'No memories stored.')
       } else {
-        console.log(`${memories.length} memories (${memoryStore.count()} total):\n`)
+        const total = memoryStore.count()
+        console.log(query
+          ? `${memories.length} matching memories (${total} total):\n`
+          : `${memories.length} memories (${total} total):\n`)
         for (const m of memories) {
           console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
         }
@@ -361,18 +364,12 @@ async function main(): Promise<void> {
     if (!memoryStore) {
       console.log('No memory database found. Use --memory to enable memory first.')
     } else {
-      const query = parsed.meta.forget
-      const matches = memoryStore.search(query, 1000)
-      if (matches.length === 0) {
-        console.log('No matching memories found.')
-      } else if (parsed.meta.dryRun) {
-        console.log(`Would forget ${matches.length} memory(s):\n`)
-        for (const m of matches) {
-          console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
-        }
+      const query = parsed.meta.memoryQuery
+      if (!query) {
+        console.log('Usage: ra --forget <search query>')
       } else {
         const deleted = memoryStore.forget(query, 1000)
-        console.log(`Forgot ${deleted} memory(s).`)
+        console.log(deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.')
       }
     }
     await shutdown()
