@@ -282,7 +282,7 @@ export class Repl {
         if (!this.options.memoryStore) return 'Memory is not enabled. Use --memory or set memory.enabled in config.'
         const query = parts.slice(1).join(' ')
         if (!query) return 'Usage: /forget <search query>'
-        const deleted = this.options.memoryStore.forget(query)
+        const deleted = this.options.memoryStore.forget(query, 1000)
         return deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.'
       }
       case '/context': {
