@@ -64,8 +64,8 @@ MCP SERVER
 
 MEMORY
   --memory                            Enable persistent memory across conversations
-  --memories [query]                  List memories (or search with query) and exit
-  --forget [query]                    Forget memories matching query and exit
+  --memories ["query"]                List all memories, or search with a query
+  --forget "query"                    Forget memories matching query
 
 STORAGE
   --storage-path <path>               Session storage directory
@@ -338,11 +338,11 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  if (parsed.meta.showMemories) {
+  if (parsed.meta.memories !== undefined) {
     if (!memoryStore) {
       console.log('No memory database found. Use --memory to enable memory first.')
     } else {
-      const query = parsed.meta.memoryQuery
+      const query = parsed.meta.memories || ''
       const memories = query ? memoryStore.search(query, 100) : memoryStore.list(100)
       if (memories.length === 0) {
         console.log(query ? 'No matching memories found.' : 'No memories stored.')
@@ -360,13 +360,13 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  if (parsed.meta.forget) {
+  if (parsed.meta.forget !== undefined) {
     if (!memoryStore) {
       console.log('No memory database found. Use --memory to enable memory first.')
     } else {
-      const query = parsed.meta.memoryQuery
+      const query = parsed.meta.forget
       if (!query) {
-        console.log('Usage: ra --forget <search query>')
+        console.log('Usage: ra --forget "search query"')
       } else {
         const deleted = memoryStore.forget(query, 1000)
         console.log(deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.')
