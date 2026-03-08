@@ -17,7 +17,9 @@ export interface Skill {
 
 /** Resolve an asset name against a list of relative paths (e.g. "run.ts" matches "scripts/run.ts"). */
 export function resolveSkillAsset(list: string[], name: string, prefix: string): string | undefined {
-  return list.find(entry => entry === name || entry === `${prefix}/${name}`)
+  const prefixed = `${prefix}/${name}`
+  const prefixedWin = `${prefix}\\${name}`
+  return list.find(entry => entry === name || entry === prefixed || entry === prefixedWin)
 }
 
 /** Source information for a skill installed from a registry */

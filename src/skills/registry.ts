@@ -1,11 +1,11 @@
-import { join } from 'path'
+import { join, basename } from 'path'
 import { mkdirSync, cpSync, rmSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
+import { homeDir, firstSegment } from '../utils/paths'
 import type { SkillSource } from './types'
 
 /** Default directory for installed skills */
 export function defaultSkillInstallDir(): string {
-  return join(homedir(), '.ra', 'skills')
+  return join(homeDir(), '.ra', 'skills')
 }
 
 /**
@@ -75,7 +75,8 @@ async function findSkillDirsIn(root: string): Promise<string[]> {
   const dirs = new Set<string>()
   try {
     for await (const rel of new Bun.Glob('{,skills/}*/SKILL.md').scan({ cwd: root, onlyFiles: true })) {
-      const parts = rel.split('/')
+      // rel uses forward slashes from Bun.Glob — split on both separators for safety
+      const parts = rel.split(/[/\\]/)
       // For "skills/foo/SKILL.md" → join(root, "skills", "foo"), for "foo/SKILL.md" → join(root, "foo")
       dirs.add(join(root, ...parts.slice(0, -1)))
     }
@@ -94,7 +95,7 @@ async function installSkillDirs(
   const skillDirs = await findSkillDirsIn(extractedRoot)
 
   for (const skillDir of skillDirs) {
-    const skillName = skillDir.split('/').pop()!
+    const skillName = basename(skillDir)
     const targetDir = join(installDir, skillName)
     cpSync(skillDir, targetDir, { recursive: true })
     writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
@@ -234,7 +235,7 @@ export async function listInstalledSkills(installDir?: string): Promise<Array<{ 
 
   try {
     for await (const rel of new Bun.Glob('*/SKILL.md').scan({ cwd: dir, onlyFiles: true })) {
-      const name = rel.split('/')[0]!
+      const name = firstSegment(rel)
       let source: SkillSource | undefined
       try {
         const sourceFile = Bun.file(join(dir, name, '.source.json'))

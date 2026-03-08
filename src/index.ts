@@ -18,7 +18,8 @@ import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools } from './tools'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
-import { join } from 'path'
+import { join, resolve } from 'path'
+import { resolvePath } from './utils/paths'
 
 async function readStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined
@@ -132,7 +133,7 @@ EXAMPLES
 
 
 async function execScript(scriptPath: string): Promise<void> {
-  const resolved = require('path').resolve(scriptPath)
+  const resolved = resolve(scriptPath)
   const mod = await import(resolved)
   if (typeof mod.default === 'function') {
     const result = await mod.default()
@@ -261,9 +262,7 @@ async function main(): Promise<void> {
   // Set up memory system
   let memoryStore: MemoryStore | undefined
   if (config.memory.enabled) {
-    const memoryPath = config.memory.path.startsWith('/')
-      ? config.memory.path
-      : join(process.cwd(), config.memory.path)
+    const memoryPath = resolvePath(config.memory.path, process.cwd())
     memoryStore = new MemoryStore({
       path: memoryPath,
       maxMemories: config.memory.maxMemories,
@@ -281,9 +280,7 @@ async function main(): Promise<void> {
   }
 
   // Create session storage
-  const storagePath = config.storage.path.startsWith('/')
-    ? config.storage.path
-    : join(process.cwd(), config.storage.path)
+  const storagePath = resolvePath(config.storage.path, process.cwd())
   const storage = new SessionStorage(storagePath)
   await storage.init()
 
