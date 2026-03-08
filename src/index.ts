@@ -64,6 +64,7 @@ MCP SERVER
 
 MEMORY
   --memory                            Enable persistent memory across conversations
+  --memories                          Show stored memories and exit
 
 STORAGE
   --storage-path <path>               Session storage directory
@@ -330,6 +331,24 @@ async function main(): Promise<void> {
         const content = typeof msg.content === 'string' ? msg.content : ''
         console.log(content)
         console.log()
+      }
+    }
+    await shutdown()
+    process.exit(0)
+  }
+
+  if (parsed.meta.showMemories) {
+    if (!memoryStore) {
+      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
+    } else {
+      const memories = memoryStore.list(100)
+      if (memories.length === 0) {
+        console.log('No memories stored.')
+      } else {
+        console.log(`${memories.length} memories (${memoryStore.count()} total):\n`)
+        for (const m of memories) {
+          console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
+        }
       }
     }
     await shutdown()

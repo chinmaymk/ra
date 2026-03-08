@@ -15,6 +15,7 @@ export interface ParsedArgsMeta {
   configPath?: string
   exec?: string
   showContext: boolean
+  showMemories: boolean
   skillCommand?: SkillCommand
 }
 
@@ -53,6 +54,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       meta: {
         help: false,
         showContext: false,
+        showMemories: false,
         files: [],
         skills: [],
         skillCommand: { action, args: subArgs },
@@ -71,6 +73,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       resume:                        { type: 'string' },
       help:                          { type: 'boolean', short: 'h' },
       'show-context':                { type: 'boolean' },
+      'memories':                    { type: 'boolean' },
       // Interface selection → config.interface
       http:                          { type: 'boolean' },
       cli:                           { type: 'boolean' },
@@ -164,8 +167,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return {
     config: r as Partial<RaConfig>,
     meta: {
-      help:       (values.help as boolean | undefined) ?? false,
-      showContext: (values['show-context'] as boolean | undefined) ?? false,
+      help:        (values.help as boolean | undefined) ?? false,
+      showContext:  (values['show-context'] as boolean | undefined) ?? false,
+      showMemories: (values['memories'] as boolean | undefined) ?? false,
       files:      (values.file as string[] | undefined) ?? [],
       skills:     (values.skill as string[] | undefined) ?? [],
       prompt:     positionals.join(' ') || undefined,
