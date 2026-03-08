@@ -27,6 +27,8 @@ function makeCtx(messages: { role: string; content: string }[]): ModelCallContex
       iteration: 1,
       maxIterations: 10,
       sessionId: 'test',
+      usage: { inputTokens: 0, outputTokens: 0 },
+      lastUsage: undefined,
     },
   }
 }
