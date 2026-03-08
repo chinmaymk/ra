@@ -15,6 +15,7 @@ export interface ParsedArgsMeta {
   configPath?: string
   exec?: string
   showContext: boolean
+  listMemories: boolean
   memories?: string
   forget?: string
   skillCommand?: SkillCommand
@@ -55,6 +56,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       meta: {
         help: false,
         showContext: false,
+        listMemories: false,
         files: [],
         skills: [],
         skillCommand: { action, args: subArgs },
@@ -62,31 +64,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
   }
 
-  // Pre-extract --memories and --forget which take an optional string value.
-  // util.parseArgs doesn't support optional values, so we handle them manually.
-  let memoriesValue: string | undefined
-  let forgetValue: string | undefined
-  const filteredArgs: string[] = []
-  for (let i = 0; i < userArgs.length; i++) {
-    const arg = userArgs[i]!
-    if (arg === '--memories' || arg === '--forget') {
-      const next = userArgs[i + 1]
-      const hasValue = next !== undefined && !next.startsWith('-')
-      const value = hasValue ? next! : ''
-      if (arg === '--memories') memoriesValue = value
-      else forgetValue = value
-      if (hasValue) i++ // skip the value arg
-    } else if (arg.startsWith('--memories=')) {
-      memoriesValue = arg.slice('--memories='.length)
-    } else if (arg.startsWith('--forget=')) {
-      forgetValue = arg.slice('--forget='.length)
-    } else {
-      filteredArgs.push(arg)
-    }
-  }
-
   const { values, positionals } = utilParseArgs({
-    args: filteredArgs,
+    args: userArgs,
     options: {
       // Meta (not mapped to RaConfig)
       exec:                          { type: 'string' },
@@ -120,6 +99,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'mcp-server-tool-description': { type: 'string' },
       // Memory
       'memory':                      { type: 'boolean' },
+      'list-memories':               { type: 'boolean' },
+      'memories':                    { type: 'string' },
+      'forget':                      { type: 'string' },
       // Storage
       'storage-path':                { type: 'string' },
       'storage-max-sessions':        { type: 'string' },
@@ -175,8 +157,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // Skills
   if (values['skill-dir']) set(['skillDirs'], values['skill-dir'])
 
-  // Memory — --memories and --forget imply --memory
-  if (values['memory'] || memoriesValue !== undefined || forgetValue !== undefined) set(['memory', 'enabled'], true)
+  // Memory — --memories, --list-memories, and --forget imply --memory
+  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) set(['memory', 'enabled'], true)
 
   // Provider connection options
   if (values['anthropic-base-url']) set(['providers', 'anthropic', 'baseURL'], values['anthropic-base-url'])
@@ -189,10 +171,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return {
     config: r as Partial<RaConfig>,
     meta: {
-      help:        (values.help as boolean | undefined) ?? false,
-      showContext:  (values['show-context'] as boolean | undefined) ?? false,
-      memories:     memoriesValue,
-      forget:       forgetValue,
+      help:         (values.help as boolean | undefined) ?? false,
+      showContext:   (values['show-context'] as boolean | undefined) ?? false,
+      listMemories:  (values['list-memories'] as boolean | undefined) ?? false,
+      memories:      values.memories as string | undefined,
+      forget:        values.forget as string | undefined,
       files:      (values.file as string[] | undefined) ?? [],
       skills:     (values.skill as string[] | undefined) ?? [],
       prompt:     positionals.join(' ') || undefined,

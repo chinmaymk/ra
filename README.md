@@ -489,7 +489,7 @@ ra can persist facts across conversations using an SQLite-backed memory store wi
 
 ```bash
 ra --memory                       # enable memory for this session
-ra --memories                     # list all stored memories
+ra --list-memories                # list all stored memories
 ra --memories "typescript"        # search memories
 ra --forget "dark mode"           # delete matching memories
 ```

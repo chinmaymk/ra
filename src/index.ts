@@ -64,8 +64,9 @@ MCP SERVER
 
 MEMORY
   --memory                            Enable persistent memory across conversations
-  --memories ["query"]                List all memories, or search with a query
-  --forget "query"                    Forget memories matching query
+  --list-memories                     List all stored memories
+  --memories <query>                  Search memories by keyword
+  --forget <query>                    Forget memories matching query
 
 STORAGE
   --storage-path <path>               Session storage directory
@@ -338,7 +339,7 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  if (parsed.meta.memories !== undefined) {
+  if (parsed.meta.listMemories || parsed.meta.memories !== undefined) {
     if (!memoryStore) {
       console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
     } else {
