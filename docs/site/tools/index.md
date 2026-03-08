@@ -240,24 +240,43 @@ Run one or more tasks in parallel using independent sub-agents. Each task gets i
 }
 ```
 
-Returns an array of results, one per task:
+Returns an object with `results` (one per task) and aggregate `usage`:
 
 ```json
-[
-  { "task": "...", "status": "completed", "result": "...", "iterations": 2, "usage": { "inputTokens": 500, "outputTokens": 120 } },
-  { "task": "...", "status": "error", "result": "error message", "iterations": 0, "usage": { "inputTokens": 0, "outputTokens": 0 } }
-]
+{
+  "results": [
+    { "task": "...", "status": "completed", "result": "...", "iterations": 2, "usage": { "inputTokens": 500, "outputTokens": 120 } },
+    { "task": "...", "status": "error", "result": "error message", "iterations": 0, "usage": { "inputTokens": 0, "outputTokens": 0 } }
+  ],
+  "usage": { "inputTokens": 500, "outputTokens": 120 }
+}
 ```
 
-**Configuration:** The subagent tool is registered automatically and accepts options via `subagentTool()`:
+Aggregate `usage` is rolled up into the parent loop's token tracking automatically.
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `maxIterations` | 5 | Max loop iterations per sub-agent |
-| `maxDepth` | 2 | Max recursion depth (sub-agents spawning sub-agents) |
-| `maxConcurrency` | 4 | Max parallel tasks per invocation |
+**Configuration:** Configure subagent behavior in your config file via `toolConfig.subagent`:
 
-Sub-agents at the maximum depth don't get the `subagent` tool, preventing infinite recursion. Individual task failures don't affect other tasks — each result reports `completed` or `error` independently.
+```yaml
+toolConfig:
+  subagent:
+    model: claude-haiku-4-5-20251001   # cheaper model for subtasks (default: parent's model)
+    system: inherit                     # 'inherit' | 'none' | custom string (default: 'none')
+    allowedTools: [read_file, search_files]  # tool allowlist (default: all parent tools)
+    maxTurns: 10                        # max iterations per sub-agent (default: 5)
+    maxConcurrency: 6                   # max parallel tasks (default: 4)
+    thinking: low                       # thinking level override (default: parent's)
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `model` | parent's model | Model for sub-agent LLM calls |
+| `system` | `none` | System prompt: `inherit` copies parent's, `none` omits, or a custom string |
+| `allowedTools` | all parent tools | Tool allowlist — caps which tools sub-agents can access |
+| `maxTurns` | `5` | Max loop iterations per sub-agent |
+| `maxConcurrency` | `4` | Max parallel tasks per invocation |
+| `thinking` | parent's level | Thinking budget override |
+
+Sub-agents at the maximum nesting depth (default: 2) don't get the `subagent` tool, preventing infinite recursion. Individual task failures don't affect other tasks — each result reports `completed` or `error` independently.
 
 ## Disabling built-in tools
 

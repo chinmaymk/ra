@@ -78,7 +78,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
         if (allowedSet && !allowedSet.has(tool.name)) continue
         childTools.register(tool)
       }
-      if (depth + 1 < maxDepth) {
+      if (depth + 1 < maxDepth && (!allowedSet || allowedSet.has('subagent'))) {
         childTools.register(subagentTool({ ...options, tools: childTools, _depth: depth + 1 }))
       }
 

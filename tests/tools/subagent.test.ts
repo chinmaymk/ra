@@ -437,4 +437,46 @@ describe('subagent tool', () => {
     expect(capturedTools).toContain('read_file')
     expect(capturedTools).not.toContain('ask_user')
   })
+
+  it('allowedTools=[] gives subagent zero tools (including no nested subagent)', async () => {
+    const capturedTools: string[] = []
+    const provider = capturingProvider(req => {
+      for (const t of req.tools ?? []) capturedTools.push(t.name)
+    })
+
+    const tools = new ToolRegistry()
+    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
+
+    const tool = subagentTool({
+      provider, tools, model: 'test',
+      config: { allowedTools: [] },
+    })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedTools).toHaveLength(0)
+  })
+
+  // ── Config: thinking override ──────────────────────────────────
+
+  it('passes config thinking level to child agent', async () => {
+    let capturedThinking: any = undefined
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream(req: ChatRequest) {
+        capturedThinking = req.thinking
+        yield { type: 'text' as const, delta: 'ok' }
+        yield { type: 'done' as const }
+      },
+    }
+
+    const tool = subagentTool({
+      provider, tools: new ToolRegistry(), model: 'test',
+      thinking: 'low',
+      config: { thinking: 'high' },
+    })
+    await tool.execute({ tasks: [{ task: 'test' }] })
+
+    expect(capturedThinking).toBeDefined()
+  })
 })

@@ -48,6 +48,11 @@ storage:
   maxSessions: 100
   ttlDays: 30
 
+toolConfig:
+  subagent:
+    maxTurns: 10
+    maxConcurrency: 4
+
 middleware:
   beforeModelCall:
     - "./middleware/budget.ts"
@@ -98,6 +103,30 @@ mcp:
 | `context.enabled` | — | — | `true` | Enable context file discovery |
 | `context.patterns` | — | — | `[]` | Glob patterns for context files |
 | `context.resolvers` | — | — | built-in | Pattern resolvers for `@file` and `url:` |
+
+### Subagent
+
+Configure sub-agent behavior via `toolConfig.subagent`. These settings control how the `subagent` tool spawns child agent loops.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `toolConfig.subagent.model` | parent's model | Model for sub-agent LLM calls |
+| `toolConfig.subagent.system` | `none` | `inherit` copies parent's system prompt, `none` omits, or a custom string |
+| `toolConfig.subagent.allowedTools` | all parent tools | Tool allowlist — caps which tools sub-agents can access |
+| `toolConfig.subagent.maxTurns` | `5` | Max loop iterations per sub-agent |
+| `toolConfig.subagent.maxConcurrency` | `4` | Max parallel tasks per invocation |
+| `toolConfig.subagent.thinking` | parent's level | Thinking budget override |
+
+```yaml
+toolConfig:
+  subagent:
+    model: claude-haiku-4-5-20251001
+    system: inherit
+    allowedTools: [read_file, search_files, web_fetch]
+    maxTurns: 10
+    maxConcurrency: 6
+    thinking: low
+```
 
 ### Storage
 
