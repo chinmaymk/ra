@@ -22,7 +22,7 @@ import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
 import { createObservability } from './observability'
 import { createObservabilityMiddleware } from './observability/middleware'
-import type { MiddlewareConfig } from './agent/types'
+import { mergeMiddleware } from './agent/middleware'
 
 async function readStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined
@@ -142,20 +142,6 @@ async function execScript(scriptPath: string): Promise<void> {
     const result = await mod.default()
     if (result !== undefined) console.log(typeof result === 'string' ? result : JSON.stringify(result))
   }
-}
-
-/** Merge observability middleware into user middleware, running observability hooks first. */
-function mergeMiddleware(
-  userMw: Partial<MiddlewareConfig>,
-  obsMw: Partial<MiddlewareConfig>,
-): Partial<MiddlewareConfig> {
-  const merged: Partial<MiddlewareConfig> = { ...userMw }
-  for (const key of Object.keys(obsMw) as (keyof MiddlewareConfig)[]) {
-    const obsHooks = obsMw[key] ?? []
-    const userHooks = userMw[key] ?? []
-    ;(merged as Record<string, unknown[]>)[key] = [...obsHooks, ...userHooks]
-  }
-  return merged
 }
 
 async function main(): Promise<void> {
@@ -337,8 +323,8 @@ async function main(): Promise<void> {
     logger.info('MCP servers connected', { totalTools: tools.all().length })
   }
 
-  // Merge observability middleware with user middleware
-  const fullMiddleware = mergeMiddleware(middleware, obsMw)
+  // Merge observability middleware with user middleware (obs hooks run first)
+  const fullMiddleware = mergeMiddleware(obsMw, middleware)
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
