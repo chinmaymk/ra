@@ -237,7 +237,7 @@ Search persistent memories by keyword. Recent memories are automatically injecte
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | yes | Full-text search query (single keywords work best) |
+| `query` | string | yes | Full-text search keywords, e.g. "typescript tabs" or "deployment" |
 | `limit` | number | no | Max results (default: 10) |
 
 ### `memory_forget`
@@ -246,7 +246,7 @@ Delete memories matching a search query. Used when the user corrects previous in
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | yes | Search query to match memories to delete (single keywords work best) |
+| `query` | string | yes | Search keywords to match memories to delete |
 | `limit` | number | no | Max memories to delete (default: 10) |
 
 ## Disabling built-in tools

@@ -11,7 +11,7 @@ export function memorySearchTool(store: MemoryStore): ITool {
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Full-text search query (single keywords work best)' },
+        query: { type: 'string', description: 'Full-text search keywords, e.g. "typescript tabs" or "deployment"' },
         limit: { type: 'number', description: 'Max results (default: 10)' },
       },
       required: ['query'],
@@ -63,7 +63,7 @@ export function memoryForgetTool(store: MemoryStore): ITool {
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Search query to match memories to delete (single keywords work best)' },
+        query: { type: 'string', description: 'Search keywords to match memories to delete' },
         limit: { type: 'number', description: 'Max memories to delete (default: 10)' },
       },
       required: ['query'],
