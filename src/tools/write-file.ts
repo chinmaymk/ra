@@ -1,6 +1,6 @@
 import type { ITool } from '../providers/types'
-import { writeFile, mkdir } from 'fs/promises'
-import { dirname } from 'path'
+import { writeFile } from 'fs/promises'
+import { ensureParentDir } from '../utils/files'
 
 export function writeFileTool(): ITool {
   return {
@@ -18,7 +18,7 @@ export function writeFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, content } = input as { path: string; content: string }
-      await mkdir(dirname(path), { recursive: true })
+      await ensureParentDir(path)
       await writeFile(path, content, 'utf-8')
       return `File written: ${path}`
     },

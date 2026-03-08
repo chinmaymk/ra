@@ -1,6 +1,6 @@
 import type { ITool } from '../providers/types'
-import { rename, mkdir } from 'fs/promises'
-import { dirname } from 'path'
+import { rename } from 'fs/promises'
+import { ensureParentDir } from '../utils/files'
 
 export function moveFileTool(): ITool {
   return {
@@ -17,7 +17,7 @@ export function moveFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { source, destination } = input as { source: string; destination: string }
-      await mkdir(dirname(destination), { recursive: true })
+      await ensureParentDir(destination)
       await rename(source, destination)
       return `Moved: ${source} → ${destination}`
     },
