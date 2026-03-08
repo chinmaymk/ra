@@ -1,6 +1,6 @@
 # The Agent Loop
 
-ra's core is deliberately simple: send messages to the model, stream the response, execute any tool calls, repeat. No workflow graphs, no forced structure — the model decides what to do next. Every step fires a [middleware hook](/middleware/) you can intercept, but by default ra stays out of the way.
+ra's core loop is simple: send messages to the model, stream the response, execute any tool calls, repeat. Every step fires a [middleware hook](/middleware/) you can intercept. The loop handles iteration, token tracking, and tool execution — you control everything else through system prompts, skills, and middleware.
 
 ```
 ┌─────────────────────────────────────────────────┐

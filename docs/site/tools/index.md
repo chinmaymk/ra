@@ -2,7 +2,7 @@
 
 ra ships with 14 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
 
-ra's philosophy is to get out of the model's way — tools are self-describing with detailed schemas and descriptions, so the model decides when and how to use them. No system prompt engineering is needed to explain the tools.
+Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 
 ```yaml
 # ra.config.yml

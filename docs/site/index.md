@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "ra"
   text: "One Loop. Infinite Agents."
-  tagline: Get out of the model's way. Give it tools and context, let it work.
+  tagline: A configurable agentic loop. Define tools, skills, and context in YAML — drop to TypeScript when you need it.
   actions:
     - theme: brand
       text: Get Started
