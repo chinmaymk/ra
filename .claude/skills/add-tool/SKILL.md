@@ -63,4 +63,4 @@ test('my_tool does the thing', async () => {
 - Cast input narrowly: `input as { param: string }`, never `as any`
 - Thrown errors become tool results with `isError: true` — the model sees them
 - Tools are subject to `toolTimeout` (default 30s)
-- All tools except `ask_user` are auto-exposed when ra runs as MCP server
+- All tools except `AskUserQuestion` are auto-exposed when ra runs as MCP server

@@ -43,7 +43,12 @@ describe('REPL integration', () => {
     expect(reqs.length).toBeGreaterThanOrEqual(2)
     const secondReqBody = reqs[1]?.body as any
     const msgs = secondReqBody?.messages ?? secondReqBody?.contents ?? []
-    const userMessages = msgs.filter((m: any) => m.role === 'user' || m.role === 'human')
+    // After /clear, the second request should not carry over messages from the first turn.
+    // Filter to actual user-typed messages (exclude injected skill/context messages).
+    const userMessages = msgs.filter((m: any) =>
+      (m.role === 'user' || m.role === 'human') &&
+      typeof m.content === 'string' && !m.content.startsWith('<')
+    )
     expect(userMessages.length).toBe(1)
   })
 

@@ -98,15 +98,22 @@ export default async function(_ctx: unknown) {
   })
 
   it('context compaction triggers and run completes successfully', async () => {
-    for (let i = 0; i < 5; i++) {
-      env.mock.enqueue([{ type: 'tool_call', name: 'noop', args: { data: 'x'.repeat(50) } }])
+    // Disable built-in skills, skill dirs, and context files to ensure
+    // deterministic message count (system + user = 2 initial messages).
+    // Built-in skills inject an available_skills message that changes
+    // the compaction zone math and mock response queue consumption order.
+    for (let i = 0; i < 2; i++) {
+      env.mock.enqueue([{ type: 'tool_call', name: 'noop', args: { data: 'x'.repeat(4000) } }])
     }
     env.mock.enqueue([{ type: 'text', content: 'Summary of prior work.' }])
     env.mock.enqueue([{ type: 'text', content: 'Compaction worked, final answer.' }])
 
     const configFile = join(tmpDir, 'ra-compact.config.json')
     writeFileSync(configFile, JSON.stringify({
-      compaction: { enabled: true, threshold: 0.1, maxTokens: 100, contextWindow: 200 },
+      compaction: { enabled: true, maxTokens: 1000, contextWindow: 5000 },
+      context: { enabled: false },
+      skillDirs: [],
+      builtinSkills: { 'write-skill': false, 'write-recipe': false, 'write-middleware': false },
     }))
 
     const { stdout, exitCode } = await runBinary(
@@ -115,6 +122,8 @@ export default async function(_ctx: unknown) {
     )
     expect(exitCode).toBe(0)
     expect(stdout).toContain('Compaction worked, final answer.')
-    expect(env.mock.requests().length).toBeGreaterThanOrEqual(6)
+    const reqs = env.mock.requests()
+    expect(reqs.length).toBeGreaterThanOrEqual(4)
+    expect(reqs.some(r => (r.body as any)?.stream !== true)).toBe(true)
   })
 })
