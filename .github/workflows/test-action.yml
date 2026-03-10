@@ -1,0 +1,30 @@
+name: Test Action
+
+on:
+  pull_request:
+    paths:
+      - 'action.yml'
+      - 'action/**'
+      - '.github/workflows/test-action.yml'
+  workflow_dispatch:
+
+jobs:
+  test-action:
+    name: Test ra GitHub Action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ra action
+        id: ra
+        uses: ./
+        with:
+          prompt: 'Say "Hello from ra!" and nothing else.'
+          provider: anthropic
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Verify output
+        run: |
+          echo "ra output:"
+          echo "${{ steps.ra.outputs.result }}"

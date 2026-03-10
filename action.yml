@@ -1,0 +1,78 @@
+name: 'ra - AI Agent'
+description: 'Run the ra agentic loop in your GitHub Actions workflow'
+branding:
+  icon: 'cpu'
+  color: 'orange'
+
+inputs:
+  prompt:
+    description: 'The prompt to send to the agent'
+    required: true
+  provider:
+    description: 'LLM provider (anthropic, openai, google, ollama, bedrock, azure)'
+    required: false
+    default: 'anthropic'
+  model:
+    description: 'Model name to use (e.g. claude-sonnet-4-6, gpt-4o)'
+    required: false
+  system-prompt:
+    description: 'System prompt text or path to a file'
+    required: false
+  skills:
+    description: 'Comma-separated list of skills to activate'
+    required: false
+  skill-dirs:
+    description: 'Comma-separated list of directories to load skills from'
+    required: false
+  files:
+    description: 'Comma-separated list of files to attach to the prompt'
+    required: false
+  max-iterations:
+    description: 'Maximum agent loop iterations'
+    required: false
+    default: '50'
+  thinking:
+    description: 'Extended thinking level (low, medium, high)'
+    required: false
+  config:
+    description: 'Path to ra config file (ra.config.yml, ra.config.json, etc.)'
+    required: false
+  version:
+    description: 'ra version to use (e.g. v0.1.0). Defaults to latest release.'
+    required: false
+    default: 'latest'
+  tool-timeout:
+    description: 'Tool execution timeout in milliseconds'
+    required: false
+
+outputs:
+  result:
+    description: 'The agent output text'
+    value: ${{ steps.run.outputs.result }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download ra binary
+      id: download
+      shell: bash
+      env:
+        RA_VERSION: ${{ inputs.version }}
+      run: ${{ github.action_path }}/action/download.sh
+
+    - name: Run ra
+      id: run
+      shell: bash
+      env:
+        INPUT_PROMPT: ${{ inputs.prompt }}
+        INPUT_PROVIDER: ${{ inputs.provider }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_SYSTEM_PROMPT: ${{ inputs.system-prompt }}
+        INPUT_SKILLS: ${{ inputs.skills }}
+        INPUT_SKILL_DIRS: ${{ inputs.skill-dirs }}
+        INPUT_FILES: ${{ inputs.files }}
+        INPUT_MAX_ITERATIONS: ${{ inputs.max-iterations }}
+        INPUT_THINKING: ${{ inputs.thinking }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_TOOL_TIMEOUT: ${{ inputs.tool-timeout }}
+      run: ${{ github.action_path }}/action/run.sh
