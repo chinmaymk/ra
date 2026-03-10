@@ -14,9 +14,9 @@ export interface LazyToolsOptions {
 }
 
 /**
- * Wraps MCP tools with lightweight stubs that only include name + truncated description.
- * The model can request full schemas via the `get_mcp_tool_schema` meta-tool before calling.
- * Each tool is tagged with its source MCP server name so the model can tell them apart.
+ * Wraps MCP tools with lightweight stubs: truncated descriptions, minimal schemas,
+ * and a [serverName] prefix. On the first call to each tool, returns the full schema
+ * instead of executing — the model then retries with correct parameters.
  */
 export function wrapMcpToolsLazy(
   registry: ToolRegistry,
@@ -24,69 +24,41 @@ export function wrapMcpToolsLazy(
   options?: LazyToolsOptions,
 ): void {
   const maxLen = options?.maxDescriptionLength ?? DEFAULT_MAX_DESCRIPTION_LENGTH
-  const fullSchemas = new Map<string, { serverName: string; description: string; inputSchema: Record<string, unknown> }>()
 
   for (const { tool, serverName } of mcpTools) {
-    // Store full schema for later retrieval
-    fullSchemas.set(tool.name, {
-      serverName,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    })
-
-    // Register a lightweight stub — same name, same execute, but minimal schema
     const prefix = `[${serverName}] `
+    const revealed = new Set<string>()
+
     registry.register({
       name: tool.name,
       description: prefix + truncateDescription(tool.description, maxLen - prefix.length),
       inputSchema: {
         type: 'object',
-        description: `Call get_mcp_tool_schema with tool name "${tool.name}" to get the full parameter schema before using this tool.`,
+        description: `Schema not shown to save tokens. Call this tool to receive the full parameter schema, then retry with correct parameters.`,
       },
-      execute: tool.execute,
+      async execute(input: unknown): Promise<unknown> {
+        if (!revealed.has(tool.name)) {
+          revealed.add(tool.name)
+          return {
+            isError: true,
+            content: formatSchemaHint(tool, serverName),
+          }
+        }
+        return tool.execute(input)
+      },
     })
   }
+}
 
-  // Build a grouped listing of tools by server for the meta-tool description
-  const serverTools = new Map<string, string[]>()
-  for (const { tool, serverName } of mcpTools) {
-    const list = serverTools.get(serverName) ?? []
-    list.push(tool.name)
-    serverTools.set(serverName, list)
-  }
-  const serverListing = [...serverTools.entries()]
-    .map(([server, tools]) => `${server}: ${tools.join(', ')}`)
-    .join('; ')
-
-  // Register the meta-tool for schema retrieval
-  registry.register({
-    name: 'get_mcp_tool_schema',
-    description: `Retrieve the full description and parameter schema for an MCP tool before calling it. Available tools by server — ${serverListing}`,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        tool_name: {
-          type: 'string',
-          description: 'Name of the MCP tool to get the schema for',
-        },
-      },
-      required: ['tool_name'],
-    },
-    async execute(input: unknown) {
-      const { tool_name } = input as { tool_name: string }
-      const schema = fullSchemas.get(tool_name)
-      if (!schema) {
-        const available = [...fullSchemas.entries()].map(([name, s]) => `${name} (${s.serverName})`)
-        return { error: `Unknown MCP tool: "${tool_name}". Available MCP tools: ${available.join(', ')}` }
-      }
-      return {
-        name: tool_name,
-        server: schema.serverName,
-        description: schema.description,
-        inputSchema: schema.inputSchema,
-      }
-    },
-  })
+function formatSchemaHint(tool: ITool, serverName: string): string {
+  return [
+    `Tool "${tool.name}" (from ${serverName}) — here is the full schema. Retry your call with the correct parameters.`,
+    ``,
+    `Description: ${tool.description}`,
+    ``,
+    `Parameters:`,
+    JSON.stringify(tool.inputSchema, null, 2),
+  ].join('\n')
 }
 
 function truncateDescription(description: string, maxLen: number): string {

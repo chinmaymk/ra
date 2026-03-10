@@ -40,21 +40,23 @@ mcp:
 
 MCP servers can expose dozens of tools, each with large JSON schemas. Sending all of them in every model call wastes tokens — especially when only a few tools are used per conversation.
 
-By default, ra uses **lazy schema loading** for MCP tools. Instead of sending full schemas, the model sees only tool names, their source server (as a `[server]` prefix), and truncated descriptions. When the model decides to use a tool, it first calls `get_mcp_tool_schema` to retrieve the full parameter schema, then makes the actual tool call.
+By default, ra uses **lazy schema loading** for MCP tools. Instead of sending full schemas, the model sees only tool names, their source server (as a `[server]` prefix), and truncated descriptions. When the model first calls a tool, ra returns the full schema instead of executing it — the model then retries with the correct parameters.
 
 ```
 Model sees:
   search_github  →  "[github] Search for repositories, issues, and..."
   query_db       →  "[database] Run SQL queries against the..."
 
-Model calls: get_mcp_tool_schema({ tool_name: "search_github" })
+Model calls: search_github({})                    ← first call, guessing
      ↓
-Model receives: { server: "github", description: "...", inputSchema: {...} }
+ra returns:  schema error with full description + inputSchema
      ↓
-Model calls: search_github({ query: "...", repo: "..." })
+Model calls: search_github({ query: "...", repo: "..." })  ← retry with correct params
+     ↓
+ra executes: real MCP tool call
 ```
 
-The `get_mcp_tool_schema` meta-tool description also lists all available tools grouped by server, so the model always knows which server provides which tool.
+No extra meta-tools needed. The model learns the schema through normal tool-call error handling — one extra round-trip per tool, only for tools actually used.
 
 This is especially effective when connecting to multiple MCP servers with many tools — you only pay the token cost for schemas the model actually uses.
 

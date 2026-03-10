@@ -2,14 +2,20 @@ import { describe, it, expect } from 'bun:test'
 import { wrapMcpToolsLazy, type McpToolEntry } from '../../src/mcp/lazy-tools'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 
-function makeMcpTool(name: string, description: string, schema: Record<string, unknown>, serverName = 'test-server'): McpToolEntry {
+function makeMcpTool(
+  name: string,
+  description: string,
+  schema: Record<string, unknown>,
+  serverName = 'test-server',
+  executeFn?: (input: unknown) => Promise<unknown>,
+): McpToolEntry {
   return {
     serverName,
     tool: {
       name,
       description,
       inputSchema: schema,
-      execute: async (input) => ({ called: name, input }),
+      execute: executeFn ?? (async (input) => ({ called: name, input })),
     },
   }
 }
@@ -53,66 +59,124 @@ describe('wrapMcpToolsLazy', () => {
     wrapMcpToolsLazy(registry, tools)
 
     const registered = registry.get('search')!
-    // Should NOT contain the full properties
     expect(registered.inputSchema.properties).toBeUndefined()
     expect(registered.inputSchema.type).toBe('object')
   })
 
-  it('registers get_mcp_tool_schema meta-tool', () => {
-    const registry = new ToolRegistry()
-    const tools = [makeMcpTool('my_tool', 'Does things', { type: 'object' })]
-
-    wrapMcpToolsLazy(registry, tools)
-
-    const metaTool = registry.get('get_mcp_tool_schema')
-    expect(metaTool).toBeDefined()
-    expect(metaTool!.inputSchema.properties).toBeDefined()
-  })
-
-  it('meta-tool returns full schema with server name for known tool', async () => {
-    const registry = new ToolRegistry()
-    const fullSchema = {
+  it('returns full schema on first call without executing the tool', async () => {
+    let executed = false
+    const schema = {
       type: 'object',
       properties: { query: { type: 'string' } },
       required: ['query'],
     }
-    const tools = [makeMcpTool('search', 'Full description of search tool', fullSchema, 'github')]
-
-    wrapMcpToolsLazy(registry, tools, { maxDescriptionLength: 40 })
-
-    const metaTool = registry.get('get_mcp_tool_schema')!
-    const result = await metaTool.execute({ tool_name: 'search' }) as { name: string; server: string; description: string; inputSchema: Record<string, unknown> }
-
-    expect(result.name).toBe('search')
-    expect(result.server).toBe('github')
-    expect(result.description).toBe('Full description of search tool')
-    expect(result.inputSchema).toEqual(fullSchema)
-  })
-
-  it('meta-tool returns error with server names for unknown tool', async () => {
     const registry = new ToolRegistry()
-    const tools = [makeMcpTool('real_tool', 'desc', { type: 'object' }, 'my-server')]
+    const tools = [makeMcpTool('search', 'Search for things', schema, 'github', async (input) => {
+      executed = true
+      return { results: [] }
+    })]
 
     wrapMcpToolsLazy(registry, tools)
 
-    const metaTool = registry.get('get_mcp_tool_schema')!
-    const result = await metaTool.execute({ tool_name: 'nonexistent' }) as { error: string }
+    const registered = registry.get('search')!
+    const result = await registered.execute({}) as { isError: boolean; content: string }
 
-    expect(result.error).toContain('Unknown MCP tool')
-    expect(result.error).toContain('real_tool')
-    expect(result.error).toContain('my-server')
+    expect(executed).toBe(false)
+    expect(result.isError).toBe(true)
+    expect(result.content).toContain('Search for things')
+    expect(result.content).toContain('"query"')
+    expect(result.content).toContain('github')
+    expect(result.content).toContain('Retry your call')
   })
 
-  it('preserves execute function on wrapped tools', async () => {
+  it('executes the real tool on second call', async () => {
+    const schema = {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    }
+    const registry = new ToolRegistry()
+    const tools = [makeMcpTool('search', 'Search for things', schema, 'github')]
+
+    wrapMcpToolsLazy(registry, tools)
+
+    const registered = registry.get('search')!
+
+    // First call — returns schema
+    const first = await registered.execute({}) as { isError: boolean }
+    expect(first.isError).toBe(true)
+
+    // Second call — executes normally
+    const second = await registered.execute({ query: 'test' }) as { called: string; input: unknown }
+    expect(second.called).toBe('search')
+    expect(second.input).toEqual({ query: 'test' })
+  })
+
+  it('continues executing on all subsequent calls after first', async () => {
     const registry = new ToolRegistry()
     const tools = [makeMcpTool('my_tool', 'desc', { type: 'object' })]
 
     wrapMcpToolsLazy(registry, tools)
 
     const registered = registry.get('my_tool')!
-    const result = await registered.execute({ foo: 'bar' }) as { called: string; input: unknown }
-    expect(result.called).toBe('my_tool')
-    expect(result.input).toEqual({ foo: 'bar' })
+
+    // First call — schema
+    await registered.execute({})
+
+    // Second, third, fourth calls — all execute
+    for (let i = 0; i < 3; i++) {
+      const result = await registered.execute({ n: i }) as { called: string; input: unknown }
+      expect(result.called).toBe('my_tool')
+      expect(result.input).toEqual({ n: i })
+    }
+  })
+
+  it('each tool tracks its own first-call independently', async () => {
+    const registry = new ToolRegistry()
+    const tools = [
+      makeMcpTool('tool_a', 'Tool A', { type: 'object' }, 'server'),
+      makeMcpTool('tool_b', 'Tool B', { type: 'object' }, 'server'),
+    ]
+
+    wrapMcpToolsLazy(registry, tools)
+
+    // First call to tool_a — schema
+    const a1 = await registry.get('tool_a')!.execute({}) as { isError: boolean }
+    expect(a1.isError).toBe(true)
+
+    // First call to tool_b — schema (independent)
+    const b1 = await registry.get('tool_b')!.execute({}) as { isError: boolean }
+    expect(b1.isError).toBe(true)
+
+    // Second call to both — execute
+    const a2 = await registry.get('tool_a')!.execute({ x: 1 }) as { called: string }
+    expect(a2.called).toBe('tool_a')
+
+    const b2 = await registry.get('tool_b')!.execute({ x: 2 }) as { called: string }
+    expect(b2.called).toBe('tool_b')
+  })
+
+  it('schema hint includes full description, server name, and parameters', async () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'File path' },
+        encoding: { type: 'string', description: 'File encoding' },
+      },
+      required: ['path'],
+    }
+    const registry = new ToolRegistry()
+    const tools = [makeMcpTool('read_file', 'Read contents of a file from the filesystem', schema, 'filesystem')]
+
+    wrapMcpToolsLazy(registry, tools)
+
+    const result = await registry.get('read_file')!.execute({}) as { content: string }
+
+    expect(result.content).toContain('read_file')
+    expect(result.content).toContain('filesystem')
+    expect(result.content).toContain('Read contents of a file from the filesystem')
+    expect(result.content).toContain('"path"')
+    expect(result.content).toContain('"encoding"')
   })
 
   it('uses default maxDescriptionLength of 100', () => {
@@ -139,52 +203,15 @@ describe('wrapMcpToolsLazy', () => {
     expect(registry.get('tool_a')).toBeDefined()
     expect(registry.get('tool_b')).toBeDefined()
     expect(registry.get('tool_c')).toBeDefined()
-    expect(registry.get('get_mcp_tool_schema')).toBeDefined()
-    // 3 tools + 1 meta-tool
-    expect(registry.all()).toHaveLength(4)
+    expect(registry.all()).toHaveLength(3)
 
-    // Server prefixes are correct
     expect(registry.get('tool_a')!.description).toStartWith('[github]')
     expect(registry.get('tool_c')!.description).toStartWith('[database]')
   })
 
-  it('meta-tool description lists tools grouped by server', () => {
-    const registry = new ToolRegistry()
-    const tools = [
-      makeMcpTool('search', 'desc', { type: 'object' }, 'github'),
-      makeMcpTool('create_issue', 'desc', { type: 'object' }, 'github'),
-      makeMcpTool('query', 'desc', { type: 'object' }, 'database'),
-    ]
-
-    wrapMcpToolsLazy(registry, tools)
-
-    const metaTool = registry.get('get_mcp_tool_schema')!
-    expect(metaTool.description).toContain('github: search, create_issue')
-    expect(metaTool.description).toContain('database: query')
-  })
-
-  it('meta-tool error lists available tools with server attribution', async () => {
-    const registry = new ToolRegistry()
-    const tools = [
-      makeMcpTool('alpha', 'desc', { type: 'object' }, 'server-a'),
-      makeMcpTool('beta', 'desc', { type: 'object' }, 'server-b'),
-    ]
-
-    wrapMcpToolsLazy(registry, tools)
-
-    const metaTool = registry.get('get_mcp_tool_schema')!
-    const result = await metaTool.execute({ tool_name: 'missing' }) as { error: string }
-
-    expect(result.error).toContain('alpha (server-a)')
-    expect(result.error).toContain('beta (server-b)')
-  })
-
-  it('does not wrap when no tools provided', () => {
+  it('handles empty tools list', () => {
     const registry = new ToolRegistry()
     wrapMcpToolsLazy(registry, [])
-
-    // Meta-tool should still be registered even with empty list (harmless)
-    expect(registry.get('get_mcp_tool_schema')).toBeDefined()
-    expect(registry.all()).toHaveLength(1)
+    expect(registry.all()).toHaveLength(0)
   })
 })

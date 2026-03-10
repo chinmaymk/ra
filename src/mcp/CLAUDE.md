@@ -7,7 +7,7 @@ MCP (Model Context Protocol) support — both as a client (connect to external t
 | File | Purpose |
 |------|---------|
 | `client.ts` | Connects to external MCP servers, registers their tools into `ToolRegistry` |
-| `lazy-tools.ts` | Lazy schema loading — wraps MCP tools with minimal stubs + `get_mcp_tool_schema` meta-tool |
+| `lazy-tools.ts` | Lazy schema loading — wraps MCP tools with minimal stubs, returns full schema on first call |
 | `server.ts` | Exposes ra itself as an MCP tool (stdio or HTTP transport) |
 
 ## MCP Client
@@ -31,16 +31,13 @@ mcp:
 When `mcp.lazySchemas` is enabled (default: `true`), MCP tools are registered with:
 - A `[serverName]` prefix in the description so the model knows which server owns each tool
 - Truncated descriptions (max `mcp.maxDescriptionLength` chars, default 100)
-- Minimal `inputSchema` (no properties) with a hint to call `get_mcp_tool_schema` first
+- Minimal `inputSchema` (no properties)
 
-A `get_mcp_tool_schema` meta-tool is registered that:
-- Returns the full description, `inputSchema`, and `server` name for any MCP tool
-- Lists all available tools grouped by server in its own description
-- Reports errors with server attribution when a tool name is unknown
+On the **first call** to each tool, the wrapper returns the full schema as an error (`isError: true`) with the complete description, server name, and `inputSchema`. The model then retries with correct parameters, and all subsequent calls pass through to the real MCP server.
 
-The `execute()` function on each stub is preserved — the model can call the tool normally after fetching the schema.
+No meta-tools needed — the model learns schemas through normal error handling.
 
-`wrapMcpToolsLazy(registry, McpToolEntry[], options?)` is the entry point. Each `McpToolEntry` pairs an `ITool` with its `serverName`. Full schemas are stored in a closure; stubs + meta-tool are registered into the registry.
+`wrapMcpToolsLazy(registry, McpToolEntry[], options?)` is the entry point. Each `McpToolEntry` pairs an `ITool` with its `serverName`. A per-tool `Set` tracks which tools have been "revealed".
 
 ## MCP Server
 

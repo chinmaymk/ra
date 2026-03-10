@@ -422,7 +422,7 @@ mcp:
   maxDescriptionLength: 100  # truncated description length
 ```
 
-**Lazy schema loading** — by default, MCP tools are registered with just their name and a truncated description. The model calls `get_mcp_tool_schema` to fetch the full parameter schema only when it needs to use a tool. This saves significant tokens when connecting to MCP servers with many tools.
+**Lazy schema loading** — by default, MCP tools are registered with just their name, source server, and a truncated description. The first call to each tool returns the full parameter schema instead of executing — the model retries with correct parameters. No extra meta-tools needed, and you only pay for schemas of tools actually used.
 
 **As a server** — `ra --mcp-stdio` exposes the full agent loop as a single MCP tool, plus all built-in tools as individual MCP tools.
 
