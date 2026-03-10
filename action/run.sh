@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 ARGS=("--cli")
 
@@ -68,11 +68,13 @@ OUTPUT_FILE="$(mktemp)"
 echo "::group::Running ra"
 echo "ra ${ARGS[*]} <prompt>"
 
-ra "${ARGS[@]}" "$INPUT_PROMPT" | tee "$OUTPUT_FILE"
+EXIT_CODE=0
+ra "${ARGS[@]}" "$INPUT_PROMPT" | tee "$OUTPUT_FILE" || EXIT_CODE=$?
 
 echo "::endgroup::"
 
-# Set output (multiline-safe using delimiter)
+# Set outputs (multiline-safe using delimiter)
+echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
 {
   echo "result<<RA_OUTPUT_EOF"
   cat "$OUTPUT_FILE"
@@ -80,3 +82,13 @@ echo "::endgroup::"
 } >> "$GITHUB_OUTPUT"
 
 rm -f "$OUTPUT_FILE"
+
+# Fail or warn based on fail-on-error setting
+if [ "$EXIT_CODE" -ne 0 ]; then
+  if [ "${INPUT_FAIL_ON_ERROR:-true}" = "true" ]; then
+    echo "::error::ra exited with code $EXIT_CODE"
+    exit "$EXIT_CODE"
+  else
+    echo "::warning::ra exited with code $EXIT_CODE (fail-on-error is false, continuing)"
+  fi
+fi

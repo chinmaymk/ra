@@ -44,8 +44,15 @@ inputs:
   tool-timeout:
     description: 'Tool execution timeout in milliseconds'
     required: false
+  fail-on-error:
+    description: 'Whether to fail the workflow if ra exits with a non-zero code (true/false)'
+    required: false
+    default: 'true'
 
 outputs:
+  exit-code:
+    description: 'The exit code from the ra process'
+    value: ${{ steps.run.outputs.exit-code }}
   result:
     description: 'The agent output text'
     value: ${{ steps.run.outputs.result }}
@@ -75,4 +82,5 @@ runs:
         INPUT_THINKING: ${{ inputs.thinking }}
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_TOOL_TIMEOUT: ${{ inputs.tool-timeout }}
+        INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
       run: ${{ github.action_path }}/action/run.sh
