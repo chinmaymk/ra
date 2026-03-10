@@ -4,7 +4,7 @@ import { dirname } from 'path'
 
 export function appendFileTool(): ITool {
   return {
-    name: 'AppendFile',
+    name: 'append_file',
     description:
       'Append content to the end of a file. Creates the file and parent directories if missing. ' +
       'No newline is added automatically — include "\\n" in content if needed.',

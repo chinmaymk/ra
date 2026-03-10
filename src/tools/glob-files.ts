@@ -3,7 +3,7 @@ import { Glob } from 'bun'
 
 export function globFilesTool(): ITool {
   return {
-    name: 'Glob',
+    name: 'glob_files',
     description:
       'Find files matching a glob pattern. Returns matching paths, one per line. ' +
       'Patterns: "*" = any file, "**" = recursive directories, "?" = single char. ' +

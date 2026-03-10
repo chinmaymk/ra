@@ -50,7 +50,7 @@ See [File Attachments](/core/file-attachments) for supported formats and provide
 
 ## Resuming sessions
 
-When the agent calls `AskUserQuestion`, the session ID is printed to stderr so you can resume later:
+When the agent calls `ask_user`, the session ID is printed to stderr so you can resume later:
 
 ```bash
 ra --resume <session-id> "Continue from where we left off"

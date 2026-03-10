@@ -3,12 +3,12 @@ import { readFile, writeFile } from 'fs/promises'
 
 export function updateFileTool(): ITool {
   return {
-    name: 'Edit',
+    name: 'update_file',
     description:
       'Replace the first occurrence of `old_string` with `new_string` in a file. ' +
       'IMPORTANT: `old_string` must match exactly, including whitespace, indentation, and newlines. ' +
       'Only the first match is replaced. Supports multi-line strings. ' +
-      'Fails if `old_string` is not found. Use Write to create new files.',
+      'Fails if `old_string` is not found. Use write_file to create new files.',
     inputSchema: {
       type: 'object',
       properties: {

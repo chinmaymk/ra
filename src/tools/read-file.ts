@@ -3,7 +3,7 @@ import { readFile } from 'fs/promises'
 
 export function readFileTool(): ITool {
   return {
-    name: 'Read',
+    name: 'read_file',
     description:
       'Read a file and return its contents with line numbers (e.g. "1: first line\\n2: second line"). ' +
       'Returns the entire file by default. Use `offset` and `limit` to read a specific range.',

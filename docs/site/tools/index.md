@@ -9,11 +9,11 @@ Tools are self-describing — each includes a detailed schema and description so
 builtinTools: true   # default
 ```
 
-When ra runs as an [MCP server](/modes/mcp), all built-in tools (except `AskUserQuestion`) are automatically exposed as MCP tools.
+When ra runs as an [MCP server](/modes/mcp), all built-in tools (except `ask_user`) are automatically exposed as MCP tools.
 
 ## Filesystem
 
-### `Read`
+### `read_file`
 
 Read the contents of a file. Returns content with line numbers prefixed (e.g. `1: first line`).
 
@@ -27,7 +27,7 @@ Read the contents of a file. Returns content with line numbers prefixed (e.g. `1
 { "path": "src/index.ts", "offset": 10, "limit": 20 }
 ```
 
-### `Write`
+### `write_file`
 
 Create or overwrite a file. Parent directories are created automatically.
 
@@ -40,7 +40,7 @@ Create or overwrite a file. Parent directories are created automatically.
 { "path": "src/hello.ts", "content": "export const hello = 'world'" }
 ```
 
-### `Edit`
+### `update_file`
 
 Replace the first occurrence of a string in a file. The match must be exact, including whitespace and indentation.
 
@@ -58,7 +58,7 @@ Replace the first occurrence of a string in a file. The match must be exact, inc
 }
 ```
 
-### `AppendFile`
+### `append_file`
 
 Append content to the end of a file. Creates the file and parent directories if they don't exist. Does not add any separator — include a newline in the content if needed.
 
@@ -67,7 +67,7 @@ Append content to the end of a file. Creates the file and parent directories if 
 | `path` | string | yes | Path to the file |
 | `content` | string | yes | Content to append |
 
-### `LS`
+### `list_directory`
 
 List files and directories at a path. Directories have a trailing `/`. Does not recurse into subdirectories.
 
@@ -75,7 +75,7 @@ List files and directories at a path. Directories have a trailing `/`. Does not 
 |-----------|------|----------|-------------|
 | `path` | string | yes | Directory to list |
 
-### `Grep`
+### `search_files`
 
 Search for a text pattern across files recursively. Returns matches in `path:line:content` format. Skips `node_modules` and `.git`.
 
@@ -89,7 +89,7 @@ Search for a text pattern across files recursively. Returns matches in `path:lin
 { "path": "src", "pattern": "TODO", "include": "*.ts" }
 ```
 
-### `Glob`
+### `glob_files`
 
 Find files matching a glob pattern. Supports `*`, `**`, and `?`.
 
@@ -98,7 +98,7 @@ Find files matching a glob pattern. Supports `*`, `**`, and `?`.
 | `path` | string | yes | Directory to search in |
 | `pattern` | string | yes | Glob pattern, e.g. `"**/*.test.ts"` |
 
-### `MoveFile`
+### `move_file`
 
 Move or rename a file or directory. Creates parent directories at the destination.
 
@@ -107,7 +107,7 @@ Move or rename a file or directory. Creates parent directories at the destinatio
 | `source` | string | yes | Current path |
 | `destination` | string | yes | New path |
 
-### `CopyFile`
+### `copy_file`
 
 Copy a file or directory. Directories are copied recursively. Creates parent directories at the destination.
 
@@ -116,7 +116,7 @@ Copy a file or directory. Directories are copied recursively. Creates parent dir
 | `source` | string | yes | Path to copy from |
 | `destination` | string | yes | Path to copy to |
 
-### `DeleteFile`
+### `delete_file`
 
 Delete a file or directory. Directories are deleted recursively. Irreversible.
 
@@ -128,7 +128,7 @@ Delete a file or directory. Directories are deleted recursively. Irreversible.
 
 ra registers a platform-specific shell tool based on the OS it's running on. Only one is available at a time.
 
-### `Bash` <Badge type="info" text="macOS / Linux" />
+### `execute_bash` <Badge type="info" text="macOS / Linux" />
 
 Execute a bash command and return combined stdout/stderr output. The description includes the detected OS (macOS or Linux).
 
@@ -142,7 +142,7 @@ Execute a bash command and return combined stdout/stderr output. The description
 { "command": "git status", "cwd": "/home/user/project" }
 ```
 
-### `PowerShell` <Badge type="info" text="Windows" />
+### `execute_powershell` <Badge type="info" text="Windows" />
 
 Execute a PowerShell command and return the output. Runs with `-NoProfile` for fast startup.
 
@@ -158,7 +158,7 @@ Execute a PowerShell command and return the output. Runs with `-NoProfile` for f
 
 ## Network
 
-### `WebFetch`
+### `web_fetch`
 
 Make an HTTP request and return the response as JSON with `status`, `headers`, and `body` fields.
 
@@ -180,13 +180,13 @@ Make an HTTP request and return the response as JSON with `status`, `headers`, a
 
 ## Agent Interaction
 
-### `AskUserQuestion`
+### `ask_user`
 
 Pause the agent loop and ask the user a question. The loop suspends until the user responds.
 
 - **REPL** — the question is printed and the next input resumes the conversation
 - **CLI** — the session ID is printed so the user can resume with `--resume`
-- **HTTP** — an `AskUserQuestion` SSE event is emitted with the question and session ID
+- **HTTP** — an `ask_user` SSE event is emitted with the question and session ID
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -194,7 +194,7 @@ Pause the agent loop and ask the user a question. The loop suspends until the us
 
 This tool is **not exposed via MCP** since MCP clients manage their own user interaction.
 
-### `TodoWrite`
+### `checklist`
 
 Track tasks with a checklist. The tool description dynamically updates to show remaining items and their indices, keeping the model aware of progress without needing to call `list`.
 
@@ -220,7 +220,7 @@ The dynamic description looks like:
 
 ## Parallelization
 
-### `Agent`
+### `subagent`
 
 Fork parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation.
 
@@ -241,7 +241,7 @@ Fork parallel copies of the agent to work on independent tasks simultaneously. E
 
 Returns `{ results, usage }` where each result has `task`, `status`, `result`, `iterations`, and `usage`. Aggregate usage rolls up into the parent's token tracking automatically.
 
-Only `AskUserQuestion` and `Agent` are excluded from forks — `AskUserQuestion` can't work from a background fork, and `Agent` nesting is depth-limited (default: 2) to prevent infinite recursion. All other tools (including memory) are inherited. Task failures don't affect siblings.
+Only `ask_user` and `subagent` are excluded from forks — `ask_user` can't work from a background fork, and `subagent` nesting is depth-limited (default: 2) to prevent infinite recursion. All other tools (including memory) are inherited. Task failures don't affect siblings.
 
 Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to control how many forks run in parallel.
 

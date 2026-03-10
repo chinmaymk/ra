@@ -3,7 +3,7 @@ import { rm, stat } from 'fs/promises'
 
 export function deleteFileTool(): ITool {
   return {
-    name: 'DeleteFile',
+    name: 'delete_file',
     description:
       'Delete a file or directory. Directories are deleted recursively. ' +
       'IRREVERSIBLE. Fails if path does not exist.',

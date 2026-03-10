@@ -11,7 +11,7 @@ export function checklistTool(): ITool {
   const remaining = () => items.filter(i => !i.checked).length
 
   return {
-    name: 'TodoWrite',
+    name: 'checklist',
     get description() {
       const base = 'Manage a task checklist. Actions: "add" (requires item), "check"/"uncheck"/"remove" (require index), "list".'
       if (items.length === 0) return base

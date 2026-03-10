@@ -21,7 +21,7 @@ describe('loadConfig', () => {
     expect(c.provider).toBe('anthropic')
     expect(c.interface).toBe('repl')
     expect(c.maxIterations).toBe(50)
-    expect(c.skillDirs).toEqual(['.claude/skills', '.agents/skills', '.opencode/skills'])
+    expect(c.skillDirs).toEqual([])
     expect(c.skills).toEqual([])
   })
 

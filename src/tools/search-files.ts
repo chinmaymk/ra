@@ -21,7 +21,7 @@ async function* walkFiles(dir: string, include?: string): AsyncGenerator<string>
 
 export function searchFilesTool(): ITool {
   return {
-    name: 'Grep',
+    name: 'search_files',
     description:
       'Recursively search file contents for a plain text string (not regex). ' +
       'Returns matches as "relative/path:line_number:matching_line". ' +

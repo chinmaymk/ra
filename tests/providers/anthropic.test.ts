@@ -285,7 +285,7 @@ describe('AnthropicProvider - stream()', () => {
 
   it('yields tool_call_start from content_block_start with tool_use', async () => {
     mockMessagesCreate.mockResolvedValue((async function* () {
-      yield { type: 'content_block_start', content_block: { type: 'tool_use', id: 'tc_1', name: 'Read' } }
+      yield { type: 'content_block_start', content_block: { type: 'tool_use', id: 'tc_1', name: 'read_file' } }
       yield { type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: '{"path":' } }
       yield { type: 'message_delta', usage: { input_tokens: 10, output_tokens: 5 } }
       yield { type: 'message_stop' }
@@ -295,7 +295,7 @@ describe('AnthropicProvider - stream()', () => {
     for await (const chunk of provider.stream({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
     }
-    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'Read' })
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'read_file' })
     expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":' })
   })
 

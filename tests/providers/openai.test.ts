@@ -271,7 +271,7 @@ describe('OpenAIProvider - stream()', () => {
 
   it('yields tool_call_start and tool_call_delta', async () => {
     mockCompletionsCreate.mockResolvedValue((async function* () {
-      yield { choices: [{ delta: { tool_calls: [{ index: 0, id: 'tc_1', function: { name: 'Read' } }] } }] }
+      yield { choices: [{ delta: { tool_calls: [{ index: 0, id: 'tc_1', function: { name: 'read_file' } }] } }] }
       yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"path":"x"}' } }] } }] }
       yield { choices: [{ delta: {}, finish_reason: 'tool_calls' }] }
     })())
@@ -280,7 +280,7 @@ describe('OpenAIProvider - stream()', () => {
     for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
     }
-    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'Read' })
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'read_file' })
     expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"x"}' })
     expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'tc_1' })
   })

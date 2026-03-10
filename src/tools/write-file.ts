@@ -4,10 +4,10 @@ import { dirname } from 'path'
 
 export function writeFileTool(): ITool {
   return {
-    name: 'Write',
+    name: 'write_file',
     description:
       'Create or overwrite a file with the given content. Parent directories are created automatically. ' +
-      'WARNING: Overwrites the entire file if it exists. Use Edit for partial edits.',
+      'WARNING: Overwrites the entire file if it exists. Use update_file for partial edits.',
     inputSchema: {
       type: 'object',
       properties: {

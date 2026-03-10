@@ -79,7 +79,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
 
   const result = await loop.run(initialMessages)
 
-  // Detect AskUserQuestion suspension
+  // Detect ask_user suspension
   let askMsg: IMessage | undefined
   for (let i = result.messages.length - 1; i >= 0; i--) {
     const m = result.messages[i]!
@@ -90,7 +90,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   }
   if (askMsg && typeof askMsg.content === 'string') {
     const question = askMsg.content.slice(ASK_USER_SIGNAL.length)
-    process.stderr.write(`\n[AskUserQuestion] ${question}\n`)
+    process.stderr.write(`\n[ask_user] ${question}\n`)
     process.stderr.write(`Resume with: ra --resume <session-id> "your answer"\n`)
   }
 

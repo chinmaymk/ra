@@ -292,7 +292,7 @@ describe('BedrockProvider - stream()', () => {
   it('yields tool call events from stream', async () => {
     mockClientSend.mockResolvedValue({
       stream: (async function* () {
-        yield { contentBlockStart: { start: { toolUse: { toolUseId: 'tc_1', name: 'Read' } } } }
+        yield { contentBlockStart: { start: { toolUse: { toolUseId: 'tc_1', name: 'read_file' } } } }
         yield { contentBlockDelta: { delta: { toolUse: { input: '{"path":"x"}' } } } }
         yield { messageStop: {} }
       })(),
@@ -302,7 +302,7 @@ describe('BedrockProvider - stream()', () => {
     for await (const chunk of provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
     }
-    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'Read' })
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'read_file' })
     expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"x"}' })
   })
 

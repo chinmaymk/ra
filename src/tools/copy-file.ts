@@ -4,7 +4,7 @@ import { dirname } from 'path'
 
 export function copyFileTool(): ITool {
   return {
-    name: 'CopyFile',
+    name: 'copy_file',
     description:
       'Copy a file or directory to a new location. Directories are copied recursively. ' +
       'Creates parent directories at the destination automatically.',

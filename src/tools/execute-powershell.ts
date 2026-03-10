@@ -3,7 +3,7 @@ import { execFile } from 'child_process'
 
 export function executePowershellTool(): ITool {
   return {
-    name: 'PowerShell',
+    name: 'execute_powershell',
     description:
       'Run a PowerShell command on this Windows system. ' +
       'Returns stdout and stderr combined. Uses -NoProfile for fast startup. Default timeout: 30s.',

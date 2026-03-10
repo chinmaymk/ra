@@ -25,7 +25,7 @@ loadConfig() → createProvider() → ToolRegistry + MCP tools → loadSkills() 
 | Loop calls | Single `run()` | `run()` per user input | `run()` per POST request |
 | Sessions | None (one-shot) | Auto-saved per turn | Optional via `sessionId` |
 | Streaming | `onChunk` callback | TUI middleware | Server-Sent Events |
-| AskUserQuestion | Async stdin prompt | Next user input resumes | Returns `{ askUser, sessionId }` |
+| ask_user | Async stdin prompt | Next user input resumes | Returns `{ askUser, sessionId }` |
 
 ## Skill Injection
 

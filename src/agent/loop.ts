@@ -163,7 +163,7 @@ export class AgentLoop {
         }
 
         // Break if ask_user was invoked — the loop should suspend
-        if (toolCalls.some(tc => tc.name === 'AskUserQuestion')) { stop(); break }
+        if (toolCalls.some(tc => tc.name === 'ask_user')) { stop(); break }
 
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopIteration, this.toolTimeout)
         if (signal.aborted) break

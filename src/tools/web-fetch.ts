@@ -2,7 +2,7 @@ import type { ITool } from '../providers/types'
 
 export function webFetchTool(): ITool {
   return {
-    name: 'WebFetch',
+    name: 'web_fetch',
     description:
       'Make an HTTP request. Returns JSON: {"status": number, "headers": {}, "body": "response text"}.',
     inputSchema: {
