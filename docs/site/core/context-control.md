@@ -52,7 +52,21 @@ Thinking output streams to the terminal in the REPL, so you can watch the model 
 
 ## Context discovery
 
-ra discovers and injects project context files into the conversation before your prompt. Configure which files to look for:
+ra discovers and injects project context files into the conversation before your prompt. By default, it looks for files from popular coding agents:
+
+| File | Source |
+|------|--------|
+| `CLAUDE.md` | Claude Code |
+| `AGENTS.md` | OpenCode, GitHub Copilot, universal standard |
+| `.cursorrules` | Cursor |
+| `.windsurfrules` | Windsurf |
+| `.github/copilot-instructions.md` | GitHub Copilot |
+
+This means instructions you've already written for another coding agent work out of the box — no migration needed.
+
+ra also searches `.claude/skills`, `.agents/skills`, and `.opencode/skills` for skill directories by default, so skills authored for any agent are picked up automatically.
+
+You can customize or extend the list:
 
 ```yaml
 context:
@@ -63,7 +77,7 @@ context:
     - "CONVENTIONS.md"
 ```
 
-ra walks the directory tree upward to the git root, finds matching files, and injects them as system context. This is useful for project conventions, coding standards, or any persistent instructions.
+ra walks the directory tree upward to the git root, finds matching files, and injects them as system context.
 
 ## Pattern resolution
 

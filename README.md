@@ -158,7 +158,11 @@ Thinking output streams to the terminal in the REPL, so you can watch the model 
 
 ### Context discovery
 
-ra can discover and inject project context files into the conversation before your prompt. Configure which files to look for via the `context.patterns` config:
+ra automatically discovers and injects project context files into the conversation before your prompt. Out of the box, it looks for `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.windsurfrules`, and `.github/copilot-instructions.md` — so instructions written for Claude Code, Cursor, Windsurf, GitHub Copilot, or any AGENTS.md-compatible tool work without changes.
+
+Similarly, ra's built-in tools use the same names as Claude Code (`Read`, `Edit`, `Bash`, `Grep`, `Glob`, etc.) and skill directories default to `.claude/skills`, `.agents/skills`, and `.opencode/skills`. If you've already written context files or skills for another coding agent, ra picks them up automatically.
+
+You can customize which files to look for via the `context.patterns` config:
 
 ```yaml
 context:
