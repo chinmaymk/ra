@@ -68,7 +68,7 @@ export type { BedrockProviderOptions } from './providers/bedrock.ts'
 export type { AzureProviderOptions } from './providers/azure.ts'
 
 // Built-in tools
-export { registerBuiltinTools } from './tools/index.ts'
-export { ASK_USER_SIGNAL } from './tools/ask-user.ts'
-export { subagentTool } from './tools/subagent.ts'
-export type { SubagentToolOptions } from './tools/subagent.ts'
+export { registerBuiltinTools } from './tools/index'
+export { ASK_USER_SIGNAL } from './tools/ask-user'
+export { subagentTool } from './tools/subagent'
+export type { SubagentToolOptions } from './tools/subagent'

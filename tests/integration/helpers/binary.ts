@@ -141,29 +141,47 @@ export async function spawnHttpServer(args: string[], binaryEnv: BinaryEnv): Pro
   const stdoutBufs: Uint8Array[] = []
   ;(async () => { for await (const chunk of proc.stdout) stdoutBufs.push(chunk) })()
 
-  // Read stderr line-by-line until we find the port announcement
-  const port = await new Promise<number>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('HTTP server did not report port within 10s')), 10000)
-    let buf = ''
-    ;(async () => {
-      try {
-        for await (const chunk of proc.stderr) {
-          buf += decoder.decode(chunk)
-          const m = buf.match(/HTTP server listening on port (\d+)/)
+  // Read stderr continuously — we must keep draining the pipe even after
+  // finding the port, otherwise observability logs fill the pipe buffer
+  // and the server process blocks/crashes.
+  const stderrBufs: string[] = []
+  let portResolve: ((port: number) => void) | undefined
+  let portReject: ((err: Error) => void) | undefined
+  const portPromise = new Promise<number>((resolve, reject) => {
+    portResolve = resolve
+    portReject = reject
+  })
+
+  const timer = setTimeout(() => portReject!(new Error('HTTP server did not report port within 10s')), 10000)
+  let portFound = false
+  ;(async () => {
+    try {
+      for await (const chunk of proc.stderr) {
+        const text = decoder.decode(chunk)
+        stderrBufs.push(text)
+        if (!portFound) {
+          const combined = stderrBufs.join('')
+          const m = combined.match(/HTTP server listening on port (\d+)/)
           if (m) {
+            portFound = true
             clearTimeout(timer)
-            resolve(parseInt(m[1]!, 10))
-            return
+            portResolve!(parseInt(m[1]!, 10))
           }
         }
-        clearTimeout(timer)
-        reject(new Error('HTTP server stderr closed without port announcement'))
-      } catch (err) {
-        clearTimeout(timer)
-        reject(err)
       }
-    })()
-  })
+      if (!portFound) {
+        clearTimeout(timer)
+        portReject!(new Error('HTTP server stderr closed without port announcement'))
+      }
+    } catch (err) {
+      if (!portFound) {
+        clearTimeout(timer)
+        portReject!(err instanceof Error ? err : new Error(String(err)))
+      }
+    }
+  })()
+
+  const port = await portPromise
 
   const interactiveProc: InteractiveProcess = {
     write(text: string) { proc.stdin.write(text) },

@@ -15,6 +15,7 @@
   <a href="#skills">Skills</a> &middot;
   <a href="#mcp">MCP</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
+  <a href="#observability">Observability</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
   <a href="#configuration">Configuration</a>
 </p>
@@ -484,6 +485,77 @@ middleware:
 ```
 
 All hooks support a configurable timeout via `toolTimeout` (default: 30s).
+
+## Observability
+
+Structured JSON logging and tracing are built in. Every agent loop emits logs and trace spans to stderr by default — no extra setup needed.
+
+```yaml
+# ra.config.yml
+observability:
+  enabled: true          # default: true
+  logs:
+    level: info          # debug | info | warn | error
+    output: stderr       # stderr | stdout | file
+    filePath: .ra/logs.jsonl
+  traces:
+    output: file
+    filePath: .ra/traces.jsonl
+```
+
+### What gets logged
+
+Startup events: `provider initialized`, `tools registered`, `custom middleware loaded`, `skills loaded`, `memory store initialized`, `MCP servers connected`, `context files discovered`, `resuming session`, `starting interface`, `shutting down`. See [docs/observability.md](docs/observability.md) for the full reference.
+
+Agent loop events (emitted per request):
+
+| Event | Level | Key fields |
+|-------|-------|------------|
+| `agent loop starting` | info | maxIterations, messageCount |
+| `calling model` | debug | iteration, model, messageCount |
+| `model responded` | info | inputTokens, outputTokens, toolCallCount, toolNames |
+| `executing tool` | info | tool, toolCallId, input (truncated) |
+| `tool execution complete` | info | tool, toolCallId, resultLength |
+| `tool execution failed` | error | tool, toolCallId, error |
+| `context compacted` | info | originalMessages, compactedMessages, estimatedTokens, threshold |
+| `iteration complete` | debug | iteration, messagesAdded |
+| `agent loop complete` | info | iterations, inputTokens, outputTokens, totalMessages |
+| `agent loop failed` | error | error, stack, phase, iterations |
+
+### Trace spans
+
+Spans follow an OpenTelemetry-inspired hierarchy:
+
+```
+agent.loop
+  └── agent.iteration (per loop iteration)
+        ├── agent.model_call
+        └── agent.tool_execution (per tool call)
+```
+
+Each span records duration, status (`ok`/`error`), and relevant attributes (token counts, tool names, result lengths).
+
+### Output format
+
+Both logs and traces emit one JSON object per line (JSONL). Logs include `timestamp`, `level`, `message`, and `sessionId`. Traces include `traceId`, `spanId`, `parentSpanId`, `name`, `durationMs`, and `attributes`.
+
+```bash
+# Watch logs in real time
+tail -f .ra/logs.jsonl | jq .
+
+# Filter to just errors
+tail -f .ra/logs.jsonl | jq 'select(.level == "error")'
+
+# Show trace span durations
+tail -f .ra/traces.jsonl | jq '{name, durationMs, status}'
+```
+
+To disable all observability output:
+
+```yaml
+observability:
+  enabled: false
+```
 
 ## Memory
 

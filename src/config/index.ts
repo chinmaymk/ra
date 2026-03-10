@@ -127,6 +127,19 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_MEMORY_TTL_DAYS !== undefined)      setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
   if (env.RA_MEMORY_INJECT_LIMIT !== undefined)  setInt(['memory', 'injectLimit'], env.RA_MEMORY_INJECT_LIMIT)
 
+  // Observability
+  if (env.RA_OBSERVABILITY_ENABLED !== undefined) set(['observability', 'enabled'], env.RA_OBSERVABILITY_ENABLED === 'true')
+  // Logs
+  if (env.RA_LOG_LEVEL !== undefined && ['debug', 'info', 'warn', 'error'].includes(env.RA_LOG_LEVEL))
+    set(['observability', 'logs', 'level'], env.RA_LOG_LEVEL)
+  if (env.RA_LOG_OUTPUT !== undefined && ['stderr', 'stdout', 'file'].includes(env.RA_LOG_OUTPUT))
+    set(['observability', 'logs', 'output'], env.RA_LOG_OUTPUT)
+  if (env.RA_LOG_FILE !== undefined) set(['observability', 'logs', 'filePath'], env.RA_LOG_FILE)
+  // Traces
+  if (env.RA_TRACE_OUTPUT !== undefined && ['stderr', 'stdout', 'file'].includes(env.RA_TRACE_OUTPUT))
+    set(['observability', 'traces', 'output'], env.RA_TRACE_OUTPUT)
+  if (env.RA_TRACE_FILE !== undefined) set(['observability', 'traces', 'filePath'], env.RA_TRACE_FILE)
+
   // Provider credentials — env-only (not CLI flags, to avoid leaking in process list/shell history)
   if (env.RA_ANTHROPIC_API_KEY !== undefined)  set(['providers', 'anthropic', 'apiKey'], env.RA_ANTHROPIC_API_KEY)
   if (env.RA_ANTHROPIC_BASE_URL !== undefined) set(['providers', 'anthropic', 'baseURL'], env.RA_ANTHROPIC_BASE_URL)

@@ -435,6 +435,80 @@ describe('createCompactionMiddleware', () => {
     expect(chatCalled).toBe(false)
   })
 
+  it('calls onCompact callback with compaction details', async () => {
+    let compactInfo: Record<string, unknown> | undefined
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => ({
+        message: { role: 'assistant' as const, content: 'Summary of conversation.' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      onCompact: (info) => { compactInfo = info },
+    })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'System prompt here' },
+      { role: 'user', content: 'First user message here' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'Latest message' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(compactInfo).toBeDefined()
+    expect(compactInfo!.originalMessages).toBe(6)
+    expect(compactInfo!.compactedMessages).toBeLessThan(6)
+    expect(compactInfo!.estimatedTokens).toBeGreaterThan(10)
+    expect(compactInfo!.threshold).toBe(10)
+  })
+
+  it('does not call onCompact when compaction is skipped', async () => {
+    let called = false
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8,
+      onCompact: () => { called = true },
+    })
+    const messages: IMessage[] = [
+      { role: 'system', content: 'hi' },
+      { role: 'user', content: 'hello' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(called).toBe(false)
+  })
+
+  it('does not call onCompact when summarization fails', async () => {
+    let called = false
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('API rate limit') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      onCompact: () => { called = true },
+    })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(called).toBe(false)
+  })
+
   it('skips when nothing to compact (all pinned)', async () => {
     const provider: IProvider = {
       name: 'mock',

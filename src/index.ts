@@ -20,6 +20,9 @@ import { registerBuiltinTools, subagentTool } from './tools'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
 import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
+import { createObservability } from './observability'
+import { createObservabilityMiddleware } from './observability/middleware'
+import type { MiddlewareConfig } from './agent/types'
 
 async function readStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined
@@ -225,20 +228,37 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
+  // Create observability (logger + tracer)
+  const { logger, tracer } = createObservability(config.observability)
+
+  // Create observability middleware — the single integration point for the agent loop
+  const obsMw = createObservabilityMiddleware(logger, tracer)
+
   // Resolve compaction model default from provider if not set
   if (!config.compaction.model) {
     config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
   }
+  config.compaction.onCompact = (info) => logger.info('context compacted', info)
 
   // Discover project context files
-  const contextMessages = config.context.enabled
-    ? buildContextMessages(await discoverContextFiles({
-        cwd: process.cwd(),
-        patterns: config.context.patterns,
-      }))
+  const contextFiles = config.context.enabled
+    ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
     : []
+  const contextMessages = buildContextMessages(contextFiles)
+
+  if (contextFiles.length > 0) {
+    logger.info('context files discovered', {
+      fileCount: contextFiles.length,
+      patterns: config.context.patterns,
+      files: contextFiles.map(f => f.relativePath),
+    })
+  }
 
   const middleware = await loadMiddleware(config, process.cwd())
+  const userHookCount = Object.values(middleware).reduce((n, hooks) => n + (hooks?.length ?? 0), 0)
+  if (userHookCount > 0) {
+    logger.info('custom middleware loaded', { hookCount: userHookCount })
+  }
 
   // Set up pattern resolvers (e.g. @file, url:)
   if (config.context.resolvers?.length) {
@@ -251,12 +271,18 @@ async function main(): Promise<void> {
 
   // Create provider
   const provider = createProvider(buildProviderConfig(config.provider, config.providers[config.provider]))
+  logger.info('provider initialized', { provider: config.provider, model: config.model })
 
   // Create tool registry
   const tools = new ToolRegistry()
 
   if (config.builtinTools) {
     registerBuiltinTools(tools)
+  }
+
+  const toolNames = tools.all().map(t => t.name)
+  if (toolNames.length > 0) {
+    logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames })
   }
 
   // Set up memory system
@@ -277,15 +303,20 @@ async function main(): Promise<void> {
       injectLimit: config.memory.injectLimit,
     })
     middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
+    logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
 
   // Create session storage
   const storagePath = resolvePath(config.storage.path, process.cwd())
   const storage = new SessionStorage(storagePath)
   await storage.init()
+  logger.debug('session storage initialized', { path: storagePath })
 
   // Load skills from configured directories
   const skillMap = await loadSkills(config.skillDirs)
+  if (skillMap.size > 0) {
+    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+  }
 
   // Active skills for this run (always-on from config + per-run --skill flags)
   const activeSkills = [...config.skills, ...parsed.meta.skills]
@@ -293,7 +324,15 @@ async function main(): Promise<void> {
   // Connect MCP clients
   const mcpClient = new McpClient()
   if (config.mcp.client && config.mcp.client.length > 0) {
+    logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
     await mcpClient.connect(config.mcp.client, tools)
+    logger.info('MCP servers connected', { totalTools: tools.all().length })
+  }
+
+  // Prepend observability hooks into the middleware chain (obs runs first)
+  for (const key of Object.keys(obsMw)) {
+    const k = key as keyof MiddlewareConfig
+    ;(middleware as any)[k] = [...((obsMw as any)[k] ?? []), ...((middleware as any)[k] ?? [])]
   }
 
   // Register subagent tool after all other tools (builtin + MCP) are set up.
@@ -330,9 +369,12 @@ async function main(): Promise<void> {
 
   // Shutdown helpers
   const shutdown = async () => {
+    logger.info('shutting down')
     try { await mcpClient.disconnect() } catch { /* best-effort cleanup */ }
     try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort cleanup */ }
     if (memoryStore) memoryStore.close()
+    await logger.flush()
+    await tracer.flush()
   }
 
   process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
@@ -390,6 +432,8 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
+  logger.info('starting interface', { interface: config.interface })
+
   // Determine which interface to launch
   if (config.interface === 'mcp') {
     stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
@@ -416,6 +460,9 @@ async function main(): Promise<void> {
       process.exit(1)
     }
     const sessionMessages = parsed.meta.resume ? await storage.readMessages(parsed.meta.resume) : []
+    if (parsed.meta.resume) {
+      logger.info('resuming session', { sessionId: parsed.meta.resume, messageCount: sessionMessages.length })
+    }
     const cliResult = await runCli({
       prompt: parsed.meta.prompt,
       files: parsed.meta.files,
