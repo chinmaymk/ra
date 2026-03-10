@@ -5,35 +5,43 @@ description: Use when creating a new ra recipe — a complete agent configuratio
 
 # Writing a Recipe
 
-A recipe is a complete agent you can run out of the box. It combines a config file, skills, and optional middleware into a self-contained directory.
+A recipe is a self-contained agent configuration. Copy the directory, run it — everything works.
 
 ## Structure
 
 ```
 recipes/<name>/
   ra.config.yaml       # Agent configuration
-  README.md            # What this recipe does, how to run it
-  skills/
+  README.md            # What it does, how to run it
+  skills/              # Bundled skills (MUST be self-contained)
     <skill-name>/
-      SKILL.md         # Frontmatter + instructions
-      scripts/         # Optional: run at activation
+      SKILL.md         # YAML frontmatter + instructions
+      scripts/         # Optional: run at activation, stdout → context
       references/      # Optional: injected as context
   middleware/           # Optional: lifecycle hooks
     <hook>.ts
-  demo.sh              # Optional: runnable demo
 ```
 
-## Reference: `code-review-agent` recipe
+## Checklist
 
+1. **Define the agent** — one sentence: "A code reviewer that reads diffs and gives structured feedback."
+
+2. **Write skills** — `skills/<name>/SKILL.md`:
+   - YAML frontmatter: `name`, `description`
+   - Markdown body: role, process, output format
+   - Optional `scripts/` for dynamic context (git diff, env vars, etc.)
+
+3. **Write config** — `ra.config.yaml`:
 ```yaml
-# ra.config.yaml
 provider: anthropic
 model: claude-sonnet-4-6
-interface: cli
+interface: cli                    # cli for one-shot, repl for interactive
 skills:
-  - code-review
+  - <skill-name>
 skillDirs:
-  - ./skills
+  - ./skills                      # always relative to recipe dir
+maxIterations: 10                 # 10 for focused tasks, 50+ for exploratory
+# Optional:
 mcp:
   client:
     - name: github
@@ -43,49 +51,17 @@ mcp:
 middleware:
   afterModelResponse:
     - ./middleware/token-budget.ts
-maxIterations: 10
 ```
 
-## Key Rule: Recipes Must Be Self-Contained
+4. **Add middleware** (optional) — common hooks: token budget, tool filtering, logging
 
-A recipe must be fully copy-pastable. Someone copying the recipe directory into their project should get everything they need — no external dependencies on shared directories.
+5. **Write README** — install, configure, run
 
-- **Bundle all skills inside the recipe's `skills/` directory**, including any specialist skills the agent references on-demand
-- **`skillDirs` should be `./skills`** (relative to the recipe directory)
-- Don't reference `../../skills` or any path outside the recipe
+6. **Test** — `cd recipes/<name> && ra --config ra.config.yaml "test prompt"`
 
-## Steps
+## Rules
 
-1. **Define the persona** — What agent are you building? One sentence: "A code reviewer that reads diffs and gives structured feedback."
-
-2. **Write the skill** — Create `skills/<name>/SKILL.md` with:
-   - YAML frontmatter: `name` and `description`
-   - Markdown body: role, process, output format
-   - Optional `scripts/` for activation-time context gathering
-   - Optional `references/` for injected documentation
-
-3. **Write the config** — `ra.config.yaml`:
-   - Set `interface: cli` for one-shot, `repl` for interactive
-   - Reference the skill by name, set `skillDirs: [./skills]`
-   - Add MCP servers if the agent needs external tools
-   - Set appropriate `maxIterations` (10 for focused tasks, 50 for exploratory)
-
-4. **Add middleware** (optional) — Common hooks:
-   - Token budget in `afterModelResponse`
-   - Tool filtering in `beforeModelCall`
-   - Logging in `afterToolExecution`
-
-5. **Write the README** — How to install, configure, and run the recipe
-
-6. **Test it** — Run the recipe end-to-end:
-   ```bash
-   cd recipes/<name>
-   ra --config ra.config.yaml "test prompt"
-   ```
-
-## Skill Script Tips
-
-- Scripts in `skills/<name>/scripts/` run at activation. Their stdout becomes context for the model.
-- Use for dynamic context: `git diff`, `ls`, reading env vars.
-- Shebangs are respected: `#!/usr/bin/env python3` works.
-- Keep scripts fast — they block skill activation.
+- **Recipes must be self-contained** — bundle all skills inside `skills/`, use `skillDirs: [./skills]`
+- Never reference paths outside the recipe directory (`../../skills` is wrong)
+- Skill scripts should be fast — they block activation
+- See existing recipes in `recipes/coding-agent/` and `recipes/code-review-agent/` for reference

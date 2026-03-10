@@ -15,24 +15,27 @@ Run these before saying "done." No exceptions.
 
 2. **Tests** — `bun test`
    - All existing tests must pass
-   - New code should have tests in `tests/` mirroring the `src/` structure
-   - If you fixed a bug, add a test that reproduces it
+   - New code needs tests in `tests/` mirroring `src/` structure
+   - Bug fixes need a regression test
 
-3. **Smoke test** — Run the actual thing
-   - For providers: `bun run ra --provider <name> "Hello"`
-   - For tools: `bun run ra "Use <tool> to ..."`
-   - For interfaces: start the interface and exercise the happy path
-   - For skills: `bun run ra --skill <name> "Test prompt"`
+3. **Smoke test** — run the actual thing
+   - Providers: `bun run ra --provider <name> "Hello"`
+   - Tools: `bun run ra "Use <tool> to ..."`
+   - Interfaces: start the interface, exercise the happy path
+   - Skills: `bun run ra --skill <name> "Test prompt"`
+   - Recipes: `cd recipes/<name> && ra --config ra.config.yaml "test prompt"`
 
-4. **Review your diff** — `git diff`
-   - No debug logs left in
+4. **Review diff** — `git diff`
+   - No debug logs
    - No commented-out code
    - No unrelated changes
    - No secrets or hardcoded keys
+   - No `as any` casts
 
 ## Common Mistakes
 
-- Claiming "tests pass" without running them
-- Skipping type check ("it runs fine" ≠ "it type-checks")
-- Not testing the actual user-facing flow end-to-end
+- Claiming "tests pass" without running `bun test`
+- Skipping `bun tsc` ("it runs" != "it type-checks")
+- Not testing the user-facing flow end-to-end
 - Forgetting to check for regressions in adjacent features
+- Leaving `console.log` debugging statements in
