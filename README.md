@@ -16,6 +16,7 @@
   <a href="#mcp">MCP</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
   <a href="#observability">Observability</a> &middot;
+  <a href="#github-actions">GitHub Actions</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
   <a href="#configuration">Configuration</a>
 </p>
@@ -689,6 +690,22 @@ Use `--exec` to run a TypeScript or JavaScript file that imports ra's internals 
 ```bash
 ra --exec ./scripts/batch-review.ts
 ```
+
+## GitHub Actions
+
+Use ra directly in your CI/CD workflows. No install step needed — the action downloads the binary automatically.
+
+```yaml
+- uses: chinmaymk/ra@v0.1.0
+  with:
+    prompt: "Review this PR for bugs and security issues"
+    provider: anthropic
+    model: claude-sonnet-4-6
+  env:
+    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+The action exposes the same configuration as the CLI — provider, model, skills, thinking, file attachments, and custom config files. See the [GitHub Actions docs](docs/site/modes/github-actions.md) for full usage.
 
 ## Building from Source
 
