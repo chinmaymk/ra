@@ -68,5 +68,5 @@ export type { BedrockProviderOptions } from './providers/bedrock.ts'
 export type { AzureProviderOptions } from './providers/azure.ts'
 
 // Built-in tools
-export { registerBuiltinTools } from './tools/index.ts'
-export { ASK_USER_SIGNAL } from './tools/ask-user.ts'
+export { registerBuiltinTools } from './tools/index'
+export { ASK_USER_SIGNAL } from './tools/ask-user'
