@@ -99,25 +99,71 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
   }
 
   const beforeToolExecution = async (ctx: ToolExecutionContext): Promise<void> => {
-    const span = tracer.startSpan('agent.tool_execution', {
+    const attrs: Record<string, unknown> = {
       tool: ctx.toolCall.name,
       toolCallId: ctx.toolCall.id,
-    }, iterationSpan?.spanId)
+    }
+
+    // For subagent calls, parse and log the task list
+    if (ctx.toolCall.name === 'subagent' && ctx.toolCall.arguments) {
+      try {
+        const parsed = JSON.parse(ctx.toolCall.arguments)
+        if (Array.isArray(parsed.tasks)) {
+          attrs.taskCount = parsed.tasks.length
+          attrs.tasks = parsed.tasks.map((t: { task: string }) =>
+            t.task.length > 100 ? t.task.slice(0, 100) + '…' : t.task
+          )
+        }
+      } catch { /* not valid JSON yet — streaming may be incomplete */ }
+    }
+
+    const span = tracer.startSpan('agent.tool_execution', attrs, iterationSpan?.spanId)
     toolSpans.set(ctx.toolCall.id, span)
 
     logger.info('executing tool', {
       tool: ctx.toolCall.name,
       toolCallId: ctx.toolCall.id,
       input: ctx.toolCall.arguments ? ctx.toolCall.arguments.slice(0, 200) : '{}',
+      ...(attrs.taskCount != null && { taskCount: attrs.taskCount }),
     })
   }
 
   const afterToolExecution = async (ctx: ToolResultContext): Promise<void> => {
     const span = toolSpans.get(ctx.toolCall.id)
+
+    // For subagent calls, extract per-task results and aggregate usage
+    let subagentAttrs: Record<string, unknown> | undefined
+    if (ctx.toolCall.name === 'subagent' && !ctx.result.isError && typeof ctx.result.content === 'string') {
+      try {
+        const parsed = JSON.parse(ctx.result.content)
+        if (Array.isArray(parsed.results)) {
+          const completed = parsed.results.filter((r: { status: string }) => r.status === 'completed').length
+          const errored = parsed.results.filter((r: { status: string }) => r.status === 'error').length
+          subagentAttrs = {
+            taskCount: parsed.results.length,
+            tasksCompleted: completed,
+            tasksErrored: errored,
+            totalInputTokens: parsed.usage?.inputTokens,
+            totalOutputTokens: parsed.usage?.outputTokens,
+          }
+
+          logger.info('subagent tasks complete', {
+            toolCallId: ctx.toolCall.id,
+            taskCount: parsed.results.length,
+            tasksCompleted: completed,
+            tasksErrored: errored,
+            inputTokens: parsed.usage?.inputTokens,
+            outputTokens: parsed.usage?.outputTokens,
+          })
+        }
+      } catch { /* result may not be JSON */ }
+    }
+
     if (span) {
       tracer.endSpan(span, ctx.result.isError ? 'error' : 'ok', {
         resultLength: ctx.result.content.length,
         ...(ctx.result.isError && { error: ctx.result.content.slice(0, 200) }),
+        ...subagentAttrs,
       })
       toolSpans.delete(ctx.toolCall.id)
     }

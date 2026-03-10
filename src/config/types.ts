@@ -40,6 +40,7 @@ export interface RaConfig {
   builtinTools: boolean
   middleware: Record<string, string[]>
   thinking?: 'low' | 'medium' | 'high'
+  maxConcurrency: number
   context: ContextConfig
   compaction: {
     enabled: boolean
