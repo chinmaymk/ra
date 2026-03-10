@@ -40,7 +40,7 @@ The compiled binary is at `dist/ra`. Copy it to your `PATH` or run it directly.
 Use ra directly in CI/CD workflows — no install step needed:
 
 ```yaml
-- uses: chinmaymk/ra@v0.0.2
+- uses: chinmaymk/ra@latest
   with:
     prompt: "Review this PR for bugs and security issues"
   env:

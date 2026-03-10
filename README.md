@@ -696,7 +696,7 @@ ra --exec ./scripts/batch-review.ts
 Use ra directly in your CI/CD workflows. No install step needed — the action downloads the binary automatically.
 
 ```yaml
-- uses: chinmaymk/ra@v0.0.2
+- uses: chinmaymk/ra@latest
   with:
     prompt: "Review this PR for bugs and security issues"
     provider: anthropic
