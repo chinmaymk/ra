@@ -62,6 +62,36 @@ if [ -n "${INPUT_TOOL_TIMEOUT:-}" ]; then
   ARGS+=("--tool-timeout" "$INPUT_TOOL_TIMEOUT")
 fi
 
+# Builtin tools
+if [ "${INPUT_BUILTIN_TOOLS:-true}" = "true" ]; then
+  ARGS+=("--builtin-tools")
+fi
+
+# Memory
+if [ "${INPUT_MEMORY:-false}" = "true" ]; then
+  ARGS+=("--memory")
+fi
+
+# Provider connection options
+if [ -n "${INPUT_ANTHROPIC_BASE_URL:-}" ]; then
+  ARGS+=("--anthropic-base-url" "$INPUT_ANTHROPIC_BASE_URL")
+fi
+if [ -n "${INPUT_OPENAI_BASE_URL:-}" ]; then
+  ARGS+=("--openai-base-url" "$INPUT_OPENAI_BASE_URL")
+fi
+if [ -n "${INPUT_GOOGLE_BASE_URL:-}" ]; then
+  ARGS+=("--google-base-url" "$INPUT_GOOGLE_BASE_URL")
+fi
+if [ -n "${INPUT_OLLAMA_HOST:-}" ]; then
+  ARGS+=("--ollama-host" "$INPUT_OLLAMA_HOST")
+fi
+if [ -n "${INPUT_AZURE_ENDPOINT:-}" ]; then
+  ARGS+=("--azure-endpoint" "$INPUT_AZURE_ENDPOINT")
+fi
+if [ -n "${INPUT_AZURE_DEPLOYMENT:-}" ]; then
+  ARGS+=("--azure-deployment" "$INPUT_AZURE_DEPLOYMENT")
+fi
+
 # Capture output
 OUTPUT_FILE="$(mktemp)"
 
