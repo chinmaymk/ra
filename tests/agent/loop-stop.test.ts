@@ -45,3 +45,40 @@ test('middleware can stop the loop via ctx.stop()', async () => {
   const result = await loop.run([{ role: 'user', content: 'hi' }])
   expect(result.iterations).toBe(2)
 })
+
+test('ctx.stop(reason) includes stopReason in result', async () => {
+  callCount = 0
+  const tools = new ToolRegistry()
+  tools.register({ name: 'noop', description: 'no-op', inputSchema: {}, execute: async () => 'ok' })
+
+  const loop = new AgentLoop({
+    provider: mockProvider,
+    tools,
+    model: 'test',
+    maxIterations: 5,
+    middleware: {
+      beforeModelCall: [async (ctx) => { ctx.stop('token budget exceeded') }]
+    }
+  })
+
+  const result = await loop.run([{ role: 'user', content: 'hi' }])
+  expect(result.stopReason).toBe('token budget exceeded')
+  expect(result.iterations).toBe(1)
+})
+
+test('stopReason is undefined when stop() called without reason', async () => {
+  callCount = 0
+  const tools = new ToolRegistry()
+
+  const loop = new AgentLoop({
+    provider: mockProvider,
+    tools,
+    model: 'test',
+    middleware: {
+      beforeModelCall: [async (ctx) => { ctx.stop() }]
+    }
+  })
+
+  const result = await loop.run([{ role: 'user', content: 'hi' }])
+  expect(result.stopReason).toBeUndefined()
+})

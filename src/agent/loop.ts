@@ -23,6 +23,7 @@ export interface LoopResult {
   messages: IMessage[]
   iterations: number
   usage: TokenUsage
+  stopReason?: string
 }
 
 const EMPTY_MW: MiddlewareConfig = {
@@ -62,7 +63,12 @@ export class AgentLoop {
     const messages: IMessage[] = [...initialMessages]
     let iterations = 0
     const controller = new AbortController()
-    const stop = () => controller.abort()
+    let stopReason: string | undefined
+    const stop = (reason?: string) => {
+      stopReason = reason
+      if (reason) console.log(`[ra] loop stopped: ${reason}`)
+      controller.abort()
+    }
     const { signal } = controller
 
     const stoppable: StoppableContext = { stop, signal }
@@ -76,7 +82,7 @@ export class AgentLoop {
 
     try {
       await runMiddlewareChain(loopCtx(), this.middleware.beforeLoopBegin, this.toolTimeout)
-      if (signal.aborted) return { messages, iterations, usage }
+      if (signal.aborted) return { messages, iterations, usage, ...(stopReason && { stopReason }) }
 
       while (iterations < this.maxIterations) {
         iterations++
@@ -173,6 +179,6 @@ export class AgentLoop {
       throw err
     }
 
-    return { messages, iterations, usage }
+    return { messages, iterations, usage, ...(stopReason && { stopReason }) }
   }
 }
