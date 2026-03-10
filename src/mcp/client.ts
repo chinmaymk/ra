@@ -2,7 +2,14 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import type { ToolRegistry } from '../agent/tool-registry'
+import type { ITool } from '../providers/types'
 import type { McpClientConfig } from '../config/types'
+import { wrapMcpToolsLazy } from './lazy-tools'
+
+export interface McpConnectOptions {
+  lazySchemas?: boolean
+  maxDescriptionLength?: number
+}
 
 export class McpClient {
   private clients: Client[]
@@ -11,8 +18,10 @@ export class McpClient {
     this.clients = clients
   }
 
-  async connect(configs: McpClientConfig[], registry: ToolRegistry): Promise<void> {
+  async connect(configs: McpClientConfig[], registry: ToolRegistry, options?: McpConnectOptions): Promise<void> {
     try {
+      const mcpTools: ITool[] = []
+
       for (const config of configs) {
         if (config.transport === 'stdio' && !config.command) throw new Error(`McpClientConfig "${config.name}" requires a command for stdio transport`)
         if (config.transport === 'sse' && !config.url) throw new Error(`McpClientConfig "${config.name}" requires a url for sse transport`)
@@ -27,12 +36,22 @@ export class McpClient {
 
         const { tools } = await client.listTools()
         for (const tool of tools) {
-          registry.register({
+          mcpTools.push({
             name: tool.name,
             description: tool.description ?? '',
             inputSchema: tool.inputSchema as Record<string, unknown>,
             execute: (input) => client.callTool({ name: tool.name, arguments: input as Record<string, unknown> }),
           })
+        }
+      }
+
+      if (options?.lazySchemas && mcpTools.length > 0) {
+        wrapMcpToolsLazy(registry, mcpTools, {
+          maxDescriptionLength: options.maxDescriptionLength,
+        })
+      } else {
+        for (const tool of mcpTools) {
+          registry.register(tool)
         }
       }
     } catch (err) {

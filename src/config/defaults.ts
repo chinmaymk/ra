@@ -19,6 +19,8 @@ export const defaultConfig: RaConfig = {
         description: 'Ra AI agent',
       },
     },
+    lazySchemas: true,
+    maxDescriptionLength: 100,
   },
   providers: {
     anthropic: { apiKey: '' },

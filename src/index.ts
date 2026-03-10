@@ -333,8 +333,11 @@ async function main(): Promise<void> {
   const mcpClient = new McpClient()
   if (config.mcp.client && config.mcp.client.length > 0) {
     logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
-    await mcpClient.connect(config.mcp.client, tools)
-    logger.info('MCP servers connected', { totalTools: tools.all().length })
+    await mcpClient.connect(config.mcp.client, tools, {
+      lazySchemas: config.mcp.lazySchemas,
+      maxDescriptionLength: config.mcp.maxDescriptionLength,
+    })
+    logger.info('MCP servers connected', { totalTools: tools.all().length, lazySchemas: config.mcp.lazySchemas })
   }
 
   // Prepend observability hooks into the middleware chain (obs runs first)
