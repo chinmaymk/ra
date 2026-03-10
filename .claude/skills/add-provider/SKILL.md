@@ -5,25 +5,17 @@ description: Use when adding a new LLM provider to ra.
 
 # Adding a Provider
 
-All 6 providers follow the same pattern. Use an existing one as a template — `anthropic.ts` is the cleanest.
+See `src/providers/CLAUDE.md` for the adapter pattern and StreamChunk contract. Use `anthropic.ts` as a template.
 
-## Files to Touch
+## Checklist
 
-1. **`src/providers/<name>.ts`** — Provider class implementing `IProvider`
-2. **`src/providers/registry.ts`** — Add to `ProviderOptionsMap`, import, and add `case` to `createProvider()`
-3. **`src/config/types.ts`** — Add to `ProviderName` union and `providers` field in `RaConfig`
-4. **`src/config/defaults.ts`** — Add default options under `providers`
-5. **`src/config/index.ts`** — Add env var mapping (e.g., `RA_<NAME>_API_KEY`)
-6. **`tests/providers/<name>.test.ts`** — Tests mocking the SDK client
-
-## Provider Class Pattern
+1. **`src/providers/<name>.ts`** — Provider class:
 
 ```ts
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk } from './types'
 
 export interface XProviderOptions {
   apiKey: string
-  // provider-specific options
 }
 
 export class XProvider implements IProvider {
@@ -35,7 +27,6 @@ export class XProvider implements IProvider {
   }
 
   buildParams(request: ChatRequest) {
-    // Map ra's ChatRequest to SDK-specific params
     return {
       model: request.model,
       messages: this.mapMessages(request.messages),
@@ -47,26 +38,32 @@ export class XProvider implements IProvider {
   async chat(request: ChatRequest): Promise<ChatResponse> { /* ... */ }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
-    // Must yield: text, tool_call_start, tool_call_delta, tool_call_end, done
-    // done chunk should include usage if available
+    // Must yield: text, tool_call_start, tool_call_delta*, tool_call_end, done
+    // done chunk MUST include usage if available
   }
 
-  mapMessages(messages: IMessage[]) { /* ra messages → SDK messages */ }
-  mapTools(tools: ITool[]) { /* ra tools → SDK tools */ }
-  mapResponseToMessage(response: SdkResponse): IMessage { /* SDK response → ra message */ }
+  private mapMessages(messages: IMessage[]) { /* ra → SDK */ }
+  private mapTools(tools: ITool[]) { /* ra → SDK */ }
+  private mapResponseToMessage(response: SdkResponse): IMessage { /* SDK → ra */ }
 }
 ```
 
-## Key Points
+2. **`src/providers/registry.ts`** — Add to `ProviderOptionsMap`, import class, add `case` to `createProvider()`
 
-- `stream()` is the primary method — the loop uses streaming. `chat()` is secondary.
+3. **`src/config/types.ts`** — Add to `ProviderName` union and `providers` field in `RaConfig`
+
+4. **`src/config/defaults.ts`** — Add default options under `providers`
+
+5. **`src/config/index.ts`** — Add env var mapping (`RA_<NAME>_API_KEY`)
+
+6. **`tests/providers/<name>.test.ts`** — Mock the SDK client, test `buildParams()`, `stream()` chunk sequence
+
+7. **Verify**: `bun tsc` → `bun test` → `bun run ra --provider <name> --model <model> "Hello"`
+
+## Rules
+
+- `stream()` is primary — the loop always uses streaming. `chat()` is secondary.
 - Every `stream()` must yield a `{ type: 'done' }` chunk at the end, even if the SDK doesn't emit one.
-- Tool call IDs must be preserved exactly — they're used to match results back.
-- `buildParams()` is a separate method so tests can inspect the request without mocking the SDK.
-- Use optional spread for conditional fields: `...(x && { key: x })`.
-
-## Verification
-
-1. `bun tsc` — no type errors
-2. `bun test` — new and existing tests pass
-3. `bun run ra --provider <name> --model <model> "Hello"` — smoke test
+- Tool call IDs must be preserved exactly — they match results back to calls.
+- `buildParams()` should be a separate method so tests can inspect requests without mocking the SDK.
+- Use optional spread: `...(x && { key: x })`.
