@@ -1,6 +1,6 @@
 # Built-in Tools
 
-ra ships with 14 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
+ra ships with 15 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
 
 Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 
@@ -217,6 +217,33 @@ Track tasks with a checklist. The tool description dynamically updates to show r
 The dynamic description looks like:
 
 > Track tasks with a checklist. Actions: "add" (item text), "check"/"uncheck"/"remove" (by 0-based index), "list" (show all). Remaining (2/3): 1: Fix bug, 2: Deploy
+
+## Parallelization
+
+### `subagent`
+
+Fork parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tasks` | array | yes | Tasks to run in parallel |
+| `tasks[].task` | string | yes | The task prompt for the fork |
+
+```json
+{
+  "tasks": [
+    { "task": "Read src/auth.ts and summarize the authentication flow" },
+    { "task": "Find all TODO comments in the codebase" },
+    { "task": "Check for unused exports in src/utils/" }
+  ]
+}
+```
+
+Returns `{ results, usage }` where each result has `task`, `status`, `result`, `iterations`, and `usage`. Aggregate usage rolls up into the parent's token tracking automatically.
+
+Only `ask_user` and `subagent` are excluded from forks — `ask_user` can't work from a background fork, and `subagent` nesting is depth-limited (default: 2) to prevent infinite recursion. All other tools (including memory) are inherited. Task failures don't affect siblings.
+
+Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to control how many forks run in parallel.
 
 ## Memory
 

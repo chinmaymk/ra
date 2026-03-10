@@ -16,7 +16,7 @@ import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
-import { registerBuiltinTools } from './tools'
+import { registerBuiltinTools, subagentTool } from './tools'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
 import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
@@ -295,6 +295,22 @@ async function main(): Promise<void> {
   if (config.mcp.client && config.mcp.client.length > 0) {
     await mcpClient.connect(config.mcp.client, tools)
   }
+
+  // Register subagent tool after all other tools (builtin + MCP) are set up.
+  // The child registry is built lazily at execution time, so it always sees
+  // the latest tools, but registering last makes the intent clear.
+  tools.register(subagentTool({
+    provider,
+    tools,
+    model: config.model,
+    systemPrompt: config.systemPrompt,
+    middleware,
+    thinking: config.thinking,
+    compaction: config.compaction,
+    toolTimeout: config.toolTimeout,
+    maxIterations: config.maxIterations,
+    maxConcurrency: config.maxConcurrency,
+  }))
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {

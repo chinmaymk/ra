@@ -1,4 +1,13 @@
-import type { IMessage } from './types'
+import type { IMessage, TokenUsage } from './types'
+
+/** Accumulate source token usage into target (mutates target) */
+export function accumulateUsage(target: TokenUsage, source: TokenUsage): void {
+  target.inputTokens += source.inputTokens
+  target.outputTokens += source.outputTokens
+  if (source.thinkingTokens) {
+    target.thinkingTokens = (target.thinkingTokens ?? 0) + source.thinkingTokens
+  }
+}
 
 export function extractSystemMessages(messages: IMessage[]): { system: string | undefined; filtered: IMessage[] } {
   const systemParts: string[] = []

@@ -48,6 +48,8 @@ storage:
   maxSessions: 100
   ttlDays: 30
 
+maxConcurrency: 4
+
 middleware:
   beforeModelCall:
     - "./middleware/budget.ts"
@@ -105,6 +107,14 @@ mcp:
 | `context.enabled` | — | — | `true` | Enable context file discovery |
 | `context.patterns` | — | — | `[]` | Glob patterns for context files |
 | `context.resolvers` | — | — | built-in | Pattern resolvers for `@file` and `url:` |
+
+### Subagent
+
+The `subagent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`.
+
+| Field | Env var | CLI flag | Default | Description |
+|-------|---------|----------|---------|-------------|
+| `maxConcurrency` | — | — | `4` | Max parallel subagent tasks per invocation |
 
 ### Storage
 

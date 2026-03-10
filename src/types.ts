@@ -70,3 +70,5 @@ export type { AzureProviderOptions } from './providers/azure.ts'
 // Built-in tools
 export { registerBuiltinTools } from './tools/index.ts'
 export { ASK_USER_SIGNAL } from './tools/ask-user.ts'
+export { subagentTool } from './tools/subagent.ts'
+export type { SubagentToolOptions } from './tools/subagent.ts'

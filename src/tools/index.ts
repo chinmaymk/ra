@@ -14,6 +14,9 @@ import { executePowershellTool } from './execute-powershell'
 import { webFetchTool } from './web-fetch'
 import { askUserTool } from './ask-user'
 import { checklistTool } from './checklist'
+import { subagentTool, type SubagentToolOptions } from './subagent'
+
+export { subagentTool, type SubagentToolOptions } from './subagent'
 
 export function registerBuiltinTools(registry: ToolRegistry): void {
   // Filesystem
