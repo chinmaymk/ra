@@ -37,7 +37,7 @@ On the **first call** to each tool, the wrapper returns the full schema as an er
 
 No meta-tools needed — the model learns schemas through normal error handling.
 
-`wrapMcpToolsLazy(registry, McpToolEntry[], options?)` is the entry point. Each `McpToolEntry` pairs an `ITool` with its `serverName`. A per-tool `Set` tracks which tools have been "revealed".
+`wrapMcpToolsLazy(registry, McpToolEntry[], options?)` is the entry point. Each `McpToolEntry` pairs an `ITool` with its `serverName`. A per-tool boolean tracks whether the schema has been revealed.
 
 ## MCP Server
 

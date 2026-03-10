@@ -27,7 +27,7 @@ export function wrapMcpToolsLazy(
 
   for (const { tool, serverName } of mcpTools) {
     const prefix = `[${serverName}] `
-    const revealed = new Set<string>()
+    let revealed = false
 
     registry.register({
       name: tool.name,
@@ -37,8 +37,8 @@ export function wrapMcpToolsLazy(
         description: `Schema not shown to save tokens. Call this tool to receive the full parameter schema, then retry with correct parameters.`,
       },
       async execute(input: unknown): Promise<unknown> {
-        if (!revealed.has(tool.name)) {
-          revealed.add(tool.name)
+        if (!revealed) {
+          revealed = true
           return {
             isError: true,
             content: formatSchemaHint(tool, serverName),
