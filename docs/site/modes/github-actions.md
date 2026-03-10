@@ -5,7 +5,7 @@ Run ra in your CI/CD workflows. The action downloads the binary, builds the CLI 
 ## Basic usage
 
 ```yaml
-- uses: chinmaymk/ra@v0.1.0
+- uses: chinmaymk/ra@v0.0.2
   with:
     prompt: "Review this PR for bugs and security issues"
   env:
@@ -62,7 +62,7 @@ Run ra in your CI/CD workflows. The action downloads the binary, builds the CLI 
 | Input | Description | Default |
 |-------|-------------|---------|
 | `config` | Path to ra config file | — |
-| `version` | ra version to use (e.g. `v0.1.0`) | `latest` |
+| `version` | ra version to use (e.g. `v0.0.2`) | `latest` |
 | `fail-on-error` | Fail the workflow if ra exits non-zero | `true` |
 
 ## Outputs
@@ -92,7 +92,7 @@ jobs:
         id: diff
         run: echo "diff=$(git diff origin/${{ github.base_ref }}...HEAD)" >> "$GITHUB_OUTPUT"
 
-      - uses: chinmaymk/ra@v0.1.0
+      - uses: chinmaymk/ra@v0.0.2
         with:
           prompt: |
             Review this diff for bugs, security issues, and style problems:
@@ -107,7 +107,7 @@ jobs:
 ### Using a custom config file
 
 ```yaml
-- uses: chinmaymk/ra@v0.1.0
+- uses: chinmaymk/ra@v0.0.2
   with:
     prompt: "Analyze the codebase and suggest improvements"
     config: ./ra.config.yml
@@ -118,7 +118,7 @@ jobs:
 ### Using OpenAI
 
 ```yaml
-- uses: chinmaymk/ra@v0.1.0
+- uses: chinmaymk/ra@v0.0.2
   with:
     prompt: "Summarize the changes in this release"
     provider: openai
@@ -130,7 +130,7 @@ jobs:
 ### Capturing output
 
 ```yaml
-- uses: chinmaymk/ra@v0.1.0
+- uses: chinmaymk/ra@v0.0.2
   id: agent
   with:
     prompt: "Generate a changelog from recent commits"
@@ -144,7 +144,7 @@ jobs:
 ### Pinning a specific version
 
 ```yaml
-- uses: chinmaymk/ra@v0.1.0  # pin to a release tag
+- uses: chinmaymk/ra@v0.0.2  # pin to a release tag
 - uses: chinmaymk/ra@main    # or track the main branch
 - uses: chinmaymk/ra@abc123  # or pin to a commit SHA
 ```
