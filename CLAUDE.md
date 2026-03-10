@@ -1,112 +1,89 @@
----
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
----
+# ra
 
-Default to using Bun instead of Node.js.
+ra is an agentic loop framework. One binary, multiple interfaces (CLI/REPL/HTTP/MCP), provider-portable across 6 LLM backends. Deployed as a single self-contained binary compiled via `bun build --compile` — no runtime dependencies needed.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
-- Use `bun tsc` to ensure there's no typescript errors
+## Quick Reference
 
-## APIs
+```bash
+bun run ra              # run from source
+bun run compile         # build binary → dist/ra
+bun tsc                 # type check (must pass, zero errors)
+bun test                # run all tests
+bun test tests/agent/   # run tests in a directory
+```
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+## Project Structure
+
+```
+src/
+  agent/       # Core loop, middleware chain, tool registry, context compaction
+  providers/   # LLM adapters: anthropic, openai, google, ollama, bedrock, azure
+  tools/       # 14 built-in tools (filesystem, shell, network, agent interaction)
+  config/      # Layered config: defaults → file → env → CLI flags
+  interfaces/  # Entry points: cli, repl, http, mcp
+  skills/      # Skill loader, runner, installer
+  middleware/   # Middleware file loader
+  context/     # Context file discovery and pattern resolution
+  mcp/         # MCP client + server
+  memory/      # SQLite-backed persistent memory
+  storage/     # JSONL session persistence
+  utils/       # Shared utilities
+tests/         # Mirrors src/ structure
+skills/        # 6 built-in skills (code-review, architect, planner, debugger, code-style, writer)
+recipes/       # 2 complete agent configurations (coding-agent, code-review-agent)
+```
+
+## Architecture
+
+The core loop (`src/agent/loop.ts`) runs: stream model → collect tool calls → execute tools → repeat.
+
+```
+User message → [beforeLoopBegin]
+  → [beforeModelCall] → provider.stream() → [onStreamChunk]* → [afterModelResponse]
+  → [beforeToolExecution] → tool.execute() → [afterToolExecution]
+  → [afterLoopIteration]
+  → repeat or [afterLoopComplete]
+```
+
+9 middleware hooks intercept every step. Context compaction is itself a `beforeModelCall` middleware.
+
+## Key Types (src/providers/types.ts)
+
+- `IProvider` — `name` + `chat()` + `stream()`. Every provider implements this.
+- `IMessage` — `{ role, content, toolCalls?, toolCallId?, isError? }`. Unified across providers.
+- `ITool` — `{ name, description, inputSchema, execute() }`. All tools follow this.
+- `StreamChunk` — Discriminated union: `text | thinking | tool_call_start | tool_call_delta | tool_call_end | done`.
+- `ChatRequest` — `{ model, messages, tools?, thinking?, providerOptions? }`.
+
+## Key Patterns
+
+- **Factory functions for tools**: each tool file exports a function returning `ITool`
+- **Provider adapters**: each provider maps `IMessage`/`ITool` to SDK-specific formats via `mapMessages()`, `mapTools()`, `buildParams()`
+- **Config merging**: `defaults.ts` → `ra.config.{yml,json,toml}` → `RA_*` env vars → `--cli-flags`
+- **Middleware as arrays**: config defines `middleware: { hookName: ["./path.ts"] }`, loaded at startup
+- **Skills as directories**: `SKILL.md` with YAML frontmatter, optional `scripts/` and `references/` subdirs
+
+## Development Rules
+
+- Use Bun everywhere — never Node.js, npm, npx, jest, vitest, vite, express, or dotenv
+- `bun tsc` must pass before committing — don't use `as any` to silence errors
+- Tests go in `tests/` mirroring `src/` structure
+- Cast tool input narrowly: `input as { param: string }` not `input as any`
+- Use optional spread for conditional fields: `...(x && { key: x })`
+- Every `stream()` must yield a `{ type: 'done' }` chunk at the end
+- Tool call IDs must be preserved exactly — they match results back to calls
+- Prefer `Bun.file` over `node:fs`, `Bun.$` over `execa`, `bun:sqlite` over `better-sqlite3`
 
 ## Testing
 
-Use `bun test` to run tests.
+```ts
+import { test, expect } from "bun:test"
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
-
-test("hello world", () => {
-  expect(1).toBe(1);
-});
-```
-
-## Frontend
-
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
-
-Server:
-
-```ts#index.ts
-import index from "./index.html"
-
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
+test("description", () => {
+  expect(result).toBe(expected)
 })
 ```
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
-
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
-
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-
-// import .css files directly and it works
-import './index.css';
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+- Provider tests mock the SDK client
+- Loop tests use a `mockProvider()` that yields `StreamChunk[][]`
+- Integration tests in `tests/integration/` test full end-to-end flows
