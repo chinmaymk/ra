@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { appendFile } from 'node:fs/promises'
+import { appendFile, mkdir, rm } from 'node:fs/promises'
 import type { IMessage } from '../providers/types'
 
 export interface SessionMeta {
@@ -34,7 +34,7 @@ export class SessionStorage {
   }
 
   async init(): Promise<void> {
-    await Bun.$`mkdir -p ${this.storagePath}`.quiet()
+    await mkdir(this.storagePath, { recursive: true })
   }
 
   sessionDir(id: string): string {
@@ -50,7 +50,7 @@ export class SessionStorage {
     const meta: SessionMeta = { id, created, ...options }
 
     const dir = this.sessionDir(id)
-    await Bun.$`mkdir -p ${dir}`.quiet()
+    await mkdir(dir, { recursive: true })
 
     await Bun.write(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
 
@@ -59,7 +59,7 @@ export class SessionStorage {
 
   async appendMessage(id: string, message: IMessage): Promise<void> {
     const dir = this.sessionDir(id)
-    await Bun.$`mkdir -p ${dir}`.quiet()
+    await mkdir(dir, { recursive: true })
     const filePath = join(dir, 'messages.jsonl')
     const line = JSON.stringify(message) + '\n'
     await appendFile(filePath, line)
@@ -120,6 +120,6 @@ export class SessionStorage {
       }
     }
 
-    await Promise.all([...toDelete].map(id => Bun.$`rm -rf ${this.sessionDir(id)}`.quiet()))
+    await Promise.all([...toDelete].map(id => rm(this.sessionDir(id), { recursive: true, force: true })))
   }
 }

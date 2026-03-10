@@ -5,6 +5,7 @@ export const defaultConfig: RaConfig = {
   model: 'claude-sonnet-4-6',
   interface: 'repl',
   systemPrompt: 'You are a helpful AI assistant.',
+  configDir: process.cwd(),
   http: { port: 3000, token: '' },
   skillDirs: [],
   skills: [],
@@ -38,12 +39,34 @@ export const defaultConfig: RaConfig = {
   builtinTools: true,
   builtinSkills: {},
   middleware: {},
+  maxConcurrency: 4,
   context: {
     enabled: true,
     patterns: [],
+    resolvers: [
+      { name: 'file', enabled: true },
+      { name: 'url', enabled: true },
+    ],
   },
   compaction: {
     enabled: true,
     threshold: 0.80,
+  },
+  memory: {
+    enabled: false,
+    path: '.ra/memory.db',
+    maxMemories: 1000,
+    ttlDays: 90,
+    injectLimit: 5,
+  },
+  observability: {
+    enabled: true,
+    logs: {
+      level: 'info',
+      output: 'stderr',
+    },
+    traces: {
+      output: 'stderr',
+    },
   },
 }

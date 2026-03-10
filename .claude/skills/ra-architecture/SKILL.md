@@ -3,71 +3,46 @@ name: ra-architecture
 description: Use when starting work on the ra codebase, navigating the source, or understanding how components connect.
 ---
 
-# ra Architecture
+# ra Architecture — Quick Orientation
 
-ra is an agentic loop you configure into any agent. One binary, multiple interfaces, provider-portable.
+Every `src/` subdirectory has its own `CLAUDE.md` with detailed docs. This skill gets you oriented fast.
 
-## Core Loop
+## Where Things Live
 
-`src/agent/loop.ts` — The heart of ra. Runs: stream model response → collect tool calls → execute tools → repeat until no tool calls or max iterations.
+| I want to... | Go to |
+|---|---|
+| Understand the agent loop | `src/agent/CLAUDE.md` → `loop.ts` |
+| Add or modify a tool | `src/tools/CLAUDE.md` → tool file → `index.ts` |
+| Add or modify a provider | `src/providers/CLAUDE.md` → provider file → `registry.ts` |
+| Change config behavior | `src/config/CLAUDE.md` → `types.ts`, `defaults.ts`, `index.ts` |
+| Work on CLI/REPL/HTTP | `src/interfaces/CLAUDE.md` → interface file |
+| Write middleware | `src/middleware/CLAUDE.md` + `src/agent/types.ts` for context shapes |
+| Work on MCP | `src/mcp/CLAUDE.md` → `client.ts` or `server.ts` |
+| Work on memory | `src/memory/CLAUDE.md` → `store.ts`, `tools.ts`, `middleware.ts` |
+| Work on skills system | `src/skills/CLAUDE.md` → `loader.ts`, `runner.ts` |
+| Work on context discovery | `src/context/CLAUDE.md` → `index.ts` |
+| Work on session storage | `src/storage/CLAUDE.md` → `sessions.ts` |
+| Find tests | `tests/CLAUDE.md` → `tests/<module>/` mirrors `src/<module>/` |
 
-```
-User message → [beforeLoopBegin]
-  → [beforeModelCall] → provider.stream() → [onStreamChunk]* → [afterModelResponse]
-  → [beforeToolExecution] → tool.execute() → [afterToolExecution]
-  → [afterLoopIteration]
-  → repeat or [afterLoopComplete]
-```
-
-## Directory Map
-
-| Directory | Purpose | Key files |
-|-----------|---------|-----------|
-| `src/agent/` | Agent loop, middleware chain, tool registry, context compaction | `loop.ts`, `middleware.ts`, `tool-registry.ts` |
-| `src/providers/` | LLM provider adapters (Anthropic, OpenAI, Google, Ollama, Bedrock, Azure) | Each implements `IProvider` from `types.ts` |
-| `src/tools/` | Built-in tools (14 total). Each exports a factory function returning `ITool` | `index.ts` registers all tools |
-| `src/interfaces/` | Entry points: CLI, REPL, HTTP, MCP server | Each reads config and wires up the loop |
-| `src/config/` | Layered config: defaults → file → env → CLI flags | `types.ts` for `RaConfig`, `index.ts` for loading |
-| `src/skills/` | Skill loading, script execution, GitHub install | `loader.ts`, `runner.ts`, `install.ts` |
-| `src/mcp/` | MCP client (connect to external servers) and MCP server (expose ra as tool) | `client.ts`, `server.ts` |
-| `src/middleware/` | Middleware file loader | `loader.ts` |
-| `src/storage/` | JSONL session persistence | `sessions.ts` |
-
-## Key Types (`src/providers/types.ts`)
-
-- `IProvider` — `chat()` + `stream()`. Every provider implements this.
-- `IMessage` — Unified message format across providers.
-- `ITool` — `name` + `description` + `inputSchema` + `execute()`.
-- `StreamChunk` — Discriminated union: `text | thinking | tool_call_start | tool_call_delta | tool_call_end | done`.
-- `ChatRequest` — What gets sent to the provider: model, messages, tools, thinking level.
-
-## Extension Points
-
-- **New provider** → implement `IProvider`, add to `src/providers/registry.ts` (see `add-provider` skill)
-- **New tool** → factory function returning `ITool`, register in `src/tools/index.ts` (see `add-tool` skill)
-- **New middleware** → hook into any of 9 lifecycle points (see `add-middleware` skill)
-- **New interface** → read config, build loop, wire I/O (see `src/interfaces/cli.ts` as template)
-- **New skill** → `SKILL.md` with frontmatter + markdown body in a `skills/` directory
-
-## Config Flow
+## Core Data Flow
 
 ```
-defaults.ts → ra.config.{yml,json,toml} → RA_* env vars → --cli-flags
+Config → Provider + ToolRegistry + Middleware → AgentLoop → Interface (CLI/REPL/HTTP/MCP)
 ```
 
-Each layer overrides the previous. `src/config/index.ts` merges them. `src/config/types.ts` defines `RaConfig`.
+## The 5 Key Interfaces
 
-## Testing
+| Type | Location | What |
+|------|----------|------|
+| `IProvider` | `src/providers/types.ts` | LLM adapter: `chat()` + `stream()` |
+| `IMessage` | `src/providers/types.ts` | Unified message format across all providers |
+| `ITool` | `src/providers/types.ts` | Tool: `name` + `description` + `inputSchema` + `execute()` |
+| `StreamChunk` | `src/providers/types.ts` | Streaming response: `text | thinking | tool_call_* | done` |
+| `MiddlewareConfig` | `src/agent/types.ts` | 9 hook arrays with typed contexts |
 
-- `bun test` runs all tests
-- Tests live in `tests/` mirroring `src/` structure
-- Provider tests mock the SDK client
-- Loop tests use `mockProvider()` that yields `StreamChunk[][]`
-- Integration tests in `tests/integration/` test full flows
+## First Steps for Any Task
 
-## Commands
-
-- `bun run ra` — run from source
-- `bun run compile` — produce `dist/ra` binary
-- `bun tsc` — type check
-- `bun test` — run tests
+1. Read the relevant `CLAUDE.md` in the target directory
+2. Read the existing code you'll modify
+3. Check `tests/<module>/` for test patterns
+4. When done: `bun tsc` → `bun test` → `git diff` (use the `verify` skill)

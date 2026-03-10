@@ -183,6 +183,34 @@ describe('parseArgs', () => {
     })
   })
 
+  describe('skill subcommands', () => {
+    it('parses "skill install <source>"', () => {
+      const r = parseArgs(dev('skill', 'install', 'code-review'))
+      expect(r.meta.skillCommand).toEqual({ action: 'install', args: ['code-review'] })
+    })
+
+    it('parses "skill install" with multiple sources', () => {
+      const r = parseArgs(dev('skill', 'install', 'review', 'lint'))
+      expect(r.meta.skillCommand).toEqual({ action: 'install', args: ['review', 'lint'] })
+    })
+
+    it('parses "skill remove <name>"', () => {
+      const r = parseArgs(dev('skill', 'remove', 'review'))
+      expect(r.meta.skillCommand).toEqual({ action: 'remove', args: ['review'] })
+    })
+
+    it('parses "skill list"', () => {
+      const r = parseArgs(dev('skill', 'list'))
+      expect(r.meta.skillCommand).toEqual({ action: 'list', args: [] })
+    })
+
+    it('does not treat "skill" without subcommand as skill command', () => {
+      const r = parseArgs(dev('skill'))
+      expect(r.meta.skillCommand).toBeUndefined()
+      expect(r.meta.prompt).toBe('skill')
+    })
+  })
+
   describe('edge cases', () => {
     it('empty argv', () => {
       const r = parseArgs(['ra'])

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "ra"
-  text: "A complete agentic loop you configure into any agent you need."
-  tagline: The loop is built in. The agent is up to you.
+  text: "One Loop. Infinite Agents."
+  tagline: A configurable agentic loop. Define tools, skills, and context in YAML — drop to TypeScript when you need it.
   actions:
     - theme: brand
       text: Get Started
@@ -15,13 +15,15 @@ hero:
 
 features:
   - title: Full Control Over Context
-    details: Every message, tool call, and stream chunk is yours to inspect, modify, or stop. Middleware hooks run at every step. You decide what the model sees and when.
-  - title: Any Provider, Any Model
-    details: Use any model from Anthropic, OpenAI, Azure OpenAI, Google Gemini, AWS Bedrock, or Ollama. Switch with a flag — the rest of your config stays the same.
-  - title: Any Interface
-    details: Ship as a CLI command, interactive REPL, streaming HTTP API, or MCP server for Cursor and Claude Desktop. One binary, every context.
+    details: Every message, tool call, and stream chunk is visible and interceptable through middleware hooks. You decide what the model sees and when.
+  - title: Any Provider, One Config
+    details: Anthropic, OpenAI, Google, Azure, AWS Bedrock, Ollama. Switch with a flag — the rest of your config stays the same.
+  - title: Four Interfaces, Same Agent
+    details: CLI command, interactive REPL, streaming HTTP API, or MCP server. One binary, every context.
+  - title: Config-Driven Agents
+    details: Define tools, skills, system prompts, and context in YAML. Drop down to TypeScript only where you need custom logic. The config is the agent.
   - title: Skills & MCP
-    details: Define behavior through skills and system prompts. Connect external MCP servers for tools. Expose ra itself as an MCP tool. Extend without touching core code.
-  - title: Layered Config
-    details: defaults → file → env → CLI. Commit a baseline, override per-run. The config is the agent — change the config, change the agent.
+    details: Reusable instruction bundles with progressive disclosure. Connect external MCP servers or expose ra as a tool for Cursor and Claude Desktop.
+  - title: Smart Context
+    details: Automatic context compaction, token tracking, prompt caching, pattern resolution, and extended thinking — all built in.
 ---

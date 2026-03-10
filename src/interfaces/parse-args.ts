@@ -1,6 +1,11 @@
 import { parseArgs as utilParseArgs } from 'util'
 import type { RaConfig } from '../config/types'
 
+export interface SkillCommand {
+  action: 'install' | 'remove' | 'list'
+  args: string[]
+}
+
 export interface ParsedArgsMeta {
   help: boolean
   files: string[]
@@ -10,7 +15,10 @@ export interface ParsedArgsMeta {
   configPath?: string
   exec?: string
   showContext: boolean
-  subcommand?: { name: string; args: string[] }
+  listMemories: boolean
+  memories?: string
+  forget?: string
+  skillCommand?: SkillCommand
 }
 
 export interface ParsedArgs {
@@ -39,16 +47,19 @@ export function parseArgs(argv: string[]): ParsedArgs {
   )
   const userArgs = argv.slice(isScriptPath ? 2 : 1)
 
-  // Detect subcommands (e.g., "skill install github.com/org/repo")
-  if (userArgs[0] === 'skill') {
+  // Check for skill subcommand: ra skill install|remove|list [args...]
+  if (userArgs[0] === 'skill' && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
+    const action = userArgs[1] as 'install' | 'remove' | 'list'
+    const subArgs = userArgs.slice(2)
     return {
-      config: {} as Partial<RaConfig>,
+      config: {},
       meta: {
         help: false,
         showContext: false,
+        listMemories: false,
         files: [],
         skills: [],
-        subcommand: { name: 'skill', args: userArgs.slice(1) },
+        skillCommand: { action, args: subArgs },
       },
     }
   }
@@ -86,6 +97,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'mcp-server-port':             { type: 'string' },
       'mcp-server-tool-name':        { type: 'string' },
       'mcp-server-tool-description': { type: 'string' },
+      // Memory
+      'memory':                      { type: 'boolean' },
+      'list-memories':               { type: 'boolean' },
+      'memories':                    { type: 'string' },
+      'forget':                      { type: 'string' },
       // Storage
       'storage-path':                { type: 'string' },
       'storage-max-sessions':        { type: 'string' },
@@ -141,6 +157,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // Skills
   if (values['skill-dir']) set(['skillDirs'], values['skill-dir'])
 
+  // Memory — --memories, --list-memories, and --forget imply --memory
+  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) set(['memory', 'enabled'], true)
+
   // Provider connection options
   if (values['anthropic-base-url']) set(['providers', 'anthropic', 'baseURL'], values['anthropic-base-url'])
   if (values['openai-base-url'])    set(['providers', 'openai', 'baseURL'], values['openai-base-url'])
@@ -152,8 +171,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return {
     config: r as Partial<RaConfig>,
     meta: {
-      help:       (values.help as boolean | undefined) ?? false,
-      showContext: (values['show-context'] as boolean | undefined) ?? false,
+      help:         (values.help as boolean | undefined) ?? false,
+      showContext:   (values['show-context'] as boolean | undefined) ?? false,
+      listMemories:  (values['list-memories'] as boolean | undefined) ?? false,
+      memories:      values.memories as string | undefined,
+      forget:        values.forget as string | undefined,
       files:      (values.file as string[] | undefined) ?? [],
       skills:     (values.skill as string[] | undefined) ?? [],
       prompt:     positionals.join(' ') || undefined,

@@ -1,0 +1,255 @@
+import type { MiddlewareConfig, LoopContext, ModelCallContext, ToolExecutionContext, ToolResultContext, ErrorContext } from '../agent/types'
+import type { Logger } from './logger'
+import type { Tracer, Span } from './tracer'
+
+/**
+ * Creates a complete set of observability middleware hooks.
+ * This is the single integration point — no logger/tracer params
+ * need to be threaded through the rest of the codebase.
+ */
+export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): Partial<MiddlewareConfig> {
+  let loopSpan: Span | undefined
+  let iterationSpan: Span | undefined
+  let modelSpan: Span | undefined
+  const toolSpans = new Map<string, Span>()
+  let iterationStartMessageCount = 0
+
+  /** End all open child spans with error status and clear state for reuse. */
+  function drainOpenSpans(status: 'ok' | 'error', attrs?: Record<string, unknown>): void {
+    for (const [id, span] of toolSpans) {
+      tracer.endSpan(span, status, attrs)
+      toolSpans.delete(id)
+    }
+    if (modelSpan) {
+      tracer.endSpan(modelSpan, status, attrs)
+      modelSpan = undefined
+    }
+    if (iterationSpan) {
+      tracer.endSpan(iterationSpan, status, attrs)
+      iterationSpan = undefined
+    }
+  }
+
+  const beforeLoopBegin = async (ctx: LoopContext): Promise<void> => {
+    // Reset state for reuse across multiple loop runs
+    drainOpenSpans('error', { reason: 'stale_from_previous_run' })
+    loopSpan = undefined
+
+    logger.setSessionId(ctx.sessionId)
+    tracer.setSessionId(ctx.sessionId)
+
+    loopSpan = tracer.startSpan('agent.loop', {
+      maxIterations: ctx.maxIterations,
+      initialMessageCount: ctx.messages.length,
+    })
+
+    logger.info('agent loop starting', {
+      maxIterations: ctx.maxIterations,
+      messageCount: ctx.messages.length,
+    })
+  }
+
+  const beforeModelCall = async (ctx: ModelCallContext): Promise<void> => {
+    iterationStartMessageCount = ctx.request.messages.length
+
+    iterationSpan = tracer.startSpan('agent.iteration', {
+      iteration: ctx.loop.iteration,
+      messageCount: ctx.request.messages.length,
+    }, loopSpan?.spanId)
+
+    modelSpan = tracer.startSpan('agent.model_call', {
+      model: ctx.request.model,
+      messageCount: ctx.request.messages.length,
+    }, iterationSpan.spanId)
+
+    logger.debug('calling model', {
+      iteration: ctx.loop.iteration,
+      model: ctx.request.model,
+      messageCount: ctx.request.messages.length,
+    })
+  }
+
+  const afterModelResponse = async (ctx: ModelCallContext): Promise<void> => {
+    const usage = ctx.loop.lastUsage
+    const lastMsg = ctx.request.messages[ctx.request.messages.length - 1]
+    const toolCalls = lastMsg?.role === 'assistant' ? lastMsg.toolCalls : undefined
+    const toolNames = toolCalls?.map(t => t.name) ?? []
+    const responseText = typeof lastMsg?.content === 'string' ? lastMsg.content : ''
+
+    if (modelSpan) {
+      tracer.endSpan(modelSpan, 'ok', {
+        inputTokens: usage?.inputTokens,
+        outputTokens: usage?.outputTokens,
+        thinkingTokens: usage?.thinkingTokens ?? null,
+        toolCallCount: toolNames.length,
+        toolNames,
+        responseLength: responseText.length,
+      })
+      modelSpan = undefined
+    }
+
+    logger.info('model responded', {
+      iteration: ctx.loop.iteration,
+      inputTokens: usage?.inputTokens,
+      outputTokens: usage?.outputTokens,
+      toolCallCount: toolNames.length,
+      toolNames,
+      responseLength: responseText.length,
+    })
+  }
+
+  const beforeToolExecution = async (ctx: ToolExecutionContext): Promise<void> => {
+    const attrs: Record<string, unknown> = {
+      tool: ctx.toolCall.name,
+      toolCallId: ctx.toolCall.id,
+    }
+
+    // For subagent calls, parse and log the task list
+    if (ctx.toolCall.name === 'subagent' && ctx.toolCall.arguments) {
+      try {
+        const parsed = JSON.parse(ctx.toolCall.arguments)
+        if (Array.isArray(parsed.tasks)) {
+          attrs.taskCount = parsed.tasks.length
+          attrs.tasks = parsed.tasks.map((t: { task: string }) =>
+            t.task.length > 100 ? t.task.slice(0, 100) + '…' : t.task
+          )
+        }
+      } catch { /* not valid JSON yet — streaming may be incomplete */ }
+    }
+
+    const span = tracer.startSpan('agent.tool_execution', attrs, iterationSpan?.spanId)
+    toolSpans.set(ctx.toolCall.id, span)
+
+    logger.info('executing tool', {
+      tool: ctx.toolCall.name,
+      toolCallId: ctx.toolCall.id,
+      input: ctx.toolCall.arguments ? ctx.toolCall.arguments.slice(0, 200) : '{}',
+      ...(attrs.taskCount != null && { taskCount: attrs.taskCount }),
+    })
+  }
+
+  const afterToolExecution = async (ctx: ToolResultContext): Promise<void> => {
+    const span = toolSpans.get(ctx.toolCall.id)
+
+    // For subagent calls, extract per-task results and aggregate usage
+    let subagentAttrs: Record<string, unknown> | undefined
+    if (ctx.toolCall.name === 'subagent' && !ctx.result.isError && typeof ctx.result.content === 'string') {
+      try {
+        const parsed = JSON.parse(ctx.result.content)
+        if (Array.isArray(parsed.results)) {
+          const completed = parsed.results.filter((r: { status: string }) => r.status === 'completed').length
+          const errored = parsed.results.filter((r: { status: string }) => r.status === 'error').length
+          subagentAttrs = {
+            taskCount: parsed.results.length,
+            tasksCompleted: completed,
+            tasksErrored: errored,
+            totalInputTokens: parsed.usage?.inputTokens,
+            totalOutputTokens: parsed.usage?.outputTokens,
+          }
+
+          logger.info('subagent tasks complete', {
+            toolCallId: ctx.toolCall.id,
+            taskCount: parsed.results.length,
+            tasksCompleted: completed,
+            tasksErrored: errored,
+            inputTokens: parsed.usage?.inputTokens,
+            outputTokens: parsed.usage?.outputTokens,
+          })
+        }
+      } catch { /* result may not be JSON */ }
+    }
+
+    if (span) {
+      tracer.endSpan(span, ctx.result.isError ? 'error' : 'ok', {
+        resultLength: ctx.result.content.length,
+        ...(ctx.result.isError && { error: ctx.result.content.slice(0, 200) }),
+        ...subagentAttrs,
+      })
+      toolSpans.delete(ctx.toolCall.id)
+    }
+
+    if (ctx.result.isError) {
+      logger.error('tool execution failed', {
+        tool: ctx.toolCall.name,
+        toolCallId: ctx.toolCall.id,
+        error: ctx.result.content.slice(0, 200),
+      })
+    } else {
+      logger.info('tool execution complete', {
+        tool: ctx.toolCall.name,
+        toolCallId: ctx.toolCall.id,
+        resultLength: ctx.result.content.length,
+      })
+    }
+  }
+
+  const afterLoopIteration = async (ctx: LoopContext): Promise<void> => {
+    const messagesAdded = ctx.messages.length - iterationStartMessageCount
+    if (iterationSpan) {
+      tracer.endSpan(iterationSpan, 'ok', {
+        iteration: ctx.iteration,
+        messagesAdded,
+      })
+      iterationSpan = undefined
+    }
+
+    logger.debug('iteration complete', {
+      iteration: ctx.iteration,
+      messagesAdded,
+      totalMessages: ctx.messages.length,
+    })
+  }
+
+  const afterLoopComplete = async (ctx: LoopContext): Promise<void> => {
+    if (loopSpan) {
+      tracer.endSpan(loopSpan, 'ok', {
+        iterations: ctx.iteration,
+        inputTokens: ctx.usage.inputTokens,
+        outputTokens: ctx.usage.outputTokens,
+        totalMessages: ctx.messages.length,
+      })
+      loopSpan = undefined
+    }
+
+    logger.info('agent loop complete', {
+      iterations: ctx.iteration,
+      inputTokens: ctx.usage.inputTokens,
+      outputTokens: ctx.usage.outputTokens,
+      totalMessages: ctx.messages.length,
+    })
+  }
+
+  const onError = async (ctx: ErrorContext): Promise<void> => {
+    const errorAttrs = { error: ctx.error.message, phase: ctx.phase }
+
+    // End any open child spans before closing the root
+    drainOpenSpans('error', errorAttrs)
+
+    if (loopSpan) {
+      tracer.endSpan(loopSpan, 'error', {
+        ...errorAttrs,
+        stack: ctx.error.stack,
+        iterations: ctx.loop.iteration,
+      })
+      loopSpan = undefined
+    }
+
+    logger.error('agent loop failed', {
+      error: ctx.error.message,
+      stack: ctx.error.stack,
+      phase: ctx.phase,
+      iterations: ctx.loop.iteration,
+    })
+  }
+
+  return {
+    beforeLoopBegin: [beforeLoopBegin],
+    beforeModelCall: [beforeModelCall],
+    afterModelResponse: [afterModelResponse],
+    beforeToolExecution: [beforeToolExecution],
+    afterToolExecution: [afterToolExecution],
+    afterLoopIteration: [afterLoopIteration],
+    afterLoopComplete: [afterLoopComplete],
+    onError: [onError],
+  }
+}

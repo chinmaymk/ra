@@ -2,6 +2,8 @@
 import { loadConfig } from './config'
 import { getDefaultCompactionModel } from './agent/model-registry'
 import { discoverContextFiles, buildContextMessages } from './context'
+import { createResolverMiddleware } from './context/resolve-middleware'
+import { loadResolvers } from './context/resolver-loader'
 import { loadMiddleware } from './middleware/loader'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { ToolRegistry } from './agent/tool-registry'
@@ -15,8 +17,13 @@ import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
-import { registerBuiltinTools } from './tools'
-import { join } from 'path'
+import { registerBuiltinTools, subagentTool } from './tools'
+import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
+import { join, resolve } from 'path'
+import { resolvePath } from './utils/paths'
+import { createObservability } from './observability'
+import { createObservabilityMiddleware } from './observability/middleware'
+import type { MiddlewareConfig } from './agent/types'
 
 async function readStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined
@@ -60,6 +67,12 @@ MCP SERVER
   --mcp-server-tool-name <name>       MCP tool name
   --mcp-server-tool-description <d>   MCP tool description
 
+MEMORY
+  --memory                            Enable persistent memory across conversations
+  --list-memories                     List all stored memories
+  --memories <query>                  Search memories by keyword
+  --forget <query>                    Forget memories matching query
+
 STORAGE
   --storage-path <path>               Session storage directory
   --storage-max-sessions <n>          Max stored sessions
@@ -78,10 +91,16 @@ PROVIDER OPTIONS
   --exec <script>                     Execute a JS/TS file and exit
   --help, -h                          Print this help message
 
-SUBCOMMANDS
-  skill install <github-url>          Install skills from a GitHub repository
-                                      URL formats: owner/repo, github.com/owner/repo
-                                      Optional ref: owner/repo@v2
+SKILL MANAGEMENT
+  ra skill install <source>           Install skill from npm, GitHub, or URL
+  ra skill remove <name>              Remove an installed skill
+  ra skill list                       List installed skills
+
+  Sources:
+    ra skill install code-review             npm package "code-review"
+    ra skill install npm:ra-skill-lint@1.0   npm with version
+    ra skill install github:user/repo        GitHub repository
+    ra skill install https://example.com/s.tgz  URL tarball
 
 ENV VARS
   RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
@@ -95,6 +114,8 @@ ENV VARS
   RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
   RA_BUILTIN_TOOLS
   RA_THINKING
+  RA_MEMORY_ENABLED, RA_MEMORY_PATH, RA_MEMORY_MAX_MEMORIES
+  RA_MEMORY_TTL_DAYS, RA_MEMORY_INJECT_LIMIT
 
 STDIN
   When input is piped, ra reads stdin and auto-switches to CLI mode.
@@ -116,7 +137,7 @@ EXAMPLES
 
 
 async function execScript(scriptPath: string): Promise<void> {
-  const resolved = require('path').resolve(scriptPath)
+  const resolved = resolve(scriptPath)
   const mod = await import(resolved)
   if (typeof mod.default === 'function') {
     const result = await mod.default()
@@ -137,34 +158,67 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  if (parsed.meta.subcommand?.name === 'skill') {
-    const { installSkillsFromGithub } = await import('./skills/install')
-    const args = parsed.meta.subcommand.args
-    if (args[0] === 'install' && args[1]) {
-      const config = await loadConfig({ cwd: process.cwd(), env: process.env as Record<string, string | undefined> })
-      const targetDir = config.skillDirs[0] || join(process.cwd(), 'skills')
-      console.log(`Installing skills from ${args[1]} into ${targetDir}...`)
-      const installed = await installSkillsFromGithub(args[1], targetDir)
-      if (installed.length === 0) {
-        console.log('No valid skills found.')
-      } else {
-        console.log(`Installed ${installed.length} skill(s): ${installed.join(', ')}`)
+  // Handle skill management subcommands (lazy-load registry module)
+  if (parsed.meta.skillCommand) {
+    const { installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir } = await import('./skills/registry')
+    const { action, args } = parsed.meta.skillCommand
+    switch (action) {
+      case 'install': {
+        if (args.length === 0) {
+          console.error('Usage: ra skill install <source>')
+          process.exit(1)
+        }
+        for (const source of args) {
+          try {
+            const installed = await installSkill(source)
+            console.log(`Installed skills: ${installed.join(', ')} → ${defaultSkillInstallDir()}`)
+          } catch (err) {
+            console.error(`Failed to install "${source}": ${err instanceof Error ? err.message : String(err)}`)
+            process.exit(1)
+          }
+        }
+        process.exit(0)
       }
-    } else {
-      console.log('Usage: ra skill install <github-url>')
+      case 'remove': {
+        if (args.length === 0) {
+          console.error('Usage: ra skill remove <name>')
+          process.exit(1)
+        }
+        for (const name of args) {
+          try {
+            await removeSkill(name)
+            console.log(`Removed skill: ${name}`)
+          } catch (err) {
+            console.error(`Failed to remove "${name}": ${err instanceof Error ? err.message : String(err)}`)
+            process.exit(1)
+          }
+        }
+        process.exit(0)
+      }
+      case 'list': {
+        const skills = await listInstalledSkills()
+        if (skills.length === 0) {
+          console.log(`No skills installed in ${defaultSkillInstallDir()}`)
+        } else {
+          for (const s of skills) {
+            const src = s.source
+              ? ` (${s.source.registry}${s.source.package ? ': ' + s.source.package : ''}${s.source.repo ? ': ' + s.source.repo : ''}${s.source.version ? '@' + s.source.version : ''})`
+              : ''
+            console.log(`  ${s.name}${src}`)
+          }
+        }
+        process.exit(0)
+      }
     }
-    process.exit(0)
   }
 
   // Read piped stdin only for CLI/unspecified mode (http/repl/mcp manage stdin themselves)
   const isNonCliInterface = parsed.config.interface && parsed.config.interface !== 'cli'
   const stdinContent = isNonCliInterface ? undefined : await readStdin()
   if (stdinContent) {
-    // Merge: prompt first, then stdin content
     parsed.meta.prompt = parsed.meta.prompt
       ? `${parsed.meta.prompt}\n\n${stdinContent}`
       : stdinContent
-    // Force CLI mode when piping
     parsed.config.interface = 'cli' as const
   }
 
@@ -175,23 +229,50 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
+  // Create observability (logger + tracer)
+  const { logger, tracer } = createObservability(config.observability)
+
+  // Create observability middleware — the single integration point for the agent loop
+  const obsMw = createObservabilityMiddleware(logger, tracer)
+
   // Resolve compaction model default from provider if not set
   if (!config.compaction.model) {
     config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
   }
+  config.compaction.onCompact = (info) => logger.info('context compacted', info)
 
   // Discover project context files
-  const contextMessages = config.context.enabled
-    ? buildContextMessages(await discoverContextFiles({
-        cwd: process.cwd(),
-        patterns: config.context.patterns,
-      }))
+  const contextFiles = config.context.enabled
+    ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
     : []
+  const contextMessages = buildContextMessages(contextFiles)
 
-  const middleware = await loadMiddleware(config, process.cwd())
+  if (contextFiles.length > 0) {
+    logger.info('context files discovered', {
+      fileCount: contextFiles.length,
+      patterns: config.context.patterns,
+      files: contextFiles.map(f => f.relativePath),
+    })
+  }
+
+  const middleware = await loadMiddleware(config, config.configDir)
+  const userHookCount = Object.values(middleware).reduce((n, hooks) => n + (hooks?.length ?? 0), 0)
+  if (userHookCount > 0) {
+    logger.info('custom middleware loaded', { hookCount: userHookCount })
+  }
+
+  // Set up pattern resolvers (e.g. @file, url:)
+  if (config.context.resolvers?.length) {
+    const resolvers = await loadResolvers(config.context.resolvers, config.configDir)
+    if (resolvers.length > 0) {
+      const resolverMw = createResolverMiddleware(resolvers, process.cwd())
+      middleware.beforeModelCall = [resolverMw, ...(middleware.beforeModelCall ?? [])]
+    }
+  }
 
   // Create provider
   const provider = createProvider(buildProviderConfig(config.provider, config.providers[config.provider]))
+  logger.info('provider initialized', { provider: config.provider, model: config.model })
 
   // Create tool registry
   const tools = new ToolRegistry()
@@ -200,15 +281,44 @@ async function main(): Promise<void> {
     registerBuiltinTools(tools)
   }
 
+  const toolNames = tools.all().map(t => t.name)
+  if (toolNames.length > 0) {
+    logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames })
+  }
+
+  // Set up memory system
+  let memoryStore: MemoryStore | undefined
+  if (config.memory.enabled) {
+    const memoryPath = resolvePath(config.memory.path, config.configDir)
+    memoryStore = new MemoryStore({
+      path: memoryPath,
+      maxMemories: config.memory.maxMemories,
+      ttlDays: config.memory.ttlDays,
+    })
+    tools.register(memorySearchTool(memoryStore))
+    tools.register(memorySaveTool(memoryStore))
+    tools.register(memoryForgetTool(memoryStore))
+
+    const memMw = createMemoryMiddleware({
+      store: memoryStore,
+      injectLimit: config.memory.injectLimit,
+    })
+    middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
+    logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
+  }
+
   // Create session storage
-  const storagePath = config.storage.path.startsWith('/')
-    ? config.storage.path
-    : join(process.cwd(), config.storage.path)
+  const storagePath = resolvePath(config.storage.path, config.configDir)
   const storage = new SessionStorage(storagePath)
   await storage.init()
+  logger.debug('session storage initialized', { path: storagePath })
 
-  // Load skills from configured directories
-  const skillMap = await loadSkills(config.skillDirs)
+  // Load skills from configured directories (resolve relative paths against config dir)
+  const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
+  const skillMap = await loadSkills(resolvedSkillDirs)
+  if (skillMap.size > 0) {
+    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+  }
 
   // Merge built-in skills (user skills override built-in if same name)
   const builtinSkills = loadBuiltinSkills(config.builtinSkills)
@@ -222,8 +332,32 @@ async function main(): Promise<void> {
   // Connect MCP clients
   const mcpClient = new McpClient()
   if (config.mcp.client && config.mcp.client.length > 0) {
+    logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
     await mcpClient.connect(config.mcp.client, tools)
+    logger.info('MCP servers connected', { totalTools: tools.all().length })
   }
+
+  // Prepend observability hooks into the middleware chain (obs runs first)
+  for (const key of Object.keys(obsMw)) {
+    const k = key as keyof MiddlewareConfig
+    ;(middleware as any)[k] = [...((obsMw as any)[k] ?? []), ...((middleware as any)[k] ?? [])]
+  }
+
+  // Register subagent tool after all other tools (builtin + MCP) are set up.
+  // The child registry is built lazily at execution time, so it always sees
+  // the latest tools, but registering last makes the intent clear.
+  tools.register(subagentTool({
+    provider,
+    tools,
+    model: config.model,
+    systemPrompt: config.systemPrompt,
+    middleware,
+    thinking: config.thinking,
+    compaction: config.compaction,
+    toolTimeout: config.toolTimeout,
+    maxIterations: config.maxIterations,
+    maxConcurrency: config.maxConcurrency,
+  }))
 
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
@@ -243,8 +377,12 @@ async function main(): Promise<void> {
 
   // Shutdown helpers
   const shutdown = async () => {
-    await mcpClient.disconnect()
-    if (stopMcpHttp) await stopMcpHttp()
+    logger.info('shutting down')
+    try { await mcpClient.disconnect() } catch { /* best-effort cleanup */ }
+    try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort cleanup */ }
+    if (memoryStore) memoryStore.close()
+    await logger.flush()
+    await tracer.flush()
   }
 
   process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
@@ -264,11 +402,50 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
+  if (parsed.meta.listMemories || parsed.meta.memories !== undefined) {
+    if (!memoryStore) {
+      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
+    } else {
+      const query = parsed.meta.memories || ''
+      const memories = query ? memoryStore.search(query, 100) : memoryStore.list(100)
+      if (memories.length === 0) {
+        console.log(query ? 'No matching memories found.' : 'No memories stored.')
+      } else {
+        const total = memoryStore.count()
+        console.log(query
+          ? `${memories.length} matching memories (${total} total):\n`
+          : `${memories.length} memories (${total} total):\n`)
+        for (const m of memories) {
+          console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
+        }
+      }
+    }
+    await shutdown()
+    process.exit(0)
+  }
+
+  if (parsed.meta.forget !== undefined) {
+    if (!memoryStore) {
+      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
+    } else {
+      const query = parsed.meta.forget
+      if (!query) {
+        console.log('Usage: ra --forget "search query"')
+      } else {
+        const deleted = memoryStore.forget(query, 1000)
+        console.log(deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.')
+      }
+    }
+    await shutdown()
+    process.exit(0)
+  }
+
+  logger.info('starting interface', { interface: config.interface })
+
   // Determine which interface to launch
   if (config.interface === 'mcp') {
     stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
     console.error(`MCP server (http) listening on port ${config.mcp.server.port}`)
-    // Keep process alive
     await new Promise(() => {})
   } else if (config.interface === 'mcp-stdio') {
     const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
@@ -291,6 +468,9 @@ async function main(): Promise<void> {
       process.exit(1)
     }
     const sessionMessages = parsed.meta.resume ? await storage.readMessages(parsed.meta.resume) : []
+    if (parsed.meta.resume) {
+      logger.info('resuming session', { sessionId: parsed.meta.resume, messageCount: sessionMessages.length })
+    }
     const cliResult = await runCli({
       prompt: parsed.meta.prompt,
       files: parsed.meta.files,
@@ -334,14 +514,13 @@ async function main(): Promise<void> {
     await httpServer.start()
     console.error(`HTTP server listening on port ${httpServer.port}`)
     // Keep process alive; clean up on signal
-    const httpShutdown = async () => { await httpServer.stop(); await shutdown() }
+    const httpShutdown = async () => { try { await httpServer.stop() } catch { /* best-effort */ } await shutdown() }
     process.removeAllListeners('SIGINT')
     process.removeAllListeners('SIGTERM')
     process.on('SIGINT', async () => { await httpShutdown(); process.exit(0) })
     process.on('SIGTERM', async () => { await httpShutdown(); process.exit(0) })
-    await new Promise(() => {}) // keep alive
+    await new Promise(() => {})
   } else {
-    // Default: interactive REPL mode
     const repl = new Repl({
       model: config.model,
       provider,
@@ -356,6 +535,7 @@ async function main(): Promise<void> {
       thinking: config.thinking,
       compaction: config.compaction,
       contextMessages,
+      memoryStore,
     })
     await repl.start()
     await shutdown()

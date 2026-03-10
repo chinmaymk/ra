@@ -1,6 +1,7 @@
 import { join } from 'path'
 import yaml from 'js-yaml'
-import type { Skill, SkillMetadata } from './types'
+import { firstSegment } from '../utils/paths'
+import { resolveSkillAsset, type Skill, type SkillMetadata } from './types'
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
@@ -13,7 +14,7 @@ async function listSubdirFiles(skillDir: string, subdir: string): Promise<string
   const files: string[] = []
   try {
     for await (const name of new Bun.Glob('*').scan({ cwd: join(skillDir, subdir), onlyFiles: true })) {
-      files.push(`${subdir}/${name}`)
+      files.push(join(subdir, name))
     }
   } catch { /* subdir doesn't exist */ }
   return files
@@ -28,7 +29,7 @@ async function scanSkillDirs<T>(
   for (const dir of dirs) {
     try {
       for await (const rel of new Bun.Glob('*/SKILL.md').scan({ cwd: dir, onlyFiles: true })) {
-        const entry = rel.split('/')[0]!
+        const entry = firstSegment(rel)
         const content = await Bun.file(join(dir, rel)).text()
         const { frontmatter, body } = parseFrontmatter(content)
 
@@ -79,4 +80,13 @@ export function buildAvailableSkillsXml(skills: Map<string, Skill>, exclude?: Se
 
 export function buildActiveSkillXml(skill: Skill): string {
   return `<skill name="${skill.metadata.name}">\n${skill.body}\n</skill>`
+}
+
+/**
+ * Read the content of a reference file from a skill.
+ */
+export async function readSkillReference(skill: Skill, refName: string): Promise<string> {
+  const rel = resolveSkillAsset(skill.references, refName, 'references')
+  if (!rel) throw new Error(`Reference not found: ${refName} in skill ${skill.metadata.name}`)
+  return Bun.file(join(skill.dir, rel)).text()
 }

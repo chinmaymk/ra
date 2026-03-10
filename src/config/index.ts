@@ -1,6 +1,7 @@
-import { join } from 'path'
+import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
+import { resolvePath, looksLikePath } from '../utils/paths'
 import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions } from './types'
 
@@ -39,14 +40,24 @@ function deepMerge(
   return result
 }
 
-async function loadConfigFile(cwd: string, configPath?: string): Promise<Partial<RaConfig>> {
-  const candidates = configPath
-    ? [configPath.startsWith('/') ? configPath : join(cwd, configPath)]
-    : CONFIG_FILES.map(name => join(cwd, name))
-  for (const full of candidates) {
-    if (await Bun.file(full).exists()) return parseFile(full)
+async function loadConfigFile(cwd: string, configPath?: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
+  if (configPath) {
+    const full = isAbsolute(configPath) ? configPath : join(cwd, configPath)
+    if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
+    return { config: {} }
   }
-  return {}
+  // Walk up the directory tree until a config file is found
+  let dir = cwd
+  while (true) {
+    for (const name of CONFIG_FILES) {
+      const full = join(dir, name)
+      if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
+    }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return { config: {} }
 }
 
 async function parseFile(path: string): Promise<Partial<RaConfig>> {
@@ -109,6 +120,26 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_SKILL_DIRS !== undefined) set(['skillDirs'], env.RA_SKILL_DIRS.split(',').filter(Boolean))
   if (env.RA_SKILLS !== undefined)     set(['skills'], env.RA_SKILLS.split(',').filter(Boolean))
 
+  // Memory
+  if (env.RA_MEMORY_ENABLED !== undefined)       set(['memory', 'enabled'], env.RA_MEMORY_ENABLED === 'true')
+  if (env.RA_MEMORY_PATH !== undefined)          set(['memory', 'path'], env.RA_MEMORY_PATH)
+  if (env.RA_MEMORY_MAX_MEMORIES !== undefined)  setInt(['memory', 'maxMemories'], env.RA_MEMORY_MAX_MEMORIES)
+  if (env.RA_MEMORY_TTL_DAYS !== undefined)      setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
+  if (env.RA_MEMORY_INJECT_LIMIT !== undefined)  setInt(['memory', 'injectLimit'], env.RA_MEMORY_INJECT_LIMIT)
+
+  // Observability
+  if (env.RA_OBSERVABILITY_ENABLED !== undefined) set(['observability', 'enabled'], env.RA_OBSERVABILITY_ENABLED === 'true')
+  // Logs
+  if (env.RA_LOG_LEVEL !== undefined && ['debug', 'info', 'warn', 'error'].includes(env.RA_LOG_LEVEL))
+    set(['observability', 'logs', 'level'], env.RA_LOG_LEVEL)
+  if (env.RA_LOG_OUTPUT !== undefined && ['stderr', 'stdout', 'file'].includes(env.RA_LOG_OUTPUT))
+    set(['observability', 'logs', 'output'], env.RA_LOG_OUTPUT)
+  if (env.RA_LOG_FILE !== undefined) set(['observability', 'logs', 'filePath'], env.RA_LOG_FILE)
+  // Traces
+  if (env.RA_TRACE_OUTPUT !== undefined && ['stderr', 'stdout', 'file'].includes(env.RA_TRACE_OUTPUT))
+    set(['observability', 'traces', 'output'], env.RA_TRACE_OUTPUT)
+  if (env.RA_TRACE_FILE !== undefined) set(['observability', 'traces', 'filePath'], env.RA_TRACE_FILE)
+
   // Provider credentials — env-only (not CLI flags, to avoid leaking in process list/shell history)
   if (env.RA_ANTHROPIC_API_KEY !== undefined)  set(['providers', 'anthropic', 'apiKey'], env.RA_ANTHROPIC_API_KEY)
   if (env.RA_ANTHROPIC_BASE_URL !== undefined) set(['providers', 'anthropic', 'baseURL'], env.RA_ANTHROPIC_BASE_URL)
@@ -131,7 +162,8 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
 
-  const fileConfig = await loadConfigFile(cwd, options.configPath)
+  const { config: fileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
+  const configDir = configFilePath ? dirname(configFilePath) : cwd
   const envConfig = loadEnvVars(env)
   const cliArgs = options.cliArgs ?? {}
 
@@ -142,25 +174,11 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   )
 
   const config = merged as unknown as RaConfig
+  config.configDir = configDir
 
   // Only try loading systemPrompt as a file if it looks like a path
-  if (config.systemPrompt && (
-    config.systemPrompt.startsWith('/') ||
-    config.systemPrompt.startsWith('./') ||
-    config.systemPrompt.startsWith('../') ||
-    config.systemPrompt.startsWith('~') ||
-    config.systemPrompt.endsWith('.txt') ||
-    config.systemPrompt.endsWith('.md')
-  )) {
-    let resolved: string
-    if (config.systemPrompt.startsWith('/')) {
-      resolved = config.systemPrompt
-    } else if (config.systemPrompt.startsWith('~')) {
-      const { homedir } = await import('os')
-      resolved = join(homedir(), config.systemPrompt.slice(2))
-    } else {
-      resolved = join(cwd, config.systemPrompt)
-    }
+  if (config.systemPrompt && looksLikePath(config.systemPrompt, ['.txt', '.md'])) {
+    const resolved = resolvePath(config.systemPrompt, configDir)
     const f = Bun.file(resolved)
     if (await f.exists()) config.systemPrompt = await f.text()
   }

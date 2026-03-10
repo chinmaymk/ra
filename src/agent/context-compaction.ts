@@ -81,6 +81,7 @@ export interface CompactionConfig {
   maxTokens?: number
   contextWindow?: number
   model?: string
+  onCompact?: (info: { originalMessages: number; compactedMessages: number; estimatedTokens: number; threshold: number }) => void
 }
 
 const SUMMARIZATION_PROMPT = `Summarize the following conversation concisely. Preserve:
@@ -190,7 +191,14 @@ export function createCompactionMiddleware(
         break
       }
     }
+    const originalCount = messages.length
     ctx.request.messages.length = 0
     ctx.request.messages.push(...mergedPinned, ...mergedRecent)
+    config.onCompact?.({
+      originalMessages: originalCount,
+      compactedMessages: ctx.request.messages.length,
+      estimatedTokens: estimated,
+      threshold: triggerThreshold,
+    })
   }
 }

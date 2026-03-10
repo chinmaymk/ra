@@ -51,6 +51,14 @@ export type {
   Skill,
 } from './skills/types.ts'
 
+// Context / resolver types
+export type {
+  PatternResolver,
+  ResolvedReference,
+  ResolutionResult,
+} from './context/resolvers.ts'
+export type { ResolverConfig } from './context/types.ts'
+
 // Provider option types
 export type { AnthropicProviderOptions } from './providers/anthropic.ts'
 export type { OpenAIProviderOptions } from './providers/openai.ts'
@@ -60,5 +68,7 @@ export type { BedrockProviderOptions } from './providers/bedrock.ts'
 export type { AzureProviderOptions } from './providers/azure.ts'
 
 // Built-in tools
-export { registerBuiltinTools } from './tools/index.ts'
-export { ASK_USER_SIGNAL } from './tools/ask-user.ts'
+export { registerBuiltinTools } from './tools/index'
+export { ASK_USER_SIGNAL } from './tools/ask-user'
+export { subagentTool } from './tools/subagent'
+export type { SubagentToolOptions } from './tools/subagent'

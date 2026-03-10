@@ -1,19 +1,13 @@
 # Built-in Tools
 
-ra ships with 14 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
+ra ships with 15 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
+
+Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 
 ```yaml
 # ra.config.yml
 builtinTools: true   # default
 ```
-
-Or via environment variable:
-
-```bash
-export RA_BUILTIN_TOOLS=true
-```
-
-Tools are self-describing — each one includes a description and input schema that the model uses to decide when and how to invoke it. No system prompt is needed to explain them.
 
 When ra runs as an [MCP server](/modes/mcp), all built-in tools (except `ask_user`) are automatically exposed as MCP tools.
 
@@ -190,7 +184,9 @@ Make an HTTP request and return the response as JSON with `status`, `headers`, a
 
 Pause the agent loop and ask the user a question. The loop suspends until the user responds.
 
-In the REPL, the question is printed and the next input resumes the conversation. In CLI mode, the session ID is printed so the user can resume with `--resume`. In HTTP mode, the response includes the question and session ID for the client to handle.
+- **REPL** — the question is printed and the next input resumes the conversation
+- **CLI** — the session ID is printed so the user can resume with `--resume`
+- **HTTP** — an `ask_user` SSE event is emitted with the question and session ID
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -222,18 +218,78 @@ The dynamic description looks like:
 
 > Track tasks with a checklist. Actions: "add" (item text), "check"/"uncheck"/"remove" (by 0-based index), "list" (show all). Remaining (2/3): 1: Fix bug, 2: Deploy
 
-## Disabling Built-in Tools
+## Parallelization
 
-To run ra without built-in tools (e.g., when using only MCP tools):
+### `subagent`
+
+Fork parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tasks` | array | yes | Tasks to run in parallel |
+| `tasks[].task` | string | yes | The task prompt for the fork |
+
+```json
+{
+  "tasks": [
+    { "task": "Read src/auth.ts and summarize the authentication flow" },
+    { "task": "Find all TODO comments in the codebase" },
+    { "task": "Check for unused exports in src/utils/" }
+  ]
+}
+```
+
+Returns `{ results, usage }` where each result has `task`, `status`, `result`, `iterations`, and `usage`. Aggregate usage rolls up into the parent's token tracking automatically.
+
+Only `ask_user` and `subagent` are excluded from forks — `ask_user` can't work from a background fork, and `subagent` nesting is depth-limited (default: 2) to prevent infinite recursion. All other tools (including memory) are inherited. Task failures don't affect siblings.
+
+Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to control how many forks run in parallel.
+
+## Memory
+
+When [memory](/configuration/#memory) is enabled, three additional tools are registered.
+
+### `memory_save`
+
+Save a fact to persistent memory for future conversations. Proactively saves user preferences, project decisions, corrections, and key context. To update an existing memory, the agent forgets the old version first, then saves the new one.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `content` | string | yes | Self-contained fact, e.g. "User prefers tabs over spaces" |
+| `tags` | string | no | Category: `preference`, `project`, `convention`, `team`, or `tooling` |
+
+### `memory_search`
+
+Search persistent memories by keyword. Recent memories are automatically injected at conversation start — this tool is for targeted lookups beyond the recalled set.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Full-text search keywords, e.g. "typescript tabs" or "deployment" |
+| `limit` | number | no | Max results (default: 10) |
+
+### `memory_forget`
+
+Delete memories matching a search query. Used when the user corrects previous information, a fact becomes outdated, or before saving an updated version of an existing memory.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Search keywords to match memories to delete |
+| `limit` | number | no | Max memories to delete (default: 10) |
+
+## Disabling built-in tools
+
+To run ra without built-in tools (e.g., when using only [MCP tools](/modes/mcp)):
 
 ```yaml
 builtinTools: false
 ```
 
 ```bash
-export RA_BUILTIN_TOOLS=false
-```
-
-```bash
 ra --no-builtin-tools
 ```
+
+## See also
+
+- [The Agent Loop](/core/agent-loop) — how tools are executed within the loop
+- [Middleware](/middleware/) — `beforeToolExecution` and `afterToolExecution` hooks
+- [MCP](/modes/mcp) — connecting external MCP tools

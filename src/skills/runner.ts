@@ -1,3 +1,6 @@
+import { join, basename, extname } from 'path'
+import { resolveSkillAsset, type Skill } from './types'
+
 /**
  * Find the first available binary from candidates via Bun.which.
  * Throws if none found.
@@ -33,14 +36,11 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
   if (content.startsWith('#!')) {
     const shebangLine = content.split('\n')[0]!.slice(2).trim()
     const parts = shebangLine.split(/\s+/)
-    // /usr/bin/env python3 → ['python3', scriptPath]; /bin/bash → ['/bin/bash', scriptPath]
     const interpreter = parts[0]?.endsWith('/env') && parts[1] ? parts[1] : parts[0]!
     return [interpreter, scriptPath]
   }
 
-  const filename = scriptPath.split('/').pop() ?? ''
-  const dotIdx = filename.lastIndexOf('.')
-  const ext = dotIdx > 0 ? filename.slice(dotIdx + 1).toLowerCase() : null
+  const ext = extname(scriptPath).slice(1).toLowerCase() || null
 
   switch (ext) {
     case null:  return [shell(), scriptPath]
@@ -72,4 +72,14 @@ export async function runSkillScript(scriptPath: string, env: Record<string, str
     throw new Error(`Script exited with code ${exitCode}: ${stderrText.trim()}`)
   }
   return output
+}
+
+/**
+ * Run a specific script from a skill by name (on-demand).
+ * Accepts either "scripts/run.ts" or just "run.ts".
+ */
+export async function runSkillScriptByName(skill: Skill, scriptName: string, env: Record<string, string>): Promise<string> {
+  const rel = resolveSkillAsset(skill.scripts, scriptName, 'scripts')
+  if (!rel) throw new Error(`Script not found: ${scriptName} in skill ${skill.metadata.name}`)
+  return runSkillScript(join(skill.dir, rel), env)
 }

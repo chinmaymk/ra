@@ -1,7 +1,7 @@
 import type { IToolCall, IToolResult, StreamChunk, IMessage, ChatRequest, TokenUsage } from '../providers/types'
 
 export interface StoppableContext {
-  stop: () => void
+  stop: (reason?: string) => void
   signal: AbortSignal
 }
 

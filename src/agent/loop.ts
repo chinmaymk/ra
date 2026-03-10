@@ -3,6 +3,7 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
+import { accumulateUsage } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
 
@@ -22,6 +23,7 @@ export interface LoopResult {
   messages: IMessage[]
   iterations: number
   usage: TokenUsage
+  stopReason?: string
 }
 
 const EMPTY_MW: MiddlewareConfig = {
@@ -61,7 +63,12 @@ export class AgentLoop {
     const messages: IMessage[] = [...initialMessages]
     let iterations = 0
     const controller = new AbortController()
-    const stop = () => controller.abort()
+    let stopReason: string | undefined
+    const stop = (reason?: string) => {
+      stopReason = reason
+      if (reason) console.log(`[ra] loop stopped: ${reason}`)
+      controller.abort()
+    }
     const { signal } = controller
 
     const stoppable: StoppableContext = { stop, signal }
@@ -75,7 +82,7 @@ export class AgentLoop {
 
     try {
       await runMiddlewareChain(loopCtx(), this.middleware.beforeLoopBegin, this.toolTimeout)
-      if (signal.aborted) return { messages, iterations, usage }
+      if (signal.aborted) return { messages, iterations, usage, ...(stopReason && { stopReason }) }
 
       while (iterations < this.maxIterations) {
         iterations++
@@ -109,11 +116,7 @@ export class AgentLoop {
             if (tc) tc.argsRaw += chunk.argsDelta
           } else if (chunk.type === 'done') {
             if (chunk.usage) {
-              usage.inputTokens += chunk.usage.inputTokens
-              usage.outputTokens += chunk.usage.outputTokens
-              if (chunk.usage.thinkingTokens) {
-                usage.thinkingTokens = (usage.thinkingTokens ?? 0) + chunk.usage.thinkingTokens
-              }
+              accumulateUsage(usage, chunk.usage)
               lastUsage = chunk.usage
             }
             break
@@ -143,6 +146,11 @@ export class AgentLoop {
                 ? await withTimeout(this.tools.execute(tc.name, input), this.toolTimeout, `Tool '${tc.name}'`)
                 : await this.tools.execute(tc.name, input)
               content = typeof value === 'string' ? value : JSON.stringify(value)
+              // Roll up child usage (e.g. from subagent tool) into parent totals
+              if (value && typeof value === 'object' && 'usage' in value) {
+                const childUsage = (value as { usage: TokenUsage }).usage
+                if (childUsage) accumulateUsage(usage, childUsage)
+              }
               await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             } catch (err) {
               isError = true
@@ -171,6 +179,6 @@ export class AgentLoop {
       throw err
     }
 
-    return { messages, iterations, usage }
+    return { messages, iterations, usage, ...(stopReason && { stopReason }) }
   }
 }

@@ -39,6 +39,19 @@ describe('loadConfig', () => {
     expect(c.systemPrompt).toBe('You are a pirate.')
   })
 
+  it('sets configDir to cwd when no config file is found', async () => {
+    const c = await loadConfig({ cwd: tmp })
+    expect(c.configDir).toBe(tmp)
+  })
+
+  it('sets configDir to directory containing the config file', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google' }))
+    const child = join(tmp, 'a', 'b', 'c')
+    mkdirSync(child, { recursive: true })
+    const c = await loadConfig({ cwd: child })
+    expect(c.configDir).toBe(tmp)
+  })
+
   describe('config file formats', () => {
     it('loads JSON', async () => {
       writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google', maxIterations: 25 }))
@@ -59,6 +72,36 @@ describe('loadConfig', () => {
       const c = await loadConfig({ cwd: tmp })
       expect(c.provider).toBe('openai')
       expect(c.maxIterations).toBe(5)
+    })
+  })
+
+  describe('upward directory walking', () => {
+    it('finds config in a parent directory', async () => {
+      writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google' }))
+      const child = join(tmp, 'a', 'b', 'c')
+      mkdirSync(child, { recursive: true })
+      const c = await loadConfig({ cwd: child })
+      expect(c.provider).toBe('google')
+    })
+
+    it('stops at the first config found while walking up', async () => {
+      writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google' }))
+      const mid = join(tmp, 'a')
+      mkdirSync(mid, { recursive: true })
+      writeFileSync(join(mid, 'ra.config.json'), JSON.stringify({ provider: 'ollama' }))
+      const child = join(mid, 'b')
+      mkdirSync(child, { recursive: true })
+      const c = await loadConfig({ cwd: child })
+      expect(c.provider).toBe('ollama')
+    })
+
+    it('prefers config in cwd over parent', async () => {
+      writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google' }))
+      const child = join(tmp, 'sub')
+      mkdirSync(child, { recursive: true })
+      writeFileSync(join(child, 'ra.config.json'), JSON.stringify({ provider: 'openai' }))
+      const c = await loadConfig({ cwd: child })
+      expect(c.provider).toBe('openai')
     })
   })
 
@@ -262,6 +305,17 @@ describe('systemPrompt file-path detection', () => {
     mkdirSync(childDir, { recursive: true })
     const c = await loadConfig({ cwd: childDir, cliArgs: { systemPrompt: '../prompt.txt' } })
     expect(c.systemPrompt).toBe('parent prompt')
+  })
+
+  it('resolves relative systemPrompt in config file against config dir, not cwd', async () => {
+    // Config file is in parent dir with a relative systemPrompt path
+    writeFileSync(join(tmp, 'system.txt'), 'Config-relative prompt')
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ systemPrompt: './system.txt' }))
+    // cwd is a child directory
+    const child = join(tmp, 'deep', 'nested')
+    mkdirSync(child, { recursive: true })
+    const c = await loadConfig({ cwd: child })
+    expect(c.systemPrompt).toBe('Config-relative prompt')
   })
 
   it('keeps string as-is when path-like but file does not exist', async () => {
