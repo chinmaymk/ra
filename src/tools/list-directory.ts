@@ -4,7 +4,7 @@ import { join } from 'path'
 
 export function listDirectoryTool(): ITool {
   return {
-    name: 'list_directory',
+    name: 'LS',
     description:
       'List immediate children of a directory, one per line. ' +
       'Directories are suffixed with "/" (e.g. "src/"). Does not recurse.',

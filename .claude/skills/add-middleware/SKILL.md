@@ -58,14 +58,14 @@ export default async (ctx) => {
 ```ts
 export default async (ctx) => {
   if (ctx.loop.iteration > 5)
-    ctx.request.tools = ctx.request.tools?.filter(t => t.name !== 'web_fetch')
+    ctx.request.tools = ctx.request.tools?.filter(t => t.name !== 'WebFetch')
 }
 ```
 
 **Guardrail** (beforeToolExecution):
 ```ts
 export default async (ctx) => {
-  if (ctx.toolCall.name === 'execute_bash' && ctx.toolCall.arguments.includes('rm -rf'))
+  if (ctx.toolCall.name === 'Bash' && ctx.toolCall.arguments.includes('rm -rf'))
     ctx.stop()
 }
 ```

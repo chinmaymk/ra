@@ -23,7 +23,7 @@ describe('estimateTokens', () => {
       { role: 'assistant', content: 'hi' },
     ]
     const withTools: IMessage[] = [
-      { role: 'assistant', content: 'hi', toolCalls: [{ id: 'tc1', name: 'read_file', arguments: '{"path":"/foo/bar"}' }] },
+      { role: 'assistant', content: 'hi', toolCalls: [{ id: 'tc1', name: 'Read', arguments: '{"path":"/foo/bar"}' }] },
     ]
     expect(estimateTokens(withTools)).toBeGreaterThan(estimateTokens(withoutTools))
   })

@@ -7,7 +7,7 @@ export const defaultConfig: RaConfig = {
   systemPrompt: 'You are a helpful AI assistant.',
   configDir: process.cwd(),
   http: { port: 3000, token: '' },
-  skillDirs: [],
+  skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
   skills: [],
   mcp: {
     client: [],
@@ -42,7 +42,13 @@ export const defaultConfig: RaConfig = {
   maxConcurrency: 4,
   context: {
     enabled: true,
-    patterns: [],
+    patterns: [
+      'CLAUDE.md',
+      'AGENTS.md',
+      '.cursorrules',
+      '.windsurfrules',
+      '.github/copilot-instructions.md',
+    ],
     resolvers: [
       { name: 'file', enabled: true },
       { name: 'url', enabled: true },

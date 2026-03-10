@@ -82,7 +82,7 @@ ra's core loop is simple: send messages to the model, stream the response, execu
          ▼
     Execute tools
          │
-         ├── ask_user? ──► suspend (loop exits without afterLoopComplete)
+         ├── AskUserQuestion? ──► suspend (loop exits without afterLoopComplete)
          │
          ▼
    afterToolExecution
@@ -265,7 +265,7 @@ ra --http --http-port 8080 --http-token secret
 | `/chat/sync` | POST | Blocking JSON — `{"response":"..."}` |
 | `/sessions` | GET | List stored sessions |
 
-Both endpoints accept `{"messages": [...], "sessionId": "..."}`. The streaming endpoint also emits `ask_user` events when the agent needs input.
+Both endpoints accept `{"messages": [...], "sessionId": "..."}`. The streaming endpoint also emits `AskUserQuestion` events when the agent needs input.
 
 ### MCP server
 
@@ -291,20 +291,20 @@ When built-in tools are enabled, they're also exposed as individual MCP tools �
 
 ## Built-in Tools
 
-15 tools enabled by default (platform-specific: `execute_bash` on Linux/macOS, `execute_powershell` on Windows). Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them.
+15 tools enabled by default (platform-specific: `Bash` on Linux/macOS, `PowerShell` on Windows). Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them.
 
 | Category | Tools |
 |----------|-------|
-| **Filesystem** | `read_file`, `write_file`, `update_file`, `append_file`, `list_directory`, `search_files`, `glob_files`, `move_file`, `copy_file`, `delete_file` |
-| **Shell** | `execute_bash` (Linux/macOS) / `execute_powershell` (Windows) |
-| **Network** | `web_fetch` |
-| **Agent** | `ask_user`, `checklist`, `subagent` |
+| **Filesystem** | `Read`, `Write`, `Edit`, `AppendFile`, `LS`, `Grep`, `Glob`, `MoveFile`, `CopyFile`, `DeleteFile` |
+| **Shell** | `Bash` (Linux/macOS) / `PowerShell` (Windows) |
+| **Network** | `WebFetch` |
+| **Agent** | `AskUserQuestion`, `TodoWrite`, `Agent` |
 
-The `update_file` tool does exact string replacement — same pattern as Claude Code's Edit tool. The `checklist` tool dynamically updates its description to show remaining items, keeping the model aware of progress.
+The `Edit` tool does exact string replacement — same pattern as Claude Code's Edit tool. The `TodoWrite` tool dynamically updates its description to show remaining items, keeping the model aware of progress.
 
-The `ask_user` tool suspends the agent loop and returns control to the caller. In the REPL, the question is printed and the next input resumes the conversation. In CLI mode, it prints the session ID so you can `--resume` later. In HTTP mode, it emits an `ask_user` SSE event.
+The `AskUserQuestion` tool suspends the agent loop and returns control to the caller. In the REPL, the question is printed and the next input resumes the conversation. In CLI mode, it prints the session ID so you can `--resume` later. In HTTP mode, it emits an `AskUserQuestion` SSE event.
 
-The `subagent` tool forks parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation. Token usage rolls up into the parent automatically. Recursion depth is capped (default: 2 levels).
+The `Agent` tool forks parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation. Token usage rolls up into the parent automatically. Recursion depth is capped (default: 2 levels).
 
 To bring your own tools via MCP instead, set `builtinTools: false` in your config file.
 
@@ -394,7 +394,7 @@ storage:
   ttlDays: 30           # auto-expire
 ```
 
-Sessions are auto-saved after each turn. The REPL has `/resume <id>` and the HTTP API accepts a `sessionId` field. When `ask_user` suspends a CLI run, the session ID is printed to stderr so you can resume later.
+Sessions are auto-saved after each turn. The REPL has `/resume <id>` and the HTTP API accepts a `sessionId` field. When `AskUserQuestion` suspends a CLI run, the session ID is printed to stderr so you can resume later.
 
 ## MCP
 

@@ -104,8 +104,8 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       toolCallId: ctx.toolCall.id,
     }
 
-    // For subagent calls, parse and log the task list
-    if (ctx.toolCall.name === 'subagent' && ctx.toolCall.arguments) {
+    // For Agent calls, parse and log the task list
+    if (ctx.toolCall.name === 'Agent' && ctx.toolCall.arguments) {
       try {
         const parsed = JSON.parse(ctx.toolCall.arguments)
         if (Array.isArray(parsed.tasks)) {
@@ -131,15 +131,15 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
   const afterToolExecution = async (ctx: ToolResultContext): Promise<void> => {
     const span = toolSpans.get(ctx.toolCall.id)
 
-    // For subagent calls, extract per-task results and aggregate usage
-    let subagentAttrs: Record<string, unknown> | undefined
-    if (ctx.toolCall.name === 'subagent' && !ctx.result.isError && typeof ctx.result.content === 'string') {
+    // For Agent calls, extract per-task results and aggregate usage
+    let agentAttrs: Record<string, unknown> | undefined
+    if (ctx.toolCall.name === 'Agent' && !ctx.result.isError && typeof ctx.result.content === 'string') {
       try {
         const parsed = JSON.parse(ctx.result.content)
         if (Array.isArray(parsed.results)) {
           const completed = parsed.results.filter((r: { status: string }) => r.status === 'completed').length
           const errored = parsed.results.filter((r: { status: string }) => r.status === 'error').length
-          subagentAttrs = {
+          agentAttrs = {
             taskCount: parsed.results.length,
             tasksCompleted: completed,
             tasksErrored: errored,
@@ -147,7 +147,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
             totalOutputTokens: parsed.usage?.outputTokens,
           }
 
-          logger.info('subagent tasks complete', {
+          logger.info('Agent tasks complete', {
             toolCallId: ctx.toolCall.id,
             taskCount: parsed.results.length,
             tasksCompleted: completed,
@@ -163,7 +163,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       tracer.endSpan(span, ctx.result.isError ? 'error' : 'ok', {
         resultLength: ctx.result.content.length,
         ...(ctx.result.isError && { error: ctx.result.content.slice(0, 200) }),
-        ...subagentAttrs,
+        ...agentAttrs,
       })
       toolSpans.delete(ctx.toolCall.id)
     }
