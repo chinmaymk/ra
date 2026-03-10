@@ -330,8 +330,9 @@ async function main(): Promise<void> {
   }
 
   // Prepend observability hooks into the middleware chain (obs runs first)
-  for (const key of Object.keys(obsMw) as (keyof MiddlewareConfig)[]) {
-    middleware[key] = [...(obsMw[key] ?? []), ...(middleware[key] ?? [])]
+  for (const key of Object.keys(obsMw)) {
+    const k = key as keyof MiddlewareConfig
+    ;(middleware as any)[k] = [...((obsMw as any)[k] ?? []), ...((middleware as any)[k] ?? [])]
   }
 
   // Agent handler shared by MCP transports

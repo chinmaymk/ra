@@ -47,6 +47,7 @@ export interface RaConfig {
     maxTokens?: number     // absolute token trigger, overrides threshold * contextWindow
     contextWindow?: number // per-provider override for context window size
     model?: string         // cheaper model for summarization, defaults per provider
+    onCompact?: (info: { originalMessages: number; compactedMessages: number; estimatedTokens: number; threshold: number }) => void
   }
   memory: {
     enabled: boolean
