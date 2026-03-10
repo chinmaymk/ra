@@ -5,6 +5,7 @@ export const defaultConfig: RaConfig = {
   model: 'claude-sonnet-4-6',
   interface: 'repl',
   systemPrompt: 'You are a helpful AI assistant.',
+  configDir: process.cwd(),
   http: { port: 3000, token: '' },
   skillDirs: [],
   skills: [],

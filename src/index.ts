@@ -254,7 +254,7 @@ async function main(): Promise<void> {
     })
   }
 
-  const middleware = await loadMiddleware(config, process.cwd())
+  const middleware = await loadMiddleware(config, config.configDir)
   const userHookCount = Object.values(middleware).reduce((n, hooks) => n + (hooks?.length ?? 0), 0)
   if (userHookCount > 0) {
     logger.info('custom middleware loaded', { hookCount: userHookCount })
@@ -262,7 +262,7 @@ async function main(): Promise<void> {
 
   // Set up pattern resolvers (e.g. @file, url:)
   if (config.context.resolvers?.length) {
-    const resolvers = await loadResolvers(config.context.resolvers, process.cwd())
+    const resolvers = await loadResolvers(config.context.resolvers, config.configDir)
     if (resolvers.length > 0) {
       const resolverMw = createResolverMiddleware(resolvers, process.cwd())
       middleware.beforeModelCall = [resolverMw, ...(middleware.beforeModelCall ?? [])]
@@ -288,7 +288,7 @@ async function main(): Promise<void> {
   // Set up memory system
   let memoryStore: MemoryStore | undefined
   if (config.memory.enabled) {
-    const memoryPath = resolvePath(config.memory.path, process.cwd())
+    const memoryPath = resolvePath(config.memory.path, config.configDir)
     memoryStore = new MemoryStore({
       path: memoryPath,
       maxMemories: config.memory.maxMemories,
@@ -307,13 +307,14 @@ async function main(): Promise<void> {
   }
 
   // Create session storage
-  const storagePath = resolvePath(config.storage.path, process.cwd())
+  const storagePath = resolvePath(config.storage.path, config.configDir)
   const storage = new SessionStorage(storagePath)
   await storage.init()
   logger.debug('session storage initialized', { path: storagePath })
 
-  // Load skills from configured directories
-  const skillMap = await loadSkills(config.skillDirs)
+  // Load skills from configured directories (resolve relative paths against config dir)
+  const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
+  const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
     logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
   }
