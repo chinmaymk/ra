@@ -2,7 +2,7 @@ import { join } from 'path'
 import yaml from 'js-yaml'
 import { firstSegment } from '../utils/paths'
 import { resolveSkillAsset, type Skill, type SkillMetadata, type SkillHook } from './types'
-import type { LoopContext, ModelCallContext, MiddlewareConfig } from '../agent/types'
+import type { ModelCallContext, MiddlewareConfig } from '../agent/types'
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
@@ -139,7 +139,7 @@ export function buildSkillHookMiddleware(skill: Skill): Partial<MiddlewareConfig
     result.beforeLoopBegin = [async () => {
       for (const hook of skill.metadata.before!) {
         const out = await runHook(hook, skill.dir)
-        if (hook.as) captured.set(hook.as, out)
+        if (hook.as) captured.set(hook.as, out.trim())
       }
     }]
 

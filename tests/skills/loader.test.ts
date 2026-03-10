@@ -171,7 +171,7 @@ describe('skill hooks', () => {
       loop: makeLoopCtx(), stop: () => ctrl.abort(), signal: ctrl.signal,
     }
     await mw.beforeModelCall![0]!(ctx)
-    expect(ctx.request.messages[0]!.content).toContain('hello')
+    expect(ctx.request.messages[0]!.content).toBe('say hello')
     expect(ctx.request.messages[0]!.content).not.toContain('@greeting')
   })
 
