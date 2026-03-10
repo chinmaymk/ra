@@ -418,7 +418,11 @@ mcp:
       args: ["-y", "@modelcontextprotocol/server-github"]
       env:
         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+  lazySchemas: true          # default — only send tool names, not full schemas
+  maxDescriptionLength: 100  # truncated description length
 ```
+
+**Lazy schema loading** — by default, MCP tools are registered with just their name and a truncated description. The model calls `get_mcp_tool_schema` to fetch the full parameter schema only when it needs to use a tool. This saves significant tokens when connecting to MCP servers with many tools.
 
 **As a server** — `ra --mcp-stdio` exposes the full agent loop as a single MCP tool, plus all built-in tools as individual MCP tools.
 

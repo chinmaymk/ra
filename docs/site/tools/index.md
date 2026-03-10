@@ -245,6 +245,28 @@ Only `ask_user` and `subagent` are excluded from forks — `ask_user` can't work
 
 Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to control how many forks run in parallel.
 
+## MCP
+
+When [MCP clients](/modes/mcp/) are configured and `mcp.lazySchemas` is enabled (the default), one additional tool is registered.
+
+### `get_mcp_tool_schema`
+
+Retrieve the full description and parameter schema for an MCP tool. The model calls this before using an MCP tool, since MCP tools are registered with truncated descriptions and minimal schemas to save tokens.
+
+The tool's description dynamically lists all available MCP tools grouped by their source server, so the model always knows which server provides which tool.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tool_name` | string | yes | Name of the MCP tool to get the schema for |
+
+```json
+{ "tool_name": "search_github" }
+```
+
+Returns `name`, `server` (source MCP server name), `description`, and `inputSchema` for the tool. If the tool name is not found, returns an error listing available MCP tools with their server attribution.
+
+See [MCP — Lazy schema loading](/modes/mcp/#lazy-schema-loading) for details.
+
 ## Memory
 
 When [memory](/configuration/#memory) is enabled, three additional tools are registered.

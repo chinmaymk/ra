@@ -36,6 +36,47 @@ mcp:
       command: ./my-mcp-server
 ```
 
+### Lazy schema loading
+
+MCP servers can expose dozens of tools, each with large JSON schemas. Sending all of them in every model call wastes tokens — especially when only a few tools are used per conversation.
+
+By default, ra uses **lazy schema loading** for MCP tools. Instead of sending full schemas, the model sees only tool names, their source server (as a `[server]` prefix), and truncated descriptions. When the model decides to use a tool, it first calls `get_mcp_tool_schema` to retrieve the full parameter schema, then makes the actual tool call.
+
+```
+Model sees:
+  search_github  →  "[github] Search for repositories, issues, and..."
+  query_db       →  "[database] Run SQL queries against the..."
+
+Model calls: get_mcp_tool_schema({ tool_name: "search_github" })
+     ↓
+Model receives: { server: "github", description: "...", inputSchema: {...} }
+     ↓
+Model calls: search_github({ query: "...", repo: "..." })
+```
+
+The `get_mcp_tool_schema` meta-tool description also lists all available tools grouped by server, so the model always knows which server provides which tool.
+
+This is especially effective when connecting to multiple MCP servers with many tools — you only pay the token cost for schemas the model actually uses.
+
+```yaml
+# ra.config.yml
+mcp:
+  lazySchemas: true          # default: true
+  maxDescriptionLength: 100  # max chars for truncated descriptions
+```
+
+To disable lazy loading and send full schemas every time (the pre-optimization behavior):
+
+```yaml
+mcp:
+  lazySchemas: false
+```
+
+| Field | Env var | Default | Description |
+|-------|---------|---------|-------------|
+| `mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | `true` | Enable lazy schema loading for MCP tools |
+| `mcp.maxDescriptionLength` | `RA_MCP_MAX_DESCRIPTION_LENGTH` | `100` | Max characters for truncated MCP tool descriptions |
+
 ## ra as MCP server
 
 Expose the full agent loop as a tool for other agents.

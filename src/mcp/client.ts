@@ -2,9 +2,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import type { ToolRegistry } from '../agent/tool-registry'
-import type { ITool } from '../providers/types'
 import type { McpClientConfig } from '../config/types'
-import { wrapMcpToolsLazy } from './lazy-tools'
+import { wrapMcpToolsLazy, type McpToolEntry } from './lazy-tools'
 
 export interface McpConnectOptions {
   lazySchemas?: boolean
@@ -20,7 +19,7 @@ export class McpClient {
 
   async connect(configs: McpClientConfig[], registry: ToolRegistry, options?: McpConnectOptions): Promise<void> {
     try {
-      const mcpTools: ITool[] = []
+      const mcpTools: McpToolEntry[] = []
 
       for (const config of configs) {
         if (config.transport === 'stdio' && !config.command) throw new Error(`McpClientConfig "${config.name}" requires a command for stdio transport`)
@@ -37,10 +36,13 @@ export class McpClient {
         const { tools } = await client.listTools()
         for (const tool of tools) {
           mcpTools.push({
-            name: tool.name,
-            description: tool.description ?? '',
-            inputSchema: tool.inputSchema as Record<string, unknown>,
-            execute: (input) => client.callTool({ name: tool.name, arguments: input as Record<string, unknown> }),
+            serverName: config.name,
+            tool: {
+              name: tool.name,
+              description: tool.description ?? '',
+              inputSchema: tool.inputSchema as Record<string, unknown>,
+              execute: (input) => client.callTool({ name: tool.name, arguments: input as Record<string, unknown> }),
+            },
           })
         }
       }
@@ -50,7 +52,7 @@ export class McpClient {
           maxDescriptionLength: options.maxDescriptionLength,
         })
       } else {
-        for (const tool of mcpTools) {
+        for (const { tool } of mcpTools) {
           registry.register(tool)
         }
       }
