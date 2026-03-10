@@ -311,8 +311,8 @@ async function main(): Promise<void> {
     thinking: config.thinking,
     compaction: config.compaction,
     toolTimeout: config.toolTimeout,
-    maxTurns: config.subagent.maxTurns,
-    maxConcurrency: config.subagent.maxConcurrency,
+    maxIterations: config.maxIterations,
+    maxConcurrency: config.maxConcurrency,
   }))
 
   // Agent handler shared by MCP transports

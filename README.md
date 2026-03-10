@@ -583,9 +583,7 @@ memory:
   ttlDays: 90
   injectLimit: 5
 
-subagent:
-  maxTurns: 10
-  maxConcurrency: 4
+maxConcurrency: 4
 
 middleware:
   beforeModelCall:

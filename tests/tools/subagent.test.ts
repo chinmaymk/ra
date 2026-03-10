@@ -326,9 +326,9 @@ describe('subagent tool', () => {
     expect(capturedTools[0]).toContain('subagent')
   })
 
-  // ── maxTurns ─────────────────────────────────────────────────────
+  // ── maxIterations ─────────────────────────────────────────────────
 
-  it('respects maxTurns per fork', async () => {
+  it('respects maxIterations per fork', async () => {
     const infiniteToolCall: StreamChunk[] = [
       { type: 'tool_call_start', id: 'tc1', name: 'noop' },
       { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
@@ -339,7 +339,7 @@ describe('subagent tool', () => {
     tools.register({ name: 'noop', description: 'noop', inputSchema: {}, execute: async () => 'ok' })
     const provider = mockProvider(Array(100).fill(infiniteToolCall))
 
-    const tool = subagentTool({ provider, tools, model: 'test', maxTurns: 3 })
+    const tool = subagentTool({ provider, tools, model: 'test', maxIterations: 3 })
     const out = await tool.execute({ tasks: [{ task: 'loop forever' }] }) as any
 
     expect(out.results[0].status).toBe('completed')

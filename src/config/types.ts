@@ -39,10 +39,7 @@ export interface RaConfig {
   builtinTools: boolean
   middleware: Record<string, string[]>
   thinking?: 'low' | 'medium' | 'high'
-  subagent: {
-    maxTurns: number
-    maxConcurrency: number
-  }
+  maxConcurrency: number
   context: ContextConfig
   compaction: {
     enabled: boolean

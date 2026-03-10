@@ -17,7 +17,7 @@ export interface SubagentToolOptions {
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   toolTimeout?: number
-  maxTurns?: number
+  maxIterations?: number
   maxConcurrency?: number
   /** Max nesting depth (default: 2) */
   maxDepth?: number
@@ -29,7 +29,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
   const depth = options._depth ?? 0
   const maxDepth = options.maxDepth ?? 2
   const maxConcurrency = options.maxConcurrency ?? 4
-  const maxIterations = options.maxTurns ?? 5
+  const maxIterations = options.maxIterations ?? 50
 
   return {
     name: 'subagent',

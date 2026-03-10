@@ -243,10 +243,7 @@ Returns `{ results, usage }` where each result has `task`, `status`, `result`, `
 
 Only `ask_user` and `subagent` are excluded from forks — `ask_user` can't work from a background fork, and `subagent` nesting is depth-limited (default: 2) to prevent infinite recursion. All other tools (including memory) are inherited. Task failures don't affect siblings.
 
-```yaml
-subagent:
-  maxTurns: 10       # max iterations per fork (default: 5)
-  maxConcurrency: 6  # max parallel tasks (default: 4)
+Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to control how many forks run in parallel.
 ```
 
 ## Memory

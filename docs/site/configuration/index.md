@@ -48,9 +48,7 @@ storage:
   maxSessions: 100
   ttlDays: 30
 
-subagent:
-  maxTurns: 10
-  maxConcurrency: 4
+maxConcurrency: 4
 
 middleware:
   beforeModelCall:
@@ -112,12 +110,11 @@ mcp:
 
 ### Subagent
 
-The `subagent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, and thinking level. These settings control fork limits.
+The `subagent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`.
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `subagent.maxTurns` | — | — | `5` | Max iterations per fork |
-| `subagent.maxConcurrency` | — | — | `4` | Max parallel tasks per invocation |
+| `maxConcurrency` | — | — | `4` | Max parallel subagent tasks per invocation |
 
 ### Storage
 
