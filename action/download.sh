@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Skip download if ra is already on PATH (e.g. built from source in CI)
+if command -v ra &>/dev/null; then
+  echo "ra already available at $(command -v ra), skipping download"
+  exit 0
+fi
+
 # Determine platform and architecture
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
