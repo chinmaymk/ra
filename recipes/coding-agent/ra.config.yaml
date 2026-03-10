@@ -13,6 +13,16 @@ maxIterations: 200
 
 thinking: high
 
+toolTimeout: 120000
+
 compaction:
   enabled: true
   threshold: 0.8
+
+middleware:
+  beforeLoopBegin:
+    - ./middleware/project-discovery.ts
+  afterToolExecution:
+    - ./middleware/auto-verify.ts
+  afterLoopIteration:
+    - ./middleware/self-review.ts
