@@ -8,6 +8,7 @@ import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoop } from './agent/loop'
 import { SessionStorage } from './storage/sessions'
 import { loadSkills } from './skills/loader'
+import { loadBuiltinSkills } from './skills/builtin'
 import { McpClient } from './mcp/client'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { runCli } from './interfaces/cli'
@@ -208,6 +209,12 @@ async function main(): Promise<void> {
 
   // Load skills from configured directories
   const skillMap = await loadSkills(config.skillDirs)
+
+  // Merge built-in skills (user skills override built-in if same name)
+  const builtinSkills = loadBuiltinSkills(config.builtinSkills)
+  for (const [name, skill] of builtinSkills) {
+    if (!skillMap.has(name)) skillMap.set(name, skill)
+  }
 
   // Active skills for this run (always-on from config + per-run --skill flags)
   const activeSkills = [...config.skills, ...parsed.meta.skills]
