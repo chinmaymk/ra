@@ -1,6 +1,7 @@
 import yaml from 'js-yaml'
 import type { Skill, SkillMetadata } from './types'
 
+/// <reference path="./builtin-skills.d.ts" />
 // Build-time text imports — embedded in the compiled binary
 import writeSkillMd from './builtin/write-skill/SKILL.md' with { type: 'text' }
 import writeRecipeMd from './builtin/write-recipe/SKILL.md' with { type: 'text' }

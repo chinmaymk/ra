@@ -79,9 +79,7 @@ Each middleware file exports a default async function that receives the hook's c
 
 ```typescript
 // middleware/log-calls.ts
-import type { ModelCallContext } from 'ra/agent/types'
-
-export default async function (ctx: ModelCallContext): Promise<void> {
+export default async function (ctx: any): Promise<void> {
   const messageCount = ctx.loop.messages.length
   console.log(`[middleware] Model call #${ctx.loop.iteration} with ${messageCount} messages`)
 }
@@ -91,9 +89,7 @@ Another example — blocking dangerous tool calls:
 
 ```typescript
 // middleware/guard-tools.ts
-import type { ToolExecutionContext } from 'ra/agent/types'
-
-export default async function (ctx: ToolExecutionContext): Promise<void> {
+export default async function (ctx: any): Promise<void> {
   const name = ctx.toolCall.name
   const blocked = ['rm', 'delete', 'drop']
 
@@ -131,7 +127,7 @@ middleware:
 ## Key Rules
 
 - **Async functions.** Every middleware handler must be an async function (or return a Promise). The signature is `(ctx: ContextType) => Promise<void>`.
-- **Typed context.** Import the context type from `ra/agent/types` for type safety. Each hook receives exactly the context type listed in the table above.
+- **Typed context.** Each hook receives exactly the context type listed in the table above. Middleware files are dynamically imported — use `any` for the context type or define local interfaces matching the shapes documented above.
 - **Sequential execution.** When multiple middleware are registered for the same hook, they run in order — first to last. If one calls `ctx.stop()`, the agent halts after the current hook completes.
 - **Relative paths.** File paths in the config are resolved relative to the config file's directory. Use `./middleware/file.ts` not absolute paths.
 - **No return value.** Middleware functions return `void`. They act through side effects: logging, modifying context fields, or calling `ctx.stop()`.
