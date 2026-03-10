@@ -14,6 +14,8 @@ export interface RaConfig {
   model: string
   interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio'
   systemPrompt: string
+  /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
+  configDir: string
   http: { port: number; token: string }
   skillDirs: string[]
   skills: string[]

@@ -40,24 +40,24 @@ function deepMerge(
   return result
 }
 
-async function loadConfigFile(cwd: string, configPath?: string): Promise<Partial<RaConfig>> {
+async function loadConfigFile(cwd: string, configPath?: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
   if (configPath) {
     const full = isAbsolute(configPath) ? configPath : join(cwd, configPath)
-    if (await Bun.file(full).exists()) return parseFile(full)
-    return {}
+    if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
+    return { config: {} }
   }
   // Walk up the directory tree until a config file is found
   let dir = cwd
   while (true) {
     for (const name of CONFIG_FILES) {
       const full = join(dir, name)
-      if (await Bun.file(full).exists()) return parseFile(full)
+      if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
     }
     const parent = dirname(dir)
     if (parent === dir) break
     dir = parent
   }
-  return {}
+  return { config: {} }
 }
 
 async function parseFile(path: string): Promise<Partial<RaConfig>> {
@@ -162,7 +162,8 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
 
-  const fileConfig = await loadConfigFile(cwd, options.configPath)
+  const { config: fileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
+  const configDir = configFilePath ? dirname(configFilePath) : cwd
   const envConfig = loadEnvVars(env)
   const cliArgs = options.cliArgs ?? {}
 
@@ -173,10 +174,11 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   )
 
   const config = merged as unknown as RaConfig
+  config.configDir = configDir
 
   // Only try loading systemPrompt as a file if it looks like a path
   if (config.systemPrompt && looksLikePath(config.systemPrompt, ['.txt', '.md'])) {
-    const resolved = resolvePath(config.systemPrompt, cwd)
+    const resolved = resolvePath(config.systemPrompt, configDir)
     const f = Bun.file(resolved)
     if (await f.exists()) config.systemPrompt = await f.text()
   }
