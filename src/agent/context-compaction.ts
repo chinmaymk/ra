@@ -128,7 +128,8 @@ export function createCompactionMiddleware(
         model: compactionModel,
         messages: [{ role: 'user', content: `${SUMMARIZATION_PROMPT}\n\n${conversationText}` }],
       })
-    } catch {
+    } catch (err) {
+      console.error('[compaction] summarization failed:', err instanceof Error ? err.message : String(err))
       return // Leave messages unchanged on summarization failure
     }
 
