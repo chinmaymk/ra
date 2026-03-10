@@ -36,6 +36,7 @@ export const defaultConfig: RaConfig = {
   maxIterations: 50,
   toolTimeout: 30000,
   builtinTools: true,
+  builtinSkills: {},
   middleware: {},
   context: {
     enabled: true,
