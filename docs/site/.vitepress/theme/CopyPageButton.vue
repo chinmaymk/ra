@@ -5,15 +5,43 @@ import { useData } from 'vitepress'
 const { page } = useData()
 const copied = ref(false)
 
+function fallbackCopy(text: string) {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
+
+async function writeToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    fallbackCopy(text)
+  }
+}
+
 async function copyPage() {
+  let text = ''
   const url = `https://raw.githubusercontent.com/chinmaymk/ra/main/docs/site/${page.value.relativePath}`
   try {
     const res = await fetch(url)
-    const text = await res.text()
-    await navigator.clipboard.writeText(text)
+    if (res.ok) {
+      text = await res.text()
+    }
   } catch {
-    await navigator.clipboard.writeText(window.location.href)
+    // fetch failed, fall through to DOM fallback
   }
+
+  if (!text) {
+    const el = document.querySelector('.vp-doc')
+    text = el?.textContent?.trim() || window.location.href
+  }
+
+  await writeToClipboard(text)
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
 }
