@@ -65,10 +65,10 @@ export const defaultConfig: RaConfig = {
     enabled: true,
     logs: {
       level: 'info',
-      output: 'stderr',
+      output: 'session',
     },
     traces: {
-      output: 'stderr',
+      output: 'session',
     },
   },
 }

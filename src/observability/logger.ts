@@ -81,13 +81,13 @@ export class Logger {
   }
 
   private emit(entry: LogEntry): void {
-    const line = JSON.stringify(entry)
+    const line = JSON.stringify(entry) + '\n'
     if (this.fileWriter) {
-      this.fileWriter.write(line + '\n')
+      this.fileWriter.write(line)
     } else if (this.output === 'stdout') {
-      process.stdout.write(line + '\n')
+      process.stdout.write(line)
     } else {
-      process.stderr.write(line + '\n')
+      process.stderr.write(line)
     }
   }
 }

@@ -19,6 +19,7 @@ import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
+import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
 import { createObservability } from './observability'
@@ -237,10 +238,21 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
-  // Create observability (logger + tracer)
-  const { logger, tracer } = createObservability(config.observability)
+  // Create session storage and session first (observability needs the session dir)
+  const storagePath = resolvePath(config.storage.path, config.configDir)
+  const storage = new SessionStorage(storagePath)
+  await storage.init()
 
-  // Create observability middleware — the single integration point for the agent loop
+  const sessionId = parsed.meta.resume ?? (await storage.create({
+    provider: config.provider,
+    model: config.model,
+    interface: config.interface,
+  })).id
+  const sessionDir = storage.sessionDir(sessionId)
+  await mkdir(sessionDir, { recursive: true })
+
+  // Create observability — 'session' output resolves to files in sessionDir
+  const { logger, tracer } = createObservability(config.observability, { sessionId, sessionDir })
   const obsMw = createObservabilityMiddleware(logger, tracer)
 
   // Resolve compaction model default from provider if not set
@@ -314,12 +326,6 @@ async function main(): Promise<void> {
     middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
-
-  // Create session storage
-  const storagePath = resolvePath(config.storage.path, config.configDir)
-  const storage = new SessionStorage(storagePath)
-  await storage.init()
-  logger.debug('session storage initialized', { path: storagePath })
 
   // Load skills from configured directories (resolve relative paths against config dir)
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
@@ -484,9 +490,9 @@ async function main(): Promise<void> {
       console.error('Error: --cli requires a prompt argument')
       process.exit(1)
     }
-    const sessionMessages = parsed.meta.resume ? await storage.readMessages(parsed.meta.resume) : []
+    const sessionMessages = parsed.meta.resume ? await storage.readMessages(sessionId) : []
     if (parsed.meta.resume) {
-      logger.info('resuming session', { sessionId: parsed.meta.resume, messageCount: sessionMessages.length })
+      logger.info('resuming session', { sessionId, messageCount: sessionMessages.length })
     }
     const cliResult = await runCli({
       prompt: parsed.meta.prompt,
@@ -504,10 +510,8 @@ async function main(): Promise<void> {
       contextMessages,
       sessionMessages,
     })
-    if (parsed.meta.resume) {
-      for (const msg of cliResult.messages.slice(cliResult.priorCount)) {
-        await storage.appendMessage(parsed.meta.resume, msg)
-      }
+    for (const msg of cliResult.messages.slice(cliResult.priorCount)) {
+      await storage.appendMessage(sessionId, msg)
     }
     process.stdout.write('\n')
     await shutdown()
@@ -547,7 +551,7 @@ async function main(): Promise<void> {
       skillMap,
       maxIterations: config.maxIterations,
       toolTimeout: config.toolTimeout,
-      sessionId: parsed.meta.resume,
+      sessionId,
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,

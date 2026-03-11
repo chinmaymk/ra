@@ -428,7 +428,7 @@ storage:
   ttlDays: 30           # auto-expire
 ```
 
-Sessions are auto-saved after each turn. The REPL has `/resume <id>` and the HTTP API accepts a `sessionId` field. When `ask_user` suspends a CLI run, the session ID is printed to stderr so you can resume later.
+Sessions are auto-saved after each turn. Each session directory contains the conversation messages, plus observability logs and traces when using the default `session` output mode. The REPL has `/resume <id>` and the HTTP API accepts a `sessionId` field. When `ask_user` suspends a CLI run, the session ID is printed to stderr so you can resume later.
 
 ## MCP
 
@@ -525,7 +525,15 @@ All hooks support a configurable timeout via `toolTimeout` (default: 30s).
 
 ## Observability
 
-Structured JSON logging and tracing are built in. Every agent loop emits logs and trace spans to stderr by default — no extra setup needed.
+Structured JSON logging and tracing are built in. By default, logs and traces are written to the session directory alongside conversation messages — keeping stdout/stderr clean.
+
+```
+.ra/sessions/{session-id}/
+  meta.json          # session metadata
+  messages.jsonl     # conversation messages
+  logs.jsonl         # structured logs
+  traces.jsonl       # trace spans
+```
 
 ```yaml
 # ra.config.yml
@@ -533,10 +541,10 @@ observability:
   enabled: true          # default: true
   logs:
     level: info          # debug | info | warn | error
-    output: stderr       # stderr | stdout | file
-    filePath: .ra/logs.jsonl
+    output: session      # session | stderr | stdout | file
+    filePath: .ra/logs.jsonl  # only used when output is 'file'
   traces:
-    output: file
+    output: session      # session | stderr | stdout | file
     filePath: .ra/traces.jsonl
 ```
 
@@ -577,14 +585,14 @@ Each span records duration, status (`ok`/`error`), and relevant attributes (toke
 Both logs and traces emit one JSON object per line (JSONL). Logs include `timestamp`, `level`, `message`, and `sessionId`. Traces include `traceId`, `spanId`, `parentSpanId`, `name`, `durationMs`, and `attributes`.
 
 ```bash
-# Watch logs in real time
-tail -f .ra/logs.jsonl | jq .
+# Watch logs for a session
+cat .ra/sessions/<session-id>/logs.jsonl | jq .
 
 # Filter to just errors
-tail -f .ra/logs.jsonl | jq 'select(.level == "error")'
+cat .ra/sessions/<session-id>/logs.jsonl | jq 'select(.level == "error")'
 
 # Show trace span durations
-tail -f .ra/traces.jsonl | jq '{name, durationMs, status}'
+cat .ra/sessions/<session-id>/traces.jsonl | jq '{name, durationMs, status}'
 ```
 
 To disable all observability output:

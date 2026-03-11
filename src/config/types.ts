@@ -89,11 +89,11 @@ export interface RaConfig {
     enabled: boolean
     logs: {
       level: LogLevel      // minimum log level: 'debug' | 'info' | 'warn' | 'error'
-      output: 'stderr' | 'stdout' | 'file'
+      output: 'stderr' | 'stdout' | 'file' | 'session'
       filePath?: string    // required when output is 'file'
     }
     traces: {
-      output: 'stderr' | 'stdout' | 'file'
+      output: 'stderr' | 'stdout' | 'file' | 'session'
       filePath?: string    // required when output is 'file'
     }
   }

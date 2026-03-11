@@ -123,13 +123,13 @@ export class Tracer {
   }
 
   private emit(record: TraceRecord): void {
-    const line = JSON.stringify(record)
+    const line = JSON.stringify(record) + '\n'
     if (this.fileWriter) {
-      this.fileWriter.write(line + '\n')
+      this.fileWriter.write(line)
     } else if (this.output === 'stdout') {
-      process.stdout.write(line + '\n')
+      process.stdout.write(line)
     } else {
-      process.stderr.write(line + '\n')
+      process.stderr.write(line)
     }
   }
 }

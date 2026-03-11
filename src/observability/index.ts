@@ -9,11 +9,11 @@ export interface ObservabilityConfig {
   enabled: boolean
   logs: {
     level: LogLevel
-    output: 'stderr' | 'stdout' | 'file'
+    output: 'stderr' | 'stdout' | 'file' | 'session'
     filePath?: string
   }
   traces: {
-    output: 'stderr' | 'stdout' | 'file'
+    output: 'stderr' | 'stdout' | 'file' | 'session'
     filePath?: string
   }
 }
@@ -23,22 +23,37 @@ export interface Observability {
   tracer: Tracer
 }
 
-export function createObservability(config: ObservabilityConfig, sessionId?: string): Observability {
+export function createObservability(config: ObservabilityConfig, options?: { sessionId?: string; sessionDir?: string }): Observability {
   if (!config.enabled) {
     return { logger: new NoopLogger(), tracer: new NoopTracer() }
   }
 
+  // Resolve 'session' → 'file' with path in sessionDir, or fall back to stderr
+  const logOutput = config.logs.output === 'session'
+    ? (options?.sessionDir ? 'file' as const : 'stderr' as const)
+    : config.logs.output
+  const logFilePath = config.logs.output === 'session' && options?.sessionDir
+    ? `${options.sessionDir}/logs.jsonl`
+    : config.logs.filePath
+
+  const traceOutput = config.traces.output === 'session'
+    ? (options?.sessionDir ? 'file' as const : 'stderr' as const)
+    : config.traces.output
+  const traceFilePath = config.traces.output === 'session' && options?.sessionDir
+    ? `${options.sessionDir}/traces.jsonl`
+    : config.traces.filePath
+
   const logger = new Logger({
     level: config.logs.level,
-    output: config.logs.output,
-    filePath: config.logs.filePath,
-    sessionId,
+    output: logOutput,
+    filePath: logFilePath,
+    sessionId: options?.sessionId,
   })
 
   const tracer = new Tracer({
-    output: config.traces.output,
-    filePath: config.traces.filePath,
-    sessionId,
+    output: traceOutput,
+    filePath: traceFilePath,
+    sessionId: options?.sessionId,
   })
 
   return { logger, tracer }
