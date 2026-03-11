@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   test:
     name: Test
@@ -25,30 +28,14 @@ jobs:
       - name: Test
         run: bun test
 
-  build:
-    name: Build (${{ matrix.target }})
+  goreleaser:
+    name: Release
     needs: test
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: bun-linux-x64
-            asset: ra-linux-x64
-          - os: ubuntu-latest
-            target: bun-linux-arm64
-            asset: ra-linux-arm64
-          - os: macos-latest
-            target: bun-darwin-x64
-            asset: ra-darwin-x64
-          - os: macos-latest
-            target: bun-darwin-arm64
-            asset: ra-darwin-arm64
-          - os: windows-latest
-            target: bun-windows-x64
-            asset: ra-windows-x64.exe
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -57,69 +44,14 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build binary
-        run: bun build src/index.ts --compile --target ${{ matrix.target }} --outfile dist/${{ matrix.asset }}
-
-      - name: Strip binary (Linux x64)
-        if: matrix.target == 'bun-linux-x64'
-        run: strip dist/${{ matrix.asset }}
-
-      - name: Strip binary (Linux arm64)
-        if: matrix.target == 'bun-linux-arm64'
-        run: |
-          sudo apt-get update && sudo apt-get install -y binutils-aarch64-linux-gnu
-          aarch64-linux-gnu-strip dist/${{ matrix.asset }}
-
-      - name: Strip binary (macOS)
-        if: startsWith(matrix.target, 'bun-darwin')
-        run: strip dist/${{ matrix.asset }}
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
         with:
-          name: ${{ matrix.asset }}
-          path: dist/${{ matrix.asset }}
-
-  release:
-    name: Publish Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist/
-
-      - name: Flatten artifacts
-        run: |
-          mkdir -p release
-          find dist/ -type f -exec mv {} release/ \;
-          ls -lh release/
-
-      - name: Compress binaries
-        working-directory: release
-        run: |
-          for f in ra-linux-* ra-darwin-*; do
-            gzip -9 "$f"
-          done
-          for f in ra-windows-*; do
-            zip -9 "${f%.exe}.zip" "$f" && rm "$f"
-          done
-          ls -lh
-
-      - name: Create checksums
-        working-directory: release
-        run: sha256sum * > checksums.txt
-
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/*
-          generate_release_notes: true
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-npm:
     name: Publish to npm
