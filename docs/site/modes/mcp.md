@@ -36,11 +36,15 @@ mcp:
       command: ./my-mcp-server
 ```
 
+### Server-prefixed tool names
+
+All MCP tools are registered with server-prefixed names: `serverName__toolName`. This avoids conflicts when multiple servers expose tools with the same name. Server names are sanitized to `[a-zA-Z0-9_]` for provider compatibility (e.g., `my-server` becomes `my_server`).
+
 ### Lazy schema loading
 
 MCP servers can expose dozens of tools, each with large JSON schemas. Sending all of them in every model call wastes tokens — especially when only a few tools are used per conversation.
 
-By default, ra uses **lazy schema loading** for MCP tools. Tool names are prefixed with the server name (`github__search`, `database__query`) to avoid conflicts across servers. Descriptions are passed through unchanged from the MCP server. Only the `inputSchema` is stripped — when the model first calls a tool, ra returns the full schema instead of executing it, and the model retries with the correct parameters.
+By default, ra uses **lazy schema loading** for MCP tools. Descriptions are passed through unchanged from the MCP server. Only the `inputSchema` is stripped — when the model first calls a tool, ra returns the full schema instead of executing it, and the model retries with the correct parameters.
 
 ```
 Model sees:

@@ -3,7 +3,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { McpClientConfig } from '../config/types'
-import { wrapMcpToolsLazy, type McpToolEntry } from './lazy-tools'
+import { wrapMcpToolsLazy, prefixToolName, type McpToolEntry } from './lazy-tools'
 
 export interface McpConnectOptions {
   lazySchemas?: boolean
@@ -49,8 +49,8 @@ export class McpClient {
       if (options?.lazySchemas && mcpTools.length > 0) {
         wrapMcpToolsLazy(registry, mcpTools)
       } else {
-        for (const { tool } of mcpTools) {
-          registry.register(tool)
+        for (const { tool, serverName } of mcpTools) {
+          registry.register({ ...tool, name: prefixToolName(serverName, tool.name) })
         }
       }
     } catch (err) {
