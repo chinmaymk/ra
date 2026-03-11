@@ -1,31 +1,16 @@
 #!/usr/bin/env bun
 import { loadConfig } from './config'
-import { getDefaultCompactionModel } from './agent/model-registry'
-import { discoverContextFiles, buildContextMessages } from './context'
-import { createResolverMiddleware } from './context/resolve-middleware'
-import { loadResolvers } from './context/resolver-loader'
-import { loadMiddleware } from './middleware/loader'
-import { createProvider, buildProviderConfig } from './providers/registry'
-import { ToolRegistry } from './agent/tool-registry'
-import { AgentLoop } from './agent/loop'
-import { SessionStorage } from './storage/sessions'
-import { loadSkills } from './skills/loader'
-import { loadBuiltinSkills } from './skills/builtin'
-import { McpClient } from './mcp/client'
-import { startMcpStdio, startMcpHttp } from './mcp/server'
+import { bootstrap, type AppContext } from './bootstrap'
+import { parseArgs } from './interfaces/parse-args'
+import { HELP } from './interfaces/help'
+import { runExecScript, runSkillCommand, showContext, runMemoryCommand } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
-import { parseArgs } from './interfaces/parse-args'
-import { registerBuiltinTools, subagentTool } from './tools'
-import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
-import { mkdir } from 'node:fs/promises'
-import { join, resolve } from 'path'
-import { resolvePath } from './utils/paths'
-import { createObservability } from './observability'
-import { createObservabilityMiddleware } from './observability/middleware'
-import { createPermissionsMiddleware } from './agent/permissions'
-import type { MiddlewareConfig } from './agent/types'
+import { AgentLoop } from './agent/loop'
+import { startMcpStdio, startMcpHttp } from './mcp/server'
+
+// ── Helpers ──────────────────────────────────────────────────────────
 
 async function readStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined
@@ -35,200 +20,224 @@ async function readStdin(): Promise<string | undefined> {
   return text || undefined
 }
 
-const HELP = `
-ra - AI agent CLI
-
-USAGE
-  ra [options] [prompt]
-
-OPTIONS
-  --provider <name>                   Provider (anthropic, openai, google, ollama)
-  --model <name>                      Model name
-  --system-prompt <text>              System prompt text or path to file
-  --max-iterations <n>                Max agent loop iterations
-  --config <path>                     Path to config file
-  --skill <name>                      Skill to activate for this run (repeatable)
-  --skill-dir <path>                  Directory to load skills from (repeatable)
-  --file <path>                       File to attach (repeatable)
-  --resume <session-id>               Resume a previous session
-
-INTERFACE
-  --cli                               Oneshot mode: run prompt and exit
-  --repl                              Interactive REPL mode (default)
-  --http                              Start HTTP API server
-  --mcp                               Start MCP HTTP server (default port: 3001)
-  --mcp-stdio                         Start MCP stdio server (for Claude Desktop/Cursor)
-
-HTTP SERVER
-  --http-port <port>                  HTTP server port (default: 3000)
-  --http-token <token>                Bearer token for HTTP auth
-
-MCP SERVER
-  --mcp-server-enabled                Enable MCP HTTP server alongside main interface
-  --mcp-server-port <port>            MCP server port (default: 3001)
-  --mcp-server-tool-name <name>       MCP tool name
-  --mcp-server-tool-description <d>   MCP tool description
-
-MEMORY
-  --memory                            Enable persistent memory across conversations
-  --list-memories                     List all stored memories
-  --memories <query>                  Search memories by keyword
-  --forget <query>                    Forget memories matching query
-
-STORAGE
-  --storage-path <path>               Session storage directory
-  --storage-max-sessions <n>          Max stored sessions
-  --storage-ttl-days <n>              Session TTL in days
-
-THINKING
-  --thinking <level>                  Enable extended thinking: low | medium | high
-
-PROVIDER OPTIONS
-  --anthropic-base-url <url>          Anthropic API base URL
-  --openai-base-url <url>             OpenAI API base URL
-  --ollama-host <url>                 Ollama host URL
-
-  --builtin-tools                     Enable built-in tools (filesystem, shell, network)
-  --show-context                      Show discovered context files and exit
-  --exec <script>                     Execute a JS/TS file and exit
-  --version, -v                       Print version and exit
-  --help, -h                          Print this help message
-
-SKILL MANAGEMENT
-  ra skill install <source>           Install skill from npm, GitHub, or URL
-  ra skill remove <name>              Remove an installed skill
-  ra skill list                       List installed skills
-
-  Sources:
-    ra skill install code-review             npm package "code-review"
-    ra skill install npm:ra-skill-lint@1.0   npm with version
-    ra skill install github:user/repo        GitHub repository
-    ra skill install https://example.com/s.tgz  URL tarball
-
-ENV VARS
-  RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
-  RA_HTTP_PORT, RA_HTTP_TOKEN
-  RA_MCP_SERVER_ENABLED, RA_MCP_SERVER_PORT
-  RA_MCP_SERVER_TOOL_NAME, RA_MCP_SERVER_TOOL_DESCRIPTION
-  RA_STORAGE_PATH, RA_STORAGE_MAX_SESSIONS, RA_STORAGE_TTL_DAYS
-  RA_SKILL_DIRS=dir1,dir2  RA_SKILLS=skill1,skill2
-  RA_ANTHROPIC_API_KEY, RA_ANTHROPIC_BASE_URL
-  RA_OPENAI_API_KEY, RA_OPENAI_BASE_URL
-  RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
-  RA_BUILTIN_TOOLS
-  RA_THINKING
-  RA_MEMORY_ENABLED, RA_MEMORY_PATH, RA_MEMORY_MAX_MEMORIES
-  RA_MEMORY_TTL_DAYS, RA_MEMORY_INJECT_LIMIT
-
-STDIN
-  When input is piped, ra reads stdin and auto-switches to CLI mode.
-  If a prompt argument is given, the prompt comes first followed by stdin.
-  If no prompt argument, stdin becomes the prompt.
-
-EXAMPLES
-  ra "What is the capital of France?"
-  ra --provider openai --model gpt-4o "Summarize this file" --file report.pdf
-  cat file.ts | ra "review this code"
-  git diff | ra "summarize these changes"
-  echo "hello" | ra
-  ra --repl
-  ra --http --http-port 8080
-  ra --mcp --mcp-server-port 4000
-  ra --mcp-stdio
-  ra --mcp-server-enabled --mcp-server-port 4000 --repl
-`.trim()
-
-
-async function execScript(scriptPath: string): Promise<void> {
-  const resolved = resolve(scriptPath)
-  const mod = await import(resolved)
-  if (typeof mod.default === 'function') {
-    const result = await mod.default()
-    if (result !== undefined) console.log(typeof result === 'string' ? result : JSON.stringify(result))
+function onSignals(fn: () => Promise<void>): { remove: () => void } {
+  const handler = async () => { await fn(); process.exit(0) }
+  process.on('SIGINT', handler)
+  process.on('SIGTERM', handler)
+  return {
+    remove: () => {
+      process.off('SIGINT', handler)
+      process.off('SIGTERM', handler)
+    },
   }
 }
 
-async function main(): Promise<void> {
-  const parsed = parseArgs(process.argv)
+// ── Early exits (no config/bootstrap needed) ─────────────────────────
 
+async function handleEarlyExits(parsed: ReturnType<typeof parseArgs>): Promise<void> {
   if (parsed.meta.exec) {
-    await execScript(parsed.meta.exec)
+    await runExecScript(parsed.meta.exec)
     process.exit(0)
   }
-
   if (parsed.meta.version) {
     const { versionString } = await import('./version')
     console.log(versionString())
     process.exit(0)
   }
-
   if (parsed.meta.help) {
     console.log(HELP)
     process.exit(0)
   }
-
-  // Handle skill management subcommands (lazy-load registry module)
   if (parsed.meta.skillCommand) {
-    const { installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir } = await import('./skills/registry')
-    const { action, args } = parsed.meta.skillCommand
-    switch (action) {
-      case 'install': {
-        if (args.length === 0) {
-          console.error('Usage: ra skill install <source>')
-          process.exit(1)
-        }
-        for (const source of args) {
-          try {
-            const installed = await installSkill(source)
-            console.log(`Installed skills: ${installed.join(', ')} → ${defaultSkillInstallDir()}`)
-          } catch (err) {
-            console.error(`Failed to install "${source}": ${err instanceof Error ? err.message : String(err)}`)
-            process.exit(1)
-          }
-        }
-        process.exit(0)
-      }
-      case 'remove': {
-        if (args.length === 0) {
-          console.error('Usage: ra skill remove <name>')
-          process.exit(1)
-        }
-        for (const name of args) {
-          try {
-            await removeSkill(name)
-            console.log(`Removed skill: ${name}`)
-          } catch (err) {
-            console.error(`Failed to remove "${name}": ${err instanceof Error ? err.message : String(err)}`)
-            process.exit(1)
-          }
-        }
-        process.exit(0)
-      }
-      case 'list': {
-        const skills = await listInstalledSkills()
-        if (skills.length === 0) {
-          console.log(`No skills installed in ${defaultSkillInstallDir()}`)
-        } else {
-          for (const s of skills) {
-            const src = s.source
-              ? ` (${s.source.registry}${s.source.package ? ': ' + s.source.package : ''}${s.source.repo ? ': ' + s.source.repo : ''}${s.source.version ? '@' + s.source.version : ''})`
-              : ''
-            console.log(`  ${s.name}${src}`)
-          }
-        }
-        process.exit(0)
-      }
-    }
+    await runSkillCommand(parsed.meta.skillCommand)
+  }
+}
+
+// ── Standalone commands (need bootstrap but no interface) ────────────
+
+async function handleStandaloneCommands(
+  parsed: ReturnType<typeof parseArgs>,
+  app: AppContext,
+): Promise<void> {
+  if (parsed.meta.showContext) {
+    showContext(app.contextMessages)
+    await app.shutdown()
+    process.exit(0)
   }
 
-  // Read piped stdin only for CLI/unspecified mode (http/repl/mcp manage stdin themselves)
+  if (parsed.meta.listMemories || parsed.meta.memories !== undefined) {
+    runMemoryCommand(app.memoryStore, { list: parsed.meta.listMemories, search: parsed.meta.memories })
+    await app.shutdown()
+    process.exit(0)
+  }
+
+  if (parsed.meta.forget !== undefined) {
+    runMemoryCommand(app.memoryStore, { forget: parsed.meta.forget })
+    await app.shutdown()
+    process.exit(0)
+  }
+}
+
+// ── Interface launchers ──────────────────────────────────────────────
+
+function createMcpHandler(app: AppContext) {
+  return async (input: unknown) => {
+    const loop = new AgentLoop({
+      provider: app.provider,
+      tools: app.tools,
+      model: app.config.model,
+      maxIterations: app.config.maxIterations,
+      toolTimeout: app.config.toolTimeout,
+      middleware: app.middleware,
+      compaction: app.config.compaction,
+    })
+    const prompt = typeof input === 'string' ? input : JSON.stringify(input)
+    const result = await loop.run([{ role: 'user', content: prompt }])
+    const last = result.messages.at(-1)
+    return typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content)
+  }
+}
+
+function mcpToolsFor(app: AppContext) {
+  return app.config.builtinTools ? app.tools : undefined
+}
+
+async function startSidecarMcp(app: AppContext): Promise<(() => Promise<void>) | null> {
+  if (!app.config.mcp.server?.enabled) return null
+  const handler = createMcpHandler(app)
+  const stop = await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
+  console.error(`MCP server (http) listening on port ${app.config.mcp.server.port}`)
+  return stop
+}
+
+async function launchMcpHttp(app: AppContext): Promise<void> {
+  const handler = createMcpHandler(app)
+  await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
+  console.error(`MCP server (http) listening on port ${app.config.mcp.server.port}`)
+  await new Promise(() => {}) // keep alive
+}
+
+async function launchMcpStdio(app: AppContext): Promise<void> {
+  const handler = createMcpHandler(app)
+  const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
+  const mcpCommand = isDevMode ? 'bun' : process.argv[0]!
+  const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp-stdio'] : ['--mcp-stdio']
+  const mcpConfig = JSON.stringify({ mcpServers: { ra: { command: mcpCommand, args: mcpArgs } } }, null, 2)
+  process.stderr.write(
+    `MCP stdio server starting.\n\n` +
+    `Cursor — .cursor/mcp.json:\n${mcpConfig}\n\n` +
+    `Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n${mcpConfig}\n\n`
+  )
+  await startMcpStdio(app.config.mcp.server, handler, mcpToolsFor(app))
+  await app.shutdown()
+}
+
+async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext): Promise<void> {
+  if (!parsed.meta.prompt) {
+    console.error('Error: --cli requires a prompt argument')
+    process.exit(1)
+  }
+  const sessionMessages = parsed.meta.resume ? await app.storage.readMessages(app.sessionId) : []
+  if (parsed.meta.resume) {
+    app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
+  }
+  const activeSkills = [...app.config.skills, ...parsed.meta.skills]
+  const result = await runCli({
+    prompt: parsed.meta.prompt!,
+    files: parsed.meta.files,
+    skills: activeSkills,
+    systemPrompt: app.config.systemPrompt,
+    model: app.config.model,
+    provider: app.provider,
+    tools: app.tools,
+    skillMap: app.skillMap,
+    maxIterations: app.config.maxIterations,
+    middleware: app.middleware,
+    thinking: app.config.thinking,
+    compaction: app.config.compaction,
+    contextMessages: app.contextMessages,
+    sessionMessages,
+  })
+  for (const msg of result.messages.slice(result.priorCount)) {
+    await app.storage.appendMessage(app.sessionId, msg)
+  }
+  process.stdout.write('\n')
+  await app.shutdown()
+}
+
+async function launchHttp(app: AppContext, signals: { remove: () => void }): Promise<void> {
+  const stopMcpHttp = await startSidecarMcp(app)
+
+  const httpServer = new HttpServer({
+    port: app.config.http.port,
+    token: app.config.http.token || undefined,
+    model: app.config.model,
+    provider: app.provider,
+    tools: app.tools,
+    storage: app.storage,
+    systemPrompt: app.config.systemPrompt,
+    skillMap: app.skillMap,
+    maxIterations: app.config.maxIterations,
+    toolTimeout: app.config.toolTimeout,
+    middleware: app.middleware,
+    thinking: app.config.thinking,
+    compaction: app.config.compaction,
+    contextMessages: app.contextMessages,
+  })
+  await httpServer.start()
+  console.error(`HTTP server listening on port ${httpServer.port}`)
+
+  const httpShutdown = async () => {
+    try { await httpServer.stop() } catch { /* best-effort */ }
+    try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }
+    await app.shutdown()
+  }
+  signals.remove()
+  onSignals(httpShutdown)
+  await new Promise(() => {}) // keep alive
+}
+
+async function launchRepl(app: AppContext): Promise<void> {
+  const stopMcpHttp = await startSidecarMcp(app)
+
+  const repl = new Repl({
+    model: app.config.model,
+    provider: app.provider,
+    tools: app.tools,
+    storage: app.storage,
+    systemPrompt: app.config.systemPrompt,
+    skillMap: app.skillMap,
+    maxIterations: app.config.maxIterations,
+    toolTimeout: app.config.toolTimeout,
+    sessionId: app.sessionId,
+    middleware: app.middleware,
+    thinking: app.config.thinking,
+    compaction: app.config.compaction,
+    contextMessages: app.contextMessages,
+    memoryStore: app.memoryStore,
+  })
+  await repl.start()
+  try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }
+  await app.shutdown()
+}
+
+// ── Main ─────────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  const parsed = parseArgs(process.argv)
+
+  await handleEarlyExits(parsed)
+
+  // Read piped stdin (only for CLI / unspecified mode)
   const isNonCliInterface = parsed.config.interface && parsed.config.interface !== 'cli'
-  const stdinContent = isNonCliInterface ? undefined : await readStdin()
-  if (stdinContent) {
-    parsed.meta.prompt = parsed.meta.prompt
-      ? `${parsed.meta.prompt}\n\n${stdinContent}`
-      : stdinContent
-    parsed.config.interface = 'cli' as const
+  if (!isNonCliInterface) {
+    const stdinContent = await readStdin()
+    if (stdinContent) {
+      parsed.meta.prompt = parsed.meta.prompt
+        ? `${parsed.meta.prompt}\n\n${stdinContent}`
+        : stdinContent
+      parsed.config.interface = 'cli' as const
+    }
   }
 
   const config = await loadConfig({
@@ -238,328 +247,26 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
-  // Create session storage and session first (observability needs the session dir)
-  const storagePath = resolvePath(config.storage.path, config.configDir)
-  const storage = new SessionStorage(storagePath)
-  await storage.init()
+  const app = await bootstrap(config, { sessionId: parsed.meta.resume })
 
-  const sessionId = parsed.meta.resume ?? (await storage.create({
-    provider: config.provider,
-    model: config.model,
-    interface: config.interface,
-  })).id
-  const sessionDir = storage.sessionDir(sessionId)
-  await mkdir(sessionDir, { recursive: true })
+  const signals = onSignals(app.shutdown)
+  await handleStandaloneCommands(parsed, app)
 
-  // Create observability — 'session' output resolves to files in sessionDir
-  const { logger, tracer } = createObservability(config.observability, { sessionId, sessionDir })
-  const obsMw = createObservabilityMiddleware(logger, tracer)
+  app.logger.info('starting interface', { interface: config.interface })
 
-  // Resolve compaction model default from provider if not set
-  if (!config.compaction.model) {
-    config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
-  }
-  config.compaction.onCompact = (info) => logger.info('context compacted', info)
-
-  // Discover project context files
-  const contextFiles = config.context.enabled
-    ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
-    : []
-  const contextMessages = buildContextMessages(contextFiles)
-
-  if (contextFiles.length > 0) {
-    logger.info('context files discovered', {
-      fileCount: contextFiles.length,
-      patterns: config.context.patterns,
-      files: contextFiles.map(f => f.relativePath),
-    })
-  }
-
-  const middleware = await loadMiddleware(config, config.configDir)
-  const userHookCount = Object.values(middleware).reduce((n, hooks) => n + (hooks?.length ?? 0), 0)
-  if (userHookCount > 0) {
-    logger.info('custom middleware loaded', { hookCount: userHookCount })
-  }
-
-  // Set up pattern resolvers (e.g. @file, url:)
-  if (config.context.resolvers?.length) {
-    const resolvers = await loadResolvers(config.context.resolvers, config.configDir)
-    if (resolvers.length > 0) {
-      const resolverMw = createResolverMiddleware(resolvers, process.cwd())
-      middleware.beforeModelCall = [resolverMw, ...(middleware.beforeModelCall ?? [])]
-    }
-  }
-
-  // Create provider
-  const provider = createProvider(buildProviderConfig(config.provider, config.providers[config.provider]))
-  logger.info('provider initialized', { provider: config.provider, model: config.model })
-
-  // Create tool registry
-  const tools = new ToolRegistry()
-
-  if (config.builtinTools) {
-    registerBuiltinTools(tools)
-  }
-
-  const toolNames = tools.all().map(t => t.name)
-  if (toolNames.length > 0) {
-    logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames })
-  }
-
-  // Set up memory system
-  let memoryStore: MemoryStore | undefined
-  if (config.memory.enabled) {
-    const memoryPath = resolvePath(config.memory.path, config.configDir)
-    memoryStore = new MemoryStore({
-      path: memoryPath,
-      maxMemories: config.memory.maxMemories,
-      ttlDays: config.memory.ttlDays,
-    })
-    tools.register(memorySearchTool(memoryStore))
-    tools.register(memorySaveTool(memoryStore))
-    tools.register(memoryForgetTool(memoryStore))
-
-    const memMw = createMemoryMiddleware({
-      store: memoryStore,
-      injectLimit: config.memory.injectLimit,
-    })
-    middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
-    logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
-  }
-
-  // Load skills from configured directories (resolve relative paths against config dir)
-  const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
-  const skillMap = await loadSkills(resolvedSkillDirs)
-  if (skillMap.size > 0) {
-    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
-  }
-
-  // Merge built-in skills (user skills override built-in if same name)
-  const builtinSkills = loadBuiltinSkills(config.builtinSkills)
-  for (const [name, skill] of builtinSkills) {
-    if (!skillMap.has(name)) skillMap.set(name, skill)
-  }
-
-  // Active skills for this run (always-on from config + per-run --skill flags)
-  const activeSkills = [...config.skills, ...parsed.meta.skills]
-
-  // Connect MCP clients
-  const mcpClient = new McpClient()
-  if (config.mcp.client && config.mcp.client.length > 0) {
-    logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
-    await mcpClient.connect(config.mcp.client, tools, {
-      lazySchemas: config.mcp.lazySchemas,
-    })
-    logger.info('MCP servers connected', { totalTools: tools.all().length, lazySchemas: config.mcp.lazySchemas })
-  }
-
-  // Inject permissions middleware (runs before user middleware on beforeToolExecution)
-  if (config.permissions.rules?.length && !config.permissions.no_rules_rules) {
-    const permMw = createPermissionsMiddleware(config.permissions)
-    middleware.beforeToolExecution = [permMw, ...(middleware.beforeToolExecution ?? [])]
-    logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
-  }
-
-  // Prepend observability hooks into the middleware chain (obs runs first)
-  for (const key of Object.keys(obsMw)) {
-    const k = key as keyof MiddlewareConfig
-    ;(middleware as any)[k] = [...((obsMw as any)[k] ?? []), ...((middleware as any)[k] ?? [])]
-  }
-
-  // Register subagent tool after all other tools (builtin + MCP) are set up.
-  // The child registry is built lazily at execution time, so it always sees
-  // the latest tools, but registering last makes the intent clear.
-  tools.register(subagentTool({
-    provider,
-    tools,
-    model: config.model,
-    systemPrompt: config.systemPrompt,
-    middleware,
-    thinking: config.thinking,
-    compaction: config.compaction,
-    toolTimeout: config.toolTimeout,
-    maxIterations: config.maxIterations,
-    maxConcurrency: config.maxConcurrency,
-  }))
-
-  // Agent handler shared by MCP transports
-  const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware, compaction: config.compaction })
-    const prompt = typeof input === 'string' ? input : JSON.stringify(input)
-    const result = await loop.run([{ role: 'user', content: prompt }])
-    const last = result.messages.at(-1)
-    return typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content)
-  }
-
-  // Start MCP HTTP server if configured (via --mcp-server-enabled alongside another interface)
-  let stopMcpHttp: (() => Promise<void>) | null = null
-  if (config.interface !== 'mcp' && config.mcp.server?.enabled) {
-    stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
-    console.error(`MCP server (http) listening on port ${config.mcp.server.port}`)
-  }
-
-  // Shutdown helpers
-  const shutdown = async () => {
-    logger.info('shutting down')
-    try { await mcpClient.disconnect() } catch { /* best-effort cleanup */ }
-    try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort cleanup */ }
-    if (memoryStore) memoryStore.close()
-    await logger.flush()
-    await tracer.flush()
-  }
-
-  process.on('SIGINT', async () => { await shutdown(); process.exit(0) })
-  process.on('SIGTERM', async () => { await shutdown(); process.exit(0) })
-
-  if (parsed.meta.showContext) {
-    if (contextMessages.length === 0) {
-      console.log('No context files discovered.')
-    } else {
-      for (const msg of contextMessages) {
-        const content = typeof msg.content === 'string' ? msg.content : ''
-        console.log(content)
-        console.log()
+  switch (config.interface) {
+    case 'mcp':       return launchMcpHttp(app)
+    case 'mcp-stdio': return launchMcpStdio(app)
+    case 'http':      return launchHttp(app, signals)
+    case 'cli':
+      return launchCli(parsed, app)
+    default: {
+      // CLI mode when prompt given without --cli flag
+      if (parsed.meta.prompt && !parsed.config.interface) {
+        return launchCli(parsed, app)
       }
+      return launchRepl(app)
     }
-    await shutdown()
-    process.exit(0)
-  }
-
-  if (parsed.meta.listMemories || parsed.meta.memories !== undefined) {
-    if (!memoryStore) {
-      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
-    } else {
-      const query = parsed.meta.memories || ''
-      const memories = query ? memoryStore.search(query, 100) : memoryStore.list(100)
-      if (memories.length === 0) {
-        console.log(query ? 'No matching memories found.' : 'No memories stored.')
-      } else {
-        const total = memoryStore.count()
-        console.log(query
-          ? `${memories.length} matching memories (${total} total):\n`
-          : `${memories.length} memories (${total} total):\n`)
-        for (const m of memories) {
-          console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
-        }
-      }
-    }
-    await shutdown()
-    process.exit(0)
-  }
-
-  if (parsed.meta.forget !== undefined) {
-    if (!memoryStore) {
-      console.log('Memory is not enabled. Use --memory or set memory.enabled in config.')
-    } else {
-      const query = parsed.meta.forget
-      if (!query) {
-        console.log('Usage: ra --forget "search query"')
-      } else {
-        const deleted = memoryStore.forget(query, 1000)
-        console.log(deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.')
-      }
-    }
-    await shutdown()
-    process.exit(0)
-  }
-
-  logger.info('starting interface', { interface: config.interface })
-
-  // Determine which interface to launch
-  if (config.interface === 'mcp') {
-    stopMcpHttp = await startMcpHttp(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
-    console.error(`MCP server (http) listening on port ${config.mcp.server.port}`)
-    await new Promise(() => {})
-  } else if (config.interface === 'mcp-stdio') {
-    const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
-    const mcpCommand = isDevMode ? 'bun' : process.argv[0]!
-    const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp-stdio'] : ['--mcp-stdio']
-    const mcpConfig = JSON.stringify({
-      mcpServers: { ra: { command: mcpCommand, args: mcpArgs } }
-    }, null, 2)
-    process.stderr.write(
-      `MCP stdio server starting.\n\n` +
-      `Cursor — .cursor/mcp.json:\n${mcpConfig}\n\n` +
-      `Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n${mcpConfig}\n\n`
-    )
-    await startMcpStdio(config.mcp.server, mcpHandler, config.builtinTools ? tools : undefined)
-    await shutdown()
-    return
-  } else if (config.interface === 'cli' || (parsed.meta.prompt && !parsed.config.interface)) {
-    if (!parsed.meta.prompt) {
-      console.error('Error: --cli requires a prompt argument')
-      process.exit(1)
-    }
-    const sessionMessages = parsed.meta.resume ? await storage.readMessages(sessionId) : []
-    if (parsed.meta.resume) {
-      logger.info('resuming session', { sessionId, messageCount: sessionMessages.length })
-    }
-    const cliResult = await runCli({
-      prompt: parsed.meta.prompt,
-      files: parsed.meta.files,
-      skills: activeSkills,
-      systemPrompt: config.systemPrompt,
-      model: config.model,
-      provider,
-      tools,
-      skillMap,
-      maxIterations: config.maxIterations,
-      middleware,
-      thinking: config.thinking,
-      compaction: config.compaction,
-      contextMessages,
-      sessionMessages,
-    })
-    for (const msg of cliResult.messages.slice(cliResult.priorCount)) {
-      await storage.appendMessage(sessionId, msg)
-    }
-    process.stdout.write('\n')
-    await shutdown()
-  } else if (config.interface === 'http') {
-    const httpServer = new HttpServer({
-      port: config.http.port,
-      token: config.http.token || undefined,
-      model: config.model,
-      provider,
-      tools,
-      storage,
-      systemPrompt: config.systemPrompt,
-      skillMap,
-      maxIterations: config.maxIterations,
-      toolTimeout: config.toolTimeout,
-      middleware,
-      thinking: config.thinking,
-      compaction: config.compaction,
-      contextMessages,
-    })
-    await httpServer.start()
-    console.error(`HTTP server listening on port ${httpServer.port}`)
-    // Keep process alive; clean up on signal
-    const httpShutdown = async () => { try { await httpServer.stop() } catch { /* best-effort */ } await shutdown() }
-    process.removeAllListeners('SIGINT')
-    process.removeAllListeners('SIGTERM')
-    process.on('SIGINT', async () => { await httpShutdown(); process.exit(0) })
-    process.on('SIGTERM', async () => { await httpShutdown(); process.exit(0) })
-    await new Promise(() => {})
-  } else {
-    const repl = new Repl({
-      model: config.model,
-      provider,
-      tools,
-      storage,
-      systemPrompt: config.systemPrompt,
-      skillMap,
-      maxIterations: config.maxIterations,
-      toolTimeout: config.toolTimeout,
-      sessionId,
-      middleware,
-      thinking: config.thinking,
-      compaction: config.compaction,
-      contextMessages,
-      memoryStore,
-    })
-    await repl.start()
-    await shutdown()
   }
 }
 
