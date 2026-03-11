@@ -23,18 +23,42 @@ Compaction uses an onCompact callback for logging without coupling to Logger.
 
 ## Configuration
 
+By default, logs and traces are written to the session directory as `logs.jsonl` and `traces.jsonl`, keeping stdout/stderr clean:
+
+```
+.ra/sessions/{session-id}/
+  meta.json          # session metadata
+  messages.jsonl     # conversation messages
+  logs.jsonl         # structured logs
+  traces.jsonl       # trace spans
+```
+
 ```json
 {
   "observability": {
     "enabled": true,
     "logs": {
       "level": "info",
-      "output": "stderr",
+      "output": "session"
+    },
+    "traces": {
+      "output": "session"
+    }
+  }
+}
+```
+
+To write to a fixed file instead, or to stderr/stdout:
+
+```json
+{
+  "observability": {
+    "logs": {
+      "output": "file",
       "filePath": "./logs/ra.log.jsonl"
     },
     "traces": {
-      "output": "file",
-      "filePath": "./logs/ra.traces.jsonl"
+      "output": "stderr"
     }
   }
 }
@@ -47,11 +71,11 @@ RA_OBSERVABILITY_ENABLED=true
 
 # Logs
 RA_LOG_LEVEL=debug          # debug | info | warn | error
-RA_LOG_OUTPUT=file           # stderr | stdout | file
-RA_LOG_FILE=./logs/ra.log.jsonl
+RA_LOG_OUTPUT=session        # session | stderr | stdout | file
+RA_LOG_FILE=./logs/ra.log.jsonl  # only used when output is 'file'
 
 # Traces
-RA_TRACE_OUTPUT=file         # stderr | stdout | file
+RA_TRACE_OUTPUT=session      # session | stderr | stdout | file
 RA_TRACE_FILE=./logs/ra.traces.jsonl
 ```
 
@@ -61,9 +85,9 @@ RA_TRACE_FILE=./logs/ra.traces.jsonl
 |--------|---------|-------------|
 | `enabled` | `true` | Enable/disable all observability |
 | `logs.level` | `info` | Minimum log level (`debug`, `info`, `warn`, `error`) |
-| `logs.output` | `stderr` | Log output destination (`stderr`, `stdout`, `file`) |
+| `logs.output` | `session` | Log output destination (`session`, `stderr`, `stdout`, `file`) |
 | `logs.filePath` | — | File path when `logs.output` is `file` |
-| `traces.output` | `stderr` | Trace output destination (`stderr`, `stdout`, `file`) |
+| `traces.output` | `session` | Trace output destination (`session`, `stderr`, `stdout`, `file`) |
 | `traces.filePath` | — | File path when `traces.output` is `file` |
 
 ## Logs

@@ -17,18 +17,17 @@ export interface LogEntry {
 
 export interface LoggerOptions {
   level: LogLevel
-  output: 'stderr' | 'stdout' | 'file' | 'session'
+  output: 'stderr' | 'stdout' | 'file'
   filePath?: string
   sessionId?: string
 }
 
 export class Logger {
   private level: LogLevel
-  private output: 'stderr' | 'stdout' | 'file' | 'session'
+  private output: 'stderr' | 'stdout' | 'file'
   private filePath: string | undefined
   private sessionId: string | undefined
   private fileWriter: ReturnType<ReturnType<typeof Bun.file>['writer']> | undefined
-  private pendingLines: string[] | undefined
 
   constructor(options: LoggerOptions) {
     this.level = options.level
@@ -38,25 +37,10 @@ export class Logger {
     if (this.output === 'file' && this.filePath) {
       this.fileWriter = Bun.file(this.filePath).writer()
     }
-    if (this.output === 'session') {
-      this.pendingLines = []
-    }
   }
 
   setSessionId(sessionId: string): void {
     this.sessionId = sessionId
-  }
-
-  /** Set the session directory for 'session' output mode. Flushes any buffered lines. */
-  setSessionDir(sessionDir: string): void {
-    if (this.output !== 'session') return
-    this.fileWriter = Bun.file(`${sessionDir}/logs.jsonl`).writer()
-    if (this.pendingLines) {
-      for (const line of this.pendingLines) {
-        this.fileWriter.write(line)
-      }
-      this.pendingLines = undefined
-    }
   }
 
   debug(message: string, data?: Record<string, unknown>): void {
@@ -98,9 +82,7 @@ export class Logger {
 
   private emit(entry: LogEntry): void {
     const line = JSON.stringify(entry) + '\n'
-    if (this.output === 'session' && this.pendingLines) {
-      this.pendingLines.push(line)
-    } else if (this.fileWriter) {
+    if (this.fileWriter) {
       this.fileWriter.write(line)
     } else if (this.output === 'stdout') {
       process.stdout.write(line)

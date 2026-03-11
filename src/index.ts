@@ -236,10 +236,20 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
-  // Create observability (logger + tracer)
-  const { logger, tracer } = createObservability(config.observability)
+  // Create session storage and session first (observability needs the session dir)
+  const storagePath = resolvePath(config.storage.path, config.configDir)
+  const storage = new SessionStorage(storagePath)
+  await storage.init()
 
-  // Create observability middleware — the single integration point for the agent loop
+  const sessionId = parsed.meta.resume ?? (await storage.create({
+    provider: config.provider,
+    model: config.model,
+    interface: config.interface,
+  })).id
+  const sessionDir = storage.sessionDir(sessionId)
+
+  // Create observability — 'session' output resolves to files in sessionDir
+  const { logger, tracer } = createObservability(config.observability, { sessionId, sessionDir })
   const obsMw = createObservabilityMiddleware(logger, tracer)
 
   // Resolve compaction model default from provider if not set
@@ -313,24 +323,6 @@ async function main(): Promise<void> {
     middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
-
-  // Create session storage
-  const storagePath = resolvePath(config.storage.path, config.configDir)
-  const storage = new SessionStorage(storagePath)
-  await storage.init()
-  logger.debug('session storage initialized', { path: storagePath })
-
-  // Create or resolve a session for this run and point observability at its directory
-  const sessionId = parsed.meta.resume ?? (await storage.create({
-    provider: config.provider,
-    model: config.model,
-    interface: config.interface,
-  })).id
-  const sessionDir = storage.sessionDir(sessionId)
-  logger.setSessionId(sessionId)
-  tracer.setSessionId(sessionId)
-  logger.setSessionDir(sessionDir)
-  tracer.setSessionDir(sessionDir)
 
   // Load skills from configured directories (resolve relative paths against config dir)
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))

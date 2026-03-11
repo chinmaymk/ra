@@ -23,22 +23,32 @@ export interface Observability {
   tracer: Tracer
 }
 
-export function createObservability(config: ObservabilityConfig, sessionId?: string): Observability {
+export function createObservability(config: ObservabilityConfig, options?: { sessionId?: string; sessionDir?: string }): Observability {
   if (!config.enabled) {
     return { logger: new NoopLogger(), tracer: new NoopTracer() }
   }
 
+  const logOutput = config.logs.output === 'session' ? 'file' as const : config.logs.output
+  const logFilePath = config.logs.output === 'session' && options?.sessionDir
+    ? `${options.sessionDir}/logs.jsonl`
+    : config.logs.filePath
+
+  const traceOutput = config.traces.output === 'session' ? 'file' as const : config.traces.output
+  const traceFilePath = config.traces.output === 'session' && options?.sessionDir
+    ? `${options.sessionDir}/traces.jsonl`
+    : config.traces.filePath
+
   const logger = new Logger({
     level: config.logs.level,
-    output: config.logs.output,
-    filePath: config.logs.filePath,
-    sessionId,
+    output: logOutput,
+    filePath: logFilePath,
+    sessionId: options?.sessionId,
   })
 
   const tracer = new Tracer({
-    output: config.traces.output,
-    filePath: config.traces.filePath,
-    sessionId,
+    output: traceOutput,
+    filePath: traceFilePath,
+    sessionId: options?.sessionId,
   })
 
   return { logger, tracer }

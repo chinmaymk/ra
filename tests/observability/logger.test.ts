@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { Logger, NoopLogger, type LogEntry } from '../../src/observability/logger'
-import { tmpdir } from '../tmpdir'
-import { mkdir, rm } from 'node:fs/promises'
-import { join } from 'path'
 
 describe('Logger', () => {
   let captured: string[]
@@ -84,69 +81,6 @@ describe('Logger', () => {
       expect(entry.message).toBe('stdout test')
     } finally {
       process.stdout.write = origStdout
-    }
-  })
-})
-
-describe('Logger session output', () => {
-  const TEST_DIR = tmpdir('ra-test-logger-session')
-
-  afterEach(async () => { await rm(TEST_DIR, { recursive: true, force: true }) })
-
-  it('buffers lines until setSessionDir is called', async () => {
-    const logger = new Logger({ level: 'info', output: 'session' })
-    logger.info('before session dir')
-    logger.warn('also before')
-
-    // No file yet, lines are buffered
-    await mkdir(TEST_DIR, { recursive: true })
-    logger.setSessionDir(TEST_DIR)
-
-    // Lines should now be flushed to file
-    logger.info('after session dir')
-    await logger.flush()
-
-    const content = await Bun.file(join(TEST_DIR, 'logs.jsonl')).text()
-    const lines = content.trim().split('\n')
-    expect(lines).toHaveLength(3)
-    expect(JSON.parse(lines[0]!).message).toBe('before session dir')
-    expect(JSON.parse(lines[1]!).message).toBe('also before')
-    expect(JSON.parse(lines[2]!).message).toBe('after session dir')
-  })
-
-  it('does not write to stderr or stdout in session mode', () => {
-    const stderrCaptured: string[] = []
-    const stdoutCaptured: string[] = []
-    const origStderr = process.stderr.write
-    const origStdout = process.stdout.write
-    process.stderr.write = ((data: string) => { stderrCaptured.push(data); return true }) as typeof process.stderr.write
-    process.stdout.write = ((data: string) => { stdoutCaptured.push(data); return true }) as typeof process.stdout.write
-
-    try {
-      const logger = new Logger({ level: 'info', output: 'session' })
-      logger.info('silent message')
-      expect(stderrCaptured).toHaveLength(0)
-      expect(stdoutCaptured).toHaveLength(0)
-    } finally {
-      process.stderr.write = origStderr
-      process.stdout.write = origStdout
-    }
-  })
-
-  it('setSessionDir is a no-op for non-session output', async () => {
-    const captured: string[] = []
-    const origStderr = process.stderr.write
-    process.stderr.write = ((data: string) => { captured.push(data); return true }) as typeof process.stderr.write
-
-    try {
-      const logger = new Logger({ level: 'info', output: 'stderr' })
-      await mkdir(TEST_DIR, { recursive: true })
-      logger.setSessionDir(TEST_DIR)
-      logger.info('still goes to stderr')
-      expect(captured).toHaveLength(1)
-      expect(JSON.parse(captured[0]!.trim()).message).toBe('still goes to stderr')
-    } finally {
-      process.stderr.write = origStderr
     }
   })
 })

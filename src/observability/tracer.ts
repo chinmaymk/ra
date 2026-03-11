@@ -34,18 +34,17 @@ export interface TraceRecord {
 }
 
 export interface TracerOptions {
-  output: 'stderr' | 'stdout' | 'file' | 'session'
+  output: 'stderr' | 'stdout' | 'file'
   filePath?: string
   sessionId?: string
 }
 
 export class Tracer {
   private traceId: string
-  private output: 'stderr' | 'stdout' | 'file' | 'session'
+  private output: 'stderr' | 'stdout' | 'file'
   private filePath: string | undefined
   private sessionId: string | undefined
   private fileWriter: ReturnType<ReturnType<typeof Bun.file>['writer']> | undefined
-  private pendingLines: string[] | undefined
   private activeSpans: Map<string, Span> = new Map()
 
   constructor(options: TracerOptions | null, traceId?: string) {
@@ -56,9 +55,6 @@ export class Tracer {
     if (this.output === 'file' && this.filePath) {
       this.fileWriter = Bun.file(this.filePath).writer()
     }
-    if (this.output === 'session') {
-      this.pendingLines = []
-    }
   }
 
   getTraceId(): string {
@@ -67,18 +63,6 @@ export class Tracer {
 
   setSessionId(sessionId: string): void {
     this.sessionId = sessionId
-  }
-
-  /** Set the session directory for 'session' output mode. Flushes any buffered lines. */
-  setSessionDir(sessionDir: string): void {
-    if (this.output !== 'session') return
-    this.fileWriter = Bun.file(`${sessionDir}/traces.jsonl`).writer()
-    if (this.pendingLines) {
-      for (const line of this.pendingLines) {
-        this.fileWriter.write(line)
-      }
-      this.pendingLines = undefined
-    }
   }
 
   startSpan(name: string, attributes?: Record<string, unknown>, parentSpanId?: string): Span {
@@ -140,9 +124,7 @@ export class Tracer {
 
   private emit(record: TraceRecord): void {
     const line = JSON.stringify(record) + '\n'
-    if (this.output === 'session' && this.pendingLines) {
-      this.pendingLines.push(line)
-    } else if (this.fileWriter) {
+    if (this.fileWriter) {
       this.fileWriter.write(line)
     } else if (this.output === 'stdout') {
       process.stdout.write(line)

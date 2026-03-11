@@ -1,7 +1,10 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, afterEach } from 'bun:test'
 import { createObservability, type ObservabilityConfig } from '../../src/observability'
 import { NoopLogger } from '../../src/observability/logger'
 import { NoopTracer } from '../../src/observability/tracer'
+import { tmpdir } from '../tmpdir'
+import { mkdir, rm } from 'node:fs/promises'
+import { join } from 'path'
 
 const defaultConfig: ObservabilityConfig = {
   enabled: true,
@@ -26,7 +29,7 @@ describe('createObservability', () => {
     const { logger } = createObservability({
       ...defaultConfig,
       logs: { level: 'error', output: 'stderr' },
-    }, 'test-session')
+    }, { sessionId: 'test-session' })
     const captured: string[] = []
     const orig = process.stderr.write
     process.stderr.write = ((data: string) => { captured.push(data); return true }) as typeof process.stderr.write
@@ -49,13 +52,30 @@ describe('createObservability', () => {
     expect(tracer).not.toBeInstanceOf(NoopTracer)
   })
 
-  it('creates real instances with session output', () => {
-    const { logger, tracer } = createObservability({
-      enabled: true,
-      logs: { level: 'info', output: 'session' },
-      traces: { output: 'session' },
-    })
-    expect(logger).not.toBeInstanceOf(NoopLogger)
-    expect(tracer).not.toBeInstanceOf(NoopTracer)
+  it('session output writes logs and traces to session directory', async () => {
+    const TEST_DIR = tmpdir('ra-test-obs-session')
+    await mkdir(TEST_DIR, { recursive: true })
+
+    try {
+      const { logger, tracer } = createObservability({
+        enabled: true,
+        logs: { level: 'info', output: 'session' },
+        traces: { output: 'session' },
+      }, { sessionId: 'sess-1', sessionDir: TEST_DIR })
+
+      logger.info('hello from logger')
+      const span = tracer.startSpan('test.op')
+      tracer.endSpan(span)
+      await logger.flush()
+      await tracer.flush()
+
+      const logs = await Bun.file(join(TEST_DIR, 'logs.jsonl')).text()
+      expect(JSON.parse(logs.trim()).message).toBe('hello from logger')
+
+      const traces = await Bun.file(join(TEST_DIR, 'traces.jsonl')).text()
+      expect(JSON.parse(traces.trim()).name).toBe('test.op')
+    } finally {
+      await rm(TEST_DIR, { recursive: true, force: true })
+    }
   })
 })
