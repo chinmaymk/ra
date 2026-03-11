@@ -49,8 +49,8 @@ describe('spinner', () => {
       startSpinner()
       stopSpinner()
     })
-    // Should contain spinner frame and chevron
-    expect(output).toContain('›')
+    // Should contain clear-line escape (no prefix on model response)
+    expect(output).toContain('\x1b[K')
   })
 
   it('startSpinner is idempotent', () => {
@@ -70,11 +70,11 @@ describe('spinner', () => {
     expect(output).toContain('\x1b[K')
   })
 
-  it('stopSpinner outputs response prefix even when no spinner running', () => {
+  it('stopSpinner clears line even when no spinner running', () => {
     const output = captureStdout(() => {
-      stopSpinner() // no spinner running, should still output the response prefix
+      stopSpinner() // no spinner running, should still clear and add blank line
     })
-    expect(output).toContain('›')
+    expect(output).toContain('\x1b[K')
   })
 })
 
