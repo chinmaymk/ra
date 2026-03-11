@@ -70,18 +70,18 @@ describe('spinner', () => {
     expect(output).toContain('\x1b[K')
   })
 
-  it('stopSpinner is no-op when no spinner running', () => {
+  it('stopSpinner outputs response prefix even when no spinner running', () => {
     const output = captureStdout(() => {
-      stopSpinner() // no spinner running, should not throw
+      stopSpinner() // no spinner running, should still output the response prefix
     })
-    expect(output).toBe('')
+    expect(output).toContain('›')
   })
 })
 
 describe('closeAssistantBox', () => {
-  it('outputs two newlines', () => {
+  it('outputs a newline', () => {
     const output = captureStdout(() => closeAssistantBox())
-    expect(output).toBe('\n\n')
+    expect(output).toBe('\n')
   })
 })
 

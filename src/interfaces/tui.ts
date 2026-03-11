@@ -77,22 +77,25 @@ export function startSpinner(): void {
 }
 
 export function stopSpinner(silent = false): void {
-  if (!spinnerTimer) return
-  clearInterval(spinnerTimer)
-  spinnerTimer = null
+  const wasRunning = !!spinnerTimer
+  if (spinnerTimer) {
+    clearInterval(spinnerTimer)
+    spinnerTimer = null
+  }
   if (silent) {
-    process.stdout.write('\r\x1b[K')
+    if (wasRunning) process.stdout.write('\r\x1b[K')
   } else {
-    process.stdout.write(`\r${c.dim}${c.cyan}›${c.reset} `)
+    // Always write the response prefix — clears spinner/current line, adds blank line separator, then ›
+    process.stdout.write(`\r\x1b[K\n${c.dim}${c.cyan}›${c.reset} `)
   }
 }
 
 export function closeAssistantBox(): void {
-  process.stdout.write('\n\n')
+  process.stdout.write('\n')
 }
 
 export function printToolCall(name: string): void {
-  process.stdout.write(`\n  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
+  process.stdout.write(`  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
 }
 
 export function printToolResult(name: string, ms: number): void {
