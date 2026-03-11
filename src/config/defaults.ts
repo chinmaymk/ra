@@ -48,6 +48,10 @@ export const defaultConfig: RaConfig = {
       { name: 'url', enabled: true },
     ],
   },
+  modelSwitching: {
+    enabled: false,
+    rules: [],
+  },
   compaction: {
     enabled: true,
     threshold: 0.80,

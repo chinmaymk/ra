@@ -3,6 +3,7 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
+import { createModelSwitchingMiddleware, type ModelSwitchConfig, type ModelSwitchingDeps } from './model-switching'
 import { accumulateUsage } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
@@ -16,6 +17,9 @@ export interface AgentLoopOptions {
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  modelSwitching?: ModelSwitchConfig
+  /** Factory to create a provider by name (for cross-provider model switching) */
+  createProvider?: (name: string) => IProvider
   toolTimeout?: number
 }
 
@@ -55,6 +59,16 @@ export class AgentLoop {
       this.middleware.beforeModelCall = [
         createCompactionMiddleware(this.provider, options.compaction),
         ...this.middleware.beforeModelCall,
+      ]
+    }
+    if (options.modelSwitching?.enabled) {
+      const deps: ModelSwitchingDeps = {
+        defaultProvider: this.provider,
+        ...(options.createProvider && { createProvider: options.createProvider }),
+      }
+      this.middleware.beforeModelCall = [
+        ...this.middleware.beforeModelCall,
+        createModelSwitchingMiddleware(options.modelSwitching, deps),
       ]
     }
   }
@@ -101,7 +115,8 @@ export class AgentLoop {
         const toolCallBuf: { id: string; name: string; argsRaw: string }[] = []
 
         currentPhase = 'stream'
-        for await (const chunk of this.provider.stream(request)) {
+        const activeProvider = modelCallCtx.provider ?? this.provider
+        for await (const chunk of activeProvider.stream(request)) {
           if (chunk.type === 'thinking') {
             await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
             if (signal.aborted) break

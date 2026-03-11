@@ -127,6 +127,9 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_MEMORY_TTL_DAYS !== undefined)      setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
   if (env.RA_MEMORY_INJECT_LIMIT !== undefined)  setInt(['memory', 'injectLimit'], env.RA_MEMORY_INJECT_LIMIT)
 
+  // Model switching
+  if (env.RA_MODEL_SWITCHING_ENABLED !== undefined) set(['modelSwitching', 'enabled'], env.RA_MODEL_SWITCHING_ENABLED === 'true')
+
   // Observability
   if (env.RA_OBSERVABILITY_ENABLED !== undefined) set(['observability', 'enabled'], env.RA_OBSERVABILITY_ENABLED === 'true')
   // Logs

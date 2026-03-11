@@ -359,9 +359,16 @@ async function main(): Promise<void> {
     maxConcurrency: config.maxConcurrency,
   }))
 
+  // Factory for cross-provider model switching (lazily creates providers by name)
+  const providerFactory = (name: string) => {
+    const opts = (config.providers as Record<string, Record<string, unknown>>)[name]
+    if (!opts) throw new Error(`No provider options configured for "${name}"`)
+    return createProvider(buildProviderConfig(name as Parameters<typeof buildProviderConfig>[0], opts as never))
+  }
+
   // Agent handler shared by MCP transports
   const mcpHandler = async (input: unknown) => {
-    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware, compaction: config.compaction })
+    const loop = new AgentLoop({ provider, tools, model: config.model, maxIterations: config.maxIterations, toolTimeout: config.toolTimeout, middleware, compaction: config.compaction, modelSwitching: config.modelSwitching, createProvider: providerFactory })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
@@ -484,6 +491,8 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      modelSwitching: config.modelSwitching,
+      createProvider: providerFactory,
       contextMessages,
       sessionMessages,
     })
@@ -509,6 +518,8 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      modelSwitching: config.modelSwitching,
+      createProvider: providerFactory,
       contextMessages,
     })
     await httpServer.start()
@@ -534,6 +545,8 @@ async function main(): Promise<void> {
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,
+      modelSwitching: config.modelSwitching,
+      createProvider: providerFactory,
       contextMessages,
       memoryStore,
     })

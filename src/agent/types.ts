@@ -1,4 +1,4 @@
-import type { IToolCall, IToolResult, StreamChunk, IMessage, ChatRequest, TokenUsage } from '../providers/types'
+import type { IProvider, IToolCall, IToolResult, StreamChunk, IMessage, ChatRequest, TokenUsage } from '../providers/types'
 
 export interface StoppableContext {
   stop: (reason?: string) => void
@@ -17,6 +17,8 @@ export interface LoopContext extends StoppableContext {
 export interface ModelCallContext extends StoppableContext {
   request: ChatRequest
   loop: LoopContext
+  /** Override the provider for this model call (set by model-switching middleware) */
+  provider?: IProvider
 }
 
 export interface StreamChunkContext extends StoppableContext {

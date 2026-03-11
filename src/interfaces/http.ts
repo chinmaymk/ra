@@ -4,6 +4,7 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
+import type { ModelSwitchConfig } from '../agent/model-switching'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { ASK_USER_SIGNAL } from '../tools/ask-user'
@@ -22,6 +23,8 @@ export interface HttpOptions {
   toolTimeout?: number
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  modelSwitching?: ModelSwitchConfig
+  createProvider?: (name: string) => IProvider
   contextMessages?: IMessage[]
 }
 
@@ -133,6 +136,8 @@ export class HttpServer {
       sessionId: body.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
+      modelSwitching: this.options.modelSwitching,
+      createProvider: this.options.createProvider,
     })
 
     try {
@@ -208,6 +213,8 @@ export class HttpServer {
           sessionId: body.sessionId,
           thinking: opts.thinking,
           compaction: opts.compaction,
+          modelSwitching: opts.modelSwitching,
+          createProvider: opts.createProvider,
         })
 
         try {

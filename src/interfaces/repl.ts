@@ -8,6 +8,7 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
+import type { ModelSwitchConfig } from '../agent/model-switching'
 import type { MemoryStore } from '../memory/store'
 import { ASK_USER_SIGNAL } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
@@ -26,6 +27,8 @@ export interface ReplOptions {
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  modelSwitching?: ModelSwitchConfig
+  createProvider?: (name: string) => IProvider
   contextMessages?: IMessage[]
   memoryStore?: MemoryStore
 }
@@ -129,6 +132,8 @@ export class Repl {
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
+      modelSwitching: this.options.modelSwitching,
+      createProvider: this.options.createProvider,
       middleware: {
         ...userMw,
         onStreamChunk: [

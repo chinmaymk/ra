@@ -5,6 +5,7 @@ import type { GoogleProviderOptions } from '../providers/google'
 import type { OllamaProviderOptions } from '../providers/ollama'
 import type { BedrockProviderOptions } from '../providers/bedrock'
 import type { AzureProviderOptions } from '../providers/azure'
+import type { ModelSwitchConfig } from '../agent/model-switching'
 import type { LogLevel } from '../observability/logger'
 
 export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedrock' | 'azure'
@@ -45,6 +46,7 @@ export interface RaConfig {
   thinking?: 'low' | 'medium' | 'high'
   maxConcurrency: number
   context: ContextConfig
+  modelSwitching: ModelSwitchConfig
   compaction: {
     enabled: boolean
     threshold: number      // 0-1, trigger ratio of context window

@@ -2,6 +2,7 @@ import type { IProvider, IMessage, ContentPart } from '../providers/types'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { CompactionConfig } from '../agent/context-compaction'
+import type { ModelSwitchConfig } from '../agent/model-switching'
 import type { Skill } from '../skills/types'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
@@ -23,6 +24,8 @@ export interface CliOptions {
   onChunk?: (text: string) => void
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
+  modelSwitching?: ModelSwitchConfig
+  createProvider?: (name: string) => IProvider
   contextMessages?: IMessage[]
   sessionMessages?: IMessage[]
 }
@@ -33,7 +36,7 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [] } = options
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, modelSwitching, createProvider: createProviderFn, contextMessages = [], sessionMessages = [] } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -67,7 +70,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   initialMessages.push({ role: 'user', content })
 
   const loop = new AgentLoop({
-    provider, tools, model, maxIterations, toolTimeout, thinking, compaction,
+    provider, tools, model, maxIterations, toolTimeout, thinking, compaction, modelSwitching, createProvider: createProviderFn,
     middleware: {
       ...middleware,
       onStreamChunk: [
