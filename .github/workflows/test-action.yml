@@ -1,0 +1,32 @@
+name: Test Action
+
+on:
+  pull_request:
+    paths:
+      - 'action.yml'
+      - 'action/**'
+      - '.github/workflows/test-action.yml'
+  workflow_dispatch:
+
+jobs:
+  test-action:
+    name: Test ra GitHub Action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build ra binary
+        run: |
+          bun build src/index.ts --compile --outfile dist/ra
+          chmod +x dist/ra
+          echo "$PWD/dist" >> "$GITHUB_PATH"
+
+      - name: Run ra --version
+        run: ra --version

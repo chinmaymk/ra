@@ -35,6 +35,20 @@ bun run compile   # → dist/ra
 
 The compiled binary is at `dist/ra`. Copy it to your `PATH` or run it directly.
 
+## GitHub Actions
+
+Use ra directly in CI/CD workflows — no install step needed:
+
+```yaml
+- uses: chinmaymk/ra@latest
+  with:
+    prompt: "Review this PR for bugs and security issues"
+  env:
+    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+See [GitHub Actions](/modes/github-actions) for all inputs, outputs, and examples.
+
 ## Set up a provider
 
 ra needs at least one LLM provider configured. The fastest way to get started:
