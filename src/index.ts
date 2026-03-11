@@ -23,6 +23,7 @@ import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
 import { createObservability } from './observability'
 import { createObservabilityMiddleware } from './observability/middleware'
+import { createPermissionsMiddleware } from './agent/permissions'
 import type { MiddlewareConfig } from './agent/types'
 
 async function readStdin(): Promise<string | undefined> {
@@ -342,6 +343,13 @@ async function main(): Promise<void> {
     logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
     await mcpClient.connect(config.mcp.client, tools)
     logger.info('MCP servers connected', { totalTools: tools.all().length })
+  }
+
+  // Inject permissions middleware (runs before user middleware on beforeToolExecution)
+  if (config.permissions.rules?.length && !config.permissions.no_rules) {
+    const permMw = createPermissionsMiddleware(config.permissions)
+    middleware.beforeToolExecution = [permMw, ...(middleware.beforeToolExecution ?? [])]
+    logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
   }
 
   // Prepend observability hooks into the middleware chain (obs runs first)

@@ -9,6 +9,27 @@ import type { LogLevel } from '../observability/logger'
 
 export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedrock' | 'azure'
 
+/** Regex-based allow/deny rules for a specific field of a tool's input. */
+export interface PermissionFieldRule {
+  allow?: string[]
+  deny?: string[]
+}
+
+/** Permission rule targeting a specific tool. `tool` is the tool name, other keys are field names mapped to allow/deny regex arrays. */
+export interface PermissionRule {
+  tool: string
+  [field: string]: PermissionFieldRule | string | undefined
+}
+
+export interface PermissionsConfig {
+  /** When true, all tools are allowed without checking rules. Default: false. */
+  no_rules?: boolean
+  /** Default action when no rule matches a tool: 'allow' or 'deny'. Default: 'allow'. */
+  default_action?: 'allow' | 'deny'
+  /** Permission rules per tool. */
+  rules?: PermissionRule[]
+}
+
 export interface RaConfig {
   provider: ProviderName
   model: string
@@ -41,6 +62,7 @@ export interface RaConfig {
   toolTimeout: number
   builtinTools: boolean
   builtinSkills: Record<string, boolean>
+  permissions: PermissionsConfig
   middleware: Record<string, string[]>
   thinking?: 'low' | 'medium' | 'high'
   maxConcurrency: number
