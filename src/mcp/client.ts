@@ -28,7 +28,7 @@ export class McpClient {
         const { tools } = await client.listTools()
         for (const tool of tools) {
           registry.register({
-            name: tool.name,
+            name: `${config.name}_${tool.name}`,
             description: tool.description ?? '',
             inputSchema: tool.inputSchema as Record<string, unknown>,
             execute: (input) => client.callTool({ name: tool.name, arguments: input as Record<string, unknown> }),

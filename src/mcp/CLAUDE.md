@@ -22,6 +22,7 @@ mcp:
 ```
 
 - Lists tools from the external server and wraps them as `ITool` instances
+- Tool names are prefixed with the server name (`{server}_{tool}`) to avoid conflicts across servers
 - Registered into the same `ToolRegistry` as built-in tools — the agent sees them identically
 - Supports `stdio` and `sse` transports
 

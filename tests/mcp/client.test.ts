@@ -71,10 +71,10 @@ server.connect(new StdioServerTransport())
 
       const tools = registry.all()
       expect(tools.length).toBeGreaterThanOrEqual(1)
-      expect(tools.some(t => t.name === 'greet')).toBe(true)
+      expect(tools.some(t => t.name === 'test-stdio-server_greet')).toBe(true)
 
       // Execute the registered tool
-      const tool = tools.find(t => t.name === 'greet')!
+      const tool = tools.find(t => t.name === 'test-stdio-server_greet')!
       const result = await tool.execute({ name: 'World' }) as any
       expect(result.content[0].text).toBe('Hello World')
 
