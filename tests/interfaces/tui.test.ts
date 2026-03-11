@@ -3,6 +3,7 @@ import {
   c, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
   printCommandResponse, printError, printThinkingStart, printThinkingEnd,
+  LineWrapper,
 } from '../../src/interfaces/tui'
 
 function captureStdout(fn: () => void): string {
@@ -139,6 +140,54 @@ describe('printThinkingEnd', () => {
     const output = captureStdout(() => printThinkingEnd())
     expect(output).toContain(c.reset)
     expect(output).toContain('╌')
+  })
+})
+
+describe('LineWrapper', () => {
+  it('passes short text through unchanged', () => {
+    const w = new LineWrapper('  ', 40, 2)
+    expect(w.write('hello world') + w.end()).toBe('hello world')
+  })
+
+  it('wraps a long line before the overflowing word', () => {
+    const w = new LineWrapper('  ', 20, 2)
+    // "hello " fits (col→8), "world" (5) fits (col→13), " " ok, "overflowing" (11) would
+    // put col at 13+1+11=25 > 20 so wrap before it
+    const out = w.write('hello world overflowing') + w.end()
+    expect(out).toBe('hello world\n  overflowing')
+    expect(w.col).toBe(2 + 'overflowing'.length)
+  })
+
+  it('buffers a word split across two write() calls', () => {
+    const w = new LineWrapper('  ', 20, 2)
+    let out = w.write('hello wor')   // "wor" stays buffered
+    out += w.write('ld end')         // "world" now complete, "end" buffered
+    out += w.end()
+    expect(out).toBe('hello world end')
+  })
+
+  it('wraps a cross-chunk word that overflows', () => {
+    const w = new LineWrapper('  ', 15, 2)
+    // col starts at 2; "hello " → col 8; then "over" is buffered
+    let out = w.write('hello over')
+    // "flow" completes the word "overflow" (8 chars); 8+8=16 > 15, wrap before
+    out += w.write('flow next')
+    out += w.end()
+    expect(out).toBe('hello\n  overflow next')
+  })
+
+  it('handles explicit newlines', () => {
+    const w = new LineWrapper('  ', 40, 2)
+    const out = w.write('line one\nline two') + w.end()
+    expect(out).toBe('line one\n  line two')
+  })
+
+  it('col reflects position after wrapping', () => {
+    const w = new LineWrapper('  ', 10, 2)
+    // "word1"(5) fits at col 2→7; "wrap"(4) with leading space: 7+1+4=12>10, wrap before
+    w.write('word1 wrap')
+    w.end()
+    expect(w.col).toBe(2 + 4)  // indent(2) + "wrap"(4)
   })
 })
 

@@ -94,26 +94,68 @@ export function closeAssistantBox(): void {
   process.stdout.write('\n\n')
 }
 
-/** Word-wrap `text` to fit within `width` columns, given `startCol` as the current cursor column.
- *  Newlines in `text` reset the column to `indent.length`.
- *  Wraps at word boundaries (spaces); long words are written as-is.
- *  Returns the wrapped string and the column position after the last character. */
-export function wrapChunk(text: string, indent: string, startCol: number, width: number): { out: string; col: number } {
-  let out = ''
-  let col = startCol
-  for (const ch of text) {
-    if (ch === '\n') {
-      out += '\n' + indent
-      col = indent.length
-    } else if (ch === ' ' && col >= width) {
-      out += '\n' + indent
-      col = indent.length
-    } else {
-      out += ch
-      col++
-    }
+/** Stateful word-wrapper for streaming text.
+ *
+ * Buffers the in-progress word across `write()` calls so that a word split
+ * across two chunks is still placed as a unit and wrapped before it starts
+ * (never mid-word). Spaces are the only wrap points; long words that cannot
+ * fit on any line are written as-is rather than broken. */
+export class LineWrapper {
+  col: number
+  private wordBuf = ''
+  private pendingSpace = false
+
+  constructor(
+    private readonly indent: string,
+    private readonly width: number,
+    startCol: number,
+  ) {
+    this.col = startCol
   }
-  return { out, col }
+
+  write(text: string): string {
+    let out = ''
+    for (const ch of text) {
+      if (ch === '\n') {
+        out += this._emitWord(this.pendingSpace)
+        this.pendingSpace = false
+        out += '\n' + this.indent
+        this.col = this.indent.length
+      } else if (ch === ' ') {
+        out += this._emitWord(this.pendingSpace)
+        this.pendingSpace = true
+      } else {
+        this.wordBuf += ch
+      }
+    }
+    return out
+  }
+
+  /** Flush remaining buffered word — call once when streaming ends. */
+  end(): string {
+    const out = this._emitWord(this.pendingSpace)
+    this.pendingSpace = false
+    return out
+  }
+
+  private _emitWord(withLeadingSpace: boolean): string {
+    if (!this.wordBuf) return ''
+    const spaceLen = withLeadingSpace ? 1 : 0
+    let out = ''
+    // Wrap before the word if it won't fit; newline replaces the leading space.
+    // Never wrap if already at indent — long words are written as-is.
+    if (this.col + spaceLen + this.wordBuf.length > this.width && this.col > this.indent.length) {
+      out += '\n' + this.indent
+      this.col = this.indent.length
+    } else if (withLeadingSpace) {
+      out += ' '
+      this.col++
+    }
+    out += this.wordBuf
+    this.col += this.wordBuf.length
+    this.wordBuf = ''
+    return out
+  }
 }
 
 export function printToolCall(name: string): void {

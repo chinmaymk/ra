@@ -116,7 +116,7 @@ export class Repl {
     let boxOpened = false
     let thinkingOpened = false
     let pendingNewlines = 0
-    let lineCol = 0
+    let wrapper: tui.LineWrapper | null = null
     const toolStartTimes = new Map<string, number>()
     tui.startSpinner()
     const userMw = this.options.middleware ?? {}
@@ -146,17 +146,22 @@ export class Repl {
                 tui.printThinkingEnd()
                 thinkingOpened = false
               }
-              if (!boxOpened) { tui.stopSpinner(); boxOpened = true; lineCol = 2 }
+              if (!boxOpened) {
+                tui.stopSpinner()
+                boxOpened = true
+                wrapper = new tui.LineWrapper('  ', (process.stdout.columns || 80) - 2, 2)
+              }
               const delta = ctx.chunk.delta
               const trailingMatch = delta.match(/\n+$/)
               const trailingCount = trailingMatch ? trailingMatch[0].length : 0
               const body = delta.slice(0, delta.length - trailingCount)
-              const termWidth = process.stdout.columns || 80
               if (body.length > 0) {
-                if (pendingNewlines > 0) { process.stdout.write('\n  '.repeat(pendingNewlines)); lineCol = 2; pendingNewlines = 0 }
-                const { out, col } = tui.wrapChunk(body, '  ', lineCol, termWidth - 2)
-                process.stdout.write(out)
-                lineCol = col
+                if (pendingNewlines > 0) {
+                  process.stdout.write('\n  '.repeat(pendingNewlines))
+                  wrapper!.col = 2
+                  pendingNewlines = 0
+                }
+                process.stdout.write(wrapper!.write(body))
               }
               pendingNewlines += trailingCount
             }
@@ -164,11 +169,20 @@ export class Repl {
           ...(userMw.onStreamChunk ?? []),
         ],
         beforeToolExecution: [
-          async (ctx: ToolExecutionContext) => { tui.stopSpinner(true); toolStartTimes.set(ctx.toolCall.id, Date.now()); tui.printToolCall(ctx.toolCall.name); lineCol = 0 },
+          async (ctx: ToolExecutionContext) => {
+            if (wrapper) { process.stdout.write(wrapper.end()); wrapper.col = 0 }
+            tui.stopSpinner(true)
+            toolStartTimes.set(ctx.toolCall.id, Date.now())
+            tui.printToolCall(ctx.toolCall.name)
+          },
           ...(userMw.beforeToolExecution ?? []),
         ],
         afterToolExecution: [
-          async (ctx: ToolResultContext) => { tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now())); lineCol = 0; if (!boxOpened) tui.startSpinner() },
+          async (ctx: ToolResultContext) => {
+            tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
+            if (wrapper) wrapper.col = 0
+            if (!boxOpened) tui.startSpinner()
+          },
           ...(userMw.afterToolExecution ?? []),
         ],
       },
@@ -178,6 +192,7 @@ export class Repl {
       const result = await loop.run(initialMessages)
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
       tui.stopSpinner(true)
+      if (wrapper) process.stdout.write(wrapper.end())
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
 
@@ -202,6 +217,7 @@ export class Repl {
       }
     } catch (err) {
       tui.stopSpinner(true)
+      if (wrapper) process.stdout.write(wrapper.end())
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
       tui.printError(err instanceof Error ? err.message : String(err))
