@@ -1,7 +1,7 @@
 <h1 align="center">ra</h1>
 
 <p align="center">
-  <b>One binary. Any LLM. Full control over the agent loop.</b><br>
+  <b>A compiled AI agent binary. Four interfaces, six providers, middleware that mutates — no runtime required.</b>
 </p>
 
 <p align="center">
@@ -23,15 +23,17 @@
 
 ---
 
-ra is an open-source AI agent framework built around a single, hackable loop. Download one binary, point it at any LLM, and get a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server — with full visibility and control at every step.
+ra is an open-source AI agent that ships as a single compiled binary. No npm install. No pip install. No node_modules. `curl | bash` and it runs.
+
+The same binary is a pipe-friendly CLI, an interactive REPL, a streaming HTTP server, and an MCP server — all driven by the same config file. Switch the LLM with a flag. Intercept and mutate the loop with middleware. Let the model fork itself when it needs parallelism. Connect to any MCP tool server without burning tokens on schemas you never use.
 
 ```bash
-ra "What is the capital of France?"
-ra --provider openai --model gpt-4.1 "Explain this error"
-ra --skill code-review "Review the latest changes"
-cat server.log | ra "Find the root cause of these errors"
-git diff | ra --skill code-review "Review this diff"
-ra   # interactive REPL
+ra "Review this diff" --skill code-review         # pipe to a skill
+cat error.log | ra "What caused this?"             # pipe stdin
+ra                                                 # interactive REPL
+ra --http                                          # streaming HTTP API on :8080
+ra --mcp-stdio                                     # MCP server for Cursor, Claude Desktop
+ra --provider openai --model gpt-4.1 "same prompt" # swap providers with a flag
 ```
 
 ## Install
@@ -46,104 +48,112 @@ ra --help
 ```bash
 export RA_ANTHROPIC_API_KEY="sk-..."
 
-ra "Summarize the key points of this file" --file report.pdf   # one-shot with file attachment
-ra                                                              # interactive REPL
-cat error.log | ra "Explain this error"                         # pipe stdin
-git diff | ra --skill code-review "Review these changes"        # pipe + skill
-ra --http                                                       # streaming HTTP API
-ra --mcp-stdio                                                  # MCP server for Cursor / Claude Desktop
+ra "Summarize this" --file report.pdf     # one-shot with file
+ra                                        # interactive REPL
+cat error.log | ra "Explain this error"   # pipe stdin as prompt
+git diff | ra --skill code-review         # pipe + skill
+ra --http                                 # streaming SSE API
+ra --mcp-stdio                            # MCP server
 ```
 
 ## Why ra
 
-### One binary, no runtime required
+### It's a binary, not a package
 
-ra compiles to a single self-contained binary. Drop it on any machine and it runs — no Node, no Python, no package manager, no dependencies to install or audit. CI, production servers, local dev: same binary everywhere.
-
-### Switch LLMs with a flag — same config, zero rewrites
-
-ra abstracts six providers behind one interface. Change your mind about which model to use, run A/B comparisons, or fall back to a local model when you're offline — all without touching your prompts, tools, or middleware.
+Every other agent framework asks you to `npm install` or `pip install`, then manage a runtime and dependency tree. ra compiles to a single self-contained binary via `bun build --compile`. Drop it on a server, in a Docker layer, in CI — it just runs. No runtime, no lockfile, nothing to audit or update except the binary itself.
 
 ```bash
-ra --provider anthropic --model claude-sonnet-4-6 "Review this PR"
-ra --provider openai    --model gpt-4.1            "Review this PR"
-ra --provider google    --model gemini-2.5-pro     "Review this PR"
-ra --provider ollama    --model llama3             "Review this PR"
+curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
+# that's it
 ```
 
-### Full visibility into every step of the loop
+### Four interfaces, one binary, one config
 
-Most frameworks treat the agent loop as a black box. ra exposes nine middleware hooks — before and after every model call, every tool execution, every stream chunk. Your code can read the full conversation history, mutate it, enforce budgets, log, audit, or stop the loop cleanly at any point.
+Most frameworks make you choose: build a CLI tool, or a server, or an MCP integration. In ra they're all the same binary with the same config. Same system prompt, same tools, same middleware — just a different flag.
+
+```bash
+ra "Fix this bug" --file main.ts          # CLI: runs, streams, exits
+ra                                        # REPL: interactive with slash commands
+ra --http --http-port 8080                # HTTP: SSE stream + sync JSON endpoint
+ra --mcp-stdio                            # MCP server: Cursor, Claude Desktop, other agents
+```
+
+The REPL, HTTP API, and MCP server all share sessions. An agent conversation started over HTTP can be resumed in the REPL. An MCP call can resume a CLI session. The interface is just the entry point.
+
+### Middleware that mutates — not just observes
+
+ra hooks at nine points in the loop. The difference from typical callback/event systems: your hook gets the full messages array and can rewrite it before the next model call. Inject context, redact secrets, enforce token budgets, reorder turns, or stop the loop entirely.
 
 ```ts
-// middleware/audit-log.ts — log every tool call
+// middleware/redact.ts — strip secrets from tool results before the model sees them
 export default async (ctx) => {
-  await appendFile('audit.jsonl', JSON.stringify({
-    tool: ctx.toolCall.name,
-    args: ctx.toolCall.arguments,
-    result: ctx.result.content,
-    timestamp: Date.now()
-  }) + '\n')
+  for (const msg of ctx.request.messages) {
+    if (msg.role === 'tool' && typeof msg.content === 'string') {
+      msg.content = msg.content.replace(/sk-[a-zA-Z0-9]+/g, '[REDACTED]')
+    }
+  }
 }
 ```
 
-### Parallel agents out of the box
-
-The `subagent` tool lets the model fork parallel copies of itself to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation. Token usage rolls up into the parent automatically.
-
-```bash
-ra "Analyze these three log files concurrently" --file a.log --file b.log --file c.log
+```ts
+// middleware/budget.ts — hard-stop at 100k tokens
+export default async (ctx) => {
+  const { inputTokens, outputTokens } = ctx.loop.usage
+  if (inputTokens + outputTokens > 100_000) ctx.stop('token budget exceeded')
+}
 ```
 
-### Smart context management that keeps long sessions running
+Hooks run as TypeScript files (or inline expressions in config). No special base class, no framework coupling — just a default export function.
 
-ra handles the hard parts of multi-turn conversations automatically:
+### The model forks itself — you write no orchestration
 
-- **Auto-compaction** — when conversations grow, ra summarizes the middle with a cheap model, preserving system prompts and recent turns
-- **Prompt caching** — automatic cache hints for Anthropic reduce costs on repeated calls without any config
-- **Token tracking** — cumulative usage across every iteration, readable by middleware for budget enforcement
-- **Extended thinking** — watch the model reason in real time with three configurable budget levels
+ra includes a `subagent` tool. When the model determines it needs parallel work, it calls the tool with a list of tasks. ra runs them concurrently, each in an identical copy of the current agent (same model, system prompt, tools, thinking level). Results come back as structured output. Token usage rolls up to the parent.
 
-### Fine-grained permissions without writing a proxy
+You write zero orchestration code. The model decides when to parallelize and what to delegate.
 
-Control what tools can do with regex-based allow/deny rules per tool, per field. No external policy engine needed.
+```
+# ra "Audit all three services for security issues" --file svc-a.ts --file svc-b.ts --file svc-c.ts
+→ model calls subagent({tasks: ["audit svc-a", "audit svc-b", "audit svc-c"]})
+→ ra runs three agents concurrently
+→ results collected, tokens rolled up
+→ model synthesizes findings
+```
+
+Recursion depth is capped (default: 2 levels) to prevent runaway nesting.
+
+### MCP in both directions — with lazy schema loading
+
+ra is both an MCP client and an MCP server. As a client, it connects to external MCP tool servers. As a server (`--mcp-stdio`), it exposes itself — and all its built-in tools — to Cursor, Claude Desktop, or any other agent.
+
+The novel part is how it handles MCP client schemas. MCP tool definitions include full JSON schemas for every parameter. With many tools registered, that's thousands of tokens sent to the model on every call — for tools it may never use.
+
+ra strips those schemas at registration time. The first call to any MCP tool returns the full schema as an error; the model retries with correct parameters. You only pay token costs for tools you actually invoke.
 
 ```yaml
-permissions:
-  rules:
-    - tool: execute_bash
-      command:
-        allow: ["^git ", "^bun "]
-        deny: ["--force", "--hard", "--no-verify"]
-    - tool: write_file
-      path:
-        deny: ["\\.env"]
-      content:
-        deny: ["API_KEY", "SECRET"]
+mcp:
+  client:
+    - name: github
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
+  lazySchemas: true   # default — strip schemas, reveal on first call
 ```
 
-### Memory that persists across sessions
+With 20 MCP tools registered, this can save tens of thousands of tokens per session.
 
-ra stores facts in an SQLite database with full-text search. Memories are injected automatically at the start of each conversation — the agent remembers user preferences, project decisions, and prior context without you managing state.
+### `ask_user` suspends the loop — resume it later, from anywhere
+
+The `ask_user` tool is how the model asks a clarifying question mid-task. In most frameworks this blocks the process. In ra it suspends the loop, saves the session, and exits. The session ID is printed. You answer the question later — via `ra --resume <id>`, over the HTTP API, or from a REPL — and the agent picks up exactly where it left off.
 
 ```bash
-ra --memory                   # enable for this session
-ra --list-memories            # see what's stored
-ra --forget "dark mode"       # remove matching memories
+# agent hits ask_user mid-task
+# ra prints: Session abc-123 suspended. Resume with: ra --resume abc-123
+
+ra --resume abc-123 "Use the PostgreSQL schema"
+# loop resumes from the exact suspension point
 ```
 
-### Built-in observability — no external tooling required
-
-Structured JSONL logs and OpenTelemetry-inspired trace spans are written to the session directory alongside conversation messages. stdout and stderr stay clean. Filter, query, or pipe them to your existing observability stack.
-
-```bash
-cat .ra/sessions/<id>/logs.jsonl | jq 'select(.level == "error")'
-cat .ra/sessions/<id>/traces.jsonl | jq '{name, durationMs, status}'
-```
-
-### One tool for four interfaces
-
-The same ra binary is a CLI command, an interactive REPL, a streaming HTTP API, and an MCP server. Deploy it however your workflow demands — no separate tools to maintain.
+This makes multi-step, human-in-the-loop workflows composable across time, interfaces, and callers.
 
 ---
 
