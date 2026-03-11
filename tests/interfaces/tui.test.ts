@@ -79,9 +79,9 @@ describe('spinner', () => {
 })
 
 describe('closeAssistantBox', () => {
-  it('outputs a newline', () => {
+  it('outputs two newlines', () => {
     const output = captureStdout(() => closeAssistantBox())
-    expect(output).toBe('\n')
+    expect(output).toBe('\n\n')
   })
 })
 

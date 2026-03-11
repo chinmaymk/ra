@@ -115,6 +115,7 @@ export class Repl {
 
     let boxOpened = false
     let thinkingOpened = false
+    let pendingNewlines = 0
     const toolStartTimes = new Map<string, number>()
     tui.startSpinner()
     const userMw = this.options.middleware ?? {}
@@ -145,7 +146,15 @@ export class Repl {
                 thinkingOpened = false
               }
               if (!boxOpened) { tui.stopSpinner(); boxOpened = true }
-              process.stdout.write(ctx.chunk.delta.replace(/\n/g, '\n  '))
+              const delta = ctx.chunk.delta
+              const trailingMatch = delta.match(/\n+$/)
+              const trailingCount = trailingMatch ? trailingMatch[0].length : 0
+              const body = delta.slice(0, delta.length - trailingCount)
+              if (body.length > 0) {
+                if (pendingNewlines > 0) { process.stdout.write('\n  '.repeat(pendingNewlines)); pendingNewlines = 0 }
+                process.stdout.write(body.replace(/\n/g, '\n  '))
+              }
+              pendingNewlines += trailingCount
             }
           },
           ...(userMw.onStreamChunk ?? []),
@@ -166,7 +175,7 @@ export class Repl {
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
       tui.stopSpinner(true)
       if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n')
+      else process.stdout.write('\n\n')
 
       const newMessages = result.messages.slice(initialMessages.length)
       this.messages.push(userMessage, ...newMessages)
@@ -190,7 +199,7 @@ export class Repl {
     } catch (err) {
       tui.stopSpinner(true)
       if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n')
+      else process.stdout.write('\n\n')
       tui.printError(err instanceof Error ? err.message : String(err))
     }
   }

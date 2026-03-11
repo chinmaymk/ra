@@ -91,7 +91,7 @@ export function stopSpinner(silent = false): void {
 }
 
 export function closeAssistantBox(): void {
-  process.stdout.write('\n')
+  process.stdout.write('\n\n')
 }
 
 export function printToolCall(name: string): void {
