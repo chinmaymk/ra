@@ -4,7 +4,7 @@ ra speaks MCP ([Model Context Protocol](https://modelcontextprotocol.io)) in bot
 
 ## ra as MCP client
 
-Connect ra to external MCP servers. Their tools become available to the model automatically — ra discovers tool schemas from MCP and presents them alongside the built-in tools. Tool names are prefixed with the server name to avoid conflicts (e.g., a `search_repos` tool from the `github` server becomes `github_search_repos`).
+Connect ra to external MCP servers. Their tools become available to the model automatically — ra discovers tool schemas from MCP and presents them alongside the built-in tools.
 
 ```yaml
 # ra.config.yml
