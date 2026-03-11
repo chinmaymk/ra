@@ -94,6 +94,28 @@ export function closeAssistantBox(): void {
   process.stdout.write('\n\n')
 }
 
+/** Word-wrap `text` to fit within `width` columns, given `startCol` as the current cursor column.
+ *  Newlines in `text` reset the column to `indent.length`.
+ *  Wraps at word boundaries (spaces); long words are written as-is.
+ *  Returns the wrapped string and the column position after the last character. */
+export function wrapChunk(text: string, indent: string, startCol: number, width: number): { out: string; col: number } {
+  let out = ''
+  let col = startCol
+  for (const ch of text) {
+    if (ch === '\n') {
+      out += '\n' + indent
+      col = indent.length
+    } else if (ch === ' ' && col >= width) {
+      out += '\n' + indent
+      col = indent.length
+    } else {
+      out += ch
+      col++
+    }
+  }
+  return { out, col }
+}
+
 export function printToolCall(name: string): void {
   process.stdout.write(`  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
 }
