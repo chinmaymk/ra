@@ -85,6 +85,28 @@ mcp:
 | `toolTimeout` | — | — | `30000` | Per-tool and middleware timeout (ms) |
 | `builtinTools` | `RA_BUILTIN_TOOLS` | `--no-builtin-tools` | `true` | Enable/disable [built-in tools](/tools/) |
 
+### Permissions
+
+Regex-based rules controlling what tools can do. See the [Permissions guide](/permissions/) for full details and examples.
+
+| Field | Env var | CLI flag | Default | Description |
+|-------|---------|----------|---------|-------------|
+| `permissions.no_rules_rules` | — | — | `false` | Disable all permission checks |
+| `permissions.default_action` | — | — | `allow` | Action when no rule matches: `allow` or `deny` |
+| `permissions.rules` | — | — | `[]` | Array of per-tool regex rules |
+
+```yaml
+permissions:
+  rules:
+    - tool: execute_bash
+      command:
+        allow: ["^git ", "^bun "]
+        deny: ["--force", "--hard"]
+    - tool: write_file
+      path:
+        allow: ["^src/", "^tests/"]
+```
+
 ### Skills
 
 | Field | Env var | CLI flag | Default | Description |

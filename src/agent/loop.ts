@@ -135,8 +135,14 @@ export class AgentLoop {
           currentPhase = 'tool_execution'
           for (const tc of toolCalls) {
             if (signal.aborted) break
-            await runMiddlewareChain({ ...stoppable, toolCall: tc, loop: loopCtx() } satisfies ToolExecutionContext, this.middleware.beforeToolExecution, this.toolTimeout)
+            let denied: string | undefined
+            const toolExecCtx: ToolExecutionContext = { ...stoppable, toolCall: tc, loop: loopCtx(), deny: (r) => { denied = r } }
+            await runMiddlewareChain(toolExecCtx, this.middleware.beforeToolExecution, this.toolTimeout)
             if (signal.aborted) break
+            if (denied) {
+              messages.push({ role: 'tool', content: denied, toolCallId: tc.id, isError: true })
+              continue
+            }
             let input: unknown
             try { input = JSON.parse(tc.arguments || '{}') } catch { input = {} }
             let content: string

@@ -12,6 +12,7 @@
   <a href="#providers">Providers</a> &middot;
   <a href="#interfaces">Interfaces</a> &middot;
   <a href="#built-in-tools">Tools</a> &middot;
+  <a href="#permissions">Permissions</a> &middot;
   <a href="#skills">Skills</a> &middot;
   <a href="#mcp">MCP</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
@@ -308,6 +309,38 @@ The `ask_user` tool suspends the agent loop and returns control to the caller. I
 The `subagent` tool forks parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation. Token usage rolls up into the parent automatically. Recursion depth is capped (default: 2 levels).
 
 To bring your own tools via MCP instead, set `builtinTools: false` in your config file.
+
+## Permissions
+
+Control what tools can do with regex-based allow/deny rules per tool, per field. Deny always takes priority.
+
+```yaml
+# ra.config.yml
+permissions:
+  rules:
+    - tool: execute_bash
+      command:
+        allow: ["^git ", "^bun "]
+        deny: ["--force", "--hard", "--no-verify"]
+    - tool: write_file
+      path:
+        allow: ["^src/", "^tests/"]
+        deny: ["\\.env"]
+      content:
+        deny: ["API_KEY", "SECRET"]
+    - tool: delete_file
+      path:
+        deny: [".*"]   # block all deletes
+    - tool: web_fetch
+      url:
+        deny: ["localhost", "127\\.0\\.0\\.1"]
+```
+
+Each rule key (other than `tool`) is a field name from the tool's input schema — `command` for bash, `path` for file tools, `url` for web_fetch. You can constrain any field independently.
+
+When a tool call is denied, the model gets a clear error message and can adjust. The loop continues.
+
+Set `no_rules_rules: true` to disable all checks, or `default_action: deny` for an allowlist-only approach where only tools with explicit rules can execute.
 
 ## File Attachments
 
