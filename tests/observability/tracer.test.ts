@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { Tracer, NoopTracer, type Span, type TraceRecord } from '../../src/observability/tracer'
+import { tmpdir } from '../tmpdir'
+import { mkdir, rm } from 'node:fs/promises'
+import { join } from 'path'
 
 describe('Tracer', () => {
   let captured: string[]
@@ -111,6 +114,51 @@ describe('Tracer', () => {
       tracer.endSpan(span)
       expect(stdoutCaptured).toHaveLength(1)
     } finally {
+      process.stdout.write = origStdout
+    }
+  })
+})
+
+describe('Tracer session output', () => {
+  const TEST_DIR = tmpdir('ra-test-tracer-session')
+
+  afterEach(async () => { await rm(TEST_DIR, { recursive: true, force: true }) })
+
+  it('buffers trace records until setSessionDir is called', async () => {
+    const tracer = new Tracer({ output: 'session' })
+    const span1 = tracer.startSpan('before.dir')
+    tracer.endSpan(span1)
+
+    await mkdir(TEST_DIR, { recursive: true })
+    tracer.setSessionDir(TEST_DIR)
+
+    const span2 = tracer.startSpan('after.dir')
+    tracer.endSpan(span2)
+    await tracer.flush()
+
+    const content = await Bun.file(join(TEST_DIR, 'traces.jsonl')).text()
+    const lines = content.trim().split('\n')
+    expect(lines).toHaveLength(2)
+    expect(JSON.parse(lines[0]!).name).toBe('before.dir')
+    expect(JSON.parse(lines[1]!).name).toBe('after.dir')
+  })
+
+  it('does not write to stderr or stdout in session mode', () => {
+    const stderrCaptured: string[] = []
+    const stdoutCaptured: string[] = []
+    const origStderr = process.stderr.write
+    const origStdout = process.stdout.write
+    process.stderr.write = ((data: string) => { stderrCaptured.push(data); return true }) as typeof process.stderr.write
+    process.stdout.write = ((data: string) => { stdoutCaptured.push(data); return true }) as typeof process.stdout.write
+
+    try {
+      const tracer = new Tracer({ output: 'session' })
+      const span = tracer.startSpan('silent.op')
+      tracer.endSpan(span)
+      expect(stderrCaptured).toHaveLength(0)
+      expect(stdoutCaptured).toHaveLength(0)
+    } finally {
+      process.stderr.write = origStderr
       process.stdout.write = origStdout
     }
   })

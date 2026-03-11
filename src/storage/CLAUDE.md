@@ -15,6 +15,8 @@ JSONL-based session persistence. Used by REPL and HTTP interfaces.
   meta.json          # Session metadata: id, created, provider, model, interface
   messages.jsonl     # One IMessage per line (append-only)
   checkpoint.json    # Optional checkpoint data
+  logs.jsonl         # Observability logs (when output is 'session')
+  traces.jsonl       # Observability traces (when output is 'session')
 ```
 
 ## Config

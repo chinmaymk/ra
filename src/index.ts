@@ -320,6 +320,18 @@ async function main(): Promise<void> {
   await storage.init()
   logger.debug('session storage initialized', { path: storagePath })
 
+  // Create or resolve a session for this run and point observability at its directory
+  const sessionId = parsed.meta.resume ?? (await storage.create({
+    provider: config.provider,
+    model: config.model,
+    interface: config.interface,
+  })).id
+  const sessionDir = storage.sessionDir(sessionId)
+  logger.setSessionId(sessionId)
+  tracer.setSessionId(sessionId)
+  logger.setSessionDir(sessionDir)
+  tracer.setSessionDir(sessionDir)
+
   // Load skills from configured directories (resolve relative paths against config dir)
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
@@ -474,9 +486,9 @@ async function main(): Promise<void> {
       console.error('Error: --cli requires a prompt argument')
       process.exit(1)
     }
-    const sessionMessages = parsed.meta.resume ? await storage.readMessages(parsed.meta.resume) : []
+    const sessionMessages = parsed.meta.resume ? await storage.readMessages(sessionId) : []
     if (parsed.meta.resume) {
-      logger.info('resuming session', { sessionId: parsed.meta.resume, messageCount: sessionMessages.length })
+      logger.info('resuming session', { sessionId, messageCount: sessionMessages.length })
     }
     const cliResult = await runCli({
       prompt: parsed.meta.prompt,
@@ -494,10 +506,8 @@ async function main(): Promise<void> {
       contextMessages,
       sessionMessages,
     })
-    if (parsed.meta.resume) {
-      for (const msg of cliResult.messages.slice(cliResult.priorCount)) {
-        await storage.appendMessage(parsed.meta.resume, msg)
-      }
+    for (const msg of cliResult.messages.slice(cliResult.priorCount)) {
+      await storage.appendMessage(sessionId, msg)
     }
     process.stdout.write('\n')
     await shutdown()
@@ -537,7 +547,7 @@ async function main(): Promise<void> {
       skillMap,
       maxIterations: config.maxIterations,
       toolTimeout: config.toolTimeout,
-      sessionId: parsed.meta.resume,
+      sessionId,
       middleware,
       thinking: config.thinking,
       compaction: config.compaction,

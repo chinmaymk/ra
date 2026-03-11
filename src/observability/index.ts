@@ -9,11 +9,11 @@ export interface ObservabilityConfig {
   enabled: boolean
   logs: {
     level: LogLevel
-    output: 'stderr' | 'stdout' | 'file'
+    output: 'stderr' | 'stdout' | 'file' | 'session'
     filePath?: string
   }
   traces: {
-    output: 'stderr' | 'stdout' | 'file'
+    output: 'stderr' | 'stdout' | 'file' | 'session'
     filePath?: string
   }
 }

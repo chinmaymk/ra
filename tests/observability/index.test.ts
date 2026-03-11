@@ -48,4 +48,14 @@ describe('createObservability', () => {
     expect(logger).not.toBeInstanceOf(NoopLogger)
     expect(tracer).not.toBeInstanceOf(NoopTracer)
   })
+
+  it('creates real instances with session output', () => {
+    const { logger, tracer } = createObservability({
+      enabled: true,
+      logs: { level: 'info', output: 'session' },
+      traces: { output: 'session' },
+    })
+    expect(logger).not.toBeInstanceOf(NoopLogger)
+    expect(tracer).not.toBeInstanceOf(NoopTracer)
+  })
 })
