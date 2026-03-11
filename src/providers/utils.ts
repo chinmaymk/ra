@@ -1,5 +1,25 @@
 import type { IMessage, TokenUsage } from './types'
 
+/**
+ * Merge consecutive messages with the same role into a single message.
+ * Required for APIs that enforce alternating user/assistant turns (Anthropic, Google, Bedrock).
+ * This happens after ask_user: tool result (mapped to user) is followed by the next user message.
+ */
+export function mergeConsecutiveRoles<T extends { role: string; content: unknown }>(messages: T[]): T[] {
+  const merged: T[] = []
+  for (const msg of messages) {
+    const last = merged[merged.length - 1]
+    if (last && last.role === msg.role) {
+      const lastContent = Array.isArray(last.content) ? last.content : [typeof last.content === 'string' ? { type: 'text', text: last.content } : last.content]
+      const msgContent = Array.isArray(msg.content) ? msg.content : [typeof msg.content === 'string' ? { type: 'text', text: msg.content } : msg.content]
+      last.content = [...lastContent, ...msgContent] as T['content']
+    } else {
+      merged.push({ ...msg })
+    }
+  }
+  return merged
+}
+
 /** Accumulate source token usage into target (mutates target) */
 export function accumulateUsage(target: TokenUsage, source: TokenUsage): void {
   target.inputTokens += source.inputTokens

@@ -81,7 +81,7 @@ export class BedrockProvider implements IProvider {
   }
 
   mapMessages(messages: IMessage[]): BedrockMessage[] {
-    return messages.map((msg): BedrockMessage => {
+    const mapped = messages.map((msg): BedrockMessage => {
       if (msg.role === 'tool') {
         return {
           role: 'user',
@@ -102,6 +102,17 @@ export class BedrockProvider implements IProvider {
       if (typeof msg.content === 'string') return { role: msg.role as 'user' | 'assistant', content: [{ text: msg.content }] }
       return { role: msg.role as 'user' | 'assistant', content: this.mapContentParts(msg.content) }
     })
+    // Merge consecutive same-role messages (e.g. tool_result + user answer after ask_user)
+    const merged: BedrockMessage[] = []
+    for (const msg of mapped) {
+      const last = merged[merged.length - 1]
+      if (last && last.role === msg.role) {
+        last.content = [...(last.content ?? []), ...(msg.content ?? [])]
+      } else {
+        merged.push({ ...msg, content: [...(msg.content ?? [])] })
+      }
+    }
+    return merged
   }
 
   mapTools(tools: ITool[]): BedrockTool[] {

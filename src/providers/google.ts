@@ -87,7 +87,7 @@ export class GoogleProvider implements IProvider {
   }
 
   mapMessages(messages: IMessage[]): Content[] {
-    return messages.map((msg): Content => {
+    const mapped = messages.map((msg): Content => {
       if (msg.role === 'tool') {
         // toolCallId is formatted as "functionName_counter" — extract the function name for Gemini
         const toolName = msg.toolCallId!.substring(0, msg.toolCallId!.lastIndexOf('_'))
@@ -113,6 +113,17 @@ export class GoogleProvider implements IProvider {
       }
       return { role, parts }
     })
+    // Merge consecutive same-role messages (e.g. tool_result + user answer after ask_user)
+    const merged: Content[] = []
+    for (const msg of mapped) {
+      const last = merged[merged.length - 1]
+      if (last && last.role === msg.role) {
+        last.parts.push(...msg.parts)
+      } else {
+        merged.push({ ...msg, parts: [...msg.parts] })
+      }
+    }
+    return merged
   }
 
   mapTools(tools: ITool[]): GeminiTool[] {

@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { extractSystemMessages } from './utils'
+import { extractSystemMessages, mergeConsecutiveRoles } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
@@ -72,7 +72,7 @@ export class AnthropicProvider implements IProvider {
   }
 
   mapMessages(messages: IMessage[]): Anthropic.MessageParam[] {
-    return messages.map((msg): Anthropic.MessageParam => {
+    const mapped = messages.map((msg): Anthropic.MessageParam => {
       if (msg.role === 'tool') {
         return {
           role: 'user',
@@ -93,6 +93,7 @@ export class AnthropicProvider implements IProvider {
       if (typeof msg.content === 'string') return { role: msg.role as 'user' | 'assistant', content: msg.content }
       return { role: msg.role as 'user' | 'assistant', content: this.mapContentParts(msg.content) }
     })
+    return mergeConsecutiveRoles(mapped)
   }
 
   mapTools(tools: ITool[]): Anthropic.Tool[] {
