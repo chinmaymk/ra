@@ -145,7 +145,7 @@ export class Repl {
                 thinkingOpened = false
               }
               if (!boxOpened) { tui.stopSpinner(); boxOpened = true }
-              process.stdout.write(ctx.chunk.delta)
+              process.stdout.write(ctx.chunk.delta.replace(/\n/g, '\n  '))
             }
           },
           ...(userMw.onStreamChunk ?? []),

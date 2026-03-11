@@ -85,8 +85,8 @@ export function stopSpinner(silent = false): void {
   if (silent) {
     if (wasRunning) process.stdout.write('\r\x1b[K')
   } else {
-    // Clear spinner/current line and add blank line separator before model response
-    process.stdout.write(`\r\x1b[K\n`)
+    // Clear spinner/current line, blank line separator, then 2-space indent for model response
+    process.stdout.write(`\r\x1b[K\n  `)
   }
 }
 
