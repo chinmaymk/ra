@@ -36,6 +36,7 @@ export class Repl {
   private sessionId: string | undefined
   private pendingSkill: Skill | undefined
   private pendingAttachments: ContentPart[] = []
+  private pendingAskUser: { toolCallId: string } | undefined
 
   constructor(options: ReplOptions) {
     this.options = options
@@ -85,20 +86,38 @@ export class Repl {
   async processInput(input: string): Promise<void> {
     if (!this.sessionId) this.sessionId = await this.newSession()
 
-    const text = this.pendingSkill
-      ? `${buildActiveSkillXml(this.pendingSkill)}\n\n${input}`
-      : input
-    this.pendingSkill = undefined
+    // If we're resuming after ask_user, patch the tool result with the user's answer
+    let userMessage: IMessage | undefined
+    if (this.pendingAskUser) {
+      const { toolCallId } = this.pendingAskUser
+      this.pendingAskUser = undefined
+      // Find and replace the ask_user tool result in message history
+      for (let i = this.messages.length - 1; i >= 0; i--) {
+        const m = this.messages[i]!
+        if (m.role === 'tool' && m.toolCallId === toolCallId && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
+          this.messages[i] = { ...m, content: input }
+          // Also update persisted session: append corrected tool result
+          await this.options.storage.appendMessage(this.sessionId!, this.messages[i]!)
+          break
+        }
+      }
+    } else {
+      const text = this.pendingSkill
+        ? `${buildActiveSkillXml(this.pendingSkill)}\n\n${input}`
+        : input
+      this.pendingSkill = undefined
 
-    const parts: ContentPart[] = [{ type: 'text', text }, ...this.pendingAttachments]
-    this.pendingAttachments = []
+      const parts: ContentPart[] = [{ type: 'text', text }, ...this.pendingAttachments]
+      this.pendingAttachments = []
 
-    const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
+      userMessage = { role: 'user', content: parts.length === 1 ? text : parts }
+    }
+
     const initialMessages: IMessage[] = [
       ...(this.options.systemPrompt ? [{ role: 'system' as const, content: this.options.systemPrompt }] : []),
       ...(this.messages.length === 0 && this.options.contextMessages?.length ? this.options.contextMessages : []),
       ...this.messages,
-      userMessage,
+      ...(userMessage ? [userMessage] : []),
     ]
 
     // Inject available skills XML as first user message if skills exist
@@ -170,23 +189,32 @@ export class Repl {
       else process.stdout.write('\n')
 
       const newMessages = result.messages.slice(initialMessages.length)
-      this.messages.push(userMessage, ...newMessages)
-      for (const msg of [userMessage, ...newMessages]) {
-        await this.options.storage.appendMessage(this.sessionId!, msg)
+      if (userMessage) {
+        this.messages.push(userMessage, ...newMessages)
+        for (const msg of [userMessage, ...newMessages]) {
+          await this.options.storage.appendMessage(this.sessionId!, msg)
+        }
+      } else {
+        // Resuming after ask_user — only save new messages from this continuation
+        this.messages.push(...newMessages)
+        for (const msg of newMessages) {
+          await this.options.storage.appendMessage(this.sessionId!, msg)
+        }
       }
 
-      // Detect ask_user — in REPL, just print the question; next input resumes naturally
-      let askMsg: IMessage | undefined
+      // Detect ask_user — print question and set pending state for next input
+      let askToolResult: IMessage | undefined
       for (let i = result.messages.length - 1; i >= 0; i--) {
         const m = result.messages[i]!
         if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-          askMsg = m
+          askToolResult = m
           break
         }
       }
-      if (askMsg && typeof askMsg.content === 'string') {
-        const question = askMsg.content.slice(ASK_USER_SIGNAL.length)
+      if (askToolResult && typeof askToolResult.content === 'string') {
+        const question = askToolResult.content.slice(ASK_USER_SIGNAL.length)
         tui.printCommandResponse(`[Question for you] ${question}`)
+        this.pendingAskUser = { toolCallId: askToolResult.toolCallId! }
       }
     } catch (err) {
       tui.stopSpinner(true)
@@ -204,6 +232,7 @@ export class Repl {
       case '/clear': {
         this.messages = []
         this.sessionId = await this.newSession()
+        this.pendingAskUser = undefined
         return 'Message history cleared.'
       }
       case '/save':
@@ -222,6 +251,7 @@ export class Repl {
         this.sessionId = id
         this.pendingSkill = undefined
         this.pendingAttachments = []
+        this.pendingAskUser = undefined
         return `Resumed session ${id} (${this.messages.length} messages loaded).`
       }
       case '/skill': {
