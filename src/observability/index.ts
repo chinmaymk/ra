@@ -28,12 +28,17 @@ export function createObservability(config: ObservabilityConfig, options?: { ses
     return { logger: new NoopLogger(), tracer: new NoopTracer() }
   }
 
-  const logOutput = config.logs.output === 'session' ? 'file' as const : config.logs.output
+  // Resolve 'session' → 'file' with path in sessionDir, or fall back to stderr
+  const logOutput = config.logs.output === 'session'
+    ? (options?.sessionDir ? 'file' as const : 'stderr' as const)
+    : config.logs.output
   const logFilePath = config.logs.output === 'session' && options?.sessionDir
     ? `${options.sessionDir}/logs.jsonl`
     : config.logs.filePath
 
-  const traceOutput = config.traces.output === 'session' ? 'file' as const : config.traces.output
+  const traceOutput = config.traces.output === 'session'
+    ? (options?.sessionDir ? 'file' as const : 'stderr' as const)
+    : config.traces.output
   const traceFilePath = config.traces.output === 'session' && options?.sessionDir
     ? `${options.sessionDir}/traces.jsonl`
     : config.traces.filePath

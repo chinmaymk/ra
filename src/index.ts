@@ -19,6 +19,7 @@ import { HttpServer } from './interfaces/http'
 import { parseArgs } from './interfaces/parse-args'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
+import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'path'
 import { resolvePath } from './utils/paths'
 import { createObservability } from './observability'
@@ -247,6 +248,7 @@ async function main(): Promise<void> {
     interface: config.interface,
   })).id
   const sessionDir = storage.sessionDir(sessionId)
+  await mkdir(sessionDir, { recursive: true })
 
   // Create observability — 'session' output resolves to files in sessionDir
   const { logger, tracer } = createObservability(config.observability, { sessionId, sessionDir })
