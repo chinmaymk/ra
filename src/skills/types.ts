@@ -1,9 +1,17 @@
+export interface SkillHook {
+  run: string
+  as?: string
+  label?: string
+}
+
 export interface SkillMetadata {
   name: string
   description: string
   license?: string
   compatibility?: string
   metadata?: Record<string, string>
+  before?: SkillHook[]
+  after?: SkillHook[]
 }
 
 export interface Skill {

@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { loadSkills, loadSkillMetadata, buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../../src/skills/loader'
+import { loadSkills, loadSkillMetadata, buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference, buildSkillHookMiddleware } from '../../src/skills/loader'
+import type { ModelCallContext } from '../../src/agent/types'
+import type { ChatRequest, IMessage } from '../../src/providers/types'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { tmpdir } from '../tmpdir'
 
@@ -121,5 +123,82 @@ describe('readSkillReference', () => {
     const skills = await loadSkills([TEST_DIR])
     const skill = skills.get('review')!
     await expect(readSkillReference(skill, 'nonexistent.md')).rejects.toThrow('Reference not found')
+  })
+})
+
+function makeLoopCtx() {
+  const ctrl = new AbortController()
+  return {
+    messages: [] as IMessage[],
+    iteration: 0, maxIterations: 10, sessionId: 'test',
+    usage: { inputTokens: 0, outputTokens: 0 },
+    lastUsage: undefined,
+    stop: () => ctrl.abort(), signal: ctrl.signal,
+  }
+}
+
+describe('skill hooks', () => {
+  it('parses before/after from frontmatter', async () => {
+    mkdirSync(`${TEST_DIR}/hooked`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/hooked/SKILL.md`,
+      '---\nname: hooked\ndescription: H\nbefore:\n  - run: echo hi\n    as: out\nafter:\n  - echo bye\n---\nBody')
+    const skill = (await loadSkills([TEST_DIR])).get('hooked')!
+    expect(skill.metadata.before).toEqual([{ run: 'echo hi', as: 'out' }])
+    expect(skill.metadata.after).toEqual([{ run: 'echo bye' }])
+  })
+
+  it('omits hooks when not in frontmatter', async () => {
+    mkdirSync(`${TEST_DIR}/plain`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/plain/SKILL.md`, '---\nname: plain\ndescription: P\n---\nBody')
+    const skill = (await loadSkills([TEST_DIR])).get('plain')!
+    expect(skill.metadata.before).toBeUndefined()
+    expect(skill.metadata.after).toBeUndefined()
+  })
+
+  it('before hook runs and captures stdout as @resolver', async () => {
+    mkdirSync(`${TEST_DIR}/cap`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/cap/SKILL.md`,
+      '---\nname: cap\ndescription: C\nbefore:\n  - run: echo hello\n    as: greeting\n---\nBody')
+    const skill = (await loadSkills([TEST_DIR])).get('cap')!
+    const mw = buildSkillHookMiddleware(skill)
+
+    await mw.beforeLoopBegin![0]!(makeLoopCtx())
+
+    const messages: IMessage[] = [{ role: 'user', content: 'say @greeting' }]
+    const ctrl = new AbortController()
+    const ctx: ModelCallContext = {
+      request: { model: 'test', messages } as ChatRequest,
+      loop: makeLoopCtx(), stop: () => ctrl.abort(), signal: ctrl.signal,
+    }
+    await mw.beforeModelCall![0]!(ctx)
+    expect(ctx.request.messages[0]!.content).toBe('say hello')
+    expect(ctx.request.messages[0]!.content).not.toContain('@greeting')
+  })
+
+  it('after hook produces afterLoopComplete middleware', async () => {
+    mkdirSync(`${TEST_DIR}/aft`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/aft/SKILL.md`,
+      '---\nname: aft\ndescription: A\nafter:\n  - run: echo done\n---\nBody')
+    const skill = (await loadSkills([TEST_DIR])).get('aft')!
+    const mw = buildSkillHookMiddleware(skill)
+    expect(mw.afterLoopComplete).toHaveLength(1)
+    await mw.afterLoopComplete![0]!(makeLoopCtx())
+  })
+
+  it('throws on failed hook', async () => {
+    mkdirSync(`${TEST_DIR}/fail`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/fail/SKILL.md`,
+      '---\nname: fail\ndescription: F\nbefore:\n  - run: exit 1\n---\nBody')
+    const skill = (await loadSkills([TEST_DIR])).get('fail')!
+    const mw = buildSkillHookMiddleware(skill)
+    await expect(mw.beforeLoopBegin![0]!(makeLoopCtx())).rejects.toThrow('exited with code 1')
+  })
+
+  it('returns empty middleware when no hooks', async () => {
+    mkdirSync(`${TEST_DIR}/noop`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/noop/SKILL.md`, '---\nname: noop\ndescription: N\n---\nBody')
+    const skill = (await loadSkills([TEST_DIR])).get('noop')!
+    const mw = buildSkillHookMiddleware(skill)
+    expect(Object.keys(mw)).toHaveLength(0)
   })
 })

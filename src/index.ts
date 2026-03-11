@@ -9,7 +9,7 @@ import { createProvider, buildProviderConfig } from './providers/registry'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoop } from './agent/loop'
 import { SessionStorage } from './storage/sessions'
-import { loadSkills } from './skills/loader'
+import { loadSkills, buildSkillHookMiddleware } from './skills/loader'
 import { loadBuiltinSkills } from './skills/builtin'
 import { McpClient } from './mcp/client'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
@@ -335,6 +335,16 @@ async function main(): Promise<void> {
 
   // Active skills for this run (always-on from config + per-run --skill flags)
   const activeSkills = [...config.skills, ...parsed.meta.skills]
+
+  // Wire before/after hooks from active skills into middleware
+  for (const name of activeSkills) {
+    const skill = skillMap.get(name)
+    if (!skill?.metadata.before?.length && !skill?.metadata.after?.length) continue
+    const hookMw = buildSkillHookMiddleware(skill)
+    for (const key of Object.keys(hookMw) as (keyof MiddlewareConfig)[]) {
+      ;(middleware as any)[key] = [...((middleware as any)[key] ?? []), ...((hookMw as any)[key] ?? [])]
+    }
+  }
 
   // Connect MCP clients
   const mcpClient = new McpClient()
