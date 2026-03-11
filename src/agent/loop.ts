@@ -136,10 +136,8 @@ export class AgentLoop {
           for (const tc of toolCalls) {
             if (signal.aborted) break
             let denied: string | undefined
-            const denyFn = (reason: string) => { denied = reason }
-            const toolExecCtx: ToolExecutionContext = { ...stoppable, toolCall: tc, loop: loopCtx(), deny: denyFn }
+            const toolExecCtx: ToolExecutionContext = { ...stoppable, toolCall: tc, loop: loopCtx(), deny: (r) => { denied = r } }
             await runMiddlewareChain(toolExecCtx, this.middleware.beforeToolExecution, this.toolTimeout)
-            denied = denied ?? toolExecCtx.denied
             if (signal.aborted) break
             if (denied) {
               messages.push({ role: 'tool', content: denied, toolCallId: tc.id, isError: true })

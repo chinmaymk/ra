@@ -27,10 +27,8 @@ export interface StreamChunkContext extends StoppableContext {
 export interface ToolExecutionContext extends StoppableContext {
   toolCall: IToolCall
   loop: LoopContext
-  /** Reject this specific tool call without stopping the loop. The reason is returned to the model as an error result. */
+  /** Reject this tool call without stopping the loop. The reason is returned to the model as an error result. */
   deny: (reason: string) => void
-  /** Whether deny() has been called. Set by the loop — middleware should not modify this. */
-  denied?: string
 }
 
 export interface ToolResultContext extends StoppableContext {
