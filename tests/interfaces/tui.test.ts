@@ -3,7 +3,7 @@ import {
   c, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
   printCommandResponse, printError, printThinkingStart, printThinkingEnd,
-  LineWrapper,
+  StreamBuffer, RESPONSE_PREFIX,
 } from '../../src/interfaces/tui'
 
 function captureStdout(fn: () => void): string {
@@ -143,76 +143,64 @@ describe('printThinkingEnd', () => {
   })
 })
 
-describe('LineWrapper', () => {
-  it('passes short text through unchanged', () => {
-    const w = new LineWrapper('  ', 40, 2)
-    expect(w.write('hello world') + w.end()).toBe('hello world')
+describe('StreamBuffer', () => {
+  // Helper: strip ANSI codes for readable assertions
+  const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
+  const P = strip(RESPONSE_PREFIX)  // e.g. "  │ "
+
+  it('passes short text through unchanged (no newline yet)', () => {
+    const b = new StreamBuffer(40)
+    // No newline → nothing output yet (buffered)
+    expect(b.write('hello world')).toBe('')
+    // end() flushes it
+    expect(b.end()).toBe('hello world')
   })
 
-  it('wraps a long line before the overflowing word', () => {
-    const w = new LineWrapper('  ', 20, 2)
-    // "hello " fits (col→8), "world" (5) fits (col→13), " " ok, "overflowing" (11) would
-    // put col at 13+1+11=25 > 20 so wrap before it
-    const out = w.write('hello world overflowing') + w.end()
-    expect(out).toBe('hello world\n  overflowing')
-    expect(w.col).toBe(2 + 'overflowing'.length)
+  it('outputs a complete line when \\n arrives', () => {
+    const b = new StreamBuffer(40)
+    const out = b.write('hello world\n')
+    // Complete line → formatted and flushed, prefix for the next line appended
+    expect(strip(out)).toBe('hello world\n' + P)
   })
 
-  it('buffers a word split across two write() calls', () => {
-    const w = new LineWrapper('  ', 20, 2)
-    let out = w.write('hello wor')   // "wor" stays buffered
-    out += w.write('ld end')         // "world" now complete, "end" buffered
-    out += w.end()
-    expect(out).toBe('hello world end')
+  it('wraps long lines at contentWidth', () => {
+    const b = new StreamBuffer(10)
+    // "hello world" is 11 chars — wider than contentWidth 10
+    const out = b.write('hello world\n')
+    const stripped = strip(out)
+    // wrap-ansi should break at word boundary: "hello" and "world"
+    expect(stripped).toBe('hello\n' + P + 'world\n' + P)
   })
 
-  it('wraps a cross-chunk word that overflows', () => {
-    const w = new LineWrapper('  ', 15, 2)
-    // col starts at 2; "hello " → col 8; then "over" is buffered
-    let out = w.write('hello over')
-    // "flow" completes the word "overflow" (8 chars); 8+8=16 > 15, wrap before
-    out += w.write('flow next')
-    out += w.end()
-    expect(out).toBe('hello\n  overflow next')
+  it('hard-breaks a word longer than contentWidth', () => {
+    const b = new StreamBuffer(8)
+    const out = b.write('abcdefghijkl\n')
+    const stripped = strip(out)
+    // 12-char word hard-broken into 8 + 4
+    expect(stripped).toBe('abcdefgh\n' + P + 'ijkl\n' + P)
   })
 
-  it('handles explicit newlines', () => {
-    const w = new LineWrapper('  ', 40, 2)
-    const out = w.write('line one\nline two') + w.end()
-    expect(out).toBe('line one\n  line two')
+  it('buffers across chunks and flushes at newline', () => {
+    const b = new StreamBuffer(40)
+    expect(b.write('hel')).toBe('')    // buffered
+    expect(b.write('lo ')).toBe('')    // buffered
+    expect(b.write('world')).toBe('')  // buffered
+    const out = b.write('\n')
+    expect(strip(out)).toBe('hello world\n' + P)
   })
 
-  it('col reflects position after wrapping', () => {
-    const w = new LineWrapper('  ', 10, 2)
-    // "word1"(5) fits at col 2→7; "wrap"(4) with leading space: 7+1+4=12>10, wrap before
-    w.write('word1 wrap')
-    w.end()
-    expect(w.col).toBe(2 + 4)  // indent(2) + "wrap"(4)
+  it('handles multiple lines in one chunk', () => {
+    const b = new StreamBuffer(40)
+    const out = b.write('line one\nline two\n')
+    const stripped = strip(out)
+    expect(stripped).toBe('line one\n' + P + 'line two\n' + P)
   })
 
-  it('hard-breaks a word longer than the available width', () => {
-    // width=12, indent=2 → 10 chars per line of content
-    const w = new LineWrapper('  ', 12, 2)
-    // "abcdefghijklmno" is 15 chars — too long for any single line (max 10)
-    const out = w.write('abcdefghijklmno') + w.end()
-    // First 10 chars on line 1 (col 2→12), then wrap, then 5 chars on line 2
-    expect(out).toBe('abcdefghij\n  klmno')
-    expect(w.col).toBe(2 + 5)
-  })
-
-  it('hard-breaks a long word after short words', () => {
-    const w = new LineWrapper('  ', 15, 2)
-    // "hi " at col 4; "abcdefghijklmno" (15 chars) won't fit fresh line (2+15>15)
-    // hard-break: space + 10 chars fill to col 15, wrap, remaining 5 chars
-    const out = w.write('hi abcdefghijklmno') + w.end()
-    expect(out).toBe('hi abcdefghij\n  klmno')
-  })
-
-  it('collapses consecutive spaces to one', () => {
-    const w = new LineWrapper('  ', 20, 2)
-    const out = w.write('a  b') + w.end()
-    // pendingSpace is a boolean so consecutive spaces collapse — fine for model output
-    expect(out).toBe('a b')
+  it('handles blank lines (paragraph breaks)', () => {
+    const b = new StreamBuffer(40)
+    const out = b.write('para one\n\npara two\n')
+    const stripped = strip(out)
+    expect(stripped).toBe('para one\n' + P + '\n' + P + 'para two\n' + P)
   })
 })
 

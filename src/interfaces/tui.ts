@@ -1,4 +1,5 @@
 // Pure ANSI TUI utilities — no external dependencies
+import wrapAnsi from 'wrap-ansi'
 
 export const c = {
   reset: '\x1b[0m',
@@ -85,8 +86,8 @@ export function stopSpinner(silent = false): void {
   if (silent) {
     if (wasRunning) process.stdout.write('\r\x1b[K')
   } else {
-    // Clear spinner/current line then 2-space indent for model response
-    process.stdout.write(`\r\x1b[K  `)
+    // Clear spinner/current line then left-border prefix for model response
+    process.stdout.write(`\r\x1b[K${RESPONSE_PREFIX}`)
   }
 }
 
@@ -94,82 +95,50 @@ export function closeAssistantBox(): void {
   process.stdout.write('\n\n')
 }
 
-/** Stateful word-wrapper for streaming text.
- *
- * Buffers the in-progress word across `write()` calls so that a word split
- * across two chunks is still placed as a unit and wrapped before it starts
- * (never mid-word). Words too long to fit on a single line are hard-broken
- * at the column boundary so every continuation starts with the indent. */
-export class LineWrapper {
-  col: number
-  private wordBuf = ''
-  private pendingSpace = false
+/** Dim left-border prefix shown at the start of every response line. */
+export const RESPONSE_PREFIX = `  ${c.dim}│${c.reset} `
+/** Visible column width of RESPONSE_PREFIX (2 spaces + │ + space = 4). */
+export const RESPONSE_PREFIX_LEN = 4
 
-  constructor(
-    private readonly indent: string,
-    private readonly width: number,
-    startCol: number,
-  ) {
-    this.col = startCol
-  }
+/** Streaming line-buffer that wraps completed logical lines with wrap-ansi.
+ *
+ * Text is accumulated until a `\n` is received; each complete line is then
+ * word-wrapped at `contentWidth` (hard-breaking any word that exceeds the
+ * limit) and re-prefixed with RESPONSE_PREFIX on every visual sub-line.
+ *
+ * The in-progress (last, incomplete) line is held in the buffer and only
+ * output when `end()` is called or the next `\n` arrives. */
+export class StreamBuffer {
+  private buf = ''
+
+  constructor(private readonly contentWidth: number) {}
 
   write(text: string): string {
-    let out = ''
-    for (const ch of text) {
-      if (ch === '\n') {
-        out += this._emitWord(this.pendingSpace)
-        this.pendingSpace = false
-        out += '\n' + this.indent
-        this.col = this.indent.length
-      } else if (ch === ' ') {
-        out += this._emitWord(this.pendingSpace)
-        this.pendingSpace = true
-      } else {
-        this.wordBuf += ch
-      }
-    }
-    return out
+    this.buf += text
+    const parts = this.buf.split('\n')
+    this.buf = parts.pop() ?? ''   // keep last incomplete line
+    if (parts.length === 0) return ''
+
+    // Each complete line → wrap → re-prefix continuation sub-lines
+    const formatted = parts.map(l => this._wrapLine(l))
+    // Join with newline+prefix (next line starts with prefix already on screen
+    // from the previous continuation, so we just need \n + prefix between lines)
+    return formatted.join('\n' + RESPONSE_PREFIX) + '\n' + RESPONSE_PREFIX
   }
 
-  /** Flush remaining buffered word — call once when streaming ends. */
+  /** Flush the buffered incomplete line — call once when streaming ends. */
   end(): string {
-    const out = this._emitWord(this.pendingSpace)
-    this.pendingSpace = false
+    const out = this._wrapLine(this.buf)
+    this.buf = ''
     return out
   }
 
-  private _emitWord(withLeadingSpace: boolean): string {
-    if (!this.wordBuf) return ''
-    const spaceLen = withLeadingSpace ? 1 : 0
-    const avail = this.width - this.col - spaceLen
-    let out = ''
-
-    if (this.wordBuf.length <= avail) {
-      // Word fits on the current line
-      if (withLeadingSpace) { out += ' '; this.col++ }
-      out += this.wordBuf
-      this.col += this.wordBuf.length
-    } else if (this.wordBuf.length <= this.width - this.indent.length) {
-      // Word fits on a fresh line — soft-wrap before it
-      out += '\n' + this.indent
-      this.col = this.indent.length
-      out += this.wordBuf
-      this.col += this.wordBuf.length
-    } else {
-      // Word is too long for any single line — hard-break character by character
-      if (withLeadingSpace && this.col < this.width) { out += ' '; this.col++ }
-      for (const ch of this.wordBuf) {
-        if (this.col >= this.width) {
-          out += '\n' + this.indent
-          this.col = this.indent.length
-        }
-        out += ch
-        this.col++
-      }
-    }
-
-    this.wordBuf = ''
-    return out
+  private _wrapLine(line: string): string {
+    if (!line) return ''
+    const wrapped = wrapAnsi(line, this.contentWidth, { hard: true, trim: false })
+    // trim: false preserves leading whitespace (code indents) but leaves trailing
+    // spaces at word-break points — remove those.
+    return wrapped.split('\n').map(l => l.trimEnd()).join('\n' + RESPONSE_PREFIX)
   }
 }
 
