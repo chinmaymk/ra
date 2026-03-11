@@ -1,7 +1,7 @@
 <h1 align="center">ra</h1>
 
 <p align="center">
-  <b>One Loop. Infinite Agents.</b><br>
+  <b>One binary. Full control. Your agent, your rules.</b><br>
 </p>
 
 <p align="center">
@@ -26,9 +26,9 @@
 
 ## What is ra?
 
-ra is an open-source AI agent framework that gives you a configurable agentic loop and stays out of your way. It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server.
+ra is an open-source AI agent you actually control. One self-contained binary — no dependencies, no runtime — that turns any LLM into a tool-using agent you own end to end. Run it as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server. Swap providers with a flag. Intercept every model call, tool execution, and stream chunk through middleware. Teach it new behaviors with skills. Let it modify its own logic on the fly with self-authoring middleware and dynamic tool registration. Ship it as a GitHub Action, embed it in your product, or just pipe logs into it.
 
-Every message, every tool call, every stream chunk is visible and interceptable through middleware hooks. You configure agents in YAML — define tools, skills, system prompts, and context — and drop down to TypeScript only where you need custom logic.
+Six LLM backends (Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure). 15 built-in tools. 9 middleware hooks. Persistent memory. Session replay. Parallel subagents. Context compaction. All configurable in YAML — drop to TypeScript only when you need custom logic.
 
 ```bash
 ra "What is the capital of France?"
@@ -765,5 +765,5 @@ MIT
 ---
 
 <p align="center">
-  <b>ra</b> — full control over the agentic loop.
+  <b>ra</b> — your agent, your rules, one binary.
 </p>
