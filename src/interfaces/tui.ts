@@ -85,8 +85,8 @@ export function stopSpinner(silent = false): void {
   if (silent) {
     if (wasRunning) process.stdout.write('\r\x1b[K')
   } else {
-    // Always write the response prefix — clears spinner/current line, adds blank line separator, then ›
-    process.stdout.write(`\r\x1b[K\n${c.dim}${c.cyan}›${c.reset} `)
+    // Always write the response prefix — clears spinner/current line, adds blank line separator, then branded ra ›
+    process.stdout.write(`\r\x1b[K\n${c.bold}${c.cyanBright}ra${c.reset} ${c.dim}›${c.reset} `)
   }
 }
 
