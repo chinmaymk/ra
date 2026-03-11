@@ -1,14 +1,13 @@
 <h1 align="center">ra</h1>
 
 <p align="center">
-  <b>One Loop. Infinite Agents.</b><br>
+  <b>One binary. Any LLM. Full control over the agent loop.</b><br>
 </p>
 
 <p align="center">
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
-  <a href="#the-agent-loop">The Agent Loop</a> &middot;
-  <a href="#context-control">Context Control</a> &middot;
+  <a href="#why-ra">Why ra</a> &middot;
   <a href="#providers">Providers</a> &middot;
   <a href="#interfaces">Interfaces</a> &middot;
   <a href="#built-in-tools">Tools</a> &middot;
@@ -24,17 +23,14 @@
 
 ---
 
-## What is ra?
-
-ra is an open-source AI agent framework that gives you a configurable agentic loop and stays out of your way. It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server.
-
-Every message, every tool call, every stream chunk is visible and interceptable through middleware hooks. You configure agents in YAML — define tools, skills, system prompts, and context — and drop down to TypeScript only where you need custom logic.
+ra is an open-source AI agent framework built around a single, hackable loop. Download one binary, point it at any LLM, and get a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server — with full visibility and control at every step.
 
 ```bash
 ra "What is the capital of France?"
 ra --provider openai --model gpt-4.1 "Explain this error"
-ra --skill code-review --file diff.patch "Review this diff"
+ra --skill code-review "Review the latest changes"
 cat server.log | ra "Find the root cause of these errors"
+git diff | ra --skill code-review "Review this diff"
 ra   # interactive REPL
 ```
 
@@ -58,9 +54,102 @@ ra --http                                                       # streaming HTTP
 ra --mcp-stdio                                                  # MCP server for Cursor / Claude Desktop
 ```
 
+## Why ra
+
+### One binary, no runtime required
+
+ra compiles to a single self-contained binary. Drop it on any machine and it runs — no Node, no Python, no package manager, no dependencies to install or audit. CI, production servers, local dev: same binary everywhere.
+
+### Switch LLMs with a flag — same config, zero rewrites
+
+ra abstracts six providers behind one interface. Change your mind about which model to use, run A/B comparisons, or fall back to a local model when you're offline — all without touching your prompts, tools, or middleware.
+
+```bash
+ra --provider anthropic --model claude-sonnet-4-6 "Review this PR"
+ra --provider openai    --model gpt-4.1            "Review this PR"
+ra --provider google    --model gemini-2.5-pro     "Review this PR"
+ra --provider ollama    --model llama3             "Review this PR"
+```
+
+### Full visibility into every step of the loop
+
+Most frameworks treat the agent loop as a black box. ra exposes nine middleware hooks — before and after every model call, every tool execution, every stream chunk. Your code can read the full conversation history, mutate it, enforce budgets, log, audit, or stop the loop cleanly at any point.
+
+```ts
+// middleware/audit-log.ts — log every tool call
+export default async (ctx) => {
+  await appendFile('audit.jsonl', JSON.stringify({
+    tool: ctx.toolCall.name,
+    args: ctx.toolCall.arguments,
+    result: ctx.result.content,
+    timestamp: Date.now()
+  }) + '\n')
+}
+```
+
+### Parallel agents out of the box
+
+The `subagent` tool lets the model fork parallel copies of itself to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation. Token usage rolls up into the parent automatically.
+
+```bash
+ra "Analyze these three log files concurrently" --file a.log --file b.log --file c.log
+```
+
+### Smart context management that keeps long sessions running
+
+ra handles the hard parts of multi-turn conversations automatically:
+
+- **Auto-compaction** — when conversations grow, ra summarizes the middle with a cheap model, preserving system prompts and recent turns
+- **Prompt caching** — automatic cache hints for Anthropic reduce costs on repeated calls without any config
+- **Token tracking** — cumulative usage across every iteration, readable by middleware for budget enforcement
+- **Extended thinking** — watch the model reason in real time with three configurable budget levels
+
+### Fine-grained permissions without writing a proxy
+
+Control what tools can do with regex-based allow/deny rules per tool, per field. No external policy engine needed.
+
+```yaml
+permissions:
+  rules:
+    - tool: execute_bash
+      command:
+        allow: ["^git ", "^bun "]
+        deny: ["--force", "--hard", "--no-verify"]
+    - tool: write_file
+      path:
+        deny: ["\\.env"]
+      content:
+        deny: ["API_KEY", "SECRET"]
+```
+
+### Memory that persists across sessions
+
+ra stores facts in an SQLite database with full-text search. Memories are injected automatically at the start of each conversation — the agent remembers user preferences, project decisions, and prior context without you managing state.
+
+```bash
+ra --memory                   # enable for this session
+ra --list-memories            # see what's stored
+ra --forget "dark mode"       # remove matching memories
+```
+
+### Built-in observability — no external tooling required
+
+Structured JSONL logs and OpenTelemetry-inspired trace spans are written to the session directory alongside conversation messages. stdout and stderr stay clean. Filter, query, or pipe them to your existing observability stack.
+
+```bash
+cat .ra/sessions/<id>/logs.jsonl | jq 'select(.level == "error")'
+cat .ra/sessions/<id>/traces.jsonl | jq '{name, durationMs, status}'
+```
+
+### One tool for four interfaces
+
+The same ra binary is a CLI command, an interactive REPL, a streaming HTTP API, and an MCP server. Deploy it however your workflow demands — no separate tools to maintain.
+
+---
+
 ## The Agent Loop
 
-ra's core loop is simple: send messages to the model, stream the response, execute any tool calls, repeat. Every step fires a middleware hook you can intercept. The loop handles iteration, token tracking, and tool execution — you control everything else through system prompts, skills, and middleware.
+ra's core loop: send messages to the model, stream the response, execute any tool calls, repeat. Every step fires a middleware hook you can intercept.
 
 ```
 ┌─────────────────────────────────────────────────┐
