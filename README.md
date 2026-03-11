@@ -26,9 +26,9 @@
 
 ## What is ra?
 
-ra is an open-source AI agent you actually control. One self-contained binary — no dependencies, no runtime — that turns any LLM into a tool-using agent you own end to end. Run it as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server. Swap providers with a flag. Intercept every model call, tool execution, and stream chunk through middleware. Teach it new behaviors with skills. Let it modify its own logic on the fly with self-authoring middleware and dynamic tool registration. Ship it as a GitHub Action, embed it in your product, or just pipe logs into it.
+ra is an open-source AI agent you actually control. One self-contained binary — no dependencies, no runtime — that turns any LLM into a tool-using agent you own end to end. Run it as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server. Swap providers with a flag. Intercept every model call, tool execution, and stream chunk through middleware. Teach it new behaviors with skills. Let it rewrite its own middleware on the fly. Ship it as a GitHub Action, embed it in your product, or just pipe logs into it.
 
-Six LLM backends (Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure). 15 built-in tools. 9 middleware hooks. Persistent memory. Session replay. Parallel subagents. Context compaction. All configurable in YAML — drop to TypeScript only when you need custom logic.
+Provider-portable across Anthropic, OpenAI, Google, Ollama, AWS Bedrock, and Azure. Persistent memory across sessions. Parallel subagents for independent tasks. Smart context compaction that never loses what matters. All configurable in YAML — drop to TypeScript only when you need custom logic.
 
 ```bash
 ra "What is the capital of France?"
