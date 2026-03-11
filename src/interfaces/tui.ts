@@ -98,8 +98,8 @@ export function closeAssistantBox(): void {
  *
  * Buffers the in-progress word across `write()` calls so that a word split
  * across two chunks is still placed as a unit and wrapped before it starts
- * (never mid-word). Spaces are the only wrap points; long words that cannot
- * fit on any line are written as-is rather than broken. */
+ * (never mid-word). Words too long to fit on a single line are hard-broken
+ * at the column boundary so every continuation starts with the indent. */
 export class LineWrapper {
   col: number
   private wordBuf = ''
@@ -141,18 +141,33 @@ export class LineWrapper {
   private _emitWord(withLeadingSpace: boolean): string {
     if (!this.wordBuf) return ''
     const spaceLen = withLeadingSpace ? 1 : 0
+    const avail = this.width - this.col - spaceLen
     let out = ''
-    // Wrap before the word if it won't fit; newline replaces the leading space.
-    // Never wrap if already at indent — long words are written as-is.
-    if (this.col + spaceLen + this.wordBuf.length > this.width && this.col > this.indent.length) {
+
+    if (this.wordBuf.length <= avail) {
+      // Word fits on the current line
+      if (withLeadingSpace) { out += ' '; this.col++ }
+      out += this.wordBuf
+      this.col += this.wordBuf.length
+    } else if (this.wordBuf.length <= this.width - this.indent.length) {
+      // Word fits on a fresh line — soft-wrap before it
       out += '\n' + this.indent
       this.col = this.indent.length
-    } else if (withLeadingSpace) {
-      out += ' '
-      this.col++
+      out += this.wordBuf
+      this.col += this.wordBuf.length
+    } else {
+      // Word is too long for any single line — hard-break character by character
+      if (withLeadingSpace && this.col < this.width) { out += ' '; this.col++ }
+      for (const ch of this.wordBuf) {
+        if (this.col >= this.width) {
+          out += '\n' + this.indent
+          this.col = this.indent.length
+        }
+        out += ch
+        this.col++
+      }
     }
-    out += this.wordBuf
-    this.col += this.wordBuf.length
+
     this.wordBuf = ''
     return out
   }

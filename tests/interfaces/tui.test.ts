@@ -189,6 +189,31 @@ describe('LineWrapper', () => {
     w.end()
     expect(w.col).toBe(2 + 4)  // indent(2) + "wrap"(4)
   })
+
+  it('hard-breaks a word longer than the available width', () => {
+    // width=12, indent=2 → 10 chars per line of content
+    const w = new LineWrapper('  ', 12, 2)
+    // "abcdefghijklmno" is 15 chars — too long for any single line (max 10)
+    const out = w.write('abcdefghijklmno') + w.end()
+    // First 10 chars on line 1 (col 2→12), then wrap, then 5 chars on line 2
+    expect(out).toBe('abcdefghij\n  klmno')
+    expect(w.col).toBe(2 + 5)
+  })
+
+  it('hard-breaks a long word after short words', () => {
+    const w = new LineWrapper('  ', 15, 2)
+    // "hi " at col 4; "abcdefghijklmno" (15 chars) won't fit fresh line (2+15>15)
+    // hard-break: space + 10 chars fill to col 15, wrap, remaining 5 chars
+    const out = w.write('hi abcdefghijklmno') + w.end()
+    expect(out).toBe('hi abcdefghij\n  klmno')
+  })
+
+  it('collapses consecutive spaces to one', () => {
+    const w = new LineWrapper('  ', 20, 2)
+    const out = w.write('a  b') + w.end()
+    // pendingSpace is a boolean so consecutive spaces collapse — fine for model output
+    expect(out).toBe('a b')
+  })
 })
 
 describe('tagline determinism', () => {
