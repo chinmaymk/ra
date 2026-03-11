@@ -29,7 +29,7 @@ Each rule targets a **tool name** and one or more **fields** from that tool's in
 
 Evaluation order per tool call:
 
-1. If `no_rules: true` — allow everything, skip all checks
+1. If `no_rules_rules: true` — allow everything, skip all checks
 2. Find all rules matching this tool name
 3. For each field rule, test the field's value against the regexes
 4. **Deny takes priority** — if any deny regex matches, the call is blocked
@@ -40,13 +40,13 @@ When a tool call is denied, the model receives an error result with a clear mess
 
 ## Configuration
 
-### `permissions.no_rules`
+### `permissions.no_rules_rules`
 
 When `true`, disables all permission checks. All tools are allowed unconditionally. Use this to explicitly opt out of the permissions system.
 
 ```yaml
 permissions:
-  no_rules: true
+  no_rules_rules: true
 ```
 
 ### `permissions.default_action`

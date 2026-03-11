@@ -13,7 +13,7 @@ function checkField(tool: string, field: string, value: string, rule: Permission
 
 /** Create a beforeToolExecution middleware that enforces permission rules. */
 export function createPermissionsMiddleware(config: PermissionsConfig): Middleware<ToolExecutionContext> {
-  if (config.no_rules || !config.rules?.length) return async () => {}
+  if (config.no_rules_rules || !config.rules?.length) return async () => {}
 
   const defaultAction = config.default_action ?? 'allow'
 

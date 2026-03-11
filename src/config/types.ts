@@ -23,7 +23,7 @@ export interface PermissionRule {
 
 export interface PermissionsConfig {
   /** When true, all tools are allowed without checking rules. Default: false. */
-  no_rules?: boolean
+  no_rules_rules?: boolean
   /** Default action when no rule matches a tool: 'allow' or 'deny'. Default: 'allow'. */
   default_action?: 'allow' | 'deny'
   /** Permission rules per tool. */

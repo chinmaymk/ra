@@ -346,7 +346,7 @@ async function main(): Promise<void> {
   }
 
   // Inject permissions middleware (runs before user middleware on beforeToolExecution)
-  if (config.permissions.rules?.length && !config.permissions.no_rules) {
+  if (config.permissions.rules?.length && !config.permissions.no_rules_rules) {
     const permMw = createPermissionsMiddleware(config.permissions)
     middleware.beforeToolExecution = [permMw, ...(middleware.beforeToolExecution ?? [])]
     logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })

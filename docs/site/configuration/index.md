@@ -91,7 +91,7 @@ Regex-based rules controlling what tools can do. See the [Permissions guide](/pe
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `permissions.no_rules` | — | — | `false` | Disable all permission checks |
+| `permissions.no_rules_rules` | — | — | `false` | Disable all permission checks |
 | `permissions.default_action` | — | — | `allow` | Action when no rule matches: `allow` or `deny` |
 | `permissions.rules` | — | — | `[]` | Array of per-tool regex rules |
 

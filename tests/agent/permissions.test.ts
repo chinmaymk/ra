@@ -16,8 +16,8 @@ function makeCtx(toolName: string, args: Record<string, unknown>): ToolExecution
 }
 
 describe('permissions middleware', () => {
-  it('allows everything when no_rules is true', async () => {
-    const mw = createPermissionsMiddleware({ no_rules: true, rules: [{ tool: 'execute_bash', command: { deny: ['.*'] } }] })
+  it('allows everything when no_rules_rules is true', async () => {
+    const mw = createPermissionsMiddleware({ no_rules_rules: true, rules: [{ tool: 'execute_bash', command: { deny: ['.*'] } }] })
     const ctx = makeCtx('execute_bash', { command: 'rm -rf /' })
     await mw(ctx)
     expect(ctx.denied).toBeUndefined()

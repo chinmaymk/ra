@@ -340,7 +340,7 @@ Each rule key (other than `tool`) is a field name from the tool's input schema â
 
 When a tool call is denied, the model gets a clear error message and can adjust. The loop continues.
 
-Set `no_rules: true` to disable all checks, or `default_action: deny` for an allowlist-only approach where only tools with explicit rules can execute.
+Set `no_rules_rules: true` to disable all checks, or `default_action: deny` for an allowlist-only approach where only tools with explicit rules can execute.
 
 ## File Attachments
 
