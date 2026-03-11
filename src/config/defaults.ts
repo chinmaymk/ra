@@ -20,7 +20,6 @@ export const defaultConfig: RaConfig = {
       },
     },
     lazySchemas: true,
-    maxDescriptionLength: 100,
   },
   providers: {
     anthropic: { apiKey: '' },

@@ -247,7 +247,7 @@ Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to c
 
 ## MCP
 
-When [MCP clients](/modes/mcp/) are configured and `mcp.lazySchemas` is enabled (the default), MCP tools are registered with truncated descriptions and minimal schemas. On the first call to each tool, ra returns the full schema as an error instead of executing — the model then retries with correct parameters. No extra meta-tools are needed. See [MCP — Lazy schema loading](/modes/mcp/#lazy-schema-loading) for details.
+When [MCP clients](/modes/mcp/) are configured and `mcp.lazySchemas` is enabled (the default), MCP tools are registered with server-prefixed names (`github__search`) and minimal schemas. Descriptions are preserved unchanged. On the first call to each tool, ra returns the full schema as an error instead of executing — the model then retries with correct parameters. No extra meta-tools are needed. See [MCP — Lazy schema loading](/modes/mcp/#lazy-schema-loading) for details.
 
 ## Memory
 

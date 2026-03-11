@@ -40,31 +40,30 @@ mcp:
 
 MCP servers can expose dozens of tools, each with large JSON schemas. Sending all of them in every model call wastes tokens — especially when only a few tools are used per conversation.
 
-By default, ra uses **lazy schema loading** for MCP tools. Instead of sending full schemas, the model sees only tool names, their source server (as a `[server]` prefix), and truncated descriptions. When the model first calls a tool, ra returns the full schema instead of executing it — the model then retries with the correct parameters.
+By default, ra uses **lazy schema loading** for MCP tools. Tool names are prefixed with the server name (`github__search`, `database__query`) to avoid conflicts across servers. Descriptions are passed through unchanged from the MCP server. Only the `inputSchema` is stripped — when the model first calls a tool, ra returns the full schema instead of executing it, and the model retries with the correct parameters.
 
 ```
 Model sees:
-  search_github  →  "[github] Search for repositories, issues, and..."
-  query_db       →  "[database] Run SQL queries against the..."
+  github__search   →  "Search for repositories, issues, and pull requests"
+  database__query  →  "Run SQL queries against the connected database"
 
-Model calls: search_github({})                    ← first call, guessing
+Model calls: github__search({})                    ← first call, no schema
      ↓
 ra returns:  schema error with full description + inputSchema
      ↓
-Model calls: search_github({ query: "...", repo: "..." })  ← retry with correct params
+Model calls: github__search({ query: "...", repo: "..." })  ← retry with correct params
      ↓
 ra executes: real MCP tool call
 ```
 
 No extra meta-tools needed. The model learns the schema through normal tool-call error handling — one extra round-trip per tool, only for tools actually used.
 
-This is especially effective when connecting to multiple MCP servers with many tools — you only pay the token cost for schemas the model actually uses.
+This is especially effective when connecting to multiple MCP servers with many tools — you only pay the token cost for schemas the model actually uses. Server-prefixed names also mean two servers can expose tools with the same name without conflicts.
 
 ```yaml
 # ra.config.yml
 mcp:
-  lazySchemas: true          # default: true
-  maxDescriptionLength: 100  # max chars for truncated descriptions
+  lazySchemas: true   # default: true
 ```
 
 To disable lazy loading and send full schemas every time (the pre-optimization behavior):
@@ -77,7 +76,6 @@ mcp:
 | Field | Env var | Default | Description |
 |-------|---------|---------|-------------|
 | `mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | `true` | Enable lazy schema loading for MCP tools |
-| `mcp.maxDescriptionLength` | `RA_MCP_MAX_DESCRIPTION_LENGTH` | `100` | Max characters for truncated MCP tool descriptions |
 
 ## ra as MCP server
 

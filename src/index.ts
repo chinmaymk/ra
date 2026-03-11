@@ -335,7 +335,6 @@ async function main(): Promise<void> {
     logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
     await mcpClient.connect(config.mcp.client, tools, {
       lazySchemas: config.mcp.lazySchemas,
-      maxDescriptionLength: config.mcp.maxDescriptionLength,
     })
     logger.info('MCP servers connected', { totalTools: tools.all().length, lazySchemas: config.mcp.lazySchemas })
   }

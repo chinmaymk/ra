@@ -7,7 +7,6 @@ import { wrapMcpToolsLazy, type McpToolEntry } from './lazy-tools'
 
 export interface McpConnectOptions {
   lazySchemas?: boolean
-  maxDescriptionLength?: number
 }
 
 export class McpClient {
@@ -48,9 +47,7 @@ export class McpClient {
       }
 
       if (options?.lazySchemas && mcpTools.length > 0) {
-        wrapMcpToolsLazy(registry, mcpTools, {
-          maxDescriptionLength: options.maxDescriptionLength,
-        })
+        wrapMcpToolsLazy(registry, mcpTools)
       } else {
         for (const { tool } of mcpTools) {
           registry.register(tool)

@@ -29,15 +29,15 @@ mcp:
 ### Lazy Schema Loading (`lazy-tools.ts`)
 
 When `mcp.lazySchemas` is enabled (default: `true`), MCP tools are registered with:
-- A `[serverName]` prefix in the description so the model knows which server owns each tool
-- Truncated descriptions (max `mcp.maxDescriptionLength` chars, default 100)
+- Server-prefixed names: `serverName__toolName` (avoids conflicts across servers)
+- Original descriptions from the MCP server (unchanged)
 - Minimal `inputSchema` (no properties)
 
 On the **first call** to each tool, the wrapper returns the full schema as an error (`isError: true`) with the complete description, server name, and `inputSchema`. The model then retries with correct parameters, and all subsequent calls pass through to the real MCP server.
 
 No meta-tools needed — the model learns schemas through normal error handling.
 
-`wrapMcpToolsLazy(registry, McpToolEntry[], options?)` is the entry point. Each `McpToolEntry` pairs an `ITool` with its `serverName`. A per-tool boolean tracks whether the schema has been revealed.
+`wrapMcpToolsLazy(registry, McpToolEntry[])` is the entry point. Each `McpToolEntry` pairs an `ITool` with its `serverName`. A per-tool boolean tracks whether the schema has been revealed.
 
 ## MCP Server
 

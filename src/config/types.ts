@@ -22,11 +22,9 @@ export interface RaConfig {
   mcp: {
     client: McpClientConfig[]
     server: McpServerConfig
-    /** When true, MCP tools are registered with truncated descriptions and minimal schemas.
-     *  A `get_mcp_tool_schema` meta-tool lets the model fetch full schemas on demand. Saves tokens. */
+    /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
+     *  First call returns full schema; model retries with correct params. Saves tokens. */
     lazySchemas: boolean
-    /** Max characters for truncated MCP tool descriptions when lazySchemas is enabled */
-    maxDescriptionLength: number
   }
   providers: {
     anthropic: AnthropicProviderOptions

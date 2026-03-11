@@ -21,27 +21,25 @@ function makeMcpTool(
 }
 
 describe('wrapMcpToolsLazy', () => {
-  it('registers tools with truncated descriptions and server prefix', () => {
+  it('registers tools with server-prefixed names', () => {
     const registry = new ToolRegistry()
-    const longDesc = 'A'.repeat(200)
-    const tools = [makeMcpTool('my_tool', longDesc, { type: 'object', properties: { x: { type: 'string' } } })]
+    const tools = [makeMcpTool('my_tool', 'Does stuff', { type: 'object' })]
 
-    wrapMcpToolsLazy(registry, tools, { maxDescriptionLength: 50 })
+    wrapMcpToolsLazy(registry, tools)
 
-    const registered = registry.get('my_tool')!
-    expect(registered.description.length).toBeLessThanOrEqual(50)
-    expect(registered.description).toStartWith('[test-server]')
-    expect(registered.description).toEndWith('...')
+    expect(registry.get('test-server__my_tool')).toBeDefined()
+    expect(registry.get('my_tool')).toBeUndefined()
   })
 
-  it('keeps short descriptions intact with server prefix', () => {
+  it('preserves the original description unchanged', () => {
     const registry = new ToolRegistry()
-    const tools = [makeMcpTool('short_tool', 'Brief desc', { type: 'object' })]
+    const longDesc = 'A'.repeat(200)
+    const tools = [makeMcpTool('my_tool', longDesc, { type: 'object' })]
 
-    wrapMcpToolsLazy(registry, tools, { maxDescriptionLength: 100 })
+    wrapMcpToolsLazy(registry, tools)
 
-    const registered = registry.get('short_tool')!
-    expect(registered.description).toBe('[test-server] Brief desc')
+    const registered = registry.get('test-server__my_tool')!
+    expect(registered.description).toBe(longDesc)
   })
 
   it('registers tools with minimal inputSchema', () => {
@@ -58,7 +56,7 @@ describe('wrapMcpToolsLazy', () => {
 
     wrapMcpToolsLazy(registry, tools)
 
-    const registered = registry.get('search')!
+    const registered = registry.get('test-server__search')!
     expect(registered.inputSchema.properties).toBeUndefined()
     expect(registered.inputSchema.type).toBe('object')
   })
@@ -78,7 +76,7 @@ describe('wrapMcpToolsLazy', () => {
 
     wrapMcpToolsLazy(registry, tools)
 
-    const registered = registry.get('search')!
+    const registered = registry.get('github__search')!
     const result = await registered.execute({}) as { isError: boolean; content: string }
 
     expect(executed).toBe(false)
@@ -86,6 +84,7 @@ describe('wrapMcpToolsLazy', () => {
     expect(result.content).toContain('Search for things')
     expect(result.content).toContain('"query"')
     expect(result.content).toContain('github')
+    expect(result.content).toContain('github__search')
     expect(result.content).toContain('Retry your call')
   })
 
@@ -100,7 +99,7 @@ describe('wrapMcpToolsLazy', () => {
 
     wrapMcpToolsLazy(registry, tools)
 
-    const registered = registry.get('search')!
+    const registered = registry.get('github__search')!
 
     // First call — returns schema
     const first = await registered.execute({}) as { isError: boolean }
@@ -118,7 +117,7 @@ describe('wrapMcpToolsLazy', () => {
 
     wrapMcpToolsLazy(registry, tools)
 
-    const registered = registry.get('my_tool')!
+    const registered = registry.get('test-server__my_tool')!
 
     // First call — schema
     await registered.execute({})
@@ -141,22 +140,22 @@ describe('wrapMcpToolsLazy', () => {
     wrapMcpToolsLazy(registry, tools)
 
     // First call to tool_a — schema
-    const a1 = await registry.get('tool_a')!.execute({}) as { isError: boolean }
+    const a1 = await registry.get('server__tool_a')!.execute({}) as { isError: boolean }
     expect(a1.isError).toBe(true)
 
     // First call to tool_b — schema (independent)
-    const b1 = await registry.get('tool_b')!.execute({}) as { isError: boolean }
+    const b1 = await registry.get('server__tool_b')!.execute({}) as { isError: boolean }
     expect(b1.isError).toBe(true)
 
     // Second call to both — execute
-    const a2 = await registry.get('tool_a')!.execute({ x: 1 }) as { called: string }
+    const a2 = await registry.get('server__tool_a')!.execute({ x: 1 }) as { called: string }
     expect(a2.called).toBe('tool_a')
 
-    const b2 = await registry.get('tool_b')!.execute({ x: 2 }) as { called: string }
+    const b2 = await registry.get('server__tool_b')!.execute({ x: 2 }) as { called: string }
     expect(b2.called).toBe('tool_b')
   })
 
-  it('schema hint includes full description, server name, and parameters', async () => {
+  it('schema hint includes prefixed name, server name, description, and parameters', async () => {
     const schema = {
       type: 'object',
       properties: {
@@ -170,24 +169,28 @@ describe('wrapMcpToolsLazy', () => {
 
     wrapMcpToolsLazy(registry, tools)
 
-    const result = await registry.get('read_file')!.execute({}) as { content: string }
+    const result = await registry.get('filesystem__read_file')!.execute({}) as { content: string }
 
-    expect(result.content).toContain('read_file')
+    expect(result.content).toContain('filesystem__read_file')
     expect(result.content).toContain('filesystem')
     expect(result.content).toContain('Read contents of a file from the filesystem')
     expect(result.content).toContain('"path"')
     expect(result.content).toContain('"encoding"')
   })
 
-  it('uses default maxDescriptionLength of 100', () => {
+  it('same tool name from different servers does not conflict', () => {
     const registry = new ToolRegistry()
-    const desc = 'X'.repeat(150)
-    const tools = [makeMcpTool('tool1', desc, { type: 'object' })]
+    const tools = [
+      makeMcpTool('search', 'GitHub search', { type: 'object' }, 'github'),
+      makeMcpTool('search', 'Database search', { type: 'object' }, 'database'),
+    ]
 
     wrapMcpToolsLazy(registry, tools)
 
-    const registered = registry.get('tool1')!
-    expect(registered.description.length).toBe(100)
+    expect(registry.get('github__search')).toBeDefined()
+    expect(registry.get('database__search')).toBeDefined()
+    expect(registry.get('github__search')!.description).toBe('GitHub search')
+    expect(registry.get('database__search')!.description).toBe('Database search')
   })
 
   it('handles multiple tools from different servers', () => {
@@ -200,13 +203,10 @@ describe('wrapMcpToolsLazy', () => {
 
     wrapMcpToolsLazy(registry, tools)
 
-    expect(registry.get('tool_a')).toBeDefined()
-    expect(registry.get('tool_b')).toBeDefined()
-    expect(registry.get('tool_c')).toBeDefined()
+    expect(registry.get('github__tool_a')).toBeDefined()
+    expect(registry.get('github__tool_b')).toBeDefined()
+    expect(registry.get('database__tool_c')).toBeDefined()
     expect(registry.all()).toHaveLength(3)
-
-    expect(registry.get('tool_a')!.description).toStartWith('[github]')
-    expect(registry.get('tool_c')!.description).toStartWith('[database]')
   })
 
   it('handles empty tools list', () => {

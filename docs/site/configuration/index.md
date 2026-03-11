@@ -138,8 +138,7 @@ The `subagent` tool forks parallel copies of the agent. Forks inherit the parent
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | — | `true` | Lazy schema loading — send only tool names and truncated descriptions. First call to each tool returns the full schema; model retries with correct params. |
-| `mcp.maxDescriptionLength` | `RA_MCP_MAX_DESCRIPTION_LENGTH` | — | `100` | Max characters for truncated MCP tool descriptions when lazy schemas is enabled |
+| `mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
 
 See [MCP](/modes/mcp/#lazy-schema-loading) for details.
 
