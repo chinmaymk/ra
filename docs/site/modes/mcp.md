@@ -36,6 +36,51 @@ mcp:
       command: ./my-mcp-server
 ```
 
+### Server-prefixed tool names
+
+All MCP tools are registered with server-prefixed names: `serverName__toolName`. This avoids conflicts when multiple servers expose tools with the same name. Server names are sanitized to `[a-zA-Z0-9_]` for provider compatibility (e.g., `my-server` becomes `my_server`).
+
+### Lazy schema loading
+
+MCP servers can expose dozens of tools, each with large JSON schemas. Sending all of them in every model call wastes tokens — especially when only a few tools are used per conversation.
+
+By default, ra uses **lazy schema loading** for MCP tools. Descriptions are passed through unchanged from the MCP server. Only the `inputSchema` is stripped — when the model first calls a tool, ra returns the full schema instead of executing it, and the model retries with the correct parameters.
+
+```
+Model sees:
+  github__search   →  "Search for repositories, issues, and pull requests"
+  database__query  →  "Run SQL queries against the connected database"
+
+Model calls: github__search({})                    ← first call, no schema
+     ↓
+ra returns:  schema error with full description + inputSchema
+     ↓
+Model calls: github__search({ query: "...", repo: "..." })  ← retry with correct params
+     ↓
+ra executes: real MCP tool call
+```
+
+No extra meta-tools needed. The model learns the schema through normal tool-call error handling — one extra round-trip per tool, only for tools actually used.
+
+This is especially effective when connecting to multiple MCP servers with many tools — you only pay the token cost for schemas the model actually uses. Server-prefixed names also mean two servers can expose tools with the same name without conflicts.
+
+```yaml
+# ra.config.yml
+mcp:
+  lazySchemas: true   # default: true
+```
+
+To disable lazy loading and send full schemas every time (the pre-optimization behavior):
+
+```yaml
+mcp:
+  lazySchemas: false
+```
+
+| Field | Env var | Default | Description |
+|-------|---------|---------|-------------|
+| `mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | `true` | Enable lazy schema loading for MCP tools |
+
 ## ra as MCP server
 
 Expose the full agent loop as a tool for other agents.

@@ -7,6 +7,7 @@ MCP (Model Context Protocol) support — both as a client (connect to external t
 | File | Purpose |
 |------|---------|
 | `client.ts` | Connects to external MCP servers, registers their tools into `ToolRegistry` |
+| `lazy-tools.ts` | Server-prefixed naming (`prefixToolName`) + lazy schema loading (`wrapMcpToolsLazy`) |
 | `server.ts` | Exposes ra itself as an MCP tool (stdio or HTTP transport) |
 
 ## MCP Client
@@ -22,8 +23,18 @@ mcp:
 ```
 
 - Lists tools from the external server and wraps them as `ITool` instances
+- **All MCP tools get server-prefixed names**: `serverName__toolName` (avoids conflicts across servers)
+- Server names are sanitized to `[a-zA-Z0-9_]` for provider compatibility
 - Registered into the same `ToolRegistry` as built-in tools — the agent sees them identically
 - Supports `stdio` and `sse` transports
+
+### Lazy Schema Loading (`lazy-tools.ts`)
+
+When `mcp.lazySchemas` is enabled (default: `true`), MCP tools are additionally registered with:
+- Minimal `inputSchema` (no properties)
+- A first-call reveal: returns the full schema as an error (`isError: true`), model retries with correct params
+
+`prefixToolName(serverName, toolName)` is used by both lazy and non-lazy paths. `wrapMcpToolsLazy(registry, McpToolEntry[])` adds the schema-stripping behavior on top.
 
 ## MCP Server
 

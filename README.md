@@ -419,7 +419,10 @@ mcp:
       args: ["-y", "@modelcontextprotocol/server-github"]
       env:
         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+  lazySchemas: true   # default — strip schemas, reveal on first call
 ```
+
+All MCP tools get **server-prefixed names** (`github__search`, `database__query`) to avoid conflicts across servers. With **lazy schema loading** (default), only the `inputSchema` is stripped. The first call to each tool returns the full parameter schema instead of executing — the model retries with correct parameters. You only pay for schemas of tools actually used.
 
 **As a server** — `ra --mcp-stdio` exposes the full agent loop as a single MCP tool, plus all built-in tools as individual MCP tools.
 

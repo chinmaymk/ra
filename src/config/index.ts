@@ -110,6 +110,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_MCP_SERVER_PORT !== undefined)              setInt(['mcp', 'server', 'port'], env.RA_MCP_SERVER_PORT)
   if (env.RA_MCP_SERVER_TOOL_NAME !== undefined)         set(['mcp', 'server', 'tool', 'name'], env.RA_MCP_SERVER_TOOL_NAME)
   if (env.RA_MCP_SERVER_TOOL_DESCRIPTION !== undefined)  set(['mcp', 'server', 'tool', 'description'], env.RA_MCP_SERVER_TOOL_DESCRIPTION)
+  if (env.RA_MCP_LAZY_SCHEMAS !== undefined)              set(['mcp', 'lazySchemas'], env.RA_MCP_LAZY_SCHEMAS === 'true')
 
   // Storage
   if (env.RA_STORAGE_PATH !== undefined)         set(['storage', 'path'], env.RA_STORAGE_PATH)

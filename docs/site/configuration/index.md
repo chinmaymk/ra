@@ -134,6 +134,14 @@ The `subagent` tool forks parallel copies of the agent. Forks inherit the parent
 | `memory.ttlDays` | `RA_MEMORY_TTL_DAYS` | — | `90` | Auto-prune memories older than this |
 | `memory.injectLimit` | `RA_MEMORY_INJECT_LIMIT` | — | `5` | Memories to inject as context per loop (0 to disable) |
 
+### MCP
+
+| Field | Env var | CLI flag | Default | Description |
+|-------|---------|----------|---------|-------------|
+| `mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
+
+See [MCP](/modes/mcp/#lazy-schema-loading) for details.
+
 ### HTTP
 
 | Field | Env var | CLI flag | Default | Description |

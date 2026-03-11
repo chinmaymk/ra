@@ -22,6 +22,9 @@ export interface RaConfig {
   mcp: {
     client: McpClientConfig[]
     server: McpServerConfig
+    /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
+     *  First call returns full schema; model retries with correct params. Saves tokens. */
+    lazySchemas: boolean
   }
   providers: {
     anthropic: AnthropicProviderOptions
