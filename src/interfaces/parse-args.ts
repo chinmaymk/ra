@@ -8,6 +8,7 @@ export interface SkillCommand {
 
 export interface ParsedArgsMeta {
   help: boolean
+  version: boolean
   files: string[]
   skills: string[]
   prompt?: string
@@ -55,6 +56,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       config: {},
       meta: {
         help: false,
+        version: false,
         showContext: false,
         listMemories: false,
         files: [],
@@ -74,6 +76,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       file:                          { type: 'string', multiple: true },
       resume:                        { type: 'string' },
       help:                          { type: 'boolean', short: 'h' },
+      version:                       { type: 'boolean', short: 'v' },
       'show-context':                { type: 'boolean' },
       // Interface selection → config.interface
       http:                          { type: 'boolean' },
@@ -172,6 +175,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     config: r as Partial<RaConfig>,
     meta: {
       help:         (values.help as boolean | undefined) ?? false,
+      version:      (values.version as boolean | undefined) ?? false,
       showContext:   (values['show-context'] as boolean | undefined) ?? false,
       listMemories:  (values['list-memories'] as boolean | undefined) ?? false,
       memories:      values.memories as string | undefined,

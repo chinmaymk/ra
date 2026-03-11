@@ -4,6 +4,12 @@ project_name: ra
 
 builds:
   - builder: bun
+    flags:
+      - --compile
+      - --define
+      - __RA_VERSION__="\"{{ .Version }}\""
+      - --define
+      - __RA_COMMIT__="\"{{ .ShortCommit }}\""
     targets:
       - linux-x64
       - linux-arm64

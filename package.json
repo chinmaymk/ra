@@ -33,7 +33,7 @@
   ],
   "scripts": {
     "build:types": "tsc -p tsconfig.build.json",
-    "compile": "bun build src/index.ts --compile --target bun --outfile dist/ra",
+    "compile": "bun build src/index.ts --compile --target bun --outfile dist/ra --define __RA_VERSION__='\"'$(node -p \"require('./package.json').version\")'\"' --define __RA_COMMIT__='\"'$(git rev-parse --short HEAD)'\"'",
     "ra": "bun run src/index.ts"
   },
   "dependencies": {

@@ -89,6 +89,7 @@ PROVIDER OPTIONS
   --builtin-tools                     Enable built-in tools (filesystem, shell, network)
   --show-context                      Show discovered context files and exit
   --exec <script>                     Execute a JS/TS file and exit
+  --version, -v                       Print version and exit
   --help, -h                          Print this help message
 
 SKILL MANAGEMENT
@@ -150,6 +151,12 @@ async function main(): Promise<void> {
 
   if (parsed.meta.exec) {
     await execScript(parsed.meta.exec)
+    process.exit(0)
+  }
+
+  if (parsed.meta.version) {
+    const { versionString } = await import('./version')
+    console.log(versionString())
     process.exit(0)
   }
 
