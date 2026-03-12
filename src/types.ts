@@ -67,6 +67,10 @@ export type { OllamaProviderOptions } from './providers/ollama.ts'
 export type { BedrockProviderOptions } from './providers/bedrock.ts'
 export type { AzureProviderOptions } from './providers/azure.ts'
 
+// Agent pool
+export { AgentPool } from './agent/pool'
+export type { AgentPoolConfig, AgentOverrides, PoolAgentInfo } from './agent/pool'
+
 // Built-in tools
 export { registerBuiltinTools } from './tools/index'
 export { ASK_USER_SIGNAL } from './tools/ask-user'

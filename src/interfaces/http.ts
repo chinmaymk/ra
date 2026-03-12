@@ -5,6 +5,7 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
+import { AgentPool, type AgentOverrides } from '../agent/pool'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { ASK_USER_SIGNAL } from '../tools/ask-user'
 
@@ -28,9 +29,22 @@ export interface HttpOptions {
 export class HttpServer {
   private options: HttpOptions
   private server: ReturnType<typeof Bun.serve> | null = null
+  readonly pool: AgentPool
 
   constructor(options: HttpOptions) {
     this.options = options
+    this.pool = new AgentPool({
+      provider: options.provider,
+      tools: options.tools,
+      model: options.model,
+      middleware: options.middleware,
+      maxIterations: options.maxIterations,
+      toolTimeout: options.toolTimeout,
+      thinking: options.thinking,
+      compaction: options.compaction,
+      systemPrompt: options.systemPrompt,
+      contextMessages: options.contextMessages,
+    })
   }
 
   get port(): number { return (this.server?.port ?? this.options.port) as number }
@@ -65,6 +79,32 @@ export class HttpServer {
 
         if (req.method === 'GET' && url.pathname === '/sessions') {
           return this.handleSessions()
+        }
+
+        // ── Agent pool routes ──────────────────────────────────────
+        if (url.pathname === '/agents' && req.method === 'GET') {
+          return this.handleAgentList()
+        }
+
+        if (url.pathname === '/agents' && req.method === 'POST') {
+          return this.handleAgentCreate(req)
+        }
+
+        const agentMatch = url.pathname.match(/^\/agents\/([^/]+)$/)
+        if (agentMatch) {
+          const name = decodeURIComponent(agentMatch[1]!)
+          if (req.method === 'GET') return this.handleAgentGet(name)
+          if (req.method === 'DELETE') return this.handleAgentDelete(name)
+        }
+
+        const chatMatch = url.pathname.match(/^\/agents\/([^/]+)\/chat$/)
+        if (chatMatch && req.method === 'POST') {
+          return this.handleAgentChat(decodeURIComponent(chatMatch[1]!), req)
+        }
+
+        const stopMatch = url.pathname.match(/^\/agents\/([^/]+)\/stop$/)
+        if (stopMatch && req.method === 'POST') {
+          return this.handleAgentStop(decodeURIComponent(stopMatch[1]!))
         }
 
         return new Response(JSON.stringify({ error: 'Not Found' }), {
@@ -244,5 +284,87 @@ export class HttpServer {
     return new Response(JSON.stringify({ sessions }), {
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+
+  // ── Agent pool handlers ──────────────────────────────────────────
+
+  private handleAgentList(): Response {
+    return Response.json({ agents: this.pool.list() })
+  }
+
+  private async handleAgentCreate(req: Request): Promise<Response> {
+    try {
+      const body = await req.json() as Record<string, unknown>
+      const name = typeof body.name === 'string' ? body.name : ''
+      if (!name) return Response.json({ error: 'name is required' }, { status: 400 })
+      const overrides: AgentOverrides = {}
+      if (typeof body.model === 'string') overrides.model = body.model
+      if (typeof body.systemPrompt === 'string') overrides.systemPrompt = body.systemPrompt
+      if (typeof body.maxIterations === 'number') overrides.maxIterations = body.maxIterations
+      if (body.thinking === 'low' || body.thinking === 'medium' || body.thinking === 'high') overrides.thinking = body.thinking
+      const info = this.pool.create(name, overrides)
+      return Response.json({ agent: info }, { status: 201 })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const status = msg.includes('already exists') ? 409 : 400
+      return Response.json({ error: msg }, { status })
+    }
+  }
+
+  private handleAgentGet(name: string): Response {
+    const info = this.pool.get(name)
+    if (!info) return Response.json({ error: `Agent '${name}' not found` }, { status: 404 })
+    return Response.json({ agent: info })
+  }
+
+  private handleAgentDelete(name: string): Response {
+    try {
+      this.pool.remove(name)
+      return Response.json({ ok: true })
+    } catch (err) {
+      return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 404 })
+    }
+  }
+
+  private async handleAgentChat(name: string, req: Request): Promise<Response> {
+    try {
+      const body = await req.json() as Record<string, unknown>
+      const messages = Array.isArray(body.messages) ? body.messages as IMessage[] : []
+      if (!messages.length) {
+        // Convenience: accept { message: "text" } as shorthand
+        const text = typeof body.message === 'string' ? body.message : ''
+        if (text) messages.push({ role: 'user', content: text })
+      }
+      if (!messages.length) return Response.json({ error: 'messages or message is required' }, { status: 400 })
+
+      const result = await this.pool.chat(name, messages)
+      const assistantMessages = result.messages.filter(m => m.role === 'assistant')
+      const last = assistantMessages[assistantMessages.length - 1]
+      const responseText = typeof last?.content === 'string'
+        ? last.content
+        : Array.isArray(last?.content)
+          ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
+          : ''
+
+      return Response.json({
+        response: responseText,
+        messages: result.messages,
+        iterations: result.iterations,
+        usage: result.usage,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const status = msg.includes('not found') ? 404 : msg.includes('already running') ? 409 : 500
+      return Response.json({ error: msg }, { status })
+    }
+  }
+
+  private handleAgentStop(name: string): Response {
+    try {
+      this.pool.stop(name)
+      return Response.json({ ok: true })
+    } catch (err) {
+      return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 404 })
+    }
   }
 }
