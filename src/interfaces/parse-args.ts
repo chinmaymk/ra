@@ -41,12 +41,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return {
       config: {},
       meta: {
-        help: false,
-        version: false,
-        showContext: false,
-        listMemories: false,
-        files: [],
-        skills: [],
+        help: false, version: false, showContext: false, listMemories: false,
+        files: [], skills: [],
         skillCommand: { action, args: subArgs },
       },
     }
@@ -110,52 +106,42 @@ export function parseArgs(argv: string[]): ParsedArgs {
   })
 
   const r: Record<string, unknown> = {}
-  const set = (path: string[], value: unknown) => setPath(r, path, value)
 
-  // Interface selection
-  if (values['mcp-stdio'])    set(['interface'], 'mcp-stdio')
-  else if (values.mcp)       set(['interface'], 'mcp')
-  else if (values.http) set(['interface'], 'http')
-  else if (values.repl) set(['interface'], 'repl')
-  else if (values.cli)  set(['interface'], 'cli')
+  // Interface selection (priority order)
+  const iface = (['mcp-stdio', 'mcp', 'http', 'repl', 'cli'] as const).find(k => values[k])
+  if (iface) setPath(r, ['interface'], iface)
 
-  // Top-level
-  if (values.provider)           set(['provider'], values.provider)
-  if (values.model)              set(['model'], values.model)
-  if (values['system-prompt'])   set(['systemPrompt'], values['system-prompt'])
-  if (values['max-iterations'])  { const n = safeParseInt(values['max-iterations'] as string); if (n !== undefined) set(['maxIterations'], n) }
-  if (values['thinking'])        set(['thinking'], values['thinking'])
-  if (values['tool-timeout'])    { const n = safeParseInt(values['tool-timeout'] as string); if (n !== undefined) set(['toolTimeout'], n) }
-  if (values['builtin-tools']) set(['builtinTools'], true)
+  // String args → config paths
+  const strMap: [string, string[]][] = [
+    ['provider', ['provider']], ['model', ['model']], ['system-prompt', ['systemPrompt']],
+    ['thinking', ['thinking']], ['http-token', ['http', 'token']],
+    ['mcp-server-tool-name', ['mcp', 'server', 'tool', 'name']],
+    ['mcp-server-tool-description', ['mcp', 'server', 'tool', 'description']],
+    ['storage-path', ['storage', 'path']],
+    ['anthropic-base-url', ['providers', 'anthropic', 'baseURL']],
+    ['openai-base-url', ['providers', 'openai', 'baseURL']],
+    ['google-base-url', ['providers', 'google', 'baseURL']],
+    ['ollama-host', ['providers', 'ollama', 'host']],
+    ['azure-endpoint', ['providers', 'azure', 'endpoint']],
+    ['azure-deployment', ['providers', 'azure', 'deployment']],
+  ]
+  for (const [flag, path] of strMap) if (values[flag]) setPath(r, path, values[flag])
 
-  // HTTP server
-  if (values['http-port'])   { const n = safeParseInt(values['http-port'] as string); if (n !== undefined) set(['http', 'port'], n) }
-  if (values['http-token'])  set(['http', 'token'], values['http-token'])
+  // Integer args → config paths
+  const intMap: [string, string[]][] = [
+    ['max-iterations', ['maxIterations']], ['tool-timeout', ['toolTimeout']],
+    ['http-port', ['http', 'port']], ['mcp-server-port', ['mcp', 'server', 'port']],
+    ['storage-max-sessions', ['storage', 'maxSessions']], ['storage-ttl-days', ['storage', 'ttlDays']],
+  ]
+  for (const [flag, path] of intMap) {
+    if (values[flag]) { const n = safeParseInt(values[flag] as string); if (n !== undefined) setPath(r, path, n) }
+  }
 
-  // MCP server
-  if (values['mcp-server-enabled'])          set(['mcp', 'server', 'enabled'], true)
-  if (values['mcp-server-port'])             { const n = safeParseInt(values['mcp-server-port'] as string); if (n !== undefined) set(['mcp', 'server', 'port'], n) }
-  if (values['mcp-server-tool-name'])        set(['mcp', 'server', 'tool', 'name'], values['mcp-server-tool-name'])
-  if (values['mcp-server-tool-description']) set(['mcp', 'server', 'tool', 'description'], values['mcp-server-tool-description'])
-
-  // Storage
-  if (values['storage-path'])          set(['storage', 'path'], values['storage-path'])
-  if (values['storage-max-sessions'])  { const n = safeParseInt(values['storage-max-sessions'] as string); if (n !== undefined) set(['storage', 'maxSessions'], n) }
-  if (values['storage-ttl-days'])      { const n = safeParseInt(values['storage-ttl-days'] as string); if (n !== undefined) set(['storage', 'ttlDays'], n) }
-
-  // Skills
-  if (values['skill-dir']) set(['skillDirs'], values['skill-dir'])
-
-  // Memory — --memories, --list-memories, and --forget imply --memory
-  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) set(['memory', 'enabled'], true)
-
-  // Provider connection options
-  if (values['anthropic-base-url']) set(['providers', 'anthropic', 'baseURL'], values['anthropic-base-url'])
-  if (values['openai-base-url'])    set(['providers', 'openai', 'baseURL'], values['openai-base-url'])
-  if (values['google-base-url'])    set(['providers', 'google', 'baseURL'], values['google-base-url'])
-  if (values['ollama-host'])        set(['providers', 'ollama', 'host'], values['ollama-host'])
-  if (values['azure-endpoint'])    set(['providers', 'azure', 'endpoint'], values['azure-endpoint'])
-  if (values['azure-deployment'])  set(['providers', 'azure', 'deployment'], values['azure-deployment'])
+  // Boolean/passthrough args
+  if (values['builtin-tools']) setPath(r, ['builtinTools'], true)
+  if (values['mcp-server-enabled']) setPath(r, ['mcp', 'server', 'enabled'], true)
+  if (values['skill-dir']) setPath(r, ['skillDirs'], values['skill-dir'])
+  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) setPath(r, ['memory', 'enabled'], true)
 
   return {
     config: r as Partial<RaConfig>,

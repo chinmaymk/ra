@@ -143,37 +143,31 @@ export class Repl {
     tui.startSpinner()
     const userMw = this.options.middleware ?? {}
 
-    const loop = new AgentLoop({
-      provider: this.options.provider,
-      tools: this.options.tools,
-      model: this.options.model,
-      maxIterations: this.options.maxIterations,
-      toolTimeout: this.options.toolTimeout,
-      sessionId: this.sessionId,
-      thinking: this.options.thinking,
-      compaction: this.options.compaction,
-      middleware: {
+    const flushStream = () => {
+      if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
+      tui.stopSpinner(true)
+      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
+      if (boxOpened) tui.closeAssistantBox()
+      else process.stdout.write('\n\n')
+    }
 
+    const o = this.options
+    const loop = new AgentLoop({
+      provider: o.provider, tools: o.tools, model: o.model,
+      maxIterations: o.maxIterations, toolTimeout: o.toolTimeout,
+      sessionId: this.sessionId, thinking: o.thinking, compaction: o.compaction,
+      middleware: {
         ...userMw,
         onStreamChunk: [
           async (ctx: StreamChunkContext) => {
             if (ctx.chunk.type === 'thinking') {
-              if (!thinkingOpened) {
-                tui.stopSpinner(true)
-                tui.printThinkingStart()
-                thinkingOpened = true
-              }
+              if (!thinkingOpened) { tui.stopSpinner(true); tui.printThinkingStart(); thinkingOpened = true }
               process.stdout.write(ctx.chunk.delta)
             } else if (ctx.chunk.type === 'text') {
-              if (thinkingOpened) {
-                tui.printThinkingEnd()
-                thinkingOpened = false
-              }
+              if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
               if (!boxOpened) {
-                tui.stopSpinner()
-                boxOpened = true
-                const contentWidth = (process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN
-                streamBuf = new tui.StreamBuffer(contentWidth)
+                tui.stopSpinner(); boxOpened = true
+                streamBuf = new tui.StreamBuffer((process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN)
               }
               process.stdout.write(streamBuf!.write(ctx.chunk.delta))
             }
@@ -182,10 +176,8 @@ export class Repl {
         ],
         beforeToolExecution: [
           async (ctx: ToolExecutionContext) => {
-            // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-            tui.stopSpinner(true)
-            boxOpened = false
+            const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
+            tui.stopSpinner(true); boxOpened = false
             toolStartTimes.set(ctx.toolCall.id, Date.now())
             tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
           },
@@ -204,12 +196,7 @@ export class Repl {
     this.activeLoop = loop
     try {
       const result = await loop.run(initialMessages)
-      if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
-      tui.stopSpinner(true)
-      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-      if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n\n')
+      flushStream()
 
       const newMessages = result.messages.slice(initialMessages.length)
       this.messages.push(userMessage, ...newMessages)
@@ -217,23 +204,12 @@ export class Repl {
         await this.options.storage.appendMessage(this.sessionId!, msg)
       }
 
-      // Detect ask_user — in REPL, just print the question; next input resumes naturally
       const askQuestion = extractAskUserQuestion(result.messages)
-      if (askQuestion) {
-        tui.printCommandResponse(`[Question for you] ${askQuestion}`)
-      }
+      if (askQuestion) tui.printCommandResponse(`[Question for you] ${askQuestion}`)
     } catch (err) {
-      tui.stopSpinner(true)
-      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-      if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n\n')
-      // AbortError from Ctrl+C is not a real error — just notify the user
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        tui.printInterrupt('Request cancelled.')
-      } else {
-        tui.printError(err instanceof Error ? err.message : String(err))
-      }
+      flushStream()
+      if (err instanceof DOMException && err.name === 'AbortError') tui.printInterrupt('Request cancelled.')
+      else tui.printError(err instanceof Error ? err.message : String(err))
     } finally {
       this.activeLoop = null
     }

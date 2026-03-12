@@ -50,14 +50,15 @@ function buildEnv(opts: BinaryEnv): Record<string, string> {
   return env
 }
 
-/** Run binary to completion, return stdout/stderr/exitCode */
-export async function runBinary(args: string[], binaryEnv: BinaryEnv): Promise<BinaryRunResult> {
+/** Run binary to completion, optionally piping stdin */
+export async function runBinary(args: string[], binaryEnv: BinaryEnv, input?: string): Promise<BinaryRunResult> {
   const proc = Bun.spawn([BINARY_PATH, ...args], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'pipe',
   })
+  if (input) proc.stdin.write(input)
   proc.stdin.end()
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -67,23 +68,8 @@ export async function runBinary(args: string[], binaryEnv: BinaryEnv): Promise<B
   return { stdout, stderr, exitCode }
 }
 
-/** Run binary with piped stdin */
-export async function runBinaryWithStdin(args: string[], input: string, binaryEnv: BinaryEnv): Promise<BinaryRunResult> {
-  const proc = Bun.spawn([BINARY_PATH, ...args], {
-    env: buildEnv(binaryEnv),
-    stdout: 'pipe',
-    stderr: 'pipe',
-    stdin: 'pipe',
-  })
-  proc.stdin.write(input)
-  proc.stdin.end()
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ])
-  const exitCode = await proc.exited
-  return { stdout, stderr, exitCode }
-}
+/** @deprecated Use runBinary(args, env, input) instead */
+export const runBinaryWithStdin = (args: string[], input: string, env: BinaryEnv) => runBinary(args, env, input)
 
 export interface InteractiveProcess {
   write(text: string): void
