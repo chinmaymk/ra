@@ -14,6 +14,7 @@ export interface ParsedArgsMeta {
   prompt?: string
   resume?: string
   configPath?: string
+  agentsConfig?: string
   exec?: string
   showContext: boolean
   listMemories: boolean
@@ -72,6 +73,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       // Meta (not mapped to RaConfig)
       exec:                          { type: 'string' },
       config:                        { type: 'string' },
+      agents:                        { type: 'string' },
       skill:                         { type: 'string', multiple: true },
       file:                          { type: 'string', multiple: true },
       resume:                        { type: 'string' },
@@ -185,6 +187,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       prompt:     positionals.join(' ') || undefined,
       resume:     values.resume as string | undefined,
       configPath: values.config as string | undefined,
+      agentsConfig: values.agents as string | undefined,
       exec:       values.exec as string | undefined,
     },
   }

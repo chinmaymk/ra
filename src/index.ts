@@ -9,6 +9,8 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { AgentLoop } from './agent/loop'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
+import { loadOrchestratorConfig, discoverOrchestratorConfig, bootstrapOrchestrator } from './orchestrator'
+import { launchOrchestratorCli, launchOrchestratorRepl, launchOrchestratorHttp } from './orchestrator/interfaces'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -227,6 +229,31 @@ async function main(): Promise<void> {
   const parsed = parseArgs(process.argv)
 
   await handleEarlyExits(parsed)
+
+  // ── Orchestrator mode (--agents or auto-discovered ra.agents.yml) ───
+  const agentsConfigPath = parsed.meta.agentsConfig ?? await discoverOrchestratorConfig(process.cwd())
+  if (agentsConfigPath) {
+    const orchConfig = await loadOrchestratorConfig(agentsConfigPath)
+    const orchCtx = await bootstrapOrchestrator(orchConfig)
+    const signals = onSignals(orchCtx.shutdown)
+
+    switch (orchConfig.interface) {
+      case 'cli': {
+        if (!parsed.meta.prompt) {
+          console.error('Error: orchestrator CLI mode requires a prompt argument')
+          process.exit(1)
+        }
+        return launchOrchestratorCli(orchCtx, parsed.meta.prompt)
+      }
+      case 'http': {
+        const port = orchConfig.http?.port ?? 3000
+        const token = orchConfig.http?.token
+        return launchOrchestratorHttp(orchCtx, port, token)
+      }
+      default:
+        return launchOrchestratorRepl(orchCtx)
+    }
+  }
 
   // Read piped stdin (only for CLI / unspecified mode)
   const isNonCliInterface = parsed.config.interface && parsed.config.interface !== 'cli'
