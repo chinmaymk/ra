@@ -128,6 +128,6 @@ ra --mcp-server-enabled --mcp-server-port 4000 --repl
 
 ## See also
 
-- [Built-in Tools](/tools/) — the 14 tools exposed via MCP
+- [Built-in Tools](/tools/) — tools exposed via MCP
 - [Configuration](/configuration/) — MCP client configuration
 - [Recipes](/recipes/) — MCP tool in Claude Desktop recipe

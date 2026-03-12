@@ -1,6 +1,6 @@
 # Built-in Tools
 
-ra ships with 16 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. When [memory](/configuration/#memory) is enabled, 3 additional memory tools are registered. All tools are registered automatically when `builtinTools` is enabled (the default).
+ra ships with built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. When [memory](/configuration/#memory) is enabled, additional memory tools are registered. All tools are registered automatically when `builtinTools` is enabled (the default).
 
 Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 

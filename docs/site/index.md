@@ -111,7 +111,7 @@ Now Cursor or Claude Desktop has a dedicated code reviewer that uses your projec
 | [REPL](/modes/repl) | Interactive sessions with history, slash commands, file attachments |
 | [HTTP API](/modes/http) | Sync and streaming chat, session management |
 | [MCP](/modes/mcp) | Client (pull tools from MCP servers) and server (expose ra as a tool) |
-| [Built-in Tools](/tools/) | 14 tools for filesystem, shell, network, and user interaction |
+| [Built-in Tools](/tools/) | Filesystem, shell, network, and user interaction tools |
 | [Skills](/skills/) | Reusable instruction bundles — roles, behaviors, scripts, and reference docs |
 | [Middleware](/middleware/) | Hooks at every loop stage — intercept, modify, or stop the loop |
 | [Sessions](/core/sessions) | Persist conversations as JSONL, resume from any interface, auto-prune |
