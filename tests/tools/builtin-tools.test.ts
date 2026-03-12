@@ -104,6 +104,37 @@ describe('LS', () => {
     expect(result).toContain('hello.txt')
     expect(result).toContain('src/')
     expect(result).toContain('sub/')
+    // non-recursive should not include nested files
+    expect(result).not.toContain('app.ts')
+  })
+
+  it('lists recursively with default depth', async () => {
+    const tool = listDirectoryTool()
+    const result = await tool.execute({ path: TMP, recursive: true }) as string
+    expect(result).toContain('src/')
+    expect(result).toContain('src/app.ts')
+    expect(result).toContain('src/util.ts')
+    expect(result).toContain('sub/')
+    expect(result).toContain('sub/deep.ts')
+    expect(result).toContain('hello.txt')
+  })
+
+  it('respects depth limit', async () => {
+    // Create a deeper structure: TMP/a/b/c/file.txt
+    mkdirSync(join(TMP, 'a', 'b', 'c'), { recursive: true })
+    writeFileSync(join(TMP, 'a', 'b', 'c', 'file.txt'), 'deep')
+
+    const tool = listDirectoryTool()
+    // depth=2: lists 2 levels — a/ and a/b/, but not a/b/c/
+    const shallow = await tool.execute({ path: TMP, recursive: true, depth: 2 }) as string
+    expect(shallow).toContain('a/')
+    expect(shallow).toContain('a/b/')
+    expect(shallow).not.toContain('a/b/c/')
+
+    // depth=4: lists 4 levels — reaches a/b/c/file.txt
+    const deeper = await tool.execute({ path: TMP, recursive: true, depth: 4 }) as string
+    expect(deeper).toContain('a/b/c/')
+    expect(deeper).toContain('a/b/c/file.txt')
   })
 })
 
