@@ -49,11 +49,13 @@ curl http://localhost:3000/sessions
 
 ## Configuration
 
+Sessions are stored under `{dataDir}/sessions/` (default: `.ra/sessions/`). Set `dataDir` to change the root data directory.
+
 ```yaml
+dataDir: .ra              # root for all runtime data
 storage:
-  path: .ra/sessions    # where sessions are stored
-  maxSessions: 100      # max sessions to keep (auto-prune oldest)
-  ttlDays: 30           # auto-expire sessions older than this
+  maxSessions: 100        # max sessions to keep (auto-prune oldest)
+  ttlDays: 30             # auto-expire sessions older than this
 ```
 
 ## Storage format

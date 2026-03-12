@@ -8,34 +8,18 @@ Observability is enabled by default. Logs and traces go to the session directory
 
 ```yaml
 # ra.config.yml
-observability:
-  enabled: true          # set false to disable all logging/tracing
-  logs:
-    level: info          # debug | info | warn | error
-    output: session      # session | stderr | stdout | file
-    filePath: ./ra.log   # required when output is 'file'
-  traces:
-    output: session      # session | stderr | stdout | file
-    filePath: ./traces.jsonl
+logsEnabled: true        # toggle session logs (default: true)
+logLevel: info           # debug | info | warn | error
+tracesEnabled: true      # toggle session traces (default: true)
 ```
 
 | Config key | Env var | Default | Description |
 |------------|---------|---------|-------------|
-| `observability.enabled` | `RA_OBSERVABILITY_ENABLED` | `true` | Enable or disable observability |
-| `observability.logs.level` | `RA_LOG_LEVEL` | `info` | Minimum log level |
-| `observability.logs.output` | `RA_LOG_OUTPUT` | `session` | Where to send logs |
-| `observability.logs.filePath` | `RA_LOG_FILE` | — | File path when output is `file` |
-| `observability.traces.output` | `RA_TRACE_OUTPUT` | `session` | Where to send traces |
-| `observability.traces.filePath` | `RA_TRACE_FILE` | — | File path when output is `file` |
+| `logsEnabled` | `RA_LOGS_ENABLED` | `true` | Enable or disable session logs |
+| `logLevel` | `RA_LOG_LEVEL` | `info` | Minimum log level |
+| `tracesEnabled` | `RA_TRACES_ENABLED` | `true` | Enable or disable session traces |
 
-### Output modes
-
-| Mode | Behavior |
-|------|----------|
-| `session` | Writes to the session directory (`logs.jsonl` / `traces.jsonl`). Falls back to `stderr` if no session is active. |
-| `stderr` | Writes to stderr |
-| `stdout` | Writes to stdout |
-| `file` | Writes to the path specified in `filePath` |
+Logs and traces are always written to the session directory (`{dataDir}/sessions/<id>/logs.jsonl` and `traces.jsonl`). When no session is active, they fall back to `stderr`.
 
 ## Logs
 
@@ -116,14 +100,14 @@ cat ~/.ra/sessions/<session-id>/traces.jsonl | jq 'select(.name == "agent.tool_e
 ## Disabling observability
 
 ```yaml
-observability:
-  enabled: false
+logsEnabled: false
+tracesEnabled: false
 ```
 
-Or via environment variable:
+Or via environment variables:
 
 ```bash
-RA_OBSERVABILITY_ENABLED=false ra "your prompt"
+RA_LOGS_ENABLED=false RA_TRACES_ENABLED=false ra "your prompt"
 ```
 
 When disabled, no-op implementations are used — zero overhead.

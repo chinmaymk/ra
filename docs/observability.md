@@ -35,60 +35,29 @@ By default, logs and traces are written to the session directory as `logs.jsonl`
 
 ```json
 {
-  "observability": {
-    "enabled": true,
-    "logs": {
-      "level": "info",
-      "output": "session"
-    },
-    "traces": {
-      "output": "session"
-    }
-  }
-}
-```
-
-To write to a fixed file instead, or to stderr/stdout:
-
-```json
-{
-  "observability": {
-    "logs": {
-      "output": "file",
-      "filePath": "./logs/ra.log.jsonl"
-    },
-    "traces": {
-      "output": "stderr"
-    }
-  }
+  "logsEnabled": true,
+  "logLevel": "info",
+  "tracesEnabled": true
 }
 ```
 
 Or via environment variables:
 
 ```bash
-RA_OBSERVABILITY_ENABLED=true
-
-# Logs
-RA_LOG_LEVEL=debug          # debug | info | warn | error
-RA_LOG_OUTPUT=session        # session | stderr | stdout | file
-RA_LOG_FILE=./logs/ra.log.jsonl  # only used when output is 'file'
-
-# Traces
-RA_TRACE_OUTPUT=session      # session | stderr | stdout | file
-RA_TRACE_FILE=./logs/ra.traces.jsonl
+RA_LOGS_ENABLED=true         # toggle session logs
+RA_LOG_LEVEL=debug           # debug | info | warn | error
+RA_TRACES_ENABLED=true       # toggle session traces
 ```
+
+Logs and traces are written to the session directory (`{dataDir}/sessions/<id>/logs.jsonl` and `traces.jsonl`). When no session is active, they fall back to stderr.
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `enabled` | `true` | Enable/disable all observability |
-| `logs.level` | `info` | Minimum log level (`debug`, `info`, `warn`, `error`) |
-| `logs.output` | `session` | Log output destination (`session`, `stderr`, `stdout`, `file`) |
-| `logs.filePath` | — | File path when `logs.output` is `file` |
-| `traces.output` | `session` | Trace output destination (`session`, `stderr`, `stdout`, `file`) |
-| `traces.filePath` | — | File path when `traces.output` is `file` |
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `logsEnabled` | `RA_LOGS_ENABLED` | `true` | Enable/disable session logs |
+| `logLevel` | `RA_LOG_LEVEL` | `info` | Minimum log level (`debug`, `info`, `warn`, `error`) |
+| `tracesEnabled` | `RA_TRACES_ENABLED` | `true` | Enable/disable session traces |
 
 ## Logs
 
@@ -174,11 +143,6 @@ agent.loop (traceId: abc-123)
 ### Quick: jq (command line)
 
 ```bash
-# Separate logs and traces into different files
-RA_LOG_OUTPUT=file RA_LOG_FILE=./ra.log.jsonl \
-  RA_TRACE_OUTPUT=file RA_TRACE_FILE=./ra.traces.jsonl \
-  ra "do something"
-
 # --- Working with LOGS ---
 
 # Show all tool executions
@@ -321,16 +285,17 @@ service:
 ## Example: Full Debug Session
 
 ```bash
-# Run with debug logging + traces to separate files
-RA_LOG_LEVEL=debug RA_LOG_OUTPUT=file RA_LOG_FILE=./debug.log.jsonl \
-  RA_TRACE_OUTPUT=file RA_TRACE_FILE=./debug.traces.jsonl \
-  ra "list files in the current directory"
+# Run with debug logging
+RA_LOG_LEVEL=debug ra "list files in the current directory"
+
+# Find session directory, then view logs and traces
+ls .ra/sessions/
 
 # View logs: what happened
-cat debug.log.jsonl | jq -r '"\(.timestamp) [\(.level)] \(.message) \(del(.timestamp,.level,.message,.sessionId) | to_entries | map("\(.key)=\(.value)") | join(" "))"'
+cat .ra/sessions/<session-id>/logs.jsonl | jq -r '"\(.timestamp) [\(.level)] \(.message) \(del(.timestamp,.level,.message,.sessionId) | to_entries | map("\(.key)=\(.value)") | join(" "))"'
 
 # View traces: where time was spent
-cat debug.traces.jsonl | jq -r '
+cat .ra/sessions/<session-id>/traces.jsonl | jq -r '
   (if .parentSpanId then "    " else "" end) +
   "\(.name) \(.durationMs)ms [\(.status)]"
 '
