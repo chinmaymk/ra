@@ -74,7 +74,7 @@ export async function launchOrchestratorCli(
 export async function launchOrchestratorRepl(
   orchCtx: OrchestratorContext,
 ): Promise<void> {
-  const defaultName = orchCtx.defaultAgent ?? [...orchCtx.agents.keys()][0]!
+  const defaultName = orchCtx.defaultAgent ?? orchCtx.agents.keys().next().value!
   const repl = new OrchestratorRepl(orchCtx, defaultName)
   await repl.start()
   await orchCtx.shutdown()
@@ -124,7 +124,7 @@ export async function launchOrchestratorHttp(
   port: number,
   token?: string,
 ): Promise<void> {
-  const defaultName = orchCtx.defaultAgent ?? [...orchCtx.agents.keys()][0]!
+  const defaultName = orchCtx.defaultAgent ?? orchCtx.agents.keys().next().value!
 
   function getAgent(name: string): AppContext | undefined {
     return orchCtx.agents.get(name)

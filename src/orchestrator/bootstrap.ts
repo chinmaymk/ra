@@ -8,39 +8,32 @@ import { validateNoNameCollisions } from './validate'
 export async function bootstrapOrchestrator(
   config: OrchestratorConfig,
 ): Promise<OrchestratorContext> {
-  const agents = new Map<string, AppContext>()
   let defaultAgent: string | undefined
 
-  const agentNames = Object.keys(config.agents)
+  // Bootstrap all agents in parallel — each gets its own provider, tools, middleware, memory
+  const entries = Object.entries(config.agents)
+  const results = await Promise.all(
+    entries.map(async ([name, entry]) => {
+      const configPath = isAbsolute(entry.config)
+        ? entry.config
+        : join(config.configDir, entry.config)
 
-  for (const [name, entry] of Object.entries(config.agents)) {
-    // Resolve agent config path against orchestrator configDir
-    const configPath = isAbsolute(entry.config)
-      ? entry.config
-      : join(config.configDir, entry.config)
+      const agentConfig = await loadConfig({ configPath })
+      const mergedConfig = mergeAgentConfig(agentConfig, config, name)
+      const appContext = await bootstrap(mergedConfig, {})
 
-    // Load the agent's own config (defaults → file → env → no CLI flags)
-    const agentConfig = await loadConfig({ configPath })
+      if (entry.default) defaultAgent = name
 
-    // Merge orchestrator overrides
-    const mergedConfig = mergeAgentConfig(agentConfig, config, name)
+      return [name, appContext] as const
+    }),
+  )
 
-    // Full bootstrap — each agent gets its own provider, tools, middleware, memory
-    const appContext = await bootstrap(mergedConfig, {})
+  const agents = new Map<string, AppContext>(results)
 
-    agents.set(name, appContext)
-
-    if (entry.default) {
-      defaultAgent = name
-    }
-  }
-
-  // Validate no agent name collides with a skill name
-  validateNoNameCollisions(agentNames, agents)
+  validateNoNameCollisions(entries.map(([name]) => name), agents)
 
   const shutdown = async () => {
-    const shutdowns = [...agents.values()].map(ctx => ctx.shutdown())
-    await Promise.allSettled(shutdowns)
+    await Promise.allSettled([...agents.values()].map(ctx => ctx.shutdown()))
   }
 
   return { config, agents, defaultAgent, shutdown }
