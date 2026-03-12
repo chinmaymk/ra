@@ -10,9 +10,11 @@
   <a href="#built-in-tools">Tools</a> &middot;
   <a href="#permissions">Permissions</a> &middot;
   <a href="#skills">Skills</a> &middot;
+  <a href="#sessions">Sessions</a> &middot;
   <a href="#mcp">MCP</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
   <a href="#observability">Observability</a> &middot;
+  <a href="#memory">Memory</a> &middot;
   <a href="#github-actions">GitHub Actions</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
   <a href="#configuration">Configuration</a>
@@ -109,29 +111,6 @@ The loop tracks token usage per iteration, enforces `maxIterations`, and support
 
 ## Context Control
 
-### Middleware hooks
-
-Intercept the loop before the model call, after tool execution, on each stream chunk — or anywhere in between. Every hook receives the full conversation history and can mutate it.
-
-```yaml
-# ra.config.yml
-middleware:
-  beforeModelCall:
-    - "./middleware/enforce-budget.ts"
-  afterToolExecution:
-    - "./middleware/redact-secrets.ts"
-  onStreamChunk:
-    - "(ctx) => { process.stdout.write(ctx.chunk.type === 'text' ? ctx.chunk.delta : '') }"
-```
-
-```ts
-// middleware/enforce-budget.ts — reject if context is too large
-export default async (ctx) => {
-  const totalChars = ctx.request.messages.reduce((n, m) => n + JSON.stringify(m).length, 0)
-  if (totalChars > 500_000) ctx.stop()
-}
-```
-
 ### Smart context compaction
 
 When conversations grow, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then summarizes the middle with a cheap model. You keep the context that matters.
@@ -143,32 +122,19 @@ compaction:
   model: claude-haiku-4-5-20251001  # cheap model for summarization
 ```
 
-- **Token-aware** — Uses real token counts from the provider when available, falls back to estimation.
-- **Pinned zones** — System prompts and initial context never get compacted.
-- **Tool-call-aware** — Boundaries never split an assistant message from its tool results.
-- **Provider-portable** — Works the same across all providers. Default compaction models per provider (Haiku for Anthropic, GPT-4o-mini for OpenAI, Gemini Flash for Google).
+Uses real token counts when available, never splits tool call boundaries, and picks a cheap default compaction model per provider (Haiku for Anthropic, GPT-4o-mini for OpenAI, Gemini Flash for Google).
 
-### Token tracking
+### Token tracking & prompt caching
 
-ra tracks input and output tokens across every iteration of the loop. Your middleware can read cumulative usage via `ctx.loop.usage` and enforce budgets, log costs, or trigger compaction early.
-
-### Prompt caching
-
-Automatic cache hints on system prompts and tool definitions for Anthropic, reducing costs on multi-turn sessions without any config.
+ra tracks input and output tokens across every iteration. Your middleware can read cumulative usage via `ctx.loop.usage` and enforce budgets, log costs, or trigger compaction early. On Anthropic, cache hints are automatically added to system prompts and tool definitions — no config needed.
 
 ### Extended thinking
-
-Enable extended thinking for models that support it. Three budget levels control how much the model reasons before responding.
 
 ```bash
 ra --thinking high "Design a database schema for a social network"
 ```
 
-```yaml
-thinking: high  # low | medium | high (token budgets vary by provider)
-```
-
-Thinking output streams to the terminal in the REPL, so you can watch the model reason in real time.
+Three budget levels (`low`, `medium`, `high`) control how much the model reasons before responding. Thinking output streams to the terminal in real time.
 
 ### Context discovery
 
@@ -195,14 +161,7 @@ ra "review @src/utils/*.ts for consistency"     # glob expansion
 ra "summarize url:https://example.com/api-docs" # fetched page content
 ```
 
-Two built-in resolvers (`@` for files/globs, `url:` for URLs) are enabled by default. Add custom resolvers for GitHub issues, database records, or anything else:
-
-```yaml
-context:
-  resolvers:
-    - name: issues
-      path: ./resolvers/github-issues.ts
-```
+Two built-in resolvers (`@` for files/globs, `url:` for URLs) are enabled by default. Add custom resolvers for GitHub issues, database records, or anything else via `context.resolvers` in your config.
 
 ## Providers
 
@@ -230,7 +189,7 @@ ra --provider azure --azure-deployment my-gpt4o "Analyze this log"
 
 ## Interfaces
 
-Same agent, four entry points.
+Same agent, multiple entry points.
 
 | Interface | Flag | Use case |
 |-----------|------|----------|
@@ -305,7 +264,7 @@ When built-in tools are enabled, they're also exposed as individual MCP tools �
 
 ## Built-in Tools
 
-15 tools enabled by default (platform-specific: `execute_bash` on Linux/macOS, `execute_powershell` on Windows). Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them.
+Tools are enabled by default and are self-describing — each includes a detailed schema and description so the model knows when and how to use them. Shell execution is platform-specific (`execute_bash` on Linux/macOS, `execute_powershell` on Windows).
 
 | Category | Tools |
 |----------|-------|
@@ -314,13 +273,9 @@ When built-in tools are enabled, they're also exposed as individual MCP tools �
 | **Network** | `web_fetch` |
 | **Agent** | `ask_user`, `checklist`, `subagent` |
 
-The `update_file` tool does exact string replacement — same pattern as Claude Code's Edit tool. The `checklist` tool dynamically updates its description to show remaining items, keeping the model aware of progress.
+`update_file` does exact string replacement (like Claude Code's Edit). `ask_user` suspends the loop and returns control to the caller — the REPL prints the question, CLI prints a session ID for `--resume`, HTTP emits an SSE event. `subagent` forks parallel copies of the agent for independent tasks, with token usage rolling up into the parent.
 
-The `ask_user` tool suspends the agent loop and returns control to the caller. In the REPL, the question is printed and the next input resumes the conversation. In CLI mode, it prints the session ID so you can `--resume` later. In HTTP mode, it emits an `ask_user` SSE event.
-
-The `subagent` tool forks parallel copies of the agent to work on independent tasks simultaneously. Each fork inherits the parent's model, system prompt, tools, and thinking level — it's the same agent with a fresh conversation. Token usage rolls up into the parent automatically. Recursion depth is capped (default: 2 levels).
-
-To bring your own tools via MCP instead, set `builtinTools: false` in your config file.
+To bring your own tools via MCP instead, set `builtinTools: false`.
 
 ## Permissions
 
@@ -338,37 +293,9 @@ permissions:
       path:
         allow: ["^src/", "^tests/"]
         deny: ["\\.env"]
-      content:
-        deny: ["API_KEY", "SECRET"]
-    - tool: delete_file
-      path:
-        deny: [".*"]   # block all deletes
-    - tool: web_fetch
-      url:
-        deny: ["localhost", "127\\.0\\.0\\.1"]
 ```
 
-Each rule key (other than `tool`) is a field name from the tool's input schema — `command` for bash, `path` for file tools, `url` for web_fetch. You can constrain any field independently.
-
-When a tool call is denied, the model gets a clear error message and can adjust. The loop continues.
-
-Set `no_rules_rules: true` to disable all checks, or `default_action: deny` for an allowlist-only approach where only tools with explicit rules can execute.
-
-## File Attachments
-
-Attach images, PDFs, and text files to any prompt. ra detects the MIME type and sends the content in the right format for each provider.
-
-```bash
-ra --file screenshot.png "What's wrong with this UI?"
-ra --file report.pdf --file data.csv "Summarize both files"
-```
-
-In the REPL, use `/attach`:
-
-```
-> /attach architecture.png
-> How should we refactor this?
-```
+Each rule key (other than `tool`) matches a field from the tool's input schema. When a call is denied, the model gets a clear error and can adjust. Set `default_action: deny` for an allowlist-only approach.
 
 ## Skills
 
@@ -409,7 +336,7 @@ Scripts and references are loaded on demand — not eagerly at activation. In th
 
 ### Built-in skills
 
-ra ships with six ready-to-use skills:
+ra ships with ready-to-use skills:
 
 | Skill | Purpose |
 |-------|---------|
@@ -440,7 +367,7 @@ storage:
   ttlDays: 30           # auto-expire
 ```
 
-Sessions are auto-saved after each turn. Each session directory contains the conversation messages, plus observability logs and traces when using the default `session` output mode. The REPL has `/resume <id>` and the HTTP API accepts a `sessionId` field. When `ask_user` suspends a CLI run, the session ID is printed to stderr so you can resume later.
+Sessions are auto-saved after each turn. Each session directory contains messages, logs, and traces. Resume from the REPL (`/resume <id>`), CLI (`--resume <id>`), or HTTP API (`sessionId` field).
 
 ## MCP
 
@@ -469,18 +396,7 @@ mcp:
 
 All MCP tools get **server-prefixed names** (`github__search`, `database__query`) to avoid conflicts across servers. With **lazy schema loading** (default), only the `inputSchema` is stripped. The first call to each tool returns the full parameter schema instead of executing — the model retries with correct parameters. You only pay for schemas of tools actually used.
 
-**As a server** — `ra --mcp-stdio` exposes the full agent loop as a single MCP tool, plus all built-in tools as individual MCP tools.
-
-```json
-{
-  "mcpServers": {
-    "ra": {
-      "command": "ra",
-      "args": ["--mcp-stdio"]
-    }
-  }
-}
-```
+**As a server** — `ra --mcp-stdio` exposes the full agent loop as a single MCP tool, plus all built-in tools as individual MCP tools. See [Interfaces → MCP server](#mcp-server) for config examples.
 
 You can also run the MCP server alongside another interface — for example, a REPL with an MCP sidecar:
 
@@ -505,18 +421,6 @@ Hook into every step of the agent loop. Define hooks as inline expressions in co
 | `onError` | On exceptions | error, phase (model_call/tool_execution/stream), loop state |
 
 ```ts
-// middleware/audit-log.ts
-export default async (ctx) => {
-  await appendFile('audit.jsonl', JSON.stringify({
-    tool: ctx.toolCall.name,
-    args: ctx.toolCall.arguments,
-    result: ctx.result.content,
-    timestamp: Date.now()
-  }) + '\n')
-}
-```
-
-```ts
 // middleware/token-budget.ts — stop if we've used too many tokens
 export default async (ctx) => {
   if (ctx.loop.usage.inputTokens + ctx.loop.usage.outputTokens > 100_000) {
@@ -525,15 +429,7 @@ export default async (ctx) => {
 }
 ```
 
-Inline hooks work for simple cases:
-
-```yaml
-middleware:
-  onStreamChunk:
-    - "(ctx) => { process.stdout.write(ctx.chunk.type === 'text' ? ctx.chunk.delta : '') }"
-```
-
-All hooks support a configurable timeout via `toolTimeout` (default: 30s).
+Hooks can also be inline expressions in config for simple cases. All hooks support a configurable timeout via `toolTimeout` (default: 30s).
 
 ## Observability
 
@@ -560,63 +456,11 @@ observability:
     filePath: .ra/traces.jsonl
 ```
 
-### What gets logged
-
-Startup events: `provider initialized`, `tools registered`, `custom middleware loaded`, `skills loaded`, `memory store initialized`, `MCP servers connected`, `context files discovered`, `resuming session`, `starting interface`, `shutting down`. See [docs/observability.md](docs/observability.md) for the full reference.
-
-Agent loop events (emitted per request):
-
-| Event | Level | Key fields |
-|-------|-------|------------|
-| `agent loop starting` | info | maxIterations, messageCount |
-| `calling model` | debug | iteration, model, messageCount |
-| `model responded` | info | inputTokens, outputTokens, toolCallCount, toolNames |
-| `executing tool` | info | tool, toolCallId, input (truncated) |
-| `tool execution complete` | info | tool, toolCallId, resultLength |
-| `tool execution failed` | error | tool, toolCallId, error |
-| `context compacted` | info | originalMessages, compactedMessages, estimatedTokens, threshold |
-| `iteration complete` | debug | iteration, messagesAdded |
-| `agent loop complete` | info | iterations, inputTokens, outputTokens, totalMessages |
-| `agent loop failed` | error | error, stack, phase, iterations |
-
-### Trace spans
-
-Spans follow an OpenTelemetry-inspired hierarchy:
-
-```
-agent.loop
-  └── agent.iteration (per loop iteration)
-        ├── agent.model_call
-        └── agent.tool_execution (per tool call)
-```
-
-Each span records duration, status (`ok`/`error`), and relevant attributes (token counts, tool names, result lengths).
-
-### Output format
-
-Both logs and traces emit one JSON object per line (JSONL). Logs include `timestamp`, `level`, `message`, and `sessionId`. Traces include `traceId`, `spanId`, `parentSpanId`, `name`, `durationMs`, and `attributes`.
-
-```bash
-# Watch logs for a session
-cat .ra/sessions/<session-id>/logs.jsonl | jq .
-
-# Filter to just errors
-cat .ra/sessions/<session-id>/logs.jsonl | jq 'select(.level == "error")'
-
-# Show trace span durations
-cat .ra/sessions/<session-id>/traces.jsonl | jq '{name, durationMs, status}'
-```
-
-To disable all observability output:
-
-```yaml
-observability:
-  enabled: false
-```
+Every startup event, model call, tool execution, compaction, and error is logged. Traces follow an OpenTelemetry-inspired span hierarchy (`agent.loop` → `agent.iteration` → `agent.model_call` / `agent.tool_execution`), each recording duration, status, and attributes. Both emit JSONL — pipe through `jq` to explore. See [docs/observability.md](docs/observability.md) for the full event reference.
 
 ## Memory
 
-ra can persist facts across conversations using an SQLite-backed memory store with full-text search. The agent gets three tools — `memory_save`, `memory_search`, and `memory_forget` — and recent memories are automatically injected at the start of each loop.
+SQLite-backed memory with FTS5 full-text search. The agent gets `memory_save`, `memory_search`, and `memory_forget` tools, and recent memories are injected at the start of each loop.
 
 ```bash
 ra --memory                       # enable memory for this session
@@ -625,27 +469,16 @@ ra --memories "typescript"        # search memories
 ra --forget "dark mode"           # delete matching memories
 ```
 
-In the REPL:
-
-```
-> /memories          # see what the agent remembers
-> /memories 5        # show last 5 memories
-> /forget dark mode  # manually delete memories matching "dark mode"
-```
-
-For persistent configuration:
-
 ```yaml
-# ra.config.yml
 memory:
   enabled: true
-  path: .ra/memory.db     # SQLite database location
-  maxMemories: 1000        # oldest trimmed first
-  ttlDays: 90              # auto-prune after 90 days
-  injectLimit: 5          # inject top-N recent memories (0 to disable)
+  path: .ra/memory.db
+  maxMemories: 1000
+  ttlDays: 90
+  injectLimit: 5           # inject top-N recent memories (0 to disable)
 ```
 
-The agent decides when to save and forget — tool descriptions guide it to capture user preferences, project decisions, and corrections, and to forget outdated information when told.
+The agent decides when to save and forget — tool descriptions guide it to capture user preferences, project decisions, and corrections.
 
 ## Recipes
 
@@ -676,66 +509,18 @@ defaults → config file → env vars → CLI flags
 ```
 
 ```yaml
-# ra.config.yml
+# ra.config.yml — all sections are optional
 provider: anthropic
 model: claude-sonnet-4-6
 systemPrompt: You are a helpful coding assistant.
 maxIterations: 50
 thinking: medium
-toolTimeout: 30000
-
-skills:
-  - code-review
-skillDirs:
-  - ./skills
-
-compaction:
-  enabled: true
-  threshold: 0.8
-  model: claude-haiku-4-5-20251001
-
-context:
-  enabled: true
-  patterns:
-    - "CLAUDE.md"
-    - "AGENTS.md"
-
-storage:
-  path: .ra/sessions
-  maxSessions: 100
-  ttlDays: 30
-
-memory:
-  enabled: true
-  path: .ra/memory.db
-  maxMemories: 1000
-  ttlDays: 90
-  injectLimit: 5
-
-maxConcurrency: 4
-
-middleware:
-  beforeModelCall:
-    - "./middleware/budget.ts"
-  afterToolExecution:
-    - "./middleware/audit.ts"
-
-mcp:
-  client:
-    - name: filesystem
-      transport: stdio
-      command: npx
-      args: ["-y", "@anthropic/mcp-filesystem"]
+skills: [code-review]
 ```
 
-```bash
-# Environment variables
-export RA_PROVIDER=anthropic
-export RA_MODEL=claude-sonnet-4-6
-export RA_MAX_ITERATIONS=50
-export RA_ANTHROPIC_API_KEY=sk-...
+Every option shown in the sections above (`compaction`, `permissions`, `memory`, `mcp`, `middleware`, etc.) goes in this file. Environment variables use the `RA_` prefix (`RA_PROVIDER`, `RA_MODEL`, `RA_ANTHROPIC_API_KEY`), and CLI flags override everything:
 
-# CLI flags override everything
+```bash
 ra --provider openai --model gpt-4.1 --thinking high --max-iterations 10 "Review this"
 ```
 
@@ -766,8 +551,11 @@ The action exposes the same configuration as the CLI — provider, model, skills
 ## Building from Source
 
 ```bash
+git clone https://github.com/chinmaymk/ra.git && cd ra
 bun install
 bun run compile   # → dist/ra
+bun tsc           # type-check
+bun test          # run tests
 ```
 
 ## License
