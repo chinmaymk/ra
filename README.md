@@ -28,13 +28,15 @@ It doesn't ship with a system prompt. Every part of the loop is exposed via conf
 
 It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers without changing your agent code.
 
-It comes with built-in tools for filesystem, shell, network, and user interaction. Persistent sessions via JSONL. An FTS5 memory backed by SQLite. A skill system that can pull skills from GitHub repos or npm packages.
+It comes with built-in tools for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent sessions via JSONL. An FTS5 memory backed by SQLite.
 
-It speaks MCP both ways — connect to MCP servers for additional tools, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol.
+It speaks MCP both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol.
 
-It gives you real control over context. Deterministic discovery for common formats (CLAUDE.md, AGENTS.md, README.md), pattern resolution, prompt caching, extended thinking, compaction, token tracking.
+It gives you real control over context. Deterministic discovery for common formats (CLAUDE.md, AGENTS.md, README.md), pattern resolution, prompt caching, compaction, token tracking. A skill system that can pull skills from GitHub repos or npm packages.
 
-It runs as a CLI, REPL, HTTP server, or MCP server — all from a single self-contained binary compiled via `bun build --compile`. No runtime dependencies.
+Extended thinking for models that support it — watch the model reason in real time.
+
+It runs as a CLI, REPL, HTTP server, or MCP server — all from a single self-contained binary. No runtime dependencies.
 
 Structured logs and traces per session, so you can actually see what your agent is doing.
 

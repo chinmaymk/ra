@@ -21,9 +21,9 @@ features:
   - title: MCP Both Ways
     details: Connect to MCP servers for additional tools, or expose ra itself as an MCP server for Cursor, Claude Desktop, or anything else that speaks the protocol.
   - title: Real Context Control
-    details: Deterministic context discovery, pattern resolution, prompt caching, extended thinking, compaction, token tracking. You decide what the model sees.
+    details: Deterministic context discovery, pattern resolution, prompt caching, compaction, token tracking, skills. You decide what the model sees.
   - title: Middleware Hooks Everywhere
     details: Intercept model calls, tool execution, streaming chunks, errors — 9 hooks covering every step of the loop. Inline expressions or TypeScript files.
   - title: One Binary, Four Interfaces
-    details: CLI, REPL, HTTP server, MCP server. Single self-contained binary compiled via bun build. No runtime dependencies.
+    details: CLI, REPL, HTTP server, MCP server. Single self-contained binary. No runtime dependencies.
 ---
