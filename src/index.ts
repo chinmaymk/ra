@@ -8,6 +8,7 @@ import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { AgentLoop } from './agent/loop'
+import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -92,7 +93,12 @@ function createMcpHandler(app: AppContext) {
       compaction: app.config.compaction,
     })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
-    const result = await loop.run([{ role: 'user', content: prompt }])
+    const messages: IMessage[] = [
+      ...(app.config.systemPrompt ? [{ role: 'system' as const, content: app.config.systemPrompt }] : []),
+      ...app.contextMessages,
+      { role: 'user' as const, content: prompt },
+    ]
+    const result = await loop.run(messages)
     const last = result.messages.at(-1)
     return typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content)
   }

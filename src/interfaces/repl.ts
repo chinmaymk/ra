@@ -159,7 +159,7 @@ export class Repl {
 
     const initialMessages: IMessage[] = [
       ...(this.options.systemPrompt ? [{ role: 'system' as const, content: this.options.systemPrompt }] : []),
-      ...(this.messages.length === 0 && this.options.contextMessages?.length ? this.options.contextMessages : []),
+      ...(this.options.contextMessages?.length ? this.options.contextMessages : []),
       ...this.messages,
       userMessage,
     ]

@@ -41,12 +41,16 @@ export async function discoverContextFiles(options: DiscoverOptions): Promise<Co
       for await (const match of glob.scan({ cwd: dir, absolute: false, onlyFiles: true, dot: true })) {
         const absPath = resolve(dir, match)
         if (files.some(f => f.path === absPath)) continue
-        const content = await Bun.file(absPath).text()
-        files.push({
-          path: absPath,
-          relativePath: relative(root, absPath),
-          content,
-        })
+        try {
+          const content = await Bun.file(absPath).text()
+          files.push({
+            path: absPath,
+            relativePath: relative(root, absPath),
+            content,
+          })
+        } catch {
+          // Skip files that can't be read (deleted, permission denied, binary, etc.)
+        }
       }
     }
   }
