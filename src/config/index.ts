@@ -76,6 +76,7 @@ type EnvRule =
   | { type: 'enum'; path: string[]; values: string[] }
 
 const ENV_RULES: Record<string, EnvRule> = {
+  RA_DATA_DIR:       { type: 'string', path: ['dataDir'] },
   RA_PROVIDER:       { type: 'string', path: ['provider'] },
   RA_MODEL:          { type: 'string', path: ['model'] },
   RA_INTERFACE:      { type: 'string', path: ['interface'] },
@@ -91,22 +92,17 @@ const ENV_RULES: Record<string, EnvRule> = {
   RA_MCP_SERVER_TOOL_NAME:        { type: 'string', path: ['mcp', 'server', 'tool', 'name'] },
   RA_MCP_SERVER_TOOL_DESCRIPTION: { type: 'string', path: ['mcp', 'server', 'tool', 'description'] },
   RA_MCP_LAZY_SCHEMAS:            { type: 'bool',   path: ['mcp', 'lazySchemas'] },
-  RA_STORAGE_PATH:         { type: 'string', path: ['storage', 'path'] },
   RA_STORAGE_MAX_SESSIONS: { type: 'int',    path: ['storage', 'maxSessions'] },
   RA_STORAGE_TTL_DAYS:     { type: 'int',    path: ['storage', 'ttlDays'] },
   RA_SKILL_DIRS:           { type: 'csv',    path: ['skillDirs'] },
   RA_SKILLS:               { type: 'csv',    path: ['skills'] },
+  RA_LOGS_ENABLED:      { type: 'bool',   path: ['logsEnabled'] },
+  RA_LOG_LEVEL:         { type: 'enum',   path: ['logLevel'], values: ['debug', 'info', 'warn', 'error'] },
+  RA_TRACES_ENABLED:    { type: 'bool',   path: ['tracesEnabled'] },
   RA_MEMORY_ENABLED:      { type: 'bool',   path: ['memory', 'enabled'] },
-  RA_MEMORY_PATH:         { type: 'string', path: ['memory', 'path'] },
   RA_MEMORY_MAX_MEMORIES: { type: 'int',    path: ['memory', 'maxMemories'] },
   RA_MEMORY_TTL_DAYS:     { type: 'int',    path: ['memory', 'ttlDays'] },
   RA_MEMORY_INJECT_LIMIT: { type: 'int',    path: ['memory', 'injectLimit'] },
-  RA_OBSERVABILITY_ENABLED: { type: 'bool', path: ['observability', 'enabled'] },
-  RA_LOG_LEVEL:    { type: 'enum',   path: ['observability', 'logs', 'level'],    values: ['debug', 'info', 'warn', 'error'] },
-  RA_LOG_OUTPUT:   { type: 'enum',   path: ['observability', 'logs', 'output'],   values: ['stderr', 'stdout', 'file', 'session'] },
-  RA_LOG_FILE:     { type: 'string', path: ['observability', 'logs', 'filePath'] },
-  RA_TRACE_OUTPUT: { type: 'enum',   path: ['observability', 'traces', 'output'], values: ['stderr', 'stdout', 'file', 'session'] },
-  RA_TRACE_FILE:   { type: 'string', path: ['observability', 'traces', 'filePath'] },
   // Provider credentials (env-only — not CLI flags, to avoid leaking in process list/shell history)
   RA_ANTHROPIC_API_KEY:  { type: 'string', path: ['providers', 'anthropic', 'apiKey'] },
   RA_ANTHROPIC_BASE_URL: { type: 'string', path: ['providers', 'anthropic', 'baseURL'] },
@@ -154,6 +150,9 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
 
   const config = merged as unknown as RaConfig
   config.configDir = configDir
+
+  // Resolve dataDir against configDir
+  config.dataDir = resolvePath(config.dataDir, configDir)
 
   // Only try loading systemPrompt as a file if it looks like a path
   if (config.systemPrompt && looksLikePath(config.systemPrompt, ['.txt', '.md'])) {

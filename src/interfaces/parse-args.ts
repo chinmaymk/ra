@@ -48,7 +48,7 @@ const FLAG_RULES: Record<string, FlagRule> = {
   'mcp-server-port':             { type: 'int',    path: ['mcp', 'server', 'port'] },
   'mcp-server-tool-name':        { type: 'string', path: ['mcp', 'server', 'tool', 'name'] },
   'mcp-server-tool-description': { type: 'string', path: ['mcp', 'server', 'tool', 'description'] },
-  'storage-path':                { type: 'string', path: ['storage', 'path'] },
+  'data-dir':                    { type: 'string', path: ['dataDir'] },
   'storage-max-sessions':        { type: 'int',    path: ['storage', 'maxSessions'] },
   'storage-ttl-days':            { type: 'int',    path: ['storage', 'ttlDays'] },
   'skill-dir':                   { type: 'string', path: ['skillDirs'] },
@@ -123,8 +123,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'list-memories':               { type: 'boolean' },
       'memories':                    { type: 'string' },
       'forget':                      { type: 'string' },
-      // Storage
-      'storage-path':                { type: 'string' },
+      // Data directory & storage
+      'data-dir':                    { type: 'string' },
       'storage-max-sessions':        { type: 'string' },
       'storage-ttl-days':            { type: 'string' },
       // Skills

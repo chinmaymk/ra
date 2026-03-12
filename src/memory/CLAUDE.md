@@ -19,10 +19,12 @@ SQLite-backed persistent memory with FTS5 full-text search. Memories persist acr
 
 ## Config
 
+The memory database is stored at `{dataDir}/memory.db`. The `dataDir` defaults to `.ra` and is configured at the top level.
+
 ```yaml
+dataDir: ".ra"            # root for all runtime data
 memory:
   enabled: false          # off by default
-  path: ".ra/memory.db"   # SQLite file location
   maxMemories: 1000       # auto-trim oldest when exceeded
   ttlDays: 90             # auto-prune entries older than this
   injectLimit: 5          # max memories injected per loop start

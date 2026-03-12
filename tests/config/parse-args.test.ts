@@ -97,9 +97,9 @@ describe('parseArgs', () => {
     })
   })
 
-  describe('storage flags', () => {
-    it('--storage-path', () => {
-      expect(parseArgs(dev('--storage-path', '/tmp/sessions')).config.storage?.path).toBe('/tmp/sessions')
+  describe('data-dir and storage flags', () => {
+    it('--data-dir', () => {
+      expect(parseArgs(dev('--data-dir', '/tmp/data')).config.dataDir).toBe('/tmp/data')
     })
     it('--storage-max-sessions', () => {
       expect(parseArgs(dev('--storage-max-sessions', '50')).config.storage?.maxSessions).toBe(50)
@@ -108,9 +108,9 @@ describe('parseArgs', () => {
       expect(parseArgs(dev('--storage-ttl-days', '7')).config.storage?.ttlDays).toBe(7)
     })
     it('individual storage flags do not clobber siblings', () => {
-      const r = parseArgs(dev('--storage-path', '/x'))
-      expect(r.config.storage?.path).toBe('/x')
-      expect(r.config.storage?.maxSessions).toBeUndefined()
+      const r = parseArgs(dev('--storage-max-sessions', '50'))
+      expect(r.config.storage?.maxSessions).toBe(50)
+      expect(r.config.storage?.ttlDays).toBeUndefined()
     })
   })
 
