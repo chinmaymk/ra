@@ -3,6 +3,7 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
+import { ASK_USER_SIGNAL } from '../tools/ask-user'
 import { accumulateUsage } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
@@ -177,8 +178,13 @@ export class AgentLoop {
           currentPhase = 'model_call'
         }
 
-        // Break if ask_user was invoked — the loop should suspend
-        if (toolCalls.some(tc => tc.name === 'ask_user')) { stop(); break }
+        // Break only if ask_user returned the signal (non-interactive interface)
+        // In interactive interfaces (REPL), ask_user reads inline and returns the real answer
+        const askCall = toolCalls.find(tc => tc.name === 'ask_user')
+        if (askCall) {
+          const res = messages.findLast(m => m.role === 'tool' && m.toolCallId === askCall.id)
+          if (res && typeof res.content === 'string' && res.content.startsWith(ASK_USER_SIGNAL)) { stop(); break }
+        }
 
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopIteration, this.toolTimeout)
         if (signal.aborted) break

@@ -9,7 +9,6 @@ import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { MemoryStore } from '../memory/store'
-import { ASK_USER_SIGNAL } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
 import * as tui from './tui'
 
@@ -36,7 +35,7 @@ export class Repl {
   private sessionId: string | undefined
   private pendingSkill: Skill | undefined
   private pendingAttachments: ContentPart[] = []
-  private pendingAskUser: { toolCallId: string; deferredMessages: IMessage[] } | undefined
+  private askUserResolve: ((answer: string) => void) | undefined
   private activeLoop: AgentLoop | null = null
   private lastInterruptTime = 0
 
@@ -62,12 +61,37 @@ export class Repl {
       tui.printResumeHeader(this.sessionId!, this.messages.length)
     }
 
+    // Override ask_user to read inline from the terminal
+    const askUserTool = this.options.tools.get('ask_user')
+    if (askUserTool) {
+      const { description, inputSchema } = askUserTool
+      this.options.tools.register({
+        name: 'ask_user',
+        description,
+        inputSchema,
+        execute: async (input: unknown) => {
+          const { question } = input as { question: string }
+          tui.stopSpinner(true)
+          tui.printCommandResponse(question)
+          rl.setPrompt('  > ')
+          rl.prompt()
+          return new Promise<string>(resolve => { this.askUserResolve = resolve })
+        },
+      })
+    }
+
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdout.isTTY })
     rl.setPrompt(tui.PROMPT)
-    const prompt = () => rl.prompt()
 
     // Ctrl+C: cancel active request or double-press to exit
     rl.on('SIGINT', () => {
+      if (this.askUserResolve) {
+        const resolve = this.askUserResolve
+        this.askUserResolve = undefined
+        rl.setPrompt(tui.PROMPT)
+        resolve('')
+        return
+      }
       if (this.activeLoop) {
         this.activeLoop.abort()
         return
@@ -80,69 +104,66 @@ export class Repl {
       }
       this.lastInterruptTime = now
       tui.printInterrupt('Press Ctrl+C again to exit, or type a message.')
-      prompt()
+      rl.prompt()
     })
 
-    prompt()
+    let processing = false
+    let inflight: Promise<void> | undefined
+    rl.on('line', async (line: string) => {
+      const trimmed = line.trim()
 
-    for await (const line of rl) {
-      const trimmed = (line as string).trim()
-      if (!trimmed) { prompt(); continue }
-
-      if (trimmed.startsWith('/')) {
-        try {
-          const response = await this.handleCommand(trimmed)
-          if (response) tui.printCommandResponse(response)
-        } catch (err) {
-          tui.printError(err instanceof Error ? err.message : String(err))
-        }
-      } else {
-        await this.processInput(trimmed)
+      // Route answer to waiting ask_user Promise
+      if (this.askUserResolve) {
+        if (!trimmed) { rl.prompt(); return }
+        const resolve = this.askUserResolve
+        this.askUserResolve = undefined
+        rl.setPrompt(tui.PROMPT)
+        resolve(trimmed)
+        return
       }
-      prompt()
-    }
 
-    // Reached when readline closes (Ctrl+D or stream end)
-    tui.printInterrupt('Goodbye!')
+      if (!trimmed || processing) { if (!processing) rl.prompt(); return }
+      processing = true
+
+      inflight = (async () => {
+        if (trimmed.startsWith('/')) {
+          try {
+            const response = await this.handleCommand(trimmed)
+            if (response) tui.printCommandResponse(response)
+          } catch (err) {
+            tui.printError(err instanceof Error ? err.message : String(err))
+          }
+        } else {
+          await this.processInput(trimmed)
+        }
+        processing = false
+        rl.prompt()
+      })()
+    })
+
+    rl.on('close', () => tui.printInterrupt('Goodbye!'))
+    rl.prompt()
+    await new Promise<void>(resolve => rl.once('close', async () => { await inflight; resolve() }))
   }
 
   async processInput(input: string): Promise<void> {
     if (!this.sessionId) this.sessionId = await this.newSession()
 
-    // If we're resuming after ask_user, patch the tool result with the user's answer
-    let userMessage: IMessage | undefined
-    if (this.pendingAskUser) {
-      const { toolCallId, deferredMessages } = this.pendingAskUser
-      this.pendingAskUser = undefined
-      const patchSignal = (msgs: IMessage[]) => {
-        for (let i = msgs.length - 1; i >= 0; i--) {
-          const m = msgs[i]!
-          if (m.role === 'tool' && m.toolCallId === toolCallId && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-            msgs[i] = { ...m, content: input }
-            break
-          }
-        }
-      }
-      patchSignal(this.messages)
-      patchSignal(deferredMessages)
-      await Promise.all(deferredMessages.map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
-    } else {
-      const text = this.pendingSkill
-        ? `${buildActiveSkillXml(this.pendingSkill)}\n\n${input}`
-        : input
-      this.pendingSkill = undefined
+    const text = this.pendingSkill
+      ? `${buildActiveSkillXml(this.pendingSkill)}\n\n${input}`
+      : input
+    this.pendingSkill = undefined
 
-      const parts: ContentPart[] = [{ type: 'text', text }, ...this.pendingAttachments]
-      this.pendingAttachments = []
+    const parts: ContentPart[] = [{ type: 'text', text }, ...this.pendingAttachments]
+    this.pendingAttachments = []
 
-      userMessage = { role: 'user', content: parts.length === 1 ? text : parts }
-    }
+    const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
 
     const initialMessages: IMessage[] = [
       ...(this.options.systemPrompt ? [{ role: 'system' as const, content: this.options.systemPrompt }] : []),
       ...(this.messages.length === 0 && this.options.contextMessages?.length ? this.options.contextMessages : []),
       ...this.messages,
-      ...(userMessage ? [userMessage] : []),
+      userMessage,
     ]
 
     // Inject available skills XML as first user message if skills exist
@@ -174,7 +195,6 @@ export class Repl {
       thinking: this.options.thinking,
       compaction: this.options.compaction,
       middleware: {
-
         ...userMw,
         onStreamChunk: [
           async (ctx: StreamChunkContext) => {
@@ -204,7 +224,7 @@ export class Repl {
         beforeToolExecution: [
           async (ctx: ToolExecutionContext) => {
             // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
+            const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
             tui.stopSpinner(true)
             boxOpened = false
             toolStartTimes.set(ctx.toolCall.id, Date.now())
@@ -233,39 +253,8 @@ export class Repl {
       else process.stdout.write('\n\n')
 
       const newMessages = result.messages.slice(initialMessages.length)
-
-      // Detect ask_user — only search new messages (signal cannot appear in prior history)
-      let askToolResult: IMessage | undefined
-      for (let i = newMessages.length - 1; i >= 0; i--) {
-        const m = newMessages[i]!
-        if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-          askToolResult = m
-          break
-        }
-      }
-
-      // Split newMessages into: save-now vs defer (ask_user call + its tool result)
-      let messagesToSaveNow = newMessages
-      if (askToolResult?.toolCallId) {
-        // Find the assistant message that made the ask_user call and defer from there
-        let deferIdx = newMessages.length
-        for (let j = newMessages.length - 1; j >= 0; j--) {
-          const m = newMessages[j]!
-          if (m.role === 'assistant' && m.toolCalls?.some(tc => tc.name === 'ask_user')) {
-            deferIdx = j
-            break
-          }
-        }
-        messagesToSaveNow = newMessages.slice(0, deferIdx)
-        this.pendingAskUser = { toolCallId: askToolResult.toolCallId, deferredMessages: newMessages.slice(deferIdx) }
-        const question = askToolResult.content.slice(ASK_USER_SIGNAL.length)
-        tui.printCommandResponse(`[Question for you] ${question}`)
-      }
-
-      const msgsToAdd = userMessage ? [userMessage, ...newMessages] : newMessages
-      const msgsToSave = userMessage ? [userMessage, ...messagesToSaveNow] : messagesToSaveNow
-      this.messages.push(...msgsToAdd)
-      await Promise.all(msgsToSave.map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
+      this.messages.push(userMessage, ...newMessages)
+      await Promise.all([userMessage, ...newMessages].map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
     } catch (err) {
       tui.stopSpinner(true)
       // TS narrows streamBuf to null (closure writes aren't tracked); cast back
@@ -291,7 +280,6 @@ export class Repl {
       case '/clear': {
         this.messages = []
         this.sessionId = await this.newSession()
-        this.pendingAskUser = undefined
         return 'Message history cleared.'
       }
       case '/save':
@@ -310,7 +298,6 @@ export class Repl {
         this.sessionId = id
         this.pendingSkill = undefined
         this.pendingAttachments = []
-        this.pendingAskUser = undefined
         return `Resumed session ${id} (${this.messages.length} messages loaded).`
       }
       case '/skill': {
