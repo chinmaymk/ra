@@ -1,29 +1,12 @@
 import { describe, it, expect, afterEach } from 'bun:test'
 import { HttpServer } from '../../src/interfaces/http'
 import { ToolRegistry } from '../../src/agent/tool-registry'
-import { SessionStorage } from '../../src/storage/sessions'
 import type { IProvider } from '../../src/providers/types'
 import { tmpdir } from '../tmpdir'
+import { mockProvider, makeStorage } from './helpers'
 
 const TEST_STORAGE = tmpdir('ra-http-test')
 const TEST_PORT = 13579
-
-function mockProvider(text: string): IProvider {
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error() },
-    async *stream() {
-      yield { type: 'text', delta: text }
-      yield { type: 'done' }
-    },
-  }
-}
-
-async function makeStorage(): Promise<SessionStorage> {
-  const storage = new SessionStorage(TEST_STORAGE)
-  await storage.init()
-  return storage
-}
 
 describe('HttpServer', () => {
   let server: HttpServer
@@ -39,7 +22,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('hello'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT}/chat/sync`, {
@@ -57,7 +40,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('ok'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 1}/sessions`)
@@ -73,7 +56,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('ok'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 2}/chat/sync`, {
@@ -91,7 +74,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('authorized'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 3}/chat/sync`, {
@@ -110,7 +93,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('ok'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 4}/unknown`)
@@ -125,7 +108,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('ok'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 5}/chat/sync`, {
@@ -144,7 +127,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('ok'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 6}/chat`, {
@@ -161,7 +144,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('streamed'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 7}/chat`, {
@@ -192,7 +175,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider,
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
       systemPrompt: 'You are a helpful assistant',
     })
     await server.start()
@@ -211,9 +194,8 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('ok'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
-    // stop without start should not throw
     await server.stop()
   })
 
@@ -224,7 +206,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: mockProvider('ok'),
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 10}/chat/sync`, {
@@ -239,16 +221,14 @@ describe('HttpServer', () => {
     const errorProvider: IProvider = {
       name: 'mock',
       chat: async () => { throw new Error('Provider error') },
-      async *stream() {
-        throw new Error('Provider error')
-      },
+      async *stream() { throw new Error('Provider error') },
     }
     server = new HttpServer({
       port: TEST_PORT + 11,
       model: 'test',
       provider: errorProvider,
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 11}/chat`, {
@@ -260,7 +240,6 @@ describe('HttpServer', () => {
     const text = await res.text()
     expect(text).toContain('"type":"error"')
     expect(text).toContain('Provider error')
-    // Should NOT contain a done event (error replaces it)
     expect(text).not.toContain('"type":"done"')
   })
 
@@ -268,16 +247,14 @@ describe('HttpServer', () => {
     const errorProvider: IProvider = {
       name: 'mock',
       chat: async () => { throw new Error('sync explosion') },
-      async *stream() {
-        throw new Error('sync explosion')
-      },
+      async *stream() { throw new Error('sync explosion') },
     }
     server = new HttpServer({
       port: TEST_PORT + 13,
       model: 'test',
       provider: errorProvider,
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 13}/chat/sync`, {
@@ -306,7 +283,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider,
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
       systemPrompt: 'sys',
       contextMessages: [
         { role: 'user', content: '<context-file path="README.md">hello</context-file>' },
@@ -318,7 +295,6 @@ describe('HttpServer', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
     })
-    // system prompt first, then context message, then user message
     expect(capturedMessages[0]?.role).toBe('system')
     expect(capturedMessages[1]?.role).toBe('user')
     expect(capturedMessages[1]?.content).toContain('context-file')
@@ -331,7 +307,6 @@ describe('HttpServer', () => {
       name: 'mock',
       chat: async () => { throw new Error() },
       async *stream() {
-        // The AgentLoop will accumulate text and push an assistant message
         yield { type: 'text' as const, delta: 'part1 ' }
         yield { type: 'text' as const, delta: 'part2' }
         yield { type: 'done' as const }
@@ -342,7 +317,7 @@ describe('HttpServer', () => {
       model: 'test',
       provider: arrayContentProvider,
       tools: new ToolRegistry(),
-      storage: await makeStorage(),
+      storage: await makeStorage(TEST_STORAGE),
     })
     await server.start()
     const res = await fetch(`http://localhost:${TEST_PORT + 12}/chat/sync`, {

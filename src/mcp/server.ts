@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { errMsg } from '../providers/utils'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -96,7 +97,7 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
         await transport.close().catch(() => {})
       }
       if (!res.headersSent) {
-        res.writeHead(500).end(`Internal server error: ${err instanceof Error ? err.message : String(err)}`)
+        res.writeHead(500).end(`Internal server error: ${errMsg(err)}`)
       }
       return
     }

@@ -7,8 +7,13 @@ interface ChecklistItem {
 
 export function checklistTool(): ITool {
   const items: ChecklistItem[] = []
-
   const remaining = () => items.filter(i => !i.checked).length
+
+  const at = (index: unknown): ChecklistItem => {
+    const i = index as number
+    if (i === undefined || i < 0 || i >= items.length) throw new Error(`Invalid index: ${i}`)
+    return items[i]!
+  }
 
   return {
     name: 'checklist',
@@ -32,9 +37,7 @@ export function checklistTool(): ITool {
       required: ['action'],
     },
     async execute(input: unknown) {
-      const { action, item, index } = input as {
-        action: string; item?: string; index?: number
-      }
+      const { action, item, index } = input as { action: string; item?: string; index?: number }
 
       switch (action) {
         case 'add': {
@@ -42,28 +45,15 @@ export function checklistTool(): ITool {
           items.push({ text: item, checked: false })
           return `Added: ${item} | ${remaining()} remaining`
         }
-        case 'check': {
-          if (index === undefined || index < 0 || index >= items.length) throw new Error(`Invalid index: ${index}`)
-          items[index]!.checked = true
-          return `Checked: ${items[index]!.text} | ${remaining()} remaining`
-        }
-        case 'uncheck': {
-          if (index === undefined || index < 0 || index >= items.length) throw new Error(`Invalid index: ${index}`)
-          items[index]!.checked = false
-          return `Unchecked: ${items[index]!.text} | ${remaining()} remaining`
-        }
-        case 'remove': {
-          if (index === undefined || index < 0 || index >= items.length) throw new Error(`Invalid index: ${index}`)
-          const removed = items.splice(index, 1)[0]!
-          return `Removed: ${removed.text} | ${remaining()} remaining`
-        }
+        case 'check': { at(index).checked = true; return `Checked: ${at(index).text} | ${remaining()} remaining` }
+        case 'uncheck': { at(index).checked = false; return `Unchecked: ${at(index).text} | ${remaining()} remaining` }
+        case 'remove': { at(index); return `Removed: ${items.splice(index as number, 1)[0]!.text} | ${remaining()} remaining` }
         case 'list': {
           if (items.length === 0) return 'Checklist is empty.'
           const lines = items.map((it, i) => `${i}: ${it.checked ? '[x]' : '[ ]'} ${it.text}`)
           return `${lines.join('\n')}\n${remaining()} of ${items.length} remaining`
         }
-        default:
-          throw new Error(`Unknown action: ${action}`)
+        default: throw new Error(`Unknown action: ${action}`)
       }
     },
   }

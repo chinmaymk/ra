@@ -1,6 +1,7 @@
 import type { MiddlewareConfig, LoopContext, ModelCallContext, ToolExecutionContext, ToolResultContext, ErrorContext } from '../agent/types'
 import type { Logger } from './logger'
 import type { Tracer, Span } from './tracer'
+import { parseToolArguments } from '../providers/utils'
 
 /**
  * Creates a complete set of observability middleware hooks.
@@ -60,13 +61,11 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     beforeToolExecution: [async (ctx: ToolExecutionContext) => {
       const attrs: Record<string, unknown> = { tool: ctx.toolCall.name, toolCallId: ctx.toolCall.id }
       if (ctx.toolCall.name === 'subagent' && ctx.toolCall.arguments) {
-        try {
-          const parsed = JSON.parse(ctx.toolCall.arguments)
-          if (Array.isArray(parsed.tasks)) {
-            attrs.taskCount = parsed.tasks.length
-            attrs.tasks = parsed.tasks.map((t: { task: string }) => t.task.length > 100 ? t.task.slice(0, 100) + '…' : t.task)
-          }
-        } catch { /* streaming may be incomplete */ }
+        const parsed = parseToolArguments(ctx.toolCall.arguments)
+        if (Array.isArray(parsed.tasks)) {
+          attrs.taskCount = parsed.tasks.length
+          attrs.tasks = parsed.tasks.map((t: { task: string }) => t.task.length > 100 ? t.task.slice(0, 100) + '…' : t.task)
+        }
       }
       toolSpans.set(ctx.toolCall.id, tracer.startSpan('agent.tool_execution', attrs, iterationSpan?.spanId))
       logger.info('executing tool', {

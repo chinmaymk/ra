@@ -3,7 +3,7 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
-import { accumulateUsage, errMsg } from '../providers/utils'
+import { accumulateUsage, errMsg, parseToolArguments } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
 
@@ -149,8 +149,7 @@ export class AgentLoop {
               messages.push({ role: 'tool', content: denied, toolCallId: tc.id, isError: true })
               continue
             }
-            let input: unknown
-            try { input = JSON.parse(tc.arguments || '{}') } catch { input = {} }
+            const input = parseToolArguments(tc.arguments)
             let content: string
             let isError = false
             try {

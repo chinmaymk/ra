@@ -1,7 +1,21 @@
 import { describe, it, expect } from 'bun:test'
 import { splitMessageZones, createCompactionMiddleware } from '../../src/agent/context-compaction'
-import type { IMessage, IProvider, ChatRequest } from '../../src/providers/types'
+import type { IMessage, IProvider, ChatRequest, ChatResponse } from '../../src/providers/types'
 import type { ModelCallContext } from '../../src/agent/types'
+
+/** Mock provider — chat returns summary or throws, stream always yields done */
+function mockProv(chat: IProvider['chat'] = async () => { throw new Error('should not be called') }): IProvider {
+  return {
+    name: 'mock',
+    chat,
+    async *stream() { yield { type: 'done' as const } },
+  }
+}
+
+/** Mock provider that returns a summary from chat() */
+function summaryProv(summary = 'Summary of conversation.'): IProvider {
+  return mockProv(async () => ({ message: { role: 'assistant' as const, content: summary } }))
+}
 
 describe('splitMessageZones', () => {
   const sys: IMessage = { role: 'system', content: 'You are helpful.' }
@@ -39,13 +53,8 @@ describe('splitMessageZones', () => {
   })
 
   it('moves boundary back to include assistant when boundary lands on tool result', () => {
-    // rest = [asst1(3t), user2(3t), asst2+tc(13t), tool1(4t), asst3(5t), user3(2t), asst4(4t)]
-    // budget=16: walk back accumulates asst4(4)+user3(6)+asst3(11)+tool1(15)=15 ≤16
-    //   then asst2: 15+13=28>16 → boundary=3 (tool1 in rest)
-    // adjustToolCallBoundary finds tool at [3], searches back, finds asst2 at [2] with toolCalls → return 2
     const messages = [sys, user1, asst1, user2, asst2, tool1, asst3, user3, asst4]
     const { recent } = splitMessageZones(messages, 16)
-    // asst2 and tool1 should both be in recent
     expect(recent).toContain(asst2)
     expect(recent).toContain(tool1)
   })
@@ -63,25 +72,19 @@ describe('splitMessageZones', () => {
   })
 
   it('adjusts boundary when it lands on a tool message', () => {
-    // Use a very small budget so the boundary lands right on tool1
-    // The tool message should pull back to include its assistant
     const messages = [sys, user1, asst1, user2, asst2, tool1, asst3]
     const { recent, compactable } = splitMessageZones(messages, 1)
-    // If tool1 is in recent, asst2 must also be in recent
     if (recent.includes(tool1)) {
       expect(recent).toContain(asst2)
     }
-    // If asst2 is in compactable, tool1 must also be in compactable
     if (compactable.includes(asst2)) {
       expect(compactable).toContain(tool1)
     }
   })
 
   it('adjusts boundary when it lands right after assistant with toolCalls', () => {
-    // Create scenario where boundary-1 is an assistant with toolCalls
     const messages = [sys, user1, asst2, tool1, asst3]
     const { recent } = splitMessageZones(messages, 1)
-    // asst2 and tool1 should stay together
     if (recent.includes(tool1)) {
       expect(recent).toContain(asst2)
     }
@@ -112,7 +115,6 @@ describe('splitMessageZones', () => {
     const tool2: IMessage = { role: 'tool', content: 'written', toolCallId: 'tc2' }
     const messages = [sys, user1, asst2, tool1, asst5, tool2, asst3]
     const { recent, compactable } = splitMessageZones(messages, 20_000)
-    // Each tool call group should be intact
     for (const zone of [recent, compactable]) {
       if (zone.includes(asst2)) expect(zone).toContain(tool1)
       if (zone.includes(asst5)) expect(zone).toContain(tool2)
@@ -120,8 +122,6 @@ describe('splitMessageZones', () => {
   })
 
   it('keeps all tool results with their assistant when boundary splits tool group', () => {
-    // Bug: assistant with tc1+tc2 could have tool_tc1 left in compactable
-    // when boundary pulls assistant into recent
     const asstMulti: IMessage = {
       role: 'assistant', content: 'multi',
       toolCalls: [
@@ -133,9 +133,7 @@ describe('splitMessageZones', () => {
     const toolB: IMessage = { role: 'tool', content: 'result b', toolCallId: 'tc2' }
     const messages = [sys, user1, asst1, user2, asstMulti, toolA, toolB, asst3, user3, asst4]
 
-    // Use a budget that places boundary somewhere inside the tool group
     const { recent, compactable } = splitMessageZones(messages, 1)
-    // asstMulti, toolA, and toolB must all be in the same zone
     if (recent.includes(asstMulti)) {
       expect(recent).toContain(toolA)
       expect(recent).toContain(toolB)
@@ -144,35 +142,18 @@ describe('splitMessageZones', () => {
       expect(compactable).toContain(toolA)
       expect(compactable).toContain(toolB)
     }
-    // And vice versa - if any tool result is in recent, the assistant must be too
     if (recent.includes(toolA) || recent.includes(toolB)) {
       expect(recent).toContain(asstMulti)
     }
   })
 
   it('does not move boundary when tool result has no preceding assistant with toolCalls', () => {
-    // We need adjustToolCallBoundary to receive boundary landing on a tool message,
-    // with no assistant+toolCalls before it. The for loop (lines 51-54) completes without returning.
-    //
-    // rest array after pinning [sys, user1]:
-    //   [0]=asstNoToolCalls(4 tokens), [1]=orphanTool(4), [2]=user3(2), [3]=asst4(4)
-    //
-    // Token walk backward with budget=11:
-    //   i=3: 0+4=4 ≤11 → include, recentStart=3, tokens=4
-    //   i=2: 4+2=6 ≤11 → include, recentStart=2, tokens=6
-    //   i=1: 6+4=10 ≤11 → include, recentStart=1, tokens=10
-    //   i=0: 10+4=14 >11, recentStart(1)<4 → break → boundary=1 (the tool msg)
-    //
-    // adjustToolCallBoundary sees rest[1].role='tool', then searches backward:
-    //   i=0: rest[0] is assistant but has NO toolCalls → loop finishes without match
-    // Falls through to the second check and returns boundary=1 unchanged.
     const orphanTool: IMessage = { role: 'tool', content: 'orphan result', toolCallId: 'tc_orphan' }
     const asstNoToolCalls: IMessage = { role: 'assistant', content: 'no tools here' }
     const messages = [sys, user1, asstNoToolCalls, orphanTool, user3, asst4]
 
     const { pinned, compactable, recent } = splitMessageZones(messages, 11)
     expect([...pinned, ...compactable, ...recent]).toEqual(messages)
-    // orphanTool should be in recent (boundary=1 in rest, which is index 3 in original)
     expect(recent).toContain(orphanTool)
   })
 })
@@ -197,14 +178,23 @@ function makeCtx(messages: IMessage[], model = 'claude-sonnet-4-6'): ModelCallCo
   }
 }
 
+const longText = 'word '.repeat(200)
+const COMPACT_OPTS = { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 } as const
+
+function longConvo(lastMsg = 'Latest message'): IMessage[] {
+  return [
+    { role: 'system', content: 'System prompt here' },
+    { role: 'user', content: 'First user message here' },
+    { role: 'assistant', content: longText },
+    { role: 'user', content: longText },
+    { role: 'assistant', content: longText },
+    { role: 'user', content: lastMsg },
+  ]
+}
+
 describe('createCompactionMiddleware', () => {
   it('passes through when under threshold', async () => {
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('should not be called') },
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8 })
+    const mw = createCompactionMiddleware(mockProv(), { enabled: true, threshold: 0.8 })
     const messages: IMessage[] = [
       { role: 'system', content: 'hi' },
       { role: 'user', content: 'hello' },
@@ -215,39 +205,18 @@ describe('createCompactionMiddleware', () => {
   })
 
   it('compacts when over threshold using maxTokens', async () => {
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => ({
-        message: { role: 'assistant' as const, content: 'Summary of conversation.' },
-      }),
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
-    const longText = 'word '.repeat(200)
-    const messages: IMessage[] = [
-      { role: 'system', content: 'System prompt here' },
-      { role: 'user', content: 'First user message here' },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: longText },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: 'Latest message' },
-    ]
-    const ctx = makeCtx(messages)
+    const mw = createCompactionMiddleware(summaryProv(), COMPACT_OPTS)
+    const ctx = makeCtx(longConvo())
     await mw(ctx)
     const hasSummary = ctx.request.messages.some(
       m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
     )
     expect(hasSummary).toBe(true)
-    expect(ctx.request.messages.length).toBeLessThan(messages.length)
+    expect(ctx.request.messages.length).toBeLessThan(6)
   })
 
   it('skips compaction when disabled', async () => {
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('should not be called') },
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, { enabled: false, threshold: 0.8, maxTokens: 1 })
+    const mw = createCompactionMiddleware(mockProv(), { enabled: false, threshold: 0.8, maxTokens: 1 })
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'A very long message'.repeat(100) },
@@ -258,32 +227,14 @@ describe('createCompactionMiddleware', () => {
   })
 
   it('merges compaction summary into user message to preserve role alternation', async () => {
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => ({
-        message: { role: 'assistant' as const, content: 'Conversation summary.' },
-      }),
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
-    const longText = 'word '.repeat(200)
-    const messages: IMessage[] = [
-      { role: 'system', content: 'System prompt' },
-      { role: 'user', content: 'First message' },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: longText },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: 'Latest message' },
-    ]
-    const ctx = makeCtx(messages)
+    const mw = createCompactionMiddleware(summaryProv('Conversation summary.'), COMPACT_OPTS)
+    const ctx = makeCtx(longConvo())
     await mw(ctx)
-    // Summary should be merged into a user message
     const summaryMsg = ctx.request.messages.find(
       m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
     )
     expect(summaryMsg).toBeDefined()
     expect(summaryMsg!.role).toBe('user')
-    // No consecutive user messages should exist
     for (let i = 1; i < ctx.request.messages.length; i++) {
       if (ctx.request.messages[i]!.role === 'user') {
         expect(ctx.request.messages[i - 1]!.role).not.toBe('user')
@@ -292,13 +243,10 @@ describe('createCompactionMiddleware', () => {
   })
 
   it('handles summarization API failure gracefully', async () => {
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('API rate limit') },
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
-    const longText = 'word '.repeat(200)
+    const mw = createCompactionMiddleware(
+      mockProv(async () => { throw new Error('API rate limit') }),
+      COMPACT_OPTS,
+    )
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'first' },
@@ -312,15 +260,7 @@ describe('createCompactionMiddleware', () => {
   })
 
   it('properly extracts text from ContentPart[] pinned user message during compaction', async () => {
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => ({
-        message: { role: 'assistant' as const, content: 'Summary.' },
-      }),
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
-    const longText = 'word '.repeat(200)
+    const mw = createCompactionMiddleware(summaryProv('Summary.'), COMPACT_OPTS)
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
       { role: 'user', content: [{ type: 'text' as const, text: 'look at this image' }] },
@@ -331,29 +271,18 @@ describe('createCompactionMiddleware', () => {
     ]
     const ctx = makeCtx(messages)
     await mw(ctx)
-    // With the fix, ContentPart[] is preserved, not flattened to string
     const summaryMsg = ctx.request.messages.find(
       m => m.role === 'user' && Array.isArray(m.content)
     )
     expect(summaryMsg).toBeDefined()
     const parts = summaryMsg!.content as any[]
-    // Original text part preserved
     expect(parts.some((p: any) => p.type === 'text' && p.text === 'look at this image')).toBe(true)
-    // Summary appended as text part
     const allText = parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join(' ')
     expect(allText).toContain('[Context Summary]')
   })
 
   it('preserves ContentPart[] structure when merging summary into pinned user message', async () => {
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => ({
-        message: { role: 'assistant' as const, content: 'Summary.' },
-      }),
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
-    const longText = 'word '.repeat(200)
+    const mw = createCompactionMiddleware(summaryProv('Summary.'), COMPACT_OPTS)
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
       { role: 'user', content: [
@@ -370,12 +299,9 @@ describe('createCompactionMiddleware', () => {
     const pinnedUser = ctx.request.messages.find(
       m => m.role === 'user' && Array.isArray(m.content)
     )
-    // ContentPart[] should be preserved (not flattened to string)
     expect(pinnedUser).toBeDefined()
     const parts = pinnedUser!.content as any[]
-    // Should still have the image_url part
     expect(parts.some((p: any) => p.type === 'image')).toBe(true)
-    // Should also have the summary text appended
     const textParts = parts.filter((p: any) => p.type === 'text')
     const allText = textParts.map((p: any) => p.text).join(' ')
     expect(allText).toContain('[Context Summary]')
@@ -383,52 +309,22 @@ describe('createCompactionMiddleware', () => {
 
   it('uses compaction.model for summarization instead of request model', async () => {
     let chatModel = ''
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async (req) => {
-        chatModel = req.model
-        return { message: { role: 'assistant' as const, content: 'Summary.' } }
-      },
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
-      model: 'claude-haiku-4-5-20251001',
-    })
-    const longText = 'word '.repeat(200)
-    const messages: IMessage[] = [
-      { role: 'system', content: 'sys' },
-      { role: 'user', content: 'first' },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: longText },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: 'latest' },
-    ]
-    const ctx = makeCtx(messages, 'claude-opus-4-6')
+    const mw = createCompactionMiddleware(
+      mockProv(async (req) => { chatModel = req.model; return { message: { role: 'assistant' as const, content: 'Summary.' } } }),
+      { ...COMPACT_OPTS, model: 'claude-haiku-4-5-20251001' },
+    )
+    const ctx = makeCtx(longConvo(), 'claude-opus-4-6')
     await mw(ctx)
     expect(chatModel).toBe('claude-haiku-4-5-20251001')
   })
 
   it('uses real inputTokens from loop.lastUsage when available for threshold check', async () => {
     let chatCalled = false
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => {
-        chatCalled = true
-        return { message: { role: 'assistant' as const, content: 'Summary.' } }
-      },
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 500, contextWindow: 1000,
-    })
-    const longText = 'word '.repeat(600)
-    const messages: IMessage[] = [
-      { role: 'system', content: 'sys' },
-      { role: 'user', content: 'first' },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: 'latest' },
-    ]
+    const mw = createCompactionMiddleware(
+      mockProv(async () => { chatCalled = true; return { message: { role: 'assistant' as const, content: 'Summary.' } } }),
+      { enabled: true, threshold: 0.8, maxTokens: 500, contextWindow: 1000 },
+    )
+    const messages = longConvo()
     const ctx = makeCtx(messages)
     ctx.loop.lastUsage = { inputTokens: 100, outputTokens: 50 }
     await mw(ctx)
@@ -437,27 +333,11 @@ describe('createCompactionMiddleware', () => {
 
   it('calls onCompact callback with compaction details', async () => {
     let compactInfo: Record<string, unknown> | undefined
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => ({
-        message: { role: 'assistant' as const, content: 'Summary of conversation.' },
-      }),
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+    const mw = createCompactionMiddleware(summaryProv(), {
+      ...COMPACT_OPTS,
       onCompact: (info) => { compactInfo = info },
     })
-    const longText = 'word '.repeat(200)
-    const messages: IMessage[] = [
-      { role: 'system', content: 'System prompt here' },
-      { role: 'user', content: 'First user message here' },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: longText },
-      { role: 'assistant', content: longText },
-      { role: 'user', content: 'Latest message' },
-    ]
-    const ctx = makeCtx(messages)
+    const ctx = makeCtx(longConvo())
     await mw(ctx)
     expect(compactInfo).toBeDefined()
     expect(compactInfo!.originalMessages).toBe(6)
@@ -468,12 +348,7 @@ describe('createCompactionMiddleware', () => {
 
   it('does not call onCompact when compaction is skipped', async () => {
     let called = false
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('should not be called') },
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, {
+    const mw = createCompactionMiddleware(mockProv(), {
       enabled: true, threshold: 0.8,
       onCompact: () => { called = true },
     })
@@ -488,16 +363,10 @@ describe('createCompactionMiddleware', () => {
 
   it('does not call onCompact when summarization fails', async () => {
     let called = false
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('API rate limit') },
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
-      onCompact: () => { called = true },
-    })
-    const longText = 'word '.repeat(200)
+    const mw = createCompactionMiddleware(
+      mockProv(async () => { throw new Error('API rate limit') }),
+      { ...COMPACT_OPTS, onCompact: () => { called = true } },
+    )
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'first' },
@@ -510,12 +379,7 @@ describe('createCompactionMiddleware', () => {
   })
 
   it('skips when nothing to compact (all pinned)', async () => {
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error('should not be called') },
-      async *stream() { yield { type: 'done' as const } },
-    }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 1 })
+    const mw = createCompactionMiddleware(mockProv(), { enabled: true, threshold: 0.8, maxTokens: 1 })
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'hello' },

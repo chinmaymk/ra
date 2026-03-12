@@ -1,3 +1,4 @@
+import { errMsg } from '../providers/utils'
 import { looksLikePath, resolvePath } from '../utils/paths'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '../agent/types'
@@ -23,7 +24,7 @@ async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
     const js = await transpiler.transform(`(${entry})`)
     fn = (0, eval)(js)
   } catch (err) {
-    throw new Error(`Failed to parse inline middleware expression: ${err instanceof Error ? err.message : String(err)}\n  Expression: ${entry}`)
+    throw new Error(`Failed to parse inline middleware expression: ${errMsg(err)}\n  Expression: ${entry}`)
   }
   if (typeof fn !== 'function') {
     throw new Error(`Inline middleware expression must evaluate to a function. Got: ${typeof fn}`)
