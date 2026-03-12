@@ -98,6 +98,7 @@ export class AgentLoop {
           messages,
           tools: this.tools.all(),
           ...(this.thinking && { thinking: this.thinking }),
+          signal,
         }
         const modelCallCtx: ModelCallContext = { ...stoppable, request, loop: loopCtx() }
         await runMiddlewareChain(modelCallCtx, this.middleware.beforeModelCall, this.toolTimeout)
