@@ -5,7 +5,6 @@ import type { GoogleProviderOptions } from '../providers/google'
 import type { OllamaProviderOptions } from '../providers/ollama'
 import type { BedrockProviderOptions } from '../providers/bedrock'
 import type { AzureProviderOptions } from '../providers/azure'
-import type { LogLevel } from '../observability/logger'
 
 export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedrock' | 'azure'
 
@@ -37,6 +36,8 @@ export interface RaConfig {
   systemPrompt: string
   /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
   configDir: string
+  /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `.ra`. */
+  dataDir: string
   http: { port: number; token: string }
   skillDirs: string[]
   skills: string[]
@@ -56,7 +57,6 @@ export interface RaConfig {
     azure: AzureProviderOptions
   }
   storage: {
-    path: string
     format: 'jsonl'
     maxSessions: number
     ttlDays: number
@@ -80,22 +80,9 @@ export interface RaConfig {
   }
   memory: {
     enabled: boolean
-    path: string         // SQLite database path
     maxMemories: number  // max stored memories (oldest trimmed first)
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
-  }
-  observability: {
-    enabled: boolean
-    logs: {
-      level: LogLevel      // minimum log level: 'debug' | 'info' | 'warn' | 'error'
-      output: 'stderr' | 'stdout' | 'file' | 'session'
-      filePath?: string    // required when output is 'file'
-    }
-    traces: {
-      output: 'stderr' | 'stdout' | 'file' | 'session'
-      filePath?: string    // required when output is 'file'
-    }
   }
 }
 

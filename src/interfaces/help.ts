@@ -37,8 +37,8 @@ MEMORY
   --memories <query>                  Search memories by keyword
   --forget <query>                    Forget memories matching query
 
-STORAGE
-  --storage-path <path>               Session storage directory
+DATA & STORAGE
+  --data-dir <path>                   Root directory for all runtime data (default: .ra)
   --storage-max-sessions <n>          Max stored sessions
   --storage-ttl-days <n>              Session TTL in days
 
@@ -72,14 +72,14 @@ ENV VARS
   RA_HTTP_PORT, RA_HTTP_TOKEN
   RA_MCP_SERVER_ENABLED, RA_MCP_SERVER_PORT
   RA_MCP_SERVER_TOOL_NAME, RA_MCP_SERVER_TOOL_DESCRIPTION
-  RA_STORAGE_PATH, RA_STORAGE_MAX_SESSIONS, RA_STORAGE_TTL_DAYS
+  RA_DATA_DIR, RA_STORAGE_MAX_SESSIONS, RA_STORAGE_TTL_DAYS
   RA_SKILL_DIRS=dir1,dir2  RA_SKILLS=skill1,skill2
   RA_ANTHROPIC_API_KEY, RA_ANTHROPIC_BASE_URL
   RA_OPENAI_API_KEY, RA_OPENAI_BASE_URL
   RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
   RA_BUILTIN_TOOLS
   RA_THINKING
-  RA_MEMORY_ENABLED, RA_MEMORY_PATH, RA_MEMORY_MAX_MEMORIES
+  RA_MEMORY_ENABLED, RA_MEMORY_MAX_MEMORIES
   RA_MEMORY_TTL_DAYS, RA_MEMORY_INJECT_LIMIT
 
 STDIN

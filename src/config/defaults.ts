@@ -6,6 +6,7 @@ export const defaultConfig: RaConfig = {
   interface: 'repl',
   systemPrompt: 'You are a helpful AI assistant.',
   configDir: process.cwd(),
+  dataDir: '.ra',
   http: { port: 3000, token: '' },
   skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
   skills: [],
@@ -30,7 +31,6 @@ export const defaultConfig: RaConfig = {
     azure: { endpoint: '', deployment: '', apiKey: '' },
   },
   storage: {
-    path: '.ra/sessions',
     format: 'jsonl',
     maxSessions: 100,
     ttlDays: 30,
@@ -62,19 +62,8 @@ export const defaultConfig: RaConfig = {
   },
   memory: {
     enabled: false,
-    path: '.ra/memory.db',
     maxMemories: 1000,
     ttlDays: 90,
     injectLimit: 5,
-  },
-  observability: {
-    enabled: true,
-    logs: {
-      level: 'info',
-      output: 'session',
-    },
-    traces: {
-      output: 'session',
-    },
   },
 }

@@ -105,8 +105,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'list-memories':               { type: 'boolean' },
       'memories':                    { type: 'string' },
       'forget':                      { type: 'string' },
-      // Storage
-      'storage-path':                { type: 'string' },
+      // Data directory & storage
+      'data-dir':                    { type: 'string' },
       'storage-max-sessions':        { type: 'string' },
       'storage-ttl-days':            { type: 'string' },
       // Skills
@@ -152,8 +152,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values['mcp-server-tool-name'])        set(['mcp', 'server', 'tool', 'name'], values['mcp-server-tool-name'])
   if (values['mcp-server-tool-description']) set(['mcp', 'server', 'tool', 'description'], values['mcp-server-tool-description'])
 
-  // Storage
-  if (values['storage-path'])          set(['storage', 'path'], values['storage-path'])
+  // Data directory & storage
+  if (values['data-dir'])              set(['dataDir'], values['data-dir'])
   if (values['storage-max-sessions'])  { const n = safeParseInt(values['storage-max-sessions'] as string); if (n !== undefined) set(['storage', 'maxSessions'], n) }
   if (values['storage-ttl-days'])      { const n = safeParseInt(values['storage-ttl-days'] as string); if (n !== undefined) set(['storage', 'ttlDays'], n) }
 

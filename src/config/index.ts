@@ -90,6 +90,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   const setInt = (path: string[], value: string) => { const n = safeParseInt(value); if (n !== undefined) set(path, n) }
 
   // Top-level
+  if (env.RA_DATA_DIR !== undefined)       set(['dataDir'], env.RA_DATA_DIR)
   if (env.RA_PROVIDER !== undefined)       set(['provider'], env.RA_PROVIDER)
   if (env.RA_MODEL !== undefined)          set(['model'], env.RA_MODEL)
   if (env.RA_INTERFACE !== undefined)      set(['interface'], env.RA_INTERFACE)
@@ -113,7 +114,6 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_MCP_LAZY_SCHEMAS !== undefined)              set(['mcp', 'lazySchemas'], env.RA_MCP_LAZY_SCHEMAS === 'true')
 
   // Storage
-  if (env.RA_STORAGE_PATH !== undefined)         set(['storage', 'path'], env.RA_STORAGE_PATH)
   if (env.RA_STORAGE_MAX_SESSIONS !== undefined) setInt(['storage', 'maxSessions'], env.RA_STORAGE_MAX_SESSIONS)
   if (env.RA_STORAGE_TTL_DAYS !== undefined)     setInt(['storage', 'ttlDays'], env.RA_STORAGE_TTL_DAYS)
 
@@ -123,23 +123,9 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
 
   // Memory
   if (env.RA_MEMORY_ENABLED !== undefined)       set(['memory', 'enabled'], env.RA_MEMORY_ENABLED === 'true')
-  if (env.RA_MEMORY_PATH !== undefined)          set(['memory', 'path'], env.RA_MEMORY_PATH)
   if (env.RA_MEMORY_MAX_MEMORIES !== undefined)  setInt(['memory', 'maxMemories'], env.RA_MEMORY_MAX_MEMORIES)
   if (env.RA_MEMORY_TTL_DAYS !== undefined)      setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
   if (env.RA_MEMORY_INJECT_LIMIT !== undefined)  setInt(['memory', 'injectLimit'], env.RA_MEMORY_INJECT_LIMIT)
-
-  // Observability
-  if (env.RA_OBSERVABILITY_ENABLED !== undefined) set(['observability', 'enabled'], env.RA_OBSERVABILITY_ENABLED === 'true')
-  // Logs
-  if (env.RA_LOG_LEVEL !== undefined && ['debug', 'info', 'warn', 'error'].includes(env.RA_LOG_LEVEL))
-    set(['observability', 'logs', 'level'], env.RA_LOG_LEVEL)
-  if (env.RA_LOG_OUTPUT !== undefined && ['stderr', 'stdout', 'file', 'session'].includes(env.RA_LOG_OUTPUT))
-    set(['observability', 'logs', 'output'], env.RA_LOG_OUTPUT)
-  if (env.RA_LOG_FILE !== undefined) set(['observability', 'logs', 'filePath'], env.RA_LOG_FILE)
-  // Traces
-  if (env.RA_TRACE_OUTPUT !== undefined && ['stderr', 'stdout', 'file', 'session'].includes(env.RA_TRACE_OUTPUT))
-    set(['observability', 'traces', 'output'], env.RA_TRACE_OUTPUT)
-  if (env.RA_TRACE_FILE !== undefined) set(['observability', 'traces', 'filePath'], env.RA_TRACE_FILE)
 
   // Provider credentials — env-only (not CLI flags, to avoid leaking in process list/shell history)
   if (env.RA_ANTHROPIC_API_KEY !== undefined)  set(['providers', 'anthropic', 'apiKey'], env.RA_ANTHROPIC_API_KEY)
@@ -176,6 +162,9 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
 
   const config = merged as unknown as RaConfig
   config.configDir = configDir
+
+  // Resolve dataDir against configDir
+  config.dataDir = resolvePath(config.dataDir, configDir)
 
   // Only try loading systemPrompt as a file if it looks like a path
   if (config.systemPrompt && looksLikePath(config.systemPrompt, ['.txt', '.md'])) {

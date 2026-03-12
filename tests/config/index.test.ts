@@ -189,7 +189,7 @@ describe('loadConfig', () => {
       RA_MCP_SERVER_ENABLED: 'true', RA_MCP_SERVER_PORT: '5001',
       RA_MCP_SERVER_TOOL_NAME: 'mybot',
       RA_MCP_SERVER_TOOL_DESCRIPTION: 'A bot',
-      RA_STORAGE_PATH: '/custom/storage', RA_STORAGE_MAX_SESSIONS: '50', RA_STORAGE_TTL_DAYS: '7',
+      RA_STORAGE_MAX_SESSIONS: '50', RA_STORAGE_TTL_DAYS: '7',
       RA_SKILL_DIRS: '/skills/a,/skills/b', RA_SKILLS: 'code,search',
       RA_ANTHROPIC_API_KEY: 'sk-ant-123', RA_ANTHROPIC_BASE_URL: 'https://ant-proxy/',
       RA_OPENAI_API_KEY: 'sk-oai-123', RA_OPENAI_BASE_URL: 'https://oai-proxy/',
@@ -206,7 +206,6 @@ describe('loadConfig', () => {
     expect(c.mcp.server.port).toBe(5001)
     expect(c.mcp.server.tool.name).toBe('mybot')
     expect(c.mcp.server.tool.description).toBe('A bot')
-    expect(c.storage.path).toBe('/custom/storage')
     expect(c.storage.maxSessions).toBe(50)
     expect(c.storage.ttlDays).toBe(7)
     expect(c.skillDirs).toEqual(['/skills/a', '/skills/b'])
@@ -217,6 +216,36 @@ describe('loadConfig', () => {
     expect(c.providers.openai.baseURL).toBe('https://oai-proxy/')
     expect(c.providers.google.apiKey).toBe('goog-123')
     expect(c.providers.ollama.host).toBe('http://myhost:11434')
+  })
+})
+
+describe('dataDir', () => {
+  it('defaults dataDir to .ra under configDir', async () => {
+    const dir = join(tmpdir(), `ra-datadir-test-${Date.now()}-1`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      const c = await loadConfig({ cwd: dir, env: {} })
+      expect(c.dataDir).toBe(join(dir, '.ra'))
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('RA_DATA_DIR overrides dataDir', async () => {
+    const dir = join(tmpdir(), `ra-datadir-test-${Date.now()}-3`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      const c = await loadConfig({ cwd: dir, env: { RA_DATA_DIR: '/custom/data' } })
+      expect(c.dataDir).toBe('/custom/data')
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('config file can set dataDir', async () => {
+    const dir = join(tmpdir(), `ra-datadir-test-${Date.now()}-6`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      writeFileSync(join(dir, 'ra.config.json'), JSON.stringify({ dataDir: 'mydata' }))
+      const c = await loadConfig({ cwd: dir, env: {} })
+      expect(c.dataDir).toBe(join(dir, 'mydata'))
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
 
