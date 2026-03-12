@@ -1,4 +1,6 @@
 import { defineConfig } from 'vitepress'
+import fs from 'node:fs'
+import path from 'node:path'
 
 export default defineConfig({
   title: 'ra',
@@ -10,6 +12,14 @@ export default defineConfig({
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap' }],
   ],
+  transformPageData(pageData) {
+    const filePath = path.resolve(__dirname, '..', pageData.relativePath)
+    try {
+      pageData.rawMarkdown = fs.readFileSync(filePath, 'utf-8')
+    } catch {
+      pageData.rawMarkdown = ''
+    }
+  },
   themeConfig: {
     logo: '/logo.svg',
     nav: [

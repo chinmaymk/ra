@@ -16,32 +16,18 @@ function fallbackCopy(text: string) {
   document.body.removeChild(textarea)
 }
 
-async function writeToClipboard(text: string) {
+function copyPage() {
+  const text = (page.value as any).rawMarkdown
+    || document.querySelector('.vp-doc')?.textContent?.trim()
+    || window.location.href
+
+  // Call clipboard API synchronously to preserve user activation (required by Safari)
   try {
-    await navigator.clipboard.writeText(text)
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
   } catch {
     fallbackCopy(text)
   }
-}
 
-async function copyPage() {
-  let text = ''
-  const url = `https://raw.githubusercontent.com/chinmaymk/ra/main/docs/site/${page.value.relativePath}`
-  try {
-    const res = await fetch(url)
-    if (res.ok) {
-      text = await res.text()
-    }
-  } catch {
-    // fetch failed, fall through to DOM fallback
-  }
-
-  if (!text) {
-    const el = document.querySelector('.vp-doc')
-    text = el?.textContent?.trim() || window.location.href
-  }
-
-  await writeToClipboard(text)
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
 }
