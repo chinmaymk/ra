@@ -26,7 +26,7 @@ ra is an agent you can take apart and put back together. One binary, nothing hid
 
 It doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks let you intercept every step — model calls, tool execution, streaming, all of it.
 
-It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers without changing your agent code.
+It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease.
 
 It comes with built-in tools for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent sessions via JSONL. An FTS5 memory backed by SQLite.
 
