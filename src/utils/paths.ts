@@ -39,15 +39,6 @@ export function looksLikePath(s: string, extraExtensions?: string[]): boolean {
 }
 
 /**
- * Normalize a glob result path to use OS-native separators.
- * Bun.Glob always returns forward-slash paths; this converts them for use with path.join etc.
- */
-export function normalizeGlobPath(p: string): string {
-  if (sep === '/') return p
-  return p.replace(/\//g, sep)
-}
-
-/**
  * Extract the first path segment from a glob result (e.g. "foo/SKILL.md" → "foo").
  * Handles both forward and back slashes.
  */
