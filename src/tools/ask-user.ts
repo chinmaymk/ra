@@ -1,6 +1,17 @@
-import type { ITool } from '../providers/types'
+import type { IMessage, ITool } from '../providers/types'
 
 export const ASK_USER_SIGNAL = '__RA_ASK_USER__'
+
+/** Scan messages (reverse) for an ask_user suspension and return the question, or undefined */
+export function extractAskUserQuestion(messages: IMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!
+    if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
+      return m.content.slice(ASK_USER_SIGNAL.length)
+    }
+  }
+  return undefined
+}
 
 export function askUserTool(): ITool {
   return {

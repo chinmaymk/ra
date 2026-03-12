@@ -1,5 +1,5 @@
 import type { ITool } from '../providers/types'
-import { execFile } from 'child_process'
+import { shellExec } from './shell-exec'
 
 export function executeBashTool(): ITool {
   return {
@@ -18,16 +18,7 @@ export function executeBashTool(): ITool {
     },
     async execute(input: unknown) {
       const { command, cwd, timeout = 30000 } = input as { command: string; cwd?: string; timeout?: number }
-      return new Promise<string>((resolve, reject) => {
-        execFile('bash', ['-c', command], { cwd, timeout, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-          if (error && error.killed) {
-            reject(new Error(`Command timed out after ${timeout}ms`))
-            return
-          }
-          const output = [stdout, stderr].filter(Boolean).join('\n').trim()
-          resolve(output || (error ? `Exit code: ${error.code}` : '(no output)'))
-        })
-      })
+      return shellExec('bash', ['-c', command], cwd, timeout)
     },
   }
 }

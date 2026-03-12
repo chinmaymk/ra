@@ -144,14 +144,14 @@ describe('OllamaProvider', () => {
     expect(mapped[0].content).toBe(JSON.stringify([{ type: 'text', text: 'result' }]))
   })
 
-  it('maps assistant with string content to empty when array', () => {
+  it('maps assistant with array content to extracted text', () => {
     const provider = new OllamaProvider({ host: 'http://localhost:11434' })
     const messages = [
       { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'hi' }] },
     ]
     const mapped = provider.mapMessages(messages) as any[]
-    // Array content on assistant results in empty string
-    expect(mapped[0].content).toBe('')
+    // Array content on assistant extracts text parts
+    expect(mapped[0].content).toBe('hi')
   })
 
   it('handles invalid JSON arguments in toolCalls gracefully', () => {

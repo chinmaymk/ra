@@ -1,4 +1,5 @@
 import { parseArgs as utilParseArgs } from 'util'
+import { safeParseInt, setPath } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
 export interface SkillCommand {
@@ -25,21 +26,6 @@ export interface ParsedArgsMeta {
 export interface ParsedArgs {
   config: Partial<RaConfig>
   meta: ParsedArgsMeta
-}
-
-function safeParseInt(value: string): number | undefined {
-  const n = parseInt(value, 10)
-  return Number.isNaN(n) ? undefined : n
-}
-
-function setPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
-  let cur = obj
-  for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i]!
-    if (cur[key] === undefined || typeof cur[key] !== 'object') cur[key] = {}
-    cur = cur[key] as Record<string, unknown>
-  }
-  cur[path[path.length - 1]!] = value
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {

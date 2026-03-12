@@ -1,4 +1,5 @@
 import type { IProvider, IMessage } from '../providers/types'
+import { contentToString } from '../providers/utils'
 import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
@@ -6,7 +7,7 @@ import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml } from '../skills/loader'
-import { ASK_USER_SIGNAL } from '../tools/ask-user'
+import { extractAskUserQuestion } from '../tools/ask-user'
 
 export interface HttpOptions {
   port: number
@@ -141,20 +142,9 @@ export class HttpServer {
       // Extract last assistant message text
       const assistantMessages = result.messages.filter(m => m.role === 'assistant')
       const last = assistantMessages[assistantMessages.length - 1]
-      const responseText = typeof last?.content === 'string'
-        ? last.content
-        : Array.isArray(last?.content)
-          ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
-          : ''
+      const responseText = last ? contentToString(last.content) : ''
 
-      let askQuestion: string | undefined
-      for (let i = result.messages.length - 1; i >= 0; i--) {
-        const m = result.messages[i]!
-        if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-          askQuestion = m.content.slice(ASK_USER_SIGNAL.length)
-          break
-        }
-      }
+      const askQuestion = extractAskUserQuestion(result.messages)
 
       return new Response(JSON.stringify({
         response: responseText,
@@ -213,13 +203,8 @@ export class HttpServer {
         try {
           const result = await loop.run(messages)
 
-          for (let i = result.messages.length - 1; i >= 0; i--) {
-            const m = result.messages[i]!
-            if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-              send({ type: 'ask_user', question: m.content.slice(ASK_USER_SIGNAL.length) })
-              break
-            }
-          }
+          const askQuestion = extractAskUserQuestion(result.messages)
+          if (askQuestion) send({ type: 'ask_user', question: askQuestion })
 
           send({ type: 'done' })
         } catch (err) {

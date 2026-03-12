@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { contentToString } from './utils'
 import type { IProvider, IMessage, ITool, ChatRequest, ChatResponse, StreamChunk, ContentPart, TokenUsage } from './types'
 
 export interface OpenAIProviderOptions {
@@ -82,15 +83,13 @@ export class OpenAIProvider implements IProvider {
   mapMessages(messages: IMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
     return messages.map((msg): OpenAI.Chat.ChatCompletionMessageParam => {
       if (msg.role === 'system') {
-        return { role: 'system', content: typeof msg.content === 'string' ? msg.content : msg.content.map(p => p.type === 'text' ? p.text : '').join('') }
+        return { role: 'system', content: contentToString(msg.content) }
       }
       if (msg.role === 'tool') {
         return { role: 'tool', content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content), tool_call_id: msg.toolCallId ?? '' }
       }
       if (msg.role === 'assistant') {
-        const content = typeof msg.content === 'string'
-          ? msg.content
-          : msg.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
+        const content = contentToString(msg.content)
         const result: OpenAI.Chat.ChatCompletionAssistantMessageParam = { role: 'assistant', content: content || null }
         if (msg.toolCalls?.length) {
           result.tool_calls = msg.toolCalls.map(tc => ({ id: tc.id, type: 'function' as const, function: { name: tc.name, arguments: tc.arguments } }))
