@@ -4,6 +4,7 @@ import { fileToContentPart } from '../utils/files'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
+import { errMsg } from '../providers/utils'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
@@ -65,18 +66,10 @@ export class Repl {
     rl.setPrompt(tui.PROMPT)
     const prompt = () => rl.prompt()
 
-    // Ctrl+C: cancel active request or double-press to exit
     rl.on('SIGINT', () => {
-      if (this.activeLoop) {
-        this.activeLoop.abort()
-        return
-      }
+      if (this.activeLoop) { this.activeLoop.abort(); return }
       const now = Date.now()
-      if (now - this.lastInterruptTime < 1000) {
-        tui.printInterrupt('Goodbye!')
-        rl.close()
-        return
-      }
+      if (now - this.lastInterruptTime < 1000) { tui.printInterrupt('Goodbye!'); rl.close(); return }
       this.lastInterruptTime = now
       tui.printInterrupt('Press Ctrl+C again to exit, or type a message.')
       prompt()
@@ -93,7 +86,7 @@ export class Repl {
           const response = await this.handleCommand(trimmed)
           if (response) tui.printCommandResponse(response)
         } catch (err) {
-          tui.printError(err instanceof Error ? err.message : String(err))
+          tui.printError(errMsg(err))
         }
       } else {
         await this.processInput(trimmed)
@@ -101,7 +94,6 @@ export class Repl {
       prompt()
     }
 
-    // Reached when readline closes (Ctrl+D or stream end)
     tui.printInterrupt('Goodbye!')
   }
 
@@ -124,15 +116,10 @@ export class Repl {
       userMessage,
     ]
 
-    // Inject available skills XML as first user message if skills exist
     if (this.options.skillMap && this.options.skillMap.size > 0 && this.messages.length === 0) {
       const xml = buildAvailableSkillsXml(this.options.skillMap)
       if (xml) {
-        initialMessages.splice(
-          this.options.systemPrompt ? 1 : 0,
-          0,
-          { role: 'user', content: xml }
-        )
+        initialMessages.splice(this.options.systemPrompt ? 1 : 0, 0, { role: 'user', content: xml })
       }
     }
 
@@ -209,7 +196,7 @@ export class Repl {
     } catch (err) {
       flushStream()
       if (err instanceof DOMException && err.name === 'AbortError') tui.printInterrupt('Request cancelled.')
-      else tui.printError(err instanceof Error ? err.message : String(err))
+      else tui.printError(errMsg(err))
     } finally {
       this.activeLoop = null
     }
@@ -219,12 +206,18 @@ export class Repl {
     const parts = input.split(/\s+/)
     const cmd = parts[0]
 
+    // Helper for skill lookup
+    const getSkill = (name?: string): Skill | string => {
+      if (!name) return `Usage: ${cmd} <name>`
+      const skill = this.options.skillMap?.get(name)
+      return skill ?? `Skill not found: ${name}`
+    }
+
     switch (cmd) {
-      case '/clear': {
+      case '/clear':
         this.messages = []
         this.sessionId = await this.newSession()
         return 'Message history cleared.'
-      }
       case '/save':
         return `Session ${this.sessionId} saved (auto-saved after each turn).`
       case '/resume': {
@@ -233,9 +226,7 @@ export class Repl {
         const messages = await this.options.storage.readMessages(id)
         if (messages.length === 0) {
           const sessions = await this.options.storage.list()
-          if (!sessions.some(s => s.id === id)) {
-            return `Session not found: ${id}`
-          }
+          if (!sessions.some(s => s.id === id)) return `Session not found: ${id}`
         }
         this.messages = messages
         this.sessionId = id
@@ -244,19 +235,17 @@ export class Repl {
         return `Resumed session ${id} (${this.messages.length} messages loaded).`
       }
       case '/skill': {
-        const name = parts[1]
-        if (!name) return 'Usage: /skill <name>'
-        const skill = this.options.skillMap?.get(name)
-        if (!skill) return `Skill not found: ${name}`
+        const skill = getSkill(parts[1])
+        if (typeof skill === 'string') return skill
         this.pendingSkill = skill
-        return `Skill "${name}" will be injected with your next message.`
+        return `Skill "${parts[1]}" will be injected with your next message.`
       }
       case '/skill-run': {
         const skillName = parts[1]
         const scriptName = parts[2]
         if (!skillName || !scriptName) return 'Usage: /skill-run <skill> <script>'
-        const skill = this.options.skillMap?.get(skillName)
-        if (!skill) return `Skill not found: ${skillName}`
+        const skill = getSkill(skillName)
+        if (typeof skill === 'string') return skill
         const output = await runSkillScriptByName(skill, scriptName, {})
         if (output.trim()) {
           this.pendingAttachments.push({ type: 'text', text: `<skill-script name="${scriptName}">\n${output.trim()}\n</skill-script>` })
@@ -268,8 +257,8 @@ export class Repl {
         const skillName = parts[1]
         const refName = parts[2]
         if (!skillName || !refName) return 'Usage: /skill-ref <skill> <reference>'
-        const skill = this.options.skillMap?.get(skillName)
-        if (!skill) return `Skill not found: ${skillName}`
+        const skill = getSkill(skillName)
+        if (typeof skill === 'string') return skill
         const content = await readSkillReference(skill, refName)
         if (content.trim()) {
           this.pendingAttachments.push({ type: 'text', text: `<skill-reference name="${refName}">\n${content.trim()}\n</skill-reference>` })
@@ -284,7 +273,7 @@ export class Repl {
           this.pendingAttachments.push(await fileToContentPart(filePath))
           return `Attached: ${filePath}`
         } catch (err) {
-          return `Failed to attach file: ${err instanceof Error ? err.message : String(err)}`
+          return `Failed to attach file: ${errMsg(err)}`
         }
       }
       case '/memories': {
@@ -292,9 +281,7 @@ export class Repl {
         const limit = parts[1] ? parseInt(parts[1], 10) : 20
         const memories = this.options.memoryStore.list(Number.isNaN(limit) ? 20 : limit)
         if (memories.length === 0) return 'No memories stored.'
-        const lines = memories.map(m =>
-          `  [${m.id}] [${m.tags || 'general'}] ${m.content}`
-        )
+        const lines = memories.map(m => `  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
         return `${memories.length} memories (${this.options.memoryStore.count()} total):\n${lines.join('\n')}`
       }
       case '/forget': {
@@ -309,9 +296,7 @@ export class Repl {
         const lines = this.options.contextMessages.map(m => {
           const content = typeof m.content === 'string' ? m.content : ''
           const pathMatch = content.match(/<context-file path="([^"]+)">/)
-          const path = pathMatch?.[1] ?? 'unknown'
-          const size = content.length
-          return `  ${path}  (${size} chars)`
+          return `  ${pathMatch?.[1] ?? 'unknown'}  (${content.length} chars)`
         })
         return `Discovered context files:\n${lines.join('\n')}`
       }

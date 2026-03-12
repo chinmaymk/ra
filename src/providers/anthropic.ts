@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { extractSystemMessages, THINKING_BUDGETS, parseToolArguments } from './utils'
+import { extractSystemMessages, THINKING_BUDGETS, parseToolArguments, contentToJson } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 export interface AnthropicProviderOptions {
@@ -75,10 +75,7 @@ export class AnthropicProvider implements IProvider {
   mapMessages(messages: IMessage[]): Anthropic.MessageParam[] {
     return messages.map((msg): Anthropic.MessageParam => {
       if (msg.role === 'tool') {
-        return {
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: msg.toolCallId!, content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }],
-        }
+        return { role: 'user', content: [{ type: 'tool_result', tool_use_id: msg.toolCallId!, content: contentToJson(msg.content) }] }
       }
       if (msg.role === 'assistant' && msg.toolCalls?.length) {
         const content: Anthropic.ContentBlockParam[] = []

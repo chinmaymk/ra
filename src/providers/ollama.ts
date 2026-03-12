@@ -1,5 +1,5 @@
 import { Ollama, type ChatRequest as OllamaChatRequest, type Message as OllamaMessage, type Tool as OllamaTool, type ToolCall as OllamaToolCall } from 'ollama'
-import { contentToString, parseToolArguments } from './utils'
+import { contentToString, contentToJson, parseToolArguments } from './utils'
 import type { IProvider, IMessage, ITool, ChatRequest, ChatResponse, StreamChunk } from './types'
 
 export interface OllamaProviderOptions {
@@ -59,12 +59,8 @@ export class OllamaProvider implements IProvider {
 
   mapMessages(messages: IMessage[]): OllamaMessage[] {
     return messages.map((msg): OllamaMessage => {
-      if (msg.role === 'system') {
-        return { role: 'system', content: contentToString(msg.content) }
-      }
-      if (msg.role === 'tool') {
-        return { role: 'tool', content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }
-      }
+      if (msg.role === 'system') return { role: 'system', content: contentToString(msg.content) }
+      if (msg.role === 'tool') return { role: 'tool', content: contentToJson(msg.content) }
       if (msg.role === 'assistant') {
         const result: OllamaMessage = { role: 'assistant', content: contentToString(msg.content) }
         if (msg.toolCalls?.length) {

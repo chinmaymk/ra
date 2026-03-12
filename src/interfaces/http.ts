@@ -1,5 +1,5 @@
 import type { IProvider, IMessage } from '../providers/types'
-import { contentToString } from '../providers/utils'
+import { contentToString, errMsg } from '../providers/utils'
 import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
@@ -74,17 +74,13 @@ export class HttpServer {
     try {
       const body = await req.json() as Record<string, unknown>
       if (!body || typeof body !== 'object') return null
-      // Ensure messages is an array (default to empty if missing)
-      const messages = Array.isArray(body.messages) ? body.messages as IMessage[] : []
-      const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined
-      return { messages, sessionId }
+      return {
+        messages: Array.isArray(body.messages) ? body.messages as IMessage[] : [],
+        sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
+      }
     } catch {
       return null
     }
-  }
-
-  private static badRequest(): Response {
-    return jsonResponse({ error: 'Invalid JSON' }, 400)
   }
 
   private prependSystem(messages: IMessage[]): IMessage[] {
@@ -110,7 +106,7 @@ export class HttpServer {
 
   private async handleChatSync(req: Request): Promise<Response> {
     const body = await this.parseBody(req)
-    if (!body) return HttpServer.badRequest()
+    if (!body) return jsonResponse({ error: 'Invalid JSON' }, 400)
 
     try {
       const result = await this.createLoop(body.sessionId).run(this.prependSystem(body.messages ?? []))
@@ -123,13 +119,13 @@ export class HttpServer {
         ...(askQuestion && { askUser: askQuestion, sessionId: body.sessionId }),
       })
     } catch (err) {
-      return jsonResponse({ error: err instanceof Error ? err.message : String(err) }, 500)
+      return jsonResponse({ error: errMsg(err) }, 500)
     }
   }
 
   private async handleChatStream(req: Request): Promise<Response> {
     const body = await this.parseBody(req)
-    if (!body) return HttpServer.badRequest()
+    if (!body) return jsonResponse({ error: 'Invalid JSON' }, 400)
 
     const messages = this.prependSystem(body.messages ?? [])
     const opts = this.options
@@ -157,7 +153,7 @@ export class HttpServer {
           if (askQuestion) send({ type: 'ask_user', question: askQuestion })
           send({ type: 'done' })
         } catch (err) {
-          send({ type: 'error', error: err instanceof Error ? err.message : String(err) })
+          send({ type: 'error', error: errMsg(err) })
         } finally {
           controller.close()
         }

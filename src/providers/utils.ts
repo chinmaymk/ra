@@ -18,6 +18,16 @@ export function contentToString(content: string | ContentPart[]): string {
   return content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('')
 }
 
+/** Stringify content for tool results and serialization */
+export function contentToJson(content: string | ContentPart[]): string {
+  return typeof content === 'string' ? content : JSON.stringify(content)
+}
+
+/** Extract error message from unknown error */
+export function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 /** Parse JSON tool arguments with fallback to empty object */
 export function parseToolArguments(args: string | Record<string, unknown>): Record<string, unknown> {
   if (typeof args !== 'string') return args

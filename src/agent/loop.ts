@@ -3,7 +3,7 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
-import { accumulateUsage } from '../providers/utils'
+import { accumulateUsage, errMsg } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
 
@@ -111,13 +111,10 @@ export class AgentLoop {
 
         currentPhase = 'stream'
         for await (const chunk of this.provider.stream(request)) {
-          if (chunk.type === 'thinking') {
+          if (chunk.type === 'thinking' || chunk.type === 'text') {
             await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
             if (signal.aborted) break
-          } else if (chunk.type === 'text') {
-            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-            if (signal.aborted) break
-            textAccumulator += chunk.delta
+            if (chunk.type === 'text') textAccumulator += chunk.delta
           } else if (chunk.type === 'tool_call_start') {
             toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
           } else if (chunk.type === 'tool_call_delta') {
@@ -161,7 +158,6 @@ export class AgentLoop {
                 ? await withTimeout(this.tools.execute(tc.name, input), this.toolTimeout, `Tool '${tc.name}'`)
                 : await this.tools.execute(tc.name, input)
               content = typeof value === 'string' ? value : JSON.stringify(value)
-              // Roll up child usage (e.g. from subagent tool) into parent totals
               if (value && typeof value === 'object' && 'usage' in value) {
                 const childUsage = (value as { usage: TokenUsage }).usage
                 if (childUsage) accumulateUsage(usage, childUsage)
@@ -169,7 +165,7 @@ export class AgentLoop {
               await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             } catch (err) {
               isError = true
-              content = err instanceof Error ? err.message : String(err)
+              content = errMsg(err)
               await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: true }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             }
             messages.push({ role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) })
@@ -177,7 +173,6 @@ export class AgentLoop {
           currentPhase = 'model_call'
         }
 
-        // Break if ask_user was invoked — the loop should suspend
         if (toolCalls.some(tc => tc.name === 'ask_user')) { stop(); break }
 
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopIteration, this.toolTimeout)
@@ -189,7 +184,6 @@ export class AgentLoop {
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopComplete, this.toolTimeout)
       }
     } catch (err) {
-      // If the loop was aborted (e.g. Ctrl+C), swallow the error and return partial results
       if (signal.aborted) {
         this.externalAbort = null
         return { messages, iterations, usage, stopReason: stopReason ?? 'aborted' }

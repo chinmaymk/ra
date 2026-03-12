@@ -7,7 +7,7 @@ import {
   type Tool as BedrockTool,
   type ToolInputSchema,
 } from '@aws-sdk/client-bedrock-runtime'
-import { extractSystemMessages, THINKING_BUDGETS, parseToolArguments } from './utils'
+import { extractSystemMessages, THINKING_BUDGETS, parseToolArguments, contentToJson } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 export interface BedrockProviderOptions {
@@ -86,7 +86,7 @@ export class BedrockProvider implements IProvider {
       if (msg.role === 'tool') {
         return {
           role: 'user',
-          content: [{ toolResult: { toolUseId: msg.toolCallId!, content: [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }] } }],
+          content: [{ toolResult: { toolUseId: msg.toolCallId!, content: [{ text: contentToJson(msg.content) }] } }],
         }
       }
       if (msg.role === 'assistant' && msg.toolCalls?.length) {
@@ -119,17 +119,16 @@ export class BedrockProvider implements IProvider {
       if (part.type === 'image') {
         const src = part.source
         if (src.type === 'base64') {
+          const format = src.mediaType.split('/')[1]
           return {
             image: {
-              format: (src.mediaType.split('/')[1] === 'jpg' ? 'jpeg' : src.mediaType.split('/')[1]) as 'jpeg' | 'png' | 'gif' | 'webp',
+              format: (format === 'jpg' ? 'jpeg' : format) as 'jpeg' | 'png' | 'gif' | 'webp',
               source: { bytes: Buffer.from(src.data, 'base64') },
             },
           }
         }
-        // URL images not natively supported by Bedrock — fall back to text
         return { text: `[Image: ${src.url}]` }
       }
-      // file/document
       return { text: `[File: ${part.mimeType}]` }
     })
   }

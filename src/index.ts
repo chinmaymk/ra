@@ -9,6 +9,7 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { AgentLoop } from './agent/loop'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
+import { errMsg } from './providers/utils'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -78,18 +79,14 @@ async function handleStandaloneCommands(
   }
 }
 
-// ── Interface launchers ──────────────────────────────────────────────
+// ── MCP helpers ──────────────────────────────────────────────────────
 
 function createMcpHandler(app: AppContext) {
   return async (input: unknown) => {
     const loop = new AgentLoop({
-      provider: app.provider,
-      tools: app.tools,
-      model: app.config.model,
-      maxIterations: app.config.maxIterations,
-      toolTimeout: app.config.toolTimeout,
-      middleware: app.middleware,
-      compaction: app.config.compaction,
+      provider: app.provider, tools: app.tools, model: app.config.model,
+      maxIterations: app.config.maxIterations, toolTimeout: app.config.toolTimeout,
+      middleware: app.middleware, compaction: app.config.compaction,
     })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
@@ -110,11 +107,13 @@ async function startSidecarMcp(app: AppContext): Promise<(() => Promise<void>) |
   return stop
 }
 
+// ── Interface launchers ──────────────────────────────────────────────
+
 async function launchMcpHttp(app: AppContext): Promise<void> {
   const handler = createMcpHandler(app)
   await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
   console.error(`MCP server (http) listening on port ${app.config.mcp.server.port}`)
-  await new Promise(() => {}) // keep alive
+  await new Promise(() => {})
 }
 
 async function launchMcpStdio(app: AppContext): Promise<void> {
@@ -142,21 +141,12 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
   const activeSkills = [...app.config.skills, ...parsed.meta.skills]
+  const c = app.config
   const result = await runCli({
-    prompt: parsed.meta.prompt!,
-    files: parsed.meta.files,
-    skills: activeSkills,
-    systemPrompt: app.config.systemPrompt,
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
-    sessionMessages,
+    prompt: parsed.meta.prompt!, files: parsed.meta.files, skills: activeSkills,
+    systemPrompt: c.systemPrompt, model: c.model, provider: app.provider, tools: app.tools,
+    skillMap: app.skillMap, maxIterations: c.maxIterations, middleware: app.middleware,
+    thinking: c.thinking, compaction: c.compaction, contextMessages: app.contextMessages, sessionMessages,
   })
   for (const msg of result.messages.slice(result.priorCount)) {
     await app.storage.appendMessage(app.sessionId, msg)
@@ -167,22 +157,14 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
 
 async function launchHttp(app: AppContext, signals: { remove: () => void }): Promise<void> {
   const stopMcpHttp = await startSidecarMcp(app)
+  const c = app.config
 
   const httpServer = new HttpServer({
-    port: app.config.http.port,
-    token: app.config.http.token || undefined,
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    toolTimeout: app.config.toolTimeout,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
+    port: c.http.port, token: c.http.token || undefined,
+    model: c.model, provider: app.provider, tools: app.tools, storage: app.storage,
+    systemPrompt: c.systemPrompt, skillMap: app.skillMap, maxIterations: c.maxIterations,
+    toolTimeout: c.toolTimeout, middleware: app.middleware, thinking: c.thinking,
+    compaction: c.compaction, contextMessages: app.contextMessages,
   })
   await httpServer.start()
   console.error(`HTTP server listening on port ${httpServer.port}`)
@@ -194,26 +176,18 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
   }
   signals.remove()
   onSignals(httpShutdown)
-  await new Promise(() => {}) // keep alive
+  await new Promise(() => {})
 }
 
 async function launchRepl(app: AppContext): Promise<void> {
   const stopMcpHttp = await startSidecarMcp(app)
+  const c = app.config
 
   const repl = new Repl({
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    toolTimeout: app.config.toolTimeout,
-    sessionId: app.sessionId,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
+    model: c.model, provider: app.provider, tools: app.tools, storage: app.storage,
+    systemPrompt: c.systemPrompt, skillMap: app.skillMap, maxIterations: c.maxIterations,
+    toolTimeout: c.toolTimeout, sessionId: app.sessionId, middleware: app.middleware,
+    thinking: c.thinking, compaction: c.compaction, contextMessages: app.contextMessages,
     memoryStore: app.memoryStore,
   })
   await repl.start()
@@ -228,7 +202,6 @@ async function main(): Promise<void> {
 
   await handleEarlyExits(parsed)
 
-  // Read piped stdin (only for CLI / unspecified mode)
   const isNonCliInterface = parsed.config.interface && parsed.config.interface !== 'cli'
   if (!isNonCliInterface) {
     const stdinContent = await readStdin()
@@ -258,19 +231,14 @@ async function main(): Promise<void> {
     case 'mcp':       return launchMcpHttp(app)
     case 'mcp-stdio': return launchMcpStdio(app)
     case 'http':      return launchHttp(app, signals)
-    case 'cli':
-      return launchCli(parsed, app)
-    default: {
-      // CLI mode when prompt given without --cli flag
-      if (parsed.meta.prompt && !parsed.config.interface) {
-        return launchCli(parsed, app)
-      }
+    case 'cli':       return launchCli(parsed, app)
+    default:
+      if (parsed.meta.prompt && !parsed.config.interface) return launchCli(parsed, app)
       return launchRepl(app)
-    }
   }
 }
 
 main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err))
+  console.error(errMsg(err))
   process.exit(1)
 })

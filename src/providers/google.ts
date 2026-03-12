@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Content, Part, Tool as GeminiTool, GenerateContentResponse } from '@google/generative-ai'
-import { extractSystemMessages, parseToolArguments } from './utils'
+import { extractSystemMessages, parseToolArguments, contentToJson } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
@@ -24,7 +24,6 @@ export class GoogleProvider implements IProvider {
     const { system, filtered } = extractSystemMessages(request.messages)
     const requestOptions = this.baseURL ? { baseUrl: this.baseURL } : undefined
     const model = this.client.getGenerativeModel({ model: request.model, ...(system && { systemInstruction: system }) }, requestOptions)
-    // Filter out messages with empty parts to avoid Gemini API rejection
     const contents = this.mapMessages(filtered).filter(c => c.parts.length > 0)
     const tools = request.tools?.length ? this.mapTools(request.tools) : undefined
     return { model, contents, tools }
@@ -92,11 +91,10 @@ export class GoogleProvider implements IProvider {
   mapMessages(messages: IMessage[]): Content[] {
     return messages.map((msg): Content => {
       if (msg.role === 'tool') {
-        // toolCallId is formatted as "functionName_counter" — extract the function name for Gemini
         const toolName = msg.toolCallId!.substring(0, msg.toolCallId!.lastIndexOf('_'))
         return {
           role: 'user',
-          parts: [{ functionResponse: { name: toolName, response: { content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) } } }],
+          parts: [{ functionResponse: { name: toolName, response: { content: contentToJson(msg.content) } } }],
         }
       }
       const role = msg.role === 'assistant' ? 'model' : 'user'
@@ -132,11 +130,8 @@ export class GoogleProvider implements IProvider {
   }
 
   private inferMimeType(url: string): string {
-    if (url.endsWith('.png')) return 'image/png'
-    if (url.endsWith('.gif')) return 'image/gif'
-    if (url.endsWith('.webp')) return 'image/webp'
-    if (url.endsWith('.svg')) return 'image/svg+xml'
-    return 'image/jpeg'
+    const ext = url.split('.').pop()
+    return ({ png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' } as Record<string, string>)[ext ?? ''] ?? 'image/jpeg'
   }
 
   mapResponseToMessage(response: GenerateContentResponse): IMessage {

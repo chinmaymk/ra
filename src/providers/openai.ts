@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { contentToString } from './utils'
+import { contentToString, contentToJson } from './utils'
 import type { IProvider, IMessage, ITool, ChatRequest, ChatResponse, StreamChunk, ContentPart, TokenUsage } from './types'
 
 export interface OpenAIProviderOptions {
@@ -82,12 +82,8 @@ export class OpenAIProvider implements IProvider {
 
   mapMessages(messages: IMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
     return messages.map((msg): OpenAI.Chat.ChatCompletionMessageParam => {
-      if (msg.role === 'system') {
-        return { role: 'system', content: contentToString(msg.content) }
-      }
-      if (msg.role === 'tool') {
-        return { role: 'tool', content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content), tool_call_id: msg.toolCallId ?? '' }
-      }
+      if (msg.role === 'system') return { role: 'system', content: contentToString(msg.content) }
+      if (msg.role === 'tool') return { role: 'tool', content: contentToJson(msg.content), tool_call_id: msg.toolCallId ?? '' }
       if (msg.role === 'assistant') {
         const content = contentToString(msg.content)
         const result: OpenAI.Chat.ChatCompletionAssistantMessageParam = { role: 'assistant', content: content || null }
@@ -96,7 +92,6 @@ export class OpenAIProvider implements IProvider {
         }
         return result
       }
-      // user
       const content = typeof msg.content === 'string' ? msg.content : this.mapContentParts(msg.content)
       return { role: 'user', content }
     })

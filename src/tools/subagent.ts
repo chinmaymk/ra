@@ -2,7 +2,7 @@ import type { ITool, IMessage, IProvider, TokenUsage } from '../providers/types'
 import type { MiddlewareConfig } from '../agent/types'
 import { AgentLoop, type AgentLoopOptions } from '../agent/loop'
 import { ToolRegistry } from '../agent/tool-registry'
-import { accumulateUsage } from '../providers/utils'
+import { accumulateUsage, errMsg } from '../providers/utils'
 import type { CompactionConfig } from '../agent/context-compaction'
 
 /** Tools that can't work from a background fork */
@@ -61,26 +61,18 @@ export function subagentTool(options: SubagentToolOptions): ITool {
       const { tasks } = input as { tasks: { task: string }[] }
       if (!tasks?.length) throw new Error('At least one task is required')
 
-      // Build child tool registry lazily so we pick up tools registered
-      // after subagentTool() was constructed (e.g. MCP tools)
       const childTools = new ToolRegistry()
       for (const tool of options.tools.all()) {
-        if (EXCLUDED_TOOLS.has(tool.name)) continue
-        childTools.register(tool)
+        if (!EXCLUDED_TOOLS.has(tool.name)) childTools.register(tool)
       }
       if (depth + 1 < maxDepth) {
         childTools.register(subagentTool({ ...options, tools: childTools, _depth: depth + 1 }))
       }
 
       const loopOptions: AgentLoopOptions = {
-        provider: options.provider,
-        tools: childTools,
-        model: options.model,
-        maxIterations,
-        middleware: options.middleware,
-        thinking: options.thinking,
-        compaction: options.compaction,
-        toolTimeout: options.toolTimeout,
+        provider: options.provider, tools: childTools, model: options.model,
+        maxIterations, middleware: options.middleware, thinking: options.thinking,
+        compaction: options.compaction, toolTimeout: options.toolTimeout,
       }
 
       const results = await Promise.all(tasks.map(async ({ task }) => {
@@ -92,24 +84,18 @@ export function subagentTool(options: SubagentToolOptions): ITool {
           const result = await new AgentLoop(loopOptions).run(messages)
           const last = result.messages.findLast(m => m.role === 'assistant')
           return {
-            task,
-            status: 'completed' as const,
+            task, status: 'completed' as const,
             result: last ? (typeof last.content === 'string' ? last.content : JSON.stringify(last.content)) : '(no response)',
-            iterations: result.iterations,
-            usage: result.usage,
+            iterations: result.iterations, usage: result.usage,
           }
         } catch (err) {
           return {
-            task,
-            status: 'error' as const,
-            result: err instanceof Error ? err.message : String(err),
-            iterations: 0,
-            usage: { inputTokens: 0, outputTokens: 0 } as TokenUsage,
+            task, status: 'error' as const, result: errMsg(err),
+            iterations: 0, usage: { inputTokens: 0, outputTokens: 0 } as TokenUsage,
           }
         }
       }))
 
-      // Compute aggregate usage for parent rollup
       const totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
       for (const r of results) accumulateUsage(totalUsage, r.usage)
 

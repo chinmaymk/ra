@@ -1,6 +1,7 @@
 import { resolve } from 'path'
 import type { SkillCommand } from './parse-args'
 import type { IMessage } from '../providers/types'
+import { errMsg } from '../providers/utils'
 import type { MemoryStore } from '../memory'
 
 /** Run --exec <script> */
@@ -21,32 +22,26 @@ export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
 
   switch (action) {
     case 'install': {
-      if (args.length === 0) {
-        console.error('Usage: ra skill install <source>')
-        process.exit(1)
-      }
+      if (args.length === 0) { console.error('Usage: ra skill install <source>'); process.exit(1) }
       for (const source of args) {
         try {
           const installed = await installSkill(source)
           console.log(`Installed skills: ${installed.join(', ')} → ${defaultSkillInstallDir()}`)
         } catch (err) {
-          console.error(`Failed to install "${source}": ${err instanceof Error ? err.message : String(err)}`)
+          console.error(`Failed to install "${source}": ${errMsg(err)}`)
           process.exit(1)
         }
       }
       process.exit(0)
     }
     case 'remove': {
-      if (args.length === 0) {
-        console.error('Usage: ra skill remove <name>')
-        process.exit(1)
-      }
+      if (args.length === 0) { console.error('Usage: ra skill remove <name>'); process.exit(1) }
       for (const name of args) {
         try {
           await removeSkill(name)
           console.log(`Removed skill: ${name}`)
         } catch (err) {
-          console.error(`Failed to remove "${name}": ${err instanceof Error ? err.message : String(err)}`)
+          console.error(`Failed to remove "${name}": ${errMsg(err)}`)
           process.exit(1)
         }
       }
@@ -107,9 +102,7 @@ export function runMemoryCommand(
     console.log(query ? 'No matching memories found.' : 'No memories stored.')
   } else {
     const total = memoryStore.count()
-    console.log(query
-      ? `${memories.length} matching memories (${total} total):\n`
-      : `${memories.length} memories (${total} total):\n`)
+    console.log(`${memories.length}${query ? ' matching' : ''} memories (${total} total):\n`)
     for (const m of memories) {
       console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
     }
