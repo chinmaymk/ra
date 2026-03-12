@@ -69,7 +69,6 @@ export class Repl {
     rl.on('SIGINT', () => {
       if (this.activeLoop) {
         this.activeLoop.abort()
-        this.activeLoop = null
         return
       }
       const now = Date.now()
