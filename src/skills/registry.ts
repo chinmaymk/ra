@@ -81,7 +81,7 @@ async function findSkillDirsIn(root: string): Promise<string[]> {
       dirs.add(join(root, ...parts.slice(0, -1)))
     }
   } catch { /* not a directory */ }
-  return Array.from(dirs)
+  return [...dirs]
 }
 
 /** Copy skill directories into installDir and write .source.json metadata. Returns installed skill names. */

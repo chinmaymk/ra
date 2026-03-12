@@ -92,6 +92,6 @@ export class SessionStorage {
       }
     }
 
-    await Promise.all(Array.from(toDelete, id => rm(this.sessionDir(id), { recursive: true, force: true })))
+    await Promise.all([...toDelete].map(id => rm(this.sessionDir(id), { recursive: true, force: true })))
   }
 }

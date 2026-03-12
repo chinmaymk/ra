@@ -107,7 +107,7 @@ export async function bootstrap(
     const resolvers = await loadResolvers(config.context.resolvers, config.configDir)
     if (resolvers.length > 0) {
       const resolverMw = createResolverMiddleware(resolvers, process.cwd())
-      ;(middleware.beforeModelCall ??= []).unshift(resolverMw)
+      middleware.beforeModelCall = [resolverMw, ...(middleware.beforeModelCall ?? [])]
     }
   }
 
@@ -115,7 +115,7 @@ export async function bootstrap(
   if (config.context.enabled) {
     const root = (await findGitRoot(process.cwd())) ?? process.cwd()
     const discoveryMw = createDiscoveryMiddleware(config.context.patterns, root, new Set(contextFiles.map(f => f.path)))
-    ;(middleware.afterToolExecution ??= []).push(discoveryMw)
+    middleware.afterToolExecution = [...(middleware.afterToolExecution ?? []), discoveryMw]
   }
 
   // ── Provider ───────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ export async function bootstrap(
     tools.register(memoryForgetTool(memoryStore))
 
     const memMw = createMemoryMiddleware({ store: memoryStore, injectLimit: config.memory.injectLimit })
-    ;(middleware.beforeLoopBegin ??= []).unshift(memMw.beforeLoopBegin)
+    middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
 
@@ -152,7 +152,7 @@ export async function bootstrap(
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
-    logger.info('skills loaded', { skillCount: skillMap.size, skills: Array.from(skillMap.keys()) })
+    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
   }
 
   const builtinSkills = loadBuiltinSkills(config.builtinSkills)
@@ -171,7 +171,7 @@ export async function bootstrap(
   // ── Permissions middleware ─────────────────────────────────────────
   if (config.permissions.rules?.length && !config.permissions.no_rules_rules) {
     const permMw = createPermissionsMiddleware(config.permissions)
-    ;(middleware.beforeToolExecution ??= []).unshift(permMw)
+    middleware.beforeToolExecution = [permMw, ...(middleware.beforeToolExecution ?? [])]
     logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
   }
 
