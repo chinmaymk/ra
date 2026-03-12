@@ -37,11 +37,7 @@ export function listDirectoryTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, recursive, depth } = input as { path: string; recursive?: boolean; depth?: number }
-      if (!recursive) {
-        const entries = await readdir(path, { withFileTypes: true })
-        return entries.map(e => e.isDirectory() ? `${e.name}/` : e.name).join('\n')
-      }
-      const maxDepth = Math.min(Math.max(depth ?? 5, 1), 5)
+      const maxDepth = recursive ? Math.min(Math.max(depth ?? 5, 1), 5) : 1
       const lines = await listRecursive(path, 1, maxDepth, '')
       return lines.join('\n')
     },
