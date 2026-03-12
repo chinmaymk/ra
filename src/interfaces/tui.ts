@@ -95,10 +95,10 @@ export function closeAssistantBox(): void {
   process.stdout.write('\n\n')
 }
 
-/** Prefix written at the start of each response line (4 visible chars). */
-export const RESPONSE_PREFIX = `    `
+/** Prefix written at the start of each response line (2 visible chars). */
+export const RESPONSE_PREFIX = `  `
 /** Visible column width of RESPONSE_PREFIX. */
-export const RESPONSE_PREFIX_LEN = 4
+export const RESPONSE_PREFIX_LEN = 2
 
 /** Streaming line-buffer that wraps completed logical lines with wrap-ansi.
  *
