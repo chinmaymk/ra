@@ -9,9 +9,7 @@ import { createPermissionsMiddleware } from './agent/permissions'
 import { ToolRegistry } from './agent/tool-registry'
 import type { MiddlewareConfig } from './agent/types'
 import type { RaConfig } from './config/types'
-import { discoverContextFiles, buildContextMessages } from './context'
-import { findGitRoot } from './context/discovery'
-import { createDiscoveryMiddleware } from './context/discovery-middleware'
+import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
 import { McpClient } from './mcp/client'
@@ -103,15 +101,10 @@ export async function bootstrap(
     }
   }
 
-  // Dynamic context discovery — picks up context files (CLAUDE.md, .cursorrules, etc.)
-  // from directories the agent touches during tool use
+  // Dynamic context discovery — picks up context files from directories the agent touches
   if (config.context.enabled) {
-    const gitRoot = (await findGitRoot(process.cwd())) ?? process.cwd()
-    const discoveryMw = createDiscoveryMiddleware({
-      patterns: config.context.patterns,
-      gitRoot,
-      initialPaths: new Set(contextFiles.map(f => f.path)),
-    })
+    const root = (await findGitRoot(process.cwd())) ?? process.cwd()
+    const discoveryMw = createDiscoveryMiddleware(config.context.patterns, root, new Set(contextFiles.map(f => f.path)))
     middleware.beforeModelCall = [...(middleware.beforeModelCall ?? []), discoveryMw]
   }
 
