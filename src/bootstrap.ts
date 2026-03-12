@@ -9,7 +9,7 @@ import { createPermissionsMiddleware } from './agent/permissions'
 import { ToolRegistry } from './agent/tool-registry'
 import type { MiddlewareConfig } from './agent/types'
 import type { RaConfig } from './config/types'
-import { discoverContextFiles, buildContextMessages } from './context'
+import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
 import { McpClient } from './mcp/client'
@@ -109,6 +109,13 @@ export async function bootstrap(
       const resolverMw = createResolverMiddleware(resolvers, process.cwd())
       middleware.beforeModelCall = [resolverMw, ...(middleware.beforeModelCall ?? [])]
     }
+  }
+
+  // Dynamic context discovery — picks up context files from directories the agent touches
+  if (config.context.enabled) {
+    const root = (await findGitRoot(process.cwd())) ?? process.cwd()
+    const discoveryMw = createDiscoveryMiddleware(config.context.patterns, root, new Set(contextFiles.map(f => f.path)))
+    middleware.afterToolExecution = [...(middleware.afterToolExecution ?? []), discoveryMw]
   }
 
   // ── Provider ───────────────────────────────────────────────────────
