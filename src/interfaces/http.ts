@@ -111,7 +111,8 @@ export class HttpServer {
     if (this.options.contextMessages?.length) {
       prefix.push(...this.options.contextMessages)
     }
-    return prefix.concat(messages)
+    prefix.push(...messages)
+    return prefix
   }
 
   private async handleChatSync(req: Request): Promise<Response> {
