@@ -5,8 +5,17 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
+import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
 
 export interface HttpOptions {
   port: number
@@ -49,10 +58,7 @@ export class HttpServer {
           const authHeader = req.headers.get('Authorization') ?? ''
           const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
           if (provided !== opts.token) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-              status: 401,
-              headers: { 'Content-Type': 'application/json' },
-            })
+            return jsonResponse({ error: 'Unauthorized' }, 401)
           }
         }
 
@@ -68,10 +74,7 @@ export class HttpServer {
           return this.handleSessions()
         }
 
-        return new Response(JSON.stringify({ error: 'Not Found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        return jsonResponse({ error: 'Not Found' }, 404)
       },
     })
   }
@@ -96,10 +99,7 @@ export class HttpServer {
   }
 
   private static badRequest(): Response {
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Invalid JSON' }, 400)
   }
 
   private prependSystem(messages: IMessage[]): IMessage[] {
@@ -140,20 +140,11 @@ export class HttpServer {
 
       const assistantMessages = result.messages.filter(m => m.role === 'assistant')
       const last = assistantMessages[assistantMessages.length - 1]
-      const responseText = typeof last?.content === 'string'
-        ? last.content
-        : Array.isArray(last?.content)
-          ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
-          : ''
+      const responseText = last ? extractTextContent(last.content) : ''
 
-      return new Response(JSON.stringify({ response: responseText }), {
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return jsonResponse({ response: responseText })
     } catch (err) {
-      return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return jsonResponse({ error: errorMessage(err) }, 500)
     }
   }
 
@@ -208,7 +199,7 @@ export class HttpServer {
           await loop.run(messages)
           send({ type: 'done' })
         } catch (err) {
-          send({ type: 'error', error: err instanceof Error ? err.message : String(err) })
+          send({ type: 'error', error: errorMessage(err) })
         } finally {
           controller.close()
         }
@@ -226,8 +217,6 @@ export class HttpServer {
 
   private async handleSessions(): Promise<Response> {
     const sessions = await this.options.storage.list()
-    return new Response(JSON.stringify({ sessions }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ sessions })
   }
 }

@@ -1,6 +1,6 @@
 import type { ITool } from '../providers/types'
-import { appendFile, mkdir } from 'fs/promises'
-import { dirname } from 'path'
+import { appendFile } from 'fs/promises'
+import { ensureDir } from './ensure-dir'
 
 export function appendFileTool(): ITool {
   return {
@@ -18,7 +18,7 @@ export function appendFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, content } = input as { path: string; content: string }
-      await mkdir(dirname(path), { recursive: true })
+      await ensureDir(path)
       await appendFile(path, content, 'utf-8')
       return `Content appended to: ${path}`
     },

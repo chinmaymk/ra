@@ -1,4 +1,4 @@
-import type { IMessage, TokenUsage } from './types'
+import type { IMessage, TokenUsage, ContentPart } from './types'
 
 /**
  * Merge consecutive messages with the same role using a caller-supplied merge function.
@@ -37,15 +37,25 @@ export function accumulateUsage(target: TokenUsage, source: TokenUsage): void {
   }
 }
 
+/** Extract text from string or ContentPart[] content. */
+export function extractTextContent(content: string | ContentPart[]): string {
+  if (typeof content === 'string') return content
+  return content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
+}
+
+/** Parse tool call arguments from string or object, returning {} on failure. */
+export function parseToolArguments(args: string | Record<string, unknown>): Record<string, unknown> {
+  if (typeof args !== 'string') return args
+  try { return JSON.parse(args) } catch { return {} }
+}
+
 export function extractSystemMessages(messages: IMessage[]): { system: string | undefined; filtered: IMessage[] } {
   const systemParts: string[] = []
   const filtered: IMessage[] = []
 
   for (const msg of messages) {
     if (msg.role === 'system') {
-      systemParts.push(typeof msg.content === 'string'
-        ? msg.content
-        : msg.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join(''))
+      systemParts.push(extractTextContent(msg.content))
     } else {
       filtered.push(msg)
     }

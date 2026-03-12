@@ -3,7 +3,7 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
-import { accumulateUsage } from '../providers/utils'
+import { accumulateUsage, parseToolArguments } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
 
@@ -111,32 +111,19 @@ export class AgentLoop {
 
         currentPhase = 'stream'
         for await (const chunk of this.provider.stream(request)) {
-          if (chunk.type === 'thinking') {
-            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-            if (signal.aborted) break
-          } else if (chunk.type === 'text') {
-            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-            if (signal.aborted) break
-            textAccumulator += chunk.delta
-          } else if (chunk.type === 'tool_call_start') {
-            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-            if (signal.aborted) break
-            toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
-          } else if (chunk.type === 'tool_call_delta') {
-            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-            if (signal.aborted) break
-            const tc = toolCallBuf.find(t => t.id === chunk.id)
-            if (tc) tc.argsRaw += chunk.argsDelta
-          } else if (chunk.type === 'tool_call_end') {
-            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-            if (signal.aborted) break
-          } else if (chunk.type === 'done') {
-            if (chunk.usage) {
-              accumulateUsage(usage, chunk.usage)
-              lastUsage = chunk.usage
-            }
+          if (chunk.type === 'done') {
+            if (chunk.usage) { accumulateUsage(usage, chunk.usage); lastUsage = chunk.usage }
             break
           }
+
+          // All non-done chunks go through middleware + abort check
+          await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
+          if (signal.aborted) break
+
+          // Accumulate stream data
+          if (chunk.type === 'text') textAccumulator += chunk.delta
+          else if (chunk.type === 'tool_call_start') toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
+          else if (chunk.type === 'tool_call_delta') { const tc = toolCallBuf.find(t => t.id === chunk.id); if (tc) tc.argsRaw += chunk.argsDelta }
         }
 
         if (signal.aborted) break
@@ -159,8 +146,7 @@ export class AgentLoop {
               messages.push({ role: 'tool', content: denied, toolCallId: tc.id, isError: true })
               continue
             }
-            let input: unknown
-            try { input = JSON.parse(tc.arguments || '{}') } catch { input = {} }
+            const input = parseToolArguments(tc.arguments || '{}')
             let content: string
             let isError = false
             try {
