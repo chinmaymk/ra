@@ -16,20 +16,18 @@ function fallbackCopy(text: string) {
   document.body.removeChild(textarea)
 }
 
-async function writeToClipboard(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    fallbackCopy(text)
-  }
-}
-
-async function copyPage() {
+function copyPage() {
   const text = (page.value as any).rawMarkdown
     || document.querySelector('.vp-doc')?.textContent?.trim()
     || window.location.href
 
-  await writeToClipboard(text)
+  // Call clipboard API synchronously to preserve user activation (required by Safari)
+  try {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+  } catch {
+    fallbackCopy(text)
+  }
+
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
 }
