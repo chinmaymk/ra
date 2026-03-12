@@ -24,23 +24,13 @@
 
 ## What is ra?
 
-ra is a small, hackable agent. Nothing hidden behind abstractions you can't reach.
+ra is a small, hackable agent. Nothing hidden behind abstractions you can't reach. It doesn't even ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks let you intercept every step — model calls, tool execution, streaming, all of it.
 
-It doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks let you intercept every step — model calls, tool execution, streaming, all of it.
-
-It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease.
-
-It comes with built-in tools for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent sessions via JSONL. An FTS5 memory backed by SQLite.
-
-It speaks MCP both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol.
+It comes with built-in tools for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent sessions via JSONL. An FTS5 memory backed by SQLite. It speaks MCP both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease. Extended thinking for models that support it — watch the model reason in real time. 
 
 It gives you real control over context. Deterministic discovery for common formats (CLAUDE.md, AGENTS.md, README.md), pattern resolution, prompt caching, compaction, token tracking. A skill system that can pull skills from GitHub repos or npm packages.
 
-Extended thinking for models that support it — watch the model reason in real time.
-
-It runs as a CLI, REPL, HTTP server, or MCP server. No runtime dependencies.
-
-Structured logs and traces per session, so you can actually see what your agent is doing.
+It runs as a CLI, REPL, HTTP server, or MCP server. No runtime dependencies. Fully observable via structured logs and traces per session, so you can actually see what your agent is doing.
 
 All of this is configurable via a layered config system — env vars, config files (JSON, YAML, TOML), or CLI flags. Each layer overrides the last.
 
