@@ -28,6 +28,38 @@ export interface ParsedArgs {
   meta: ParsedArgsMeta
 }
 
+type FlagRule =
+  | { type: 'string'; path: string[] }
+  | { type: 'int'; path: string[] }
+  | { type: 'bool'; path: string[]; value: unknown }
+
+// Maps CLI flag names to config paths with type coercion
+const FLAG_RULES: Record<string, FlagRule> = {
+  provider:                      { type: 'string', path: ['provider'] },
+  model:                         { type: 'string', path: ['model'] },
+  'system-prompt':               { type: 'string', path: ['systemPrompt'] },
+  'max-iterations':              { type: 'int',    path: ['maxIterations'] },
+  thinking:                      { type: 'string', path: ['thinking'] },
+  'tool-timeout':                { type: 'int',    path: ['toolTimeout'] },
+  'builtin-tools':               { type: 'bool',   path: ['builtinTools'], value: true },
+  'http-port':                   { type: 'int',    path: ['http', 'port'] },
+  'http-token':                  { type: 'string', path: ['http', 'token'] },
+  'mcp-server-enabled':          { type: 'bool',   path: ['mcp', 'server', 'enabled'], value: true },
+  'mcp-server-port':             { type: 'int',    path: ['mcp', 'server', 'port'] },
+  'mcp-server-tool-name':        { type: 'string', path: ['mcp', 'server', 'tool', 'name'] },
+  'mcp-server-tool-description': { type: 'string', path: ['mcp', 'server', 'tool', 'description'] },
+  'storage-path':                { type: 'string', path: ['storage', 'path'] },
+  'storage-max-sessions':        { type: 'int',    path: ['storage', 'maxSessions'] },
+  'storage-ttl-days':            { type: 'int',    path: ['storage', 'ttlDays'] },
+  'skill-dir':                   { type: 'string', path: ['skillDirs'] },
+  'anthropic-base-url':          { type: 'string', path: ['providers', 'anthropic', 'baseURL'] },
+  'openai-base-url':             { type: 'string', path: ['providers', 'openai', 'baseURL'] },
+  'google-base-url':             { type: 'string', path: ['providers', 'google', 'baseURL'] },
+  'ollama-host':                 { type: 'string', path: ['providers', 'ollama', 'host'] },
+  'azure-endpoint':              { type: 'string', path: ['providers', 'azure', 'endpoint'] },
+  'azure-deployment':            { type: 'string', path: ['providers', 'azure', 'deployment'] },
+}
+
 export function parseArgs(argv: string[]): ParsedArgs {
   const isScriptPath = argv[1] !== undefined && (
     /\.(ts|js|mjs|cjs)$/.test(argv[1]) || argv[1].startsWith('/$bunfs/')
@@ -110,52 +142,25 @@ export function parseArgs(argv: string[]): ParsedArgs {
   })
 
   const r: Record<string, unknown> = {}
-  const set = (path: string[], value: unknown) => setPath(r, path, value)
 
   // Interface selection
-  if (values['mcp-stdio'])    set(['interface'], 'mcp-stdio')
-  else if (values.mcp)       set(['interface'], 'mcp')
-  else if (values.http) set(['interface'], 'http')
-  else if (values.repl) set(['interface'], 'repl')
-  else if (values.cli)  set(['interface'], 'cli')
+  if (values['mcp-stdio'])    setPath(r, ['interface'], 'mcp-stdio')
+  else if (values.mcp)       setPath(r, ['interface'], 'mcp')
+  else if (values.http) setPath(r, ['interface'], 'http')
+  else if (values.repl) setPath(r, ['interface'], 'repl')
+  else if (values.cli)  setPath(r, ['interface'], 'cli')
 
-  // Top-level
-  if (values.provider)           set(['provider'], values.provider)
-  if (values.model)              set(['model'], values.model)
-  if (values['system-prompt'])   set(['systemPrompt'], values['system-prompt'])
-  if (values['max-iterations'])  { const n = safeParseInt(values['max-iterations'] as string); if (n !== undefined) set(['maxIterations'], n) }
-  if (values['thinking'])        set(['thinking'], values['thinking'])
-  if (values['tool-timeout'])    { const n = safeParseInt(values['tool-timeout'] as string); if (n !== undefined) set(['toolTimeout'], n) }
-  if (values['builtin-tools']) set(['builtinTools'], true)
-
-  // HTTP server
-  if (values['http-port'])   { const n = safeParseInt(values['http-port'] as string); if (n !== undefined) set(['http', 'port'], n) }
-  if (values['http-token'])  set(['http', 'token'], values['http-token'])
-
-  // MCP server
-  if (values['mcp-server-enabled'])          set(['mcp', 'server', 'enabled'], true)
-  if (values['mcp-server-port'])             { const n = safeParseInt(values['mcp-server-port'] as string); if (n !== undefined) set(['mcp', 'server', 'port'], n) }
-  if (values['mcp-server-tool-name'])        set(['mcp', 'server', 'tool', 'name'], values['mcp-server-tool-name'])
-  if (values['mcp-server-tool-description']) set(['mcp', 'server', 'tool', 'description'], values['mcp-server-tool-description'])
-
-  // Storage
-  if (values['storage-path'])          set(['storage', 'path'], values['storage-path'])
-  if (values['storage-max-sessions'])  { const n = safeParseInt(values['storage-max-sessions'] as string); if (n !== undefined) set(['storage', 'maxSessions'], n) }
-  if (values['storage-ttl-days'])      { const n = safeParseInt(values['storage-ttl-days'] as string); if (n !== undefined) set(['storage', 'ttlDays'], n) }
-
-  // Skills
-  if (values['skill-dir']) set(['skillDirs'], values['skill-dir'])
+  // Apply declarative flag rules
+  for (const [flag, rule] of Object.entries(FLAG_RULES)) {
+    const val = values[flag]
+    if (val === undefined) continue
+    if (rule.type === 'string') setPath(r, rule.path, val)
+    else if (rule.type === 'int') { const n = safeParseInt(val as string); if (n !== undefined) setPath(r, rule.path, n) }
+    else if (rule.type === 'bool') setPath(r, rule.path, rule.value)
+  }
 
   // Memory — --memories, --list-memories, and --forget imply --memory
-  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) set(['memory', 'enabled'], true)
-
-  // Provider connection options
-  if (values['anthropic-base-url']) set(['providers', 'anthropic', 'baseURL'], values['anthropic-base-url'])
-  if (values['openai-base-url'])    set(['providers', 'openai', 'baseURL'], values['openai-base-url'])
-  if (values['google-base-url'])    set(['providers', 'google', 'baseURL'], values['google-base-url'])
-  if (values['ollama-host'])        set(['providers', 'ollama', 'host'], values['ollama-host'])
-  if (values['azure-endpoint'])    set(['providers', 'azure', 'endpoint'], values['azure-endpoint'])
-  if (values['azure-deployment'])  set(['providers', 'azure', 'deployment'], values['azure-deployment'])
+  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) setPath(r, ['memory', 'enabled'], true)
 
   return {
     config: r as Partial<RaConfig>,

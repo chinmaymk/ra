@@ -1,10 +1,6 @@
-import { join, basename, extname } from 'path'
+import { join, extname } from 'path'
 import { resolveSkillAsset, type Skill } from './types'
 
-/**
- * Find the first available binary from candidates via Bun.which.
- * Throws if none found.
- */
 function findRuntime(candidates: string[]): string {
   for (const c of candidates) {
     if (Bun.which(c)) return c
@@ -12,50 +8,37 @@ function findRuntime(candidates: string[]): string {
   throw new Error(`None of [${candidates.join(', ')}] found on PATH`)
 }
 
-/**
- * Build the subprocess command for a given runtime and script path.
- */
-function buildCmd(runtime: string, scriptPath: string): string[] {
-  switch (runtime) {
-    case 'deno': return ['deno', 'run', scriptPath]
-    case 'bun':  return ['bun', 'run', scriptPath]
-    case 'go':   return ['go', 'run', scriptPath]
-    default:     return [runtime, scriptPath]
-  }
+// Extension → runtime candidates. 'run' runtimes use `[rt, 'run', path]`, others use `[rt, path]`.
+const RUN_CMD = new Set(['deno', 'bun', 'go'])
+const RUNTIMES: Record<string, string[]> = {
+  sh: ['bash', 'sh'],
+  py: ['python3', 'python'],
+  go: ['go'],
+  js: ['bun', 'node', 'deno'],
+  ts: ['bun', 'node', 'deno'],
 }
 
-/**
- * Resolve the command to run a script.
- * Uses extension-based detection to pick the runtime.
- * Shell scripts and files with shebangs are run via bash/sh.
- */
 async function resolveCmd(scriptPath: string): Promise<string[]> {
   const content = await Bun.file(scriptPath).text()
-  const shell = () => findRuntime(['bash', 'sh'])
 
+  // Shebang takes precedence
   if (content.startsWith('#!')) {
-    const shebangLine = content.split('\n')[0]!.slice(2).trim()
-    const parts = shebangLine.split(/\s+/)
+    const parts = content.split('\n')[0]!.slice(2).trim().split(/\s+/)
     const interpreter = parts[0]?.endsWith('/env') && parts[1] ? parts[1] : parts[0]!
     return [interpreter, scriptPath]
   }
 
-  const ext = extname(scriptPath).slice(1).toLowerCase() || null
+  const ext = extname(scriptPath).slice(1).toLowerCase()
+  const candidates = RUNTIMES[ext || 'sh']
+  if (!candidates) throw new Error(`Unsupported script extension: .${ext}`)
 
-  switch (ext) {
-    case null:  return [shell(), scriptPath]
-    case 'sh':  return [shell(), scriptPath]
-    case 'py':  return buildCmd(findRuntime(['python3', 'python']), scriptPath)
-    case 'go':  return buildCmd(findRuntime(['go']), scriptPath)
-    case 'js':
-    case 'ts': {
-      try {
-        return buildCmd(findRuntime(['bun', 'node', 'deno']), scriptPath)
-      } catch {
-        return [process.execPath, '--exec', scriptPath]
-      }
-    }
-    default:    throw new Error(`Unsupported script extension: .${ext}`)
+  try {
+    const rt = findRuntime(candidates)
+    return RUN_CMD.has(rt) ? [rt, 'run', scriptPath] : [rt, scriptPath]
+  } catch {
+    // JS/TS fallback: use the current process as an --exec runner
+    if (ext === 'js' || ext === 'ts') return [process.execPath, '--exec', scriptPath]
+    throw new Error(`No runtime found for .${ext} files`)
   }
 }
 
@@ -74,10 +57,6 @@ export async function runSkillScript(scriptPath: string, env: Record<string, str
   return output
 }
 
-/**
- * Run a specific script from a skill by name (on-demand).
- * Accepts either "scripts/run.ts" or just "run.ts".
- */
 export async function runSkillScriptByName(skill: Skill, scriptName: string, env: Record<string, string>): Promise<string> {
   const rel = resolveSkillAsset(skill.scripts, scriptName, 'scripts')
   if (!rel) throw new Error(`Script not found: ${scriptName} in skill ${skill.metadata.name}`)

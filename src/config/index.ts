@@ -47,7 +47,6 @@ async function loadConfigFile(cwd: string, configPath?: string): Promise<{ confi
     if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
     return { config: {} }
   }
-  // Walk up the directory tree until a config file is found
   let dir = cwd
   while (true) {
     for (const name of CONFIG_FILES) {
@@ -69,78 +68,72 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
   return {}
 }
 
+type EnvRule =
+  | { type: 'string'; path: string[] }
+  | { type: 'int'; path: string[] }
+  | { type: 'bool'; path: string[] }
+  | { type: 'csv'; path: string[] }
+  | { type: 'enum'; path: string[]; values: string[] }
+
+const ENV_RULES: Record<string, EnvRule> = {
+  RA_PROVIDER:       { type: 'string', path: ['provider'] },
+  RA_MODEL:          { type: 'string', path: ['model'] },
+  RA_INTERFACE:      { type: 'string', path: ['interface'] },
+  RA_SYSTEM_PROMPT:  { type: 'string', path: ['systemPrompt'] },
+  RA_MAX_ITERATIONS: { type: 'int',    path: ['maxIterations'] },
+  RA_THINKING:       { type: 'enum',   path: ['thinking'], values: ['low', 'medium', 'high'] },
+  RA_TOOL_TIMEOUT:   { type: 'int',    path: ['toolTimeout'] },
+  RA_BUILTIN_TOOLS:  { type: 'bool',   path: ['builtinTools'] },
+  RA_HTTP_PORT:      { type: 'int',    path: ['http', 'port'] },
+  RA_HTTP_TOKEN:     { type: 'string', path: ['http', 'token'] },
+  RA_MCP_SERVER_ENABLED:          { type: 'bool',   path: ['mcp', 'server', 'enabled'] },
+  RA_MCP_SERVER_PORT:             { type: 'int',    path: ['mcp', 'server', 'port'] },
+  RA_MCP_SERVER_TOOL_NAME:        { type: 'string', path: ['mcp', 'server', 'tool', 'name'] },
+  RA_MCP_SERVER_TOOL_DESCRIPTION: { type: 'string', path: ['mcp', 'server', 'tool', 'description'] },
+  RA_MCP_LAZY_SCHEMAS:            { type: 'bool',   path: ['mcp', 'lazySchemas'] },
+  RA_STORAGE_PATH:         { type: 'string', path: ['storage', 'path'] },
+  RA_STORAGE_MAX_SESSIONS: { type: 'int',    path: ['storage', 'maxSessions'] },
+  RA_STORAGE_TTL_DAYS:     { type: 'int',    path: ['storage', 'ttlDays'] },
+  RA_SKILL_DIRS:           { type: 'csv',    path: ['skillDirs'] },
+  RA_SKILLS:               { type: 'csv',    path: ['skills'] },
+  RA_MEMORY_ENABLED:      { type: 'bool',   path: ['memory', 'enabled'] },
+  RA_MEMORY_PATH:         { type: 'string', path: ['memory', 'path'] },
+  RA_MEMORY_MAX_MEMORIES: { type: 'int',    path: ['memory', 'maxMemories'] },
+  RA_MEMORY_TTL_DAYS:     { type: 'int',    path: ['memory', 'ttlDays'] },
+  RA_MEMORY_INJECT_LIMIT: { type: 'int',    path: ['memory', 'injectLimit'] },
+  RA_OBSERVABILITY_ENABLED: { type: 'bool', path: ['observability', 'enabled'] },
+  RA_LOG_LEVEL:    { type: 'enum',   path: ['observability', 'logs', 'level'],    values: ['debug', 'info', 'warn', 'error'] },
+  RA_LOG_OUTPUT:   { type: 'enum',   path: ['observability', 'logs', 'output'],   values: ['stderr', 'stdout', 'file', 'session'] },
+  RA_LOG_FILE:     { type: 'string', path: ['observability', 'logs', 'filePath'] },
+  RA_TRACE_OUTPUT: { type: 'enum',   path: ['observability', 'traces', 'output'], values: ['stderr', 'stdout', 'file', 'session'] },
+  RA_TRACE_FILE:   { type: 'string', path: ['observability', 'traces', 'filePath'] },
+  // Provider credentials (env-only — not CLI flags, to avoid leaking in process list/shell history)
+  RA_ANTHROPIC_API_KEY:  { type: 'string', path: ['providers', 'anthropic', 'apiKey'] },
+  RA_ANTHROPIC_BASE_URL: { type: 'string', path: ['providers', 'anthropic', 'baseURL'] },
+  RA_OPENAI_API_KEY:     { type: 'string', path: ['providers', 'openai', 'apiKey'] },
+  RA_OPENAI_BASE_URL:    { type: 'string', path: ['providers', 'openai', 'baseURL'] },
+  RA_GOOGLE_API_KEY:     { type: 'string', path: ['providers', 'google', 'apiKey'] },
+  RA_GOOGLE_BASE_URL:    { type: 'string', path: ['providers', 'google', 'baseURL'] },
+  RA_OLLAMA_HOST:        { type: 'string', path: ['providers', 'ollama', 'host'] },
+  RA_BEDROCK_REGION:     { type: 'string', path: ['providers', 'bedrock', 'region'] },
+  RA_BEDROCK_API_KEY:    { type: 'string', path: ['providers', 'bedrock', 'apiKey'] },
+  RA_AZURE_API_KEY:      { type: 'string', path: ['providers', 'azure', 'apiKey'] },
+  RA_AZURE_ENDPOINT:     { type: 'string', path: ['providers', 'azure', 'endpoint'] },
+  RA_AZURE_DEPLOYMENT:   { type: 'string', path: ['providers', 'azure', 'deployment'] },
+  RA_AZURE_API_VERSION:  { type: 'string', path: ['providers', 'azure', 'apiVersion'] },
+}
+
 function loadEnvVars(env: Record<string, string | undefined>): Record<string, unknown> {
   const r: Record<string, unknown> = {}
-  const set = (path: string[], value: unknown) => setPath(r, path, value)
-  const setInt = (path: string[], value: string) => { const n = safeParseInt(value); if (n !== undefined) set(path, n) }
-
-  // Top-level
-  if (env.RA_PROVIDER !== undefined)       set(['provider'], env.RA_PROVIDER)
-  if (env.RA_MODEL !== undefined)          set(['model'], env.RA_MODEL)
-  if (env.RA_INTERFACE !== undefined)      set(['interface'], env.RA_INTERFACE)
-  if (env.RA_SYSTEM_PROMPT !== undefined)  set(['systemPrompt'], env.RA_SYSTEM_PROMPT)
-  if (env.RA_MAX_ITERATIONS !== undefined) setInt(['maxIterations'], env.RA_MAX_ITERATIONS)
-  if (env.RA_THINKING !== undefined && ['low', 'medium', 'high'].includes(env.RA_THINKING)) {
-    set(['thinking'], env.RA_THINKING)
+  for (const [key, rule] of Object.entries(ENV_RULES)) {
+    const val = env[key]
+    if (val === undefined) continue
+    if (rule.type === 'string') setPath(r, rule.path, val)
+    else if (rule.type === 'int') { const n = safeParseInt(val); if (n !== undefined) setPath(r, rule.path, n) }
+    else if (rule.type === 'bool') setPath(r, rule.path, val === 'true')
+    else if (rule.type === 'csv') setPath(r, rule.path, val.split(',').filter(Boolean))
+    else if (rule.type === 'enum' && rule.values.includes(val)) setPath(r, rule.path, val)
   }
-  if (env.RA_TOOL_TIMEOUT !== undefined) setInt(['toolTimeout'], env.RA_TOOL_TIMEOUT)
-  if (env.RA_BUILTIN_TOOLS !== undefined) set(['builtinTools'], env.RA_BUILTIN_TOOLS === 'true')
-
-  // HTTP server
-  if (env.RA_HTTP_PORT !== undefined)  setInt(['http', 'port'], env.RA_HTTP_PORT)
-  if (env.RA_HTTP_TOKEN !== undefined) set(['http', 'token'], env.RA_HTTP_TOKEN)
-
-  // MCP server
-  if (env.RA_MCP_SERVER_ENABLED !== undefined)           set(['mcp', 'server', 'enabled'], env.RA_MCP_SERVER_ENABLED === 'true')
-  if (env.RA_MCP_SERVER_PORT !== undefined)              setInt(['mcp', 'server', 'port'], env.RA_MCP_SERVER_PORT)
-  if (env.RA_MCP_SERVER_TOOL_NAME !== undefined)         set(['mcp', 'server', 'tool', 'name'], env.RA_MCP_SERVER_TOOL_NAME)
-  if (env.RA_MCP_SERVER_TOOL_DESCRIPTION !== undefined)  set(['mcp', 'server', 'tool', 'description'], env.RA_MCP_SERVER_TOOL_DESCRIPTION)
-  if (env.RA_MCP_LAZY_SCHEMAS !== undefined)              set(['mcp', 'lazySchemas'], env.RA_MCP_LAZY_SCHEMAS === 'true')
-
-  // Storage
-  if (env.RA_STORAGE_PATH !== undefined)         set(['storage', 'path'], env.RA_STORAGE_PATH)
-  if (env.RA_STORAGE_MAX_SESSIONS !== undefined) setInt(['storage', 'maxSessions'], env.RA_STORAGE_MAX_SESSIONS)
-  if (env.RA_STORAGE_TTL_DAYS !== undefined)     setInt(['storage', 'ttlDays'], env.RA_STORAGE_TTL_DAYS)
-
-  // Skills
-  if (env.RA_SKILL_DIRS !== undefined) set(['skillDirs'], env.RA_SKILL_DIRS.split(',').filter(Boolean))
-  if (env.RA_SKILLS !== undefined)     set(['skills'], env.RA_SKILLS.split(',').filter(Boolean))
-
-  // Memory
-  if (env.RA_MEMORY_ENABLED !== undefined)       set(['memory', 'enabled'], env.RA_MEMORY_ENABLED === 'true')
-  if (env.RA_MEMORY_PATH !== undefined)          set(['memory', 'path'], env.RA_MEMORY_PATH)
-  if (env.RA_MEMORY_MAX_MEMORIES !== undefined)  setInt(['memory', 'maxMemories'], env.RA_MEMORY_MAX_MEMORIES)
-  if (env.RA_MEMORY_TTL_DAYS !== undefined)      setInt(['memory', 'ttlDays'], env.RA_MEMORY_TTL_DAYS)
-  if (env.RA_MEMORY_INJECT_LIMIT !== undefined)  setInt(['memory', 'injectLimit'], env.RA_MEMORY_INJECT_LIMIT)
-
-  // Observability
-  if (env.RA_OBSERVABILITY_ENABLED !== undefined) set(['observability', 'enabled'], env.RA_OBSERVABILITY_ENABLED === 'true')
-  // Logs
-  if (env.RA_LOG_LEVEL !== undefined && ['debug', 'info', 'warn', 'error'].includes(env.RA_LOG_LEVEL))
-    set(['observability', 'logs', 'level'], env.RA_LOG_LEVEL)
-  if (env.RA_LOG_OUTPUT !== undefined && ['stderr', 'stdout', 'file', 'session'].includes(env.RA_LOG_OUTPUT))
-    set(['observability', 'logs', 'output'], env.RA_LOG_OUTPUT)
-  if (env.RA_LOG_FILE !== undefined) set(['observability', 'logs', 'filePath'], env.RA_LOG_FILE)
-  // Traces
-  if (env.RA_TRACE_OUTPUT !== undefined && ['stderr', 'stdout', 'file', 'session'].includes(env.RA_TRACE_OUTPUT))
-    set(['observability', 'traces', 'output'], env.RA_TRACE_OUTPUT)
-  if (env.RA_TRACE_FILE !== undefined) set(['observability', 'traces', 'filePath'], env.RA_TRACE_FILE)
-
-  // Provider credentials — env-only (not CLI flags, to avoid leaking in process list/shell history)
-  if (env.RA_ANTHROPIC_API_KEY !== undefined)  set(['providers', 'anthropic', 'apiKey'], env.RA_ANTHROPIC_API_KEY)
-  if (env.RA_ANTHROPIC_BASE_URL !== undefined) set(['providers', 'anthropic', 'baseURL'], env.RA_ANTHROPIC_BASE_URL)
-  if (env.RA_OPENAI_API_KEY !== undefined)     set(['providers', 'openai', 'apiKey'], env.RA_OPENAI_API_KEY)
-  if (env.RA_OPENAI_BASE_URL !== undefined)    set(['providers', 'openai', 'baseURL'], env.RA_OPENAI_BASE_URL)
-  if (env.RA_GOOGLE_API_KEY !== undefined)     set(['providers', 'google', 'apiKey'], env.RA_GOOGLE_API_KEY)
-  if (env.RA_GOOGLE_BASE_URL !== undefined)    set(['providers', 'google', 'baseURL'], env.RA_GOOGLE_BASE_URL)
-  if (env.RA_OLLAMA_HOST !== undefined)        set(['providers', 'ollama', 'host'], env.RA_OLLAMA_HOST)
-  if (env.RA_BEDROCK_REGION !== undefined)  set(['providers', 'bedrock', 'region'], env.RA_BEDROCK_REGION)
-  if (env.RA_BEDROCK_API_KEY !== undefined) set(['providers', 'bedrock', 'apiKey'], env.RA_BEDROCK_API_KEY)
-  if (env.RA_AZURE_API_KEY !== undefined)    set(['providers', 'azure', 'apiKey'], env.RA_AZURE_API_KEY)
-  if (env.RA_AZURE_ENDPOINT !== undefined)   set(['providers', 'azure', 'endpoint'], env.RA_AZURE_ENDPOINT)
-  if (env.RA_AZURE_DEPLOYMENT !== undefined) set(['providers', 'azure', 'deployment'], env.RA_AZURE_DEPLOYMENT)
-  if (env.RA_AZURE_API_VERSION !== undefined) set(['providers', 'azure', 'apiVersion'], env.RA_AZURE_API_VERSION)
-
   return r
 }
 
