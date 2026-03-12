@@ -158,7 +158,8 @@ export class Repl {
         ],
         beforeToolExecution: [
           async (ctx: ToolExecutionContext) => {
-            if (streamBuf) process.stdout.write(streamBuf.end())
+            // TS narrows streamBuf to null (closure writes aren't tracked); cast back
+      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
             tui.stopSpinner(true)
             boxOpened = false
             toolStartTimes.set(ctx.toolCall.id, Date.now())
@@ -180,7 +181,8 @@ export class Repl {
       const result = await loop.run(initialMessages)
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
       tui.stopSpinner(true)
-      if (streamBuf) process.stdout.write(streamBuf.end())
+      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
+      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
 
@@ -205,7 +207,8 @@ export class Repl {
       }
     } catch (err) {
       tui.stopSpinner(true)
-      if (streamBuf) process.stdout.write(streamBuf.end())
+      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
+      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
       tui.printError(err instanceof Error ? err.message : String(err))
