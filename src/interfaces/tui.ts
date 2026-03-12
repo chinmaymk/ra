@@ -86,7 +86,7 @@ export function stopSpinner(silent = false): void {
   if (silent) {
     if (wasRunning) process.stdout.write('\r\x1b[K')
   } else {
-    // Clear spinner/current line then left-border prefix for model response
+    // Clear spinner/current line then indent prefix for model response
     process.stdout.write(`\r\x1b[K${RESPONSE_PREFIX}`)
   }
 }
@@ -95,9 +95,9 @@ export function closeAssistantBox(): void {
   process.stdout.write('\n\n')
 }
 
-/** Dim left-border prefix shown at the start of every response line. */
-export const RESPONSE_PREFIX = `  ${c.dim}│${c.reset} `
-/** Visible column width of RESPONSE_PREFIX (2 spaces + │ + space = 4). */
+/** Prefix written at the start of each response line (4 visible chars). */
+export const RESPONSE_PREFIX = `    `
+/** Visible column width of RESPONSE_PREFIX. */
 export const RESPONSE_PREFIX_LEN = 4
 
 /** Streaming line-buffer that wraps completed logical lines with wrap-ansi.
