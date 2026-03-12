@@ -58,11 +58,14 @@ export class GoogleProvider implements IProvider {
     const { model, contents, tools } = this.buildModel(request)
     const thinkingConfig = this.buildThinkingConfig(request.thinking)
     const generationConfig = thinkingConfig ? { thinkingConfig } as any : undefined
-    const result = await model.generateContentStream({
-      contents,
-      ...(tools && { tools }),
-      ...(generationConfig && { generationConfig }),
-    })
+    const result = await model.generateContentStream(
+      {
+        contents,
+        ...(tools && { tools }),
+        ...(generationConfig && { generationConfig }),
+      },
+      ...(request.signal ? [{ signal: request.signal }] : []),
+    )
     let usage: TokenUsage | undefined
     let toolCallCounter = 0
 
