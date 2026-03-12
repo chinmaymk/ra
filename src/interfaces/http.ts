@@ -6,7 +6,7 @@ import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml } from '../skills/loader'
-import { ASK_USER_SIGNAL } from '../tools/ask-user'
+import { askUserTool } from '../tools/ask-user'
 
 export interface HttpOptions {
   port: number
@@ -31,6 +31,7 @@ export class HttpServer {
 
   constructor(options: HttpOptions) {
     this.options = options
+    options.tools.register(askUserTool())
   }
 
   get port(): number { return (this.server?.port ?? this.options.port) as number }
@@ -86,7 +87,6 @@ export class HttpServer {
     try {
       const body = await req.json() as Record<string, unknown>
       if (!body || typeof body !== 'object') return null
-      // Ensure messages is an array (default to empty if missing)
       const messages = Array.isArray(body.messages) ? body.messages as IMessage[] : []
       const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined
       return { messages, sessionId }
@@ -138,7 +138,6 @@ export class HttpServer {
     try {
       const result = await loop.run(messages)
 
-      // Extract last assistant message text
       const assistantMessages = result.messages.filter(m => m.role === 'assistant')
       const last = assistantMessages[assistantMessages.length - 1]
       const responseText = typeof last?.content === 'string'
@@ -147,19 +146,7 @@ export class HttpServer {
           ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
           : ''
 
-      let askQuestion: string | undefined
-      for (let i = result.messages.length - 1; i >= 0; i--) {
-        const m = result.messages[i]!
-        if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-          askQuestion = m.content.slice(ASK_USER_SIGNAL.length)
-          break
-        }
-      }
-
-      return new Response(JSON.stringify({
-        response: responseText,
-        ...(askQuestion && { askUser: askQuestion, sessionId: body.sessionId }),
-      }), {
+      return new Response(JSON.stringify({ response: responseText }), {
         headers: { 'Content-Type': 'application/json' },
       })
     } catch (err) {
@@ -185,8 +172,15 @@ export class HttpServer {
         }
 
         const onStreamChunk = async (ctx: StreamChunkContext) => {
-          if (ctx.chunk.type === 'text') {
-            send({ type: 'text', delta: ctx.chunk.delta })
+          const { chunk } = ctx
+          if (chunk.type === 'text') {
+            send({ type: 'text', delta: chunk.delta })
+          } else if (chunk.type === 'tool_call_start') {
+            send({ type: 'tool_call_start', id: chunk.id, name: chunk.name })
+          } else if (chunk.type === 'tool_call_delta') {
+            send({ type: 'tool_call_delta', id: chunk.id, argsDelta: chunk.argsDelta })
+          } else if (chunk.type === 'tool_call_end') {
+            send({ type: 'tool_call_end', id: chunk.id })
           }
         }
 
@@ -211,16 +205,7 @@ export class HttpServer {
         })
 
         try {
-          const result = await loop.run(messages)
-
-          for (let i = result.messages.length - 1; i >= 0; i--) {
-            const m = result.messages[i]!
-            if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-              send({ type: 'AskUserQuestion', question: m.content.slice(ASK_USER_SIGNAL.length) })
-              break
-            }
-          }
-
+          await loop.run(messages)
           send({ type: 'done' })
         } catch (err) {
           send({ type: 'error', error: err instanceof Error ? err.message : String(err) })

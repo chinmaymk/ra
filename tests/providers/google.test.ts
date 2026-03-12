@@ -455,8 +455,10 @@ describe('GoogleProvider - tool result ID mapping', () => {
       { role: 'tool' as const, content: 'more contents', toolCallId: 'Read_1' },
     ]
     const mapped = provider.mapMessages(messages) as any[]
+    // Consecutive tool results (both user role) get merged into one message
+    expect(mapped).toHaveLength(1)
     expect(mapped[0].parts[0].functionResponse.name).toBe('Read')
-    expect(mapped[1].parts[0].functionResponse.name).toBe('Read')
+    expect(mapped[0].parts[1].functionResponse.name).toBe('Read')
   })
 
   it('mapResponseToMessage assigns unique IDs for duplicate function calls', () => {

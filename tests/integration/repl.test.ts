@@ -44,12 +44,15 @@ describe('REPL integration', () => {
     const secondReqBody = reqs[1]?.body as any
     const msgs = secondReqBody?.messages ?? secondReqBody?.contents ?? []
     // After /clear, the second request should not carry over messages from the first turn.
-    // Filter to actual user-typed messages (exclude injected skill/context messages).
-    const userMessages = msgs.filter((m: any) =>
-      (m.role === 'user' || m.role === 'human') &&
-      typeof m.content === 'string' && !m.content.startsWith('<')
-    )
-    expect(userMessages.length).toBe(1)
+    // Skills XML is merged with the user message into a single array-content message,
+    // so check for at least one text block that doesn't start with '<'.
+    const hasUserText = (m: any): boolean => {
+      if (m.role !== 'user' && m.role !== 'human') return false
+      if (typeof m.content === 'string') return !m.content.startsWith('<')
+      if (Array.isArray(m.content)) return m.content.some((p: any) => p.type === 'text' && typeof p.text === 'string' && !p.text.startsWith('<'))
+      return false
+    }
+    expect(msgs.filter(hasUserText).length).toBe(1)
   })
 
   it('/attach <file> includes file content in next request', async () => {

@@ -353,4 +353,76 @@ describe('HttpServer', () => {
     const data = await res.json() as { response: string }
     expect(data.response).toBe('part1 part2')
   })
+
+  it('POST /chat/sync returns model response when ask_user is called (no special field)', async () => {
+    let callCount = 0
+    const askProvider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        if (callCount++ === 0) {
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'AskUserQuestion' }
+          yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{"question":"What color?"}' }
+          yield { type: 'tool_call_end' as const, id: 'tc1' }
+          yield { type: 'done' as const }
+        } else {
+          yield { type: 'text' as const, delta: 'ok' }
+          yield { type: 'done' as const }
+        }
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 15,
+      model: 'test',
+      provider: askProvider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 15}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    const data = await res.json() as Record<string, unknown>
+    expect(data.askUser).toBeUndefined()
+    expect(typeof data.response).toBe('string')
+  })
+
+  it('POST /chat streams tool_call_start events so client can handle ask_user', async () => {
+    let callCount = 0
+    const askProvider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        if (callCount++ === 0) {
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'AskUserQuestion' }
+          yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{"question":"What color?"}' }
+          yield { type: 'tool_call_end' as const, id: 'tc1' }
+          yield { type: 'done' as const }
+        } else {
+          yield { type: 'text' as const, delta: 'ok' }
+          yield { type: 'done' as const }
+        }
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 16,
+      model: 'test',
+      provider: askProvider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 16}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text).toContain('"type":"tool_call_start"')
+    expect(text).toContain('"name":"AskUserQuestion"')
+    expect(text).toContain('"type":"done"')
+  })
 })

@@ -575,4 +575,25 @@ describe('AgentLoop', () => {
     // Should still complete normally
     expect(result.messages.at(-1)?.content).toBe('final answer')
   })
+
+  it('ask_user does not auto-stop the loop when tool returns a value', async () => {
+    // Regression: loop previously broke early when ask_user was called;
+    // now it's a plain tool call and the loop continues with the result.
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'AskUserQuestion' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{"question":"Color?"}' },
+        { type: 'tool_call_end', id: 'tc1' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'The color is blue' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'AskUserQuestion', description: '', inputSchema: {}, execute: async () => 'blue' })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'what color?' }])
+    expect(result.iterations).toBe(2)
+    expect(result.messages.at(-1)?.content).toBe('The color is blue')
+    expect(result.stopReason).toBeUndefined()
+  })
 })

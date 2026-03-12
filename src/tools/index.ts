@@ -12,7 +12,6 @@ import { deleteFileTool } from './delete-file'
 import { executeBashTool } from './execute-bash'
 import { executePowershellTool } from './execute-powershell'
 import { webFetchTool } from './web-fetch'
-import { askUserTool } from './ask-user'
 import { checklistTool } from './checklist'
 import { subagentTool, type SubagentToolOptions } from './subagent'
 
@@ -42,6 +41,5 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(webFetchTool())
 
   // Agent interaction
-  registry.register(askUserTool())
   registry.register(checklistTool())
 }

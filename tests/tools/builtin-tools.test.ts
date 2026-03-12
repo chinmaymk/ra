@@ -13,7 +13,7 @@ import { copyFileTool } from '../../src/tools/copy-file'
 import { deleteFileTool } from '../../src/tools/delete-file'
 import { executeBashTool } from '../../src/tools/execute-bash'
 import { webFetchTool } from '../../src/tools/web-fetch'
-import { askUserTool, ASK_USER_SIGNAL } from '../../src/tools/ask-user'
+import { askUserTool } from '../../src/tools/ask-user'
 import { checklistTool } from '../../src/tools/checklist'
 import { registerBuiltinTools } from '../../src/tools'
 import { ToolRegistry } from '../../src/agent/tool-registry'
@@ -223,10 +223,9 @@ describe('WebFetch', () => {
 })
 
 describe('AskUserQuestion', () => {
-  it('returns question prefixed with signal', async () => {
+  it('throws when called without an interface override', async () => {
     const tool = askUserTool()
-    const result = await tool.execute({ question: 'What color?' }) as string
-    expect(result).toBe(`${ASK_USER_SIGNAL}What color?`)
+    expect(tool.execute({ question: 'What color?' })).rejects.toThrow('ask_user is not available in this context')
   })
 })
 
@@ -261,12 +260,12 @@ describe('TodoWrite', () => {
 })
 
 describe('registerBuiltinTools', () => {
-  it('registers all 14 tools with platform-specific shell', () => {
+  it('registers all 13 tools with platform-specific shell', () => {
     const registry = new ToolRegistry()
     registerBuiltinTools(registry)
     const names = registry.all().map(t => t.name)
 
-    expect(names).toHaveLength(14)
+    expect(names).toHaveLength(13)
     expect(names).toContain('Read')
     expect(names).toContain('Write')
     expect(names).toContain('Edit')
@@ -278,7 +277,6 @@ describe('registerBuiltinTools', () => {
     expect(names).toContain('CopyFile')
     expect(names).toContain('DeleteFile')
     expect(names).toContain('WebFetch')
-    expect(names).toContain('AskUserQuestion')
     expect(names).toContain('TodoWrite')
     expect(names).toContain(process.platform === 'win32' ? 'PowerShell' : 'Bash')
   })
