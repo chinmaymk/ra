@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: "ra"
-  text: "An agentic loop you can take apart and put back together."
+  text: "An agent you can take apart and put back together."
   tagline: One binary. Nothing hidden behind abstractions you can't reach.
   actions:
     - theme: brand

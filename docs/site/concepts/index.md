@@ -1,6 +1,6 @@
 # What is ra?
 
-ra is an agentic loop you can take apart and put back together. One binary, nothing hidden behind abstractions you can't reach.
+ra is an agent you can take apart and put back together. One binary, nothing hidden behind abstractions you can't reach.
 
 It doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](/middleware/) let you intercept every step — model calls, tool execution, streaming, all of it.
 
