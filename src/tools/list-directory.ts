@@ -31,13 +31,13 @@ export function listDirectoryTool(): ITool {
       properties: {
         path: { type: 'string', description: 'Directory path to list' },
         recursive: { type: 'boolean', description: 'Recurse into subdirectories (default false)' },
-        depth: { type: 'number', description: 'Max recursion depth, 1-5 (default 5, only used when recursive=true)' },
+        depth: { type: 'number', description: 'Max recursion depth, 1-5 (default 3, only used when recursive=true)' },
       },
       required: ['path'],
     },
     async execute(input: unknown) {
       const { path, recursive, depth } = input as { path: string; recursive?: boolean; depth?: number }
-      const maxDepth = recursive ? Math.min(Math.max(depth ?? 5, 1), 5) : 1
+      const maxDepth = recursive ? Math.min(Math.max(depth ?? 3, 1), 5) : 1
       const lines = await listRecursive(path, 1, maxDepth, '')
       return lines.join('\n')
     },
