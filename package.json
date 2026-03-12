@@ -1,6 +1,6 @@
 {
   "name": "@chinmaymk/ra",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "One loop. Infinite agents. Type definitions for the ra AI agent framework.",
   "type": "module",
   "types": "dist/types.d.ts",
