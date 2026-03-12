@@ -1,4 +1,4 @@
-import { join, isAbsolute, basename, normalize, sep, resolve } from 'path'
+import { join, dirname, isAbsolute, basename, normalize, sep, resolve } from 'path'
 import { homedir } from 'os'
 
 /**
@@ -55,4 +55,22 @@ export function firstSegment(relPath: string): string {
   return relPath.split(/[/\\]/)[0]!
 }
 
-export { isAbsolute, join, basename, normalize, sep, resolve }
+/**
+ * Walk up from `startDir` looking for any file whose name is in `fileNames`.
+ * Returns the full path of the first match, or undefined if none found up to the root.
+ */
+export async function findFileUpwards(startDir: string, fileNames: string[]): Promise<string | undefined> {
+  let dir = startDir
+  while (true) {
+    for (const name of fileNames) {
+      const full = join(dir, name)
+      if (await Bun.file(full).exists()) return full
+    }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return undefined
+}
+
+export { isAbsolute, join, basename, normalize, sep, resolve, dirname }

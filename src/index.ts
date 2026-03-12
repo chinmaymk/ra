@@ -235,7 +235,7 @@ async function main(): Promise<void> {
   if (agentsConfigPath) {
     const orchConfig = await loadOrchestratorConfig(agentsConfigPath)
     const orchCtx = await bootstrapOrchestrator(orchConfig)
-    const signals = onSignals(orchCtx.shutdown)
+    onSignals(orchCtx.shutdown)
 
     switch (orchConfig.interface) {
       case 'cli': {

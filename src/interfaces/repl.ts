@@ -31,7 +31,7 @@ export interface ReplOptions {
 }
 
 export class Repl {
-  private options: ReplOptions
+  protected options: ReplOptions
   private messages: IMessage[] = []
   private sessionId: string | undefined
   private pendingSkill: Skill | undefined

@@ -1,7 +1,7 @@
 import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
-import { resolvePath, looksLikePath } from '../utils/paths'
+import { resolvePath, looksLikePath, findFileUpwards } from '../utils/paths'
 import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions } from './types'
 
@@ -43,28 +43,19 @@ function deepMerge(
 async function loadConfigFile(cwd: string, configPath?: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
   if (configPath) {
     const full = isAbsolute(configPath) ? configPath : join(cwd, configPath)
-    if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
+    if (await Bun.file(full).exists()) return { config: await parseConfigFile(full), filePath: full }
     return { config: {} }
   }
-  // Walk up the directory tree until a config file is found
-  let dir = cwd
-  while (true) {
-    for (const name of CONFIG_FILES) {
-      const full = join(dir, name)
-      if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
-    }
-    const parent = dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
+  const found = await findFileUpwards(cwd, CONFIG_FILES)
+  if (found) return { config: await parseConfigFile(found), filePath: found }
   return { config: {} }
 }
 
-async function parseFile(path: string): Promise<Partial<RaConfig>> {
+export async function parseConfigFile(path: string): Promise<Record<string, unknown>> {
   const content = await Bun.file(path).text()
-  if (path.endsWith('.json')) return JSON.parse(content) as Partial<RaConfig>
-  if (path.endsWith('.yaml') || path.endsWith('.yml')) return yaml.load(content) as Partial<RaConfig>
-  if (path.endsWith('.toml')) return parseToml(content) as Partial<RaConfig>
+  if (path.endsWith('.json')) return JSON.parse(content) as Record<string, unknown>
+  if (path.endsWith('.yaml') || path.endsWith('.yml')) return yaml.load(content) as Record<string, unknown>
+  if (path.endsWith('.toml')) return parseToml(content) as Record<string, unknown>
   return {}
 }
 

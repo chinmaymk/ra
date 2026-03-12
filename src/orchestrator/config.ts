@@ -1,6 +1,6 @@
 import { dirname, isAbsolute, join } from 'path'
-import yaml from 'js-yaml'
-import { parse as parseToml } from 'smol-toml'
+import { parseConfigFile } from '../config'
+import { findFileUpwards } from '../utils/paths'
 import { validateOrchestratorRaw } from './validate'
 import type { OrchestratorConfig, OrchestratorAgentEntry } from './types'
 
@@ -11,14 +11,6 @@ const ORCHESTRATOR_FILES = [
   'ra.agents.toml',
 ]
 
-async function parseFile(path: string): Promise<Record<string, unknown>> {
-  const content = await Bun.file(path).text()
-  if (path.endsWith('.json')) return JSON.parse(content) as Record<string, unknown>
-  if (path.endsWith('.yaml') || path.endsWith('.yml')) return yaml.load(content) as Record<string, unknown>
-  if (path.endsWith('.toml')) return parseToml(content) as Record<string, unknown>
-  throw new Error(`Unsupported config format: ${path}`)
-}
-
 export async function loadOrchestratorConfig(filePath: string): Promise<OrchestratorConfig> {
   const fullPath = isAbsolute(filePath) ? filePath : join(process.cwd(), filePath)
 
@@ -26,7 +18,7 @@ export async function loadOrchestratorConfig(filePath: string): Promise<Orchestr
     throw new Error(`Orchestrator config not found: ${fullPath}`)
   }
 
-  const raw = await parseFile(fullPath)
+  const raw = await parseConfigFile(fullPath)
   validateOrchestratorRaw(raw, fullPath)
 
   const configDir = dirname(fullPath)
@@ -66,15 +58,5 @@ export async function loadOrchestratorConfig(filePath: string): Promise<Orchestr
 }
 
 export async function discoverOrchestratorConfig(cwd: string): Promise<string | undefined> {
-  let dir = cwd
-  while (true) {
-    for (const name of ORCHESTRATOR_FILES) {
-      const full = join(dir, name)
-      if (await Bun.file(full).exists()) return full
-    }
-    const parent = dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
-  return undefined
+  return findFileUpwards(cwd, ORCHESTRATOR_FILES)
 }
