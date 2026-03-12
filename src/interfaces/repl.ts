@@ -115,8 +115,8 @@ export class Repl {
 
     let boxOpened = false
     let thinkingOpened = false
+    let streamBuf: tui.StreamBuffer | null = null
     const toolStartTimes = new Map<string, number>()
-    process.stdout.write('\n')
     tui.startSpinner()
     const userMw = this.options.middleware ?? {}
 
@@ -145,18 +145,33 @@ export class Repl {
                 tui.printThinkingEnd()
                 thinkingOpened = false
               }
-              if (!boxOpened) { tui.stopSpinner(); boxOpened = true }
-              process.stdout.write(ctx.chunk.delta)
+              if (!boxOpened) {
+                tui.stopSpinner()
+                boxOpened = true
+                const contentWidth = (process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN
+                streamBuf = new tui.StreamBuffer(contentWidth)
+              }
+              process.stdout.write(streamBuf!.write(ctx.chunk.delta))
             }
           },
           ...(userMw.onStreamChunk ?? []),
         ],
         beforeToolExecution: [
-          async (ctx: ToolExecutionContext) => { tui.stopSpinner(true); toolStartTimes.set(ctx.toolCall.id, Date.now()); tui.printToolCall(ctx.toolCall.name) },
+          async (ctx: ToolExecutionContext) => {
+            // TS narrows streamBuf to null (closure writes aren't tracked); cast back
+      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
+            tui.stopSpinner(true)
+            boxOpened = false
+            toolStartTimes.set(ctx.toolCall.id, Date.now())
+            tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
+          },
           ...(userMw.beforeToolExecution ?? []),
         ],
         afterToolExecution: [
-          async (ctx: ToolResultContext) => { tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now())); if (!boxOpened) tui.startSpinner() },
+          async (ctx: ToolResultContext) => {
+            tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
+            tui.startSpinner()
+          },
           ...(userMw.afterToolExecution ?? []),
         ],
       },
@@ -166,8 +181,10 @@ export class Repl {
       const result = await loop.run(initialMessages)
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
       tui.stopSpinner(true)
+      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
+      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
       if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n')
+      else process.stdout.write('\n\n')
 
       const newMessages = result.messages.slice(initialMessages.length)
       this.messages.push(userMessage, ...newMessages)
@@ -190,8 +207,10 @@ export class Repl {
       }
     } catch (err) {
       tui.stopSpinner(true)
+      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
+      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
       if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n')
+      else process.stdout.write('\n\n')
       tui.printError(err instanceof Error ? err.message : String(err))
     }
   }
