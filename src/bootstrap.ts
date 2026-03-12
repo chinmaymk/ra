@@ -152,7 +152,7 @@ export async function bootstrap(
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
-    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+    logger.info('skills loaded', { skillCount: skillMap.size, skills: Array.from(skillMap.keys()) })
   }
 
   const builtinSkills = loadBuiltinSkills(config.builtinSkills)
@@ -178,7 +178,7 @@ export async function bootstrap(
   // ── Prepend observability hooks (obs runs first) ───────────────────
   for (const key of Object.keys(obsMw)) {
     const k = key as keyof MiddlewareConfig
-    ;(middleware as any)[k] = [...((obsMw as any)[k] ?? []), ...((middleware as any)[k] ?? [])]
+    ;(middleware as any)[k] = ((obsMw as any)[k] ?? []).concat((middleware as any)[k] ?? [])
   }
 
   // ── Subagent tool (registered last — child registry built lazily) ──

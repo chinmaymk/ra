@@ -24,7 +24,7 @@ export function mergeConsecutiveRoles<T extends { role: string; content: unknown
   const toArray = (content: unknown) =>
     Array.isArray(content) ? content : [typeof content === 'string' ? { type: 'text', text: content } : content]
   return mergeConsecutive(messages, (a, b) => {
-    a.content = [...toArray(a.content), ...toArray(b.content)] as T['content']
+    a.content = toArray(a.content).concat(toArray(b.content)) as T['content']
   })
 }
 
