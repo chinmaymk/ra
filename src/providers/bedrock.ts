@@ -7,7 +7,7 @@ import {
   type Tool as BedrockTool,
   type ToolInputSchema,
 } from '@aws-sdk/client-bedrock-runtime'
-import { extractSystemMessages } from './utils'
+import { extractSystemMessages, mergeConsecutive } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
@@ -105,17 +105,8 @@ export class BedrockProvider implements IProvider {
       if (typeof msg.content === 'string') return { role: msg.role as 'user' | 'assistant', content: [{ text: msg.content }] }
       return { role: msg.role as 'user' | 'assistant', content: this.mapContentParts(msg.content) }
     })
-    // Merge consecutive same-role messages (e.g. tool_result + user answer after ask_user)
-    const merged: BedrockMessage[] = []
-    for (const msg of mapped) {
-      const last = merged[merged.length - 1]
-      if (last && last.role === msg.role) {
-        last.content = [...(last.content ?? []), ...(msg.content ?? [])]
-      } else {
-        merged.push({ ...msg, content: [...(msg.content ?? [])] })
-      }
-    }
-    return merged
+    // Merge consecutive same-role messages (required for alternating-turn APIs)
+    return mergeConsecutive(mapped, (a, b) => { a.content = [...(a.content ?? []), ...(b.content ?? [])] })
   }
 
   mapTools(tools: ITool[]): BedrockTool[] {

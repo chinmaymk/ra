@@ -1,23 +1,31 @@
 import type { IMessage, TokenUsage } from './types'
 
 /**
- * Merge consecutive messages with the same role into a single message.
+ * Merge consecutive messages with the same role using a caller-supplied merge function.
  * Required for APIs that enforce alternating user/assistant turns (Anthropic, Google, Bedrock).
- * This happens after ask_user: tool result (mapped to user) is followed by the next user message.
+ * Consecutive same-role messages can occur when skill XML and the user message are both injected
+ * as user-role messages, or when context files precede the user turn.
  */
-export function mergeConsecutiveRoles<T extends { role: string; content: unknown }>(messages: T[]): T[] {
-  const merged: T[] = []
-  for (const msg of messages) {
-    const last = merged[merged.length - 1]
-    if (last && last.role === msg.role) {
-      const lastContent = Array.isArray(last.content) ? last.content : [typeof last.content === 'string' ? { type: 'text', text: last.content } : last.content]
-      const msgContent = Array.isArray(msg.content) ? msg.content : [typeof msg.content === 'string' ? { type: 'text', text: msg.content } : msg.content]
-      last.content = [...lastContent, ...msgContent] as T['content']
+export function mergeConsecutive<T extends { role?: string }>(items: T[], merge: (into: T, from: T) => void): T[] {
+  const result: T[] = []
+  for (const item of items) {
+    const last = result[result.length - 1]
+    if (last && item.role && last.role === item.role) {
+      merge(last, item)
     } else {
-      merged.push({ ...msg })
+      result.push({ ...item })
     }
   }
-  return merged
+  return result
+}
+
+/** Merge consecutive IMessages — normalises string content to text parts before joining. */
+export function mergeConsecutiveRoles<T extends { role: string; content: unknown }>(messages: T[]): T[] {
+  const toArray = (content: unknown) =>
+    Array.isArray(content) ? content : [typeof content === 'string' ? { type: 'text', text: content } : content]
+  return mergeConsecutive(messages, (a, b) => {
+    a.content = [...toArray(a.content), ...toArray(b.content)] as T['content']
+  })
 }
 
 /** Accumulate source token usage into target (mutates target) */
