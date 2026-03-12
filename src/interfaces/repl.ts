@@ -36,7 +36,7 @@ export class Repl {
   private sessionId: string | undefined
   private pendingSkill: Skill | undefined
   private pendingAttachments: ContentPart[] = []
-  private pendingAskUser: { toolCallId: string } | undefined
+  private pendingAskUser: { toolCallId: string; deferredMessages: IMessage[] } | undefined
 
   constructor(options: ReplOptions) {
     this.options = options
@@ -89,17 +89,26 @@ export class Repl {
     // If we're resuming after ask_user, patch the tool result with the user's answer
     let userMessage: IMessage | undefined
     if (this.pendingAskUser) {
-      const { toolCallId } = this.pendingAskUser
+      const { toolCallId, deferredMessages } = this.pendingAskUser
       this.pendingAskUser = undefined
-      // Find and replace the ask_user tool result in message history
+      // Patch in-memory history
       for (let i = this.messages.length - 1; i >= 0; i--) {
         const m = this.messages[i]!
         if (m.role === 'tool' && m.toolCallId === toolCallId && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
           this.messages[i] = { ...m, content: input }
-          // Also update persisted session: append corrected tool result
-          await this.options.storage.appendMessage(this.sessionId!, this.messages[i]!)
           break
         }
+      }
+      // Patch deferred messages (same tool result, not yet persisted) and save them now
+      for (let j = deferredMessages.length - 1; j >= 0; j--) {
+        const m = deferredMessages[j]!
+        if (m.role === 'tool' && m.toolCallId === toolCallId && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
+          deferredMessages[j] = { ...m, content: input }
+          break
+        }
+      }
+      for (const msg of deferredMessages) {
+        await this.options.storage.appendMessage(this.sessionId!, msg)
       }
     } else {
       const text = this.pendingSkill
@@ -189,20 +198,8 @@ export class Repl {
       else process.stdout.write('\n')
 
       const newMessages = result.messages.slice(initialMessages.length)
-      if (userMessage) {
-        this.messages.push(userMessage, ...newMessages)
-        for (const msg of [userMessage, ...newMessages]) {
-          await this.options.storage.appendMessage(this.sessionId!, msg)
-        }
-      } else {
-        // Resuming after ask_user — only save new messages from this continuation
-        this.messages.push(...newMessages)
-        for (const msg of newMessages) {
-          await this.options.storage.appendMessage(this.sessionId!, msg)
-        }
-      }
 
-      // Detect ask_user — print question and set pending state for next input
+      // Detect ask_user — find which messages to defer saving until the user answers
       let askToolResult: IMessage | undefined
       for (let i = result.messages.length - 1; i >= 0; i--) {
         const m = result.messages[i]!
@@ -211,10 +208,36 @@ export class Repl {
           break
         }
       }
-      if (askToolResult && typeof askToolResult.content === 'string') {
+
+      // Split newMessages into: save-now vs defer (ask_user call + its tool result)
+      let messagesToSaveNow = newMessages
+      if (askToolResult?.toolCallId) {
+        // Find the assistant message that made the ask_user call and defer from there
+        let deferIdx = newMessages.length
+        for (let j = newMessages.length - 1; j >= 0; j--) {
+          const m = newMessages[j]!
+          if (m.role === 'assistant' && m.toolCalls?.some(tc => tc.name === 'ask_user')) {
+            deferIdx = j
+            break
+          }
+        }
+        messagesToSaveNow = newMessages.slice(0, deferIdx)
+        this.pendingAskUser = { toolCallId: askToolResult.toolCallId, deferredMessages: newMessages.slice(deferIdx) }
         const question = askToolResult.content.slice(ASK_USER_SIGNAL.length)
         tui.printCommandResponse(`[Question for you] ${question}`)
-        this.pendingAskUser = { toolCallId: askToolResult.toolCallId! }
+      }
+
+      if (userMessage) {
+        this.messages.push(userMessage, ...newMessages)
+        for (const msg of [userMessage, ...messagesToSaveNow]) {
+          await this.options.storage.appendMessage(this.sessionId!, msg)
+        }
+      } else {
+        // Resuming after ask_user — only save new messages from this continuation
+        this.messages.push(...newMessages)
+        for (const msg of messagesToSaveNow) {
+          await this.options.storage.appendMessage(this.sessionId!, msg)
+        }
       }
     } catch (err) {
       tui.stopSpinner(true)
