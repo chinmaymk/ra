@@ -1,6 +1,14 @@
-import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'fs'
 import { dirname } from 'path'
+
+// Use bun:sqlite when running under Bun, better-sqlite3 for Node.js.
+// Both share the same API surface (exec, prepare, get, all, run, close).
+let Database: any
+if (typeof (globalThis as any).Bun !== 'undefined') {
+  Database = require('bun:sqlite').Database
+} else {
+  Database = require('better-sqlite3')
+}
 
 export interface Memory {
   id: number
@@ -16,7 +24,7 @@ export interface MemoryStoreOptions {
 }
 
 export class MemoryStore {
-  private db: Database
+  private db: any
 
   constructor(private options: MemoryStoreOptions) {
     mkdirSync(dirname(options.path), { recursive: true })

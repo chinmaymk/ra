@@ -1,3 +1,4 @@
+import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { IProvider, IMessage } from '../providers/types'
 import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { ToolRegistry } from '../agent/tool-registry'
@@ -9,10 +10,6 @@ import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
 import { errorMessage } from '../utils/errors'
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
-}
 
 export interface HttpOptions {
   port: number
@@ -33,70 +30,93 @@ export interface HttpOptions {
 
 export class HttpServer {
   private options: HttpOptions
-  private server: ReturnType<typeof Bun.serve> | null = null
+  private server: Server | null = null
 
   constructor(options: HttpOptions) {
     this.options = options
     options.tools.register(askUserTool())
   }
 
-  get port(): number { return (this.server?.port ?? this.options.port) as number }
+  get port(): number {
+    const addr = this.server?.address()
+    if (addr && typeof addr === 'object') return addr.port
+    return this.options.port
+  }
 
   async start(): Promise<void> {
     const opts = this.options
 
-    this.server = Bun.serve({
-      port: opts.port,
-      fetch: async (req: Request): Promise<Response> => {
-        const url = new URL(req.url)
+    this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+      const addr = this.server?.address()
+      const actualPort = (addr && typeof addr === 'object') ? addr.port : opts.port
+      const url = new URL(req.url ?? '/', `http://localhost:${actualPort}`)
 
-        // Auth check
-        if (opts.token) {
-          const authHeader = req.headers.get('Authorization') ?? ''
-          const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-          if (provided !== opts.token) {
-            return jsonResponse({ error: 'Unauthorized' }, 401)
-          }
+      // Auth check
+      if (opts.token) {
+        const authHeader = req.headers['authorization'] ?? ''
+        const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+        if (provided !== opts.token) {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Unauthorized' }))
+          return
         }
+      }
 
-        if (req.method === 'POST' && url.pathname === '/chat/sync') {
-          return this.handleChatSync(req)
-        }
+      if (req.method === 'POST' && url.pathname === '/chat/sync') {
+        const body = await this.parseNodeBody(req)
+        if (!body) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Invalid JSON' })); return }
+        const response = await this.handleChatSyncNode(body)
+        res.writeHead(response.status, { 'Content-Type': 'application/json' })
+        res.end(response.body)
+        return
+      }
 
-        if (req.method === 'POST' && url.pathname === '/chat') {
-          return this.handleChatStream(req)
-        }
+      if (req.method === 'POST' && url.pathname === '/chat') {
+        const body = await this.parseNodeBody(req)
+        if (!body) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Invalid JSON' })); return }
+        await this.handleChatStreamNode(body, res)
+        return
+      }
 
-        if (req.method === 'GET' && url.pathname === '/sessions') {
-          return this.handleSessions()
-        }
+      if (req.method === 'GET' && url.pathname === '/sessions') {
+        const sessions = await this.options.storage.list()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ sessions }))
+        return
+      }
 
-        return jsonResponse({ error: 'Not Found' }, 404)
-      },
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Not Found' }))
+    })
+
+    await new Promise<void>((resolve) => {
+      this.server!.listen(opts.port, () => resolve())
     })
   }
 
   async stop(): Promise<void> {
     if (this.server) {
-      this.server.stop(true)
+      await new Promise<void>((resolve) => this.server!.close(() => resolve()))
       this.server = null
     }
   }
 
-  private async parseBody(req: Request): Promise<{ messages: IMessage[]; sessionId?: string } | null> {
-    try {
-      const body = await req.json() as Record<string, unknown>
-      if (!body || typeof body !== 'object') return null
-      const messages = Array.isArray(body.messages) ? body.messages as IMessage[] : []
-      const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined
-      return { messages, sessionId }
-    } catch {
-      return null
-    }
-  }
-
-  private static badRequest(): Response {
-    return jsonResponse({ error: 'Invalid JSON' }, 400)
+  private parseNodeBody(req: IncomingMessage): Promise<{ messages: IMessage[]; sessionId?: string } | null> {
+    return new Promise((resolve) => {
+      let data = ''
+      req.on('data', (chunk: Buffer) => { data += chunk.toString() })
+      req.on('end', () => {
+        try {
+          const body = JSON.parse(data) as Record<string, unknown>
+          if (!body || typeof body !== 'object') { resolve(null); return }
+          const messages = Array.isArray(body.messages) ? body.messages as IMessage[] : []
+          const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined
+          resolve({ messages, sessionId })
+        } catch {
+          resolve(null)
+        }
+      })
+    })
   }
 
   private prependSystem(messages: IMessage[]): IMessage[] {
@@ -115,12 +135,8 @@ export class HttpServer {
     return prefix
   }
 
-  private async handleChatSync(req: Request): Promise<Response> {
-    const body = await this.parseBody(req)
-    if (!body) return HttpServer.badRequest()
-
+  private async handleChatSyncNode(body: { messages: IMessage[]; sessionId?: string }): Promise<{ status: number; body: string }> {
     const messages = this.prependSystem(body.messages ?? [])
-
     const loop = new AgentLoop({
       provider: this.options.provider,
       tools: this.options.tools,
@@ -132,86 +148,68 @@ export class HttpServer {
       thinking: this.options.thinking,
       compaction: this.options.compaction,
     })
-
     try {
       const result = await loop.run(messages)
-
       const assistantMessages = result.messages.filter(m => m.role === 'assistant')
       const last = assistantMessages[assistantMessages.length - 1]
       const responseText = last ? extractTextContent(last.content) : ''
-
-      return jsonResponse({ response: responseText })
+      return { status: 200, body: JSON.stringify({ response: responseText }) }
     } catch (err) {
-      return jsonResponse({ error: errorMessage(err) }, 500)
+      return { status: 500, body: JSON.stringify({ error: errorMessage(err) }) }
     }
   }
 
-  private async handleChatStream(req: Request): Promise<Response> {
-    const body = await this.parseBody(req)
-    if (!body) return HttpServer.badRequest()
-
+  private async handleChatStreamNode(body: { messages: IMessage[]; sessionId?: string }, res: ServerResponse): Promise<void> {
     const messages = this.prependSystem(body.messages ?? [])
     const opts = this.options
-    const stream = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder()
 
-        const send = (data: unknown) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-        }
-
-        const onStreamChunk = async (ctx: StreamChunkContext) => {
-          const { chunk } = ctx
-          if (chunk.type === 'text') {
-            send({ type: 'text', delta: chunk.delta })
-          } else if (chunk.type === 'tool_call_start') {
-            send({ type: 'tool_call_start', id: chunk.id, name: chunk.name })
-          } else if (chunk.type === 'tool_call_delta') {
-            send({ type: 'tool_call_delta', id: chunk.id, argsDelta: chunk.argsDelta })
-          } else if (chunk.type === 'tool_call_end') {
-            send({ type: 'tool_call_end', id: chunk.id })
-          }
-        }
-
-        const middleware: Partial<MiddlewareConfig> = {
-          ...(opts.middleware ?? {}),
-          onStreamChunk: (opts.middleware?.onStreamChunk ?? []).concat(onStreamChunk),
-        }
-
-        const loop = new AgentLoop({
-          provider: opts.provider,
-          tools: opts.tools,
-          model: opts.model,
-          middleware,
-          maxIterations: opts.maxIterations,
-          toolTimeout: opts.toolTimeout,
-          sessionId: body.sessionId,
-          thinking: opts.thinking,
-          compaction: opts.compaction,
-        })
-
-        try {
-          await loop.run(messages)
-          send({ type: 'done' })
-        } catch (err) {
-          send({ type: 'error', error: errorMessage(err) })
-        } finally {
-          controller.close()
-        }
-      },
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
     })
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    })
-  }
+    const send = (data: unknown) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
 
-  private async handleSessions(): Promise<Response> {
-    const sessions = await this.options.storage.list()
-    return jsonResponse({ sessions })
+    const onStreamChunk = async (ctx: StreamChunkContext) => {
+      const { chunk } = ctx
+      if (chunk.type === 'text') {
+        send({ type: 'text', delta: chunk.delta })
+      } else if (chunk.type === 'tool_call_start') {
+        send({ type: 'tool_call_start', id: chunk.id, name: chunk.name })
+      } else if (chunk.type === 'tool_call_delta') {
+        send({ type: 'tool_call_delta', id: chunk.id, argsDelta: chunk.argsDelta })
+      } else if (chunk.type === 'tool_call_end') {
+        send({ type: 'tool_call_end', id: chunk.id })
+      }
+    }
+
+    const middleware: Partial<MiddlewareConfig> = {
+      ...(opts.middleware ?? {}),
+      onStreamChunk: (opts.middleware?.onStreamChunk ?? []).concat(onStreamChunk),
+    }
+
+    const loop = new AgentLoop({
+      provider: opts.provider,
+      tools: opts.tools,
+      model: opts.model,
+      middleware,
+      maxIterations: opts.maxIterations,
+      toolTimeout: opts.toolTimeout,
+      sessionId: body.sessionId,
+      thinking: opts.thinking,
+      compaction: opts.compaction,
+    })
+
+    try {
+      await loop.run(messages)
+      send({ type: 'done' })
+    } catch (err) {
+      send({ type: 'error', error: errorMessage(err) })
+    } finally {
+      res.end()
+    }
   }
 }

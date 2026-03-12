@@ -1,4 +1,6 @@
 import { join } from 'path'
+import fg from 'fast-glob'
+import { readText } from '../utils/fs'
 import { firstSegment } from '../utils/paths'
 import { resolveSkillAsset, type Skill, type SkillMetadata } from './types'
 import { parseFrontmatter, extractSkillMetadata } from './frontmatter'
@@ -6,7 +8,8 @@ import { parseFrontmatter, extractSkillMetadata } from './frontmatter'
 async function listSubdirFiles(skillDir: string, subdir: string): Promise<string[]> {
   const files: string[] = []
   try {
-    for await (const name of new Bun.Glob('*').scan({ cwd: join(skillDir, subdir), onlyFiles: true })) {
+    const matches = await fg('*', { cwd: join(skillDir, subdir), onlyFiles: true })
+    for (const name of matches) {
       files.push(join(subdir, name))
     }
   } catch { /* subdir doesn't exist */ }
@@ -21,9 +24,10 @@ async function scanSkillDirs<T>(
 
   for (const dir of dirs) {
     try {
-      for await (const rel of new Bun.Glob('*/SKILL.md').scan({ cwd: dir, onlyFiles: true })) {
+      const matches = await fg('*/SKILL.md', { cwd: dir, onlyFiles: true })
+      for (const rel of matches) {
         const entry = firstSegment(rel)
-        const content = await Bun.file(join(dir, rel)).text()
+        const content = await readText(join(dir, rel))
         const { frontmatter, body } = parseFrontmatter(content)
 
         if (frontmatter['name'] !== entry) continue
@@ -75,5 +79,5 @@ export function buildActiveSkillXml(skill: Skill): string {
 export async function readSkillReference(skill: Skill, refName: string): Promise<string> {
   const rel = resolveSkillAsset(skill.references, refName, 'references')
   if (!rel) throw new Error(`Reference not found: ${refName} in skill ${skill.metadata.name}`)
-  return Bun.file(join(skill.dir, rel)).text()
+  return readText(join(skill.dir, rel))
 }

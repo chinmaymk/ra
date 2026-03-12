@@ -1,6 +1,10 @@
 import { join, basename } from 'path'
 import { mkdirSync, cpSync, rmSync, writeFileSync } from 'fs'
+import { writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import fg from 'fast-glob'
 import { homeDir, firstSegment } from '../utils/paths'
+import { fileExists, readText } from '../utils/fs'
 import type { SkillSource } from './types'
 
 /** Default directory for installed skills */
@@ -59,10 +63,11 @@ async function withTempExtract<T>(
     if (!resp.ok) throw new Error(`${errorPrefix}: download failed (${resp.status})`)
 
     const tarballPath = join(tmpDir, 'archive.tgz')
-    await Bun.write(tarballPath, resp)
+    const buffer = Buffer.from(await resp.arrayBuffer())
+    await writeFile(tarballPath, buffer)
 
-    const extract = Bun.spawnSync(['tar', 'xzf', tarballPath, '-C', tmpDir])
-    if (extract.exitCode !== 0) throw new Error(`${errorPrefix}: failed to extract tarball`)
+    const extract = spawnSync('tar', ['xzf', tarballPath, '-C', tmpDir], { stdio: ['ignore', 'pipe', 'pipe'] })
+    if (extract.status !== 0) throw new Error(`${errorPrefix}: failed to extract tarball`)
 
     return await fn(tmpDir)
   } finally {
@@ -74,8 +79,8 @@ async function withTempExtract<T>(
 async function findSkillDirsIn(root: string): Promise<string[]> {
   const dirs = new Set<string>()
   try {
-    for await (const rel of new Bun.Glob('{,skills/}*/SKILL.md').scan({ cwd: root, onlyFiles: true })) {
-      // rel uses forward slashes from Bun.Glob — split on both separators for safety
+    const matches = await fg('{,skills/}*/SKILL.md', { cwd: root, onlyFiles: true })
+    for (const rel of matches) {
       const parts = rel.split(/[/\\]/)
       // For "skills/foo/SKILL.md" → join(root, "skills", "foo"), for "foo/SKILL.md" → join(root, "foo")
       dirs.add(join(root, ...parts.slice(0, -1)))
@@ -104,8 +109,7 @@ async function installSkillDirs(
 
   // Root-as-skill fallback: if no subdirectory skills found, check if root itself is a skill
   if (installed.length === 0 && rootFallbackName) {
-    const rootSkill = Bun.file(join(extractedRoot, 'SKILL.md'))
-    if (await rootSkill.exists()) {
+    if (await fileExists(join(extractedRoot, 'SKILL.md'))) {
       const targetDir = join(installDir, rootFallbackName)
       cpSync(extractedRoot, targetDir, { recursive: true })
       writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
@@ -163,11 +167,9 @@ async function installFromGithub(repo: string, installDir: string): Promise<stri
 
   return withTempExtract(installDir, tarballUrl, `github`, async (tmpDir) => {
     // GitHub extracts to <owner>-<repo>-<sha>/ directory
-    const entries: string[] = []
-    for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
-      if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
-    }
-    const repoDir = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
+    const entries = await fg('*/', { cwd: tmpDir, onlyFiles: false, onlyDirectories: true })
+    const filtered = entries.map(e => e.replace(/\/$/, '')).filter(e => !e.startsWith('.') && e !== 'archive.tgz')
+    const repoDir = filtered.length === 1 ? join(tmpDir, filtered[0]!) : tmpDir
 
     const installed = await installSkillDirs(repoDir, installDir, source, fallbackName)
     if (installed.length === 0) throw new Error(`github: no skills found in "${repo}"`)
@@ -180,11 +182,9 @@ async function installFromUrl(url: string, installDir: string): Promise<string[]
 
   return withTempExtract(installDir, url, 'url', async (tmpDir) => {
     // Check for a single extracted directory (common tarball pattern)
-    const entries: string[] = []
-    for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
-      if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
-    }
-    const extractedRoot = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
+    const entries = await fg('*/', { cwd: tmpDir, onlyFiles: false, onlyDirectories: true })
+    const filtered = entries.map(e => e.replace(/\/$/, '')).filter(e => !e.startsWith('.') && e !== 'archive.tgz')
+    const extractedRoot = filtered.length === 1 ? join(tmpDir, filtered[0]!) : tmpDir
 
     const installed = await installSkillDirs(extractedRoot, installDir, source, undefined)
     if (installed.length === 0) throw new Error(`url: no skills found at "${url}"`)
@@ -234,13 +234,14 @@ export async function listInstalledSkills(installDir?: string): Promise<Array<{ 
   const skills: Array<{ name: string; source?: SkillSource }> = []
 
   try {
-    for await (const rel of new Bun.Glob('*/SKILL.md').scan({ cwd: dir, onlyFiles: true })) {
+    const matches = await fg('*/SKILL.md', { cwd: dir, onlyFiles: true })
+    for (const rel of matches) {
       const name = firstSegment(rel)
       let source: SkillSource | undefined
       try {
-        const sourceFile = Bun.file(join(dir, name, '.source.json'))
-        if (await sourceFile.exists()) {
-          source = JSON.parse(await sourceFile.text()) as SkillSource
+        const sourcePath = join(dir, name, '.source.json')
+        if (await fileExists(sourcePath)) {
+          source = JSON.parse(await readText(sourcePath)) as SkillSource
         }
       } catch { /* no source info */ }
       skills.push({ name, source })

@@ -1,5 +1,5 @@
 import type { ITool } from '../providers/types'
-import { Glob } from 'bun'
+import fg from 'fast-glob'
 
 export function globFilesTool(): ITool {
   return {
@@ -18,11 +18,7 @@ export function globFilesTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, pattern } = input as { path: string; pattern: string }
-      const glob = new Glob(pattern)
-      const results: string[] = []
-      for await (const file of glob.scan({ cwd: path, dot: false })) {
-        results.push(file)
-      }
+      const results = await fg(pattern, { cwd: path, dot: false })
       results.sort()
       return results.length ? results.join('\n') : `No files found matching "${pattern}"`
     },

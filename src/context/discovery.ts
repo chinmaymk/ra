@@ -1,5 +1,8 @@
 import { resolve, relative, dirname, isAbsolute } from 'path'
 import { realpathSync } from 'fs'
+import { spawnSync } from 'node:child_process'
+import fg from 'fast-glob'
+import { readText } from '../utils/fs'
 import type { ContextFile } from './types'
 import type { ToolResultContext, Middleware } from '../agent/types'
 import { buildContextMessages } from './inject'
@@ -10,8 +13,8 @@ export interface DiscoverOptions {
 }
 
 export async function findGitRoot(cwd: string): Promise<string | null> {
-  const result = Bun.spawnSync(['git', 'rev-parse', '--show-toplevel'], { cwd })
-  if (result.exitCode !== 0) return null
+  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+  if (result.status !== 0) return null
   return result.stdout.toString().trim()
 }
 
@@ -40,12 +43,12 @@ async function scanDirs(dirs: string[], patterns: string[], root: string, exclud
   const files: ContextFile[] = []
   for (const dir of dirs) {
     for (const pattern of patterns) {
-      const glob = new Bun.Glob(pattern)
-      for await (const match of glob.scan({ cwd: dir, absolute: false, onlyFiles: true, dot: true })) {
+      const matches = await fg(pattern, { cwd: dir, absolute: false, onlyFiles: true, dot: true })
+      for (const match of matches) {
         const absPath = resolve(dir, match)
         if (exclude?.has(absPath) || files.some(f => f.path === absPath)) continue
         try {
-          files.push({ path: absPath, relativePath: relative(root, absPath), content: await Bun.file(absPath).text() })
+          files.push({ path: absPath, relativePath: relative(root, absPath), content: await readText(absPath) })
         } catch { /* skip unreadable */ }
       }
     }

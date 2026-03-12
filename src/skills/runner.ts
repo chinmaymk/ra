@@ -1,9 +1,15 @@
 import { join, extname } from 'path'
+import { spawn as nodeSpawn, execFileSync } from 'node:child_process'
+import { readText } from '../utils/fs'
 import { resolveSkillAsset, type Skill } from './types'
 
 function findRuntime(candidates: string[]): string {
   for (const c of candidates) {
-    if (Bun.which(c)) return c
+    try {
+      const cmd = process.platform === 'win32' ? 'where' : 'which'
+      execFileSync(cmd, [c], { stdio: 'pipe' })
+      return c
+    } catch { /* not found */ }
   }
   throw new Error(`None of [${candidates.join(', ')}] found on PATH`)
 }
@@ -19,7 +25,7 @@ const RUNTIMES: Record<string, string[]> = {
 }
 
 async function resolveCmd(scriptPath: string): Promise<string[]> {
-  const content = await Bun.file(scriptPath).text()
+  const content = await readText(scriptPath)
 
   // Shebang takes precedence
   if (content.startsWith('#!')) {
@@ -44,17 +50,24 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
 
 export async function runSkillScript(scriptPath: string, env: Record<string, string>): Promise<string> {
   const cmd = await resolveCmd(scriptPath)
-  const proc = Bun.spawn(cmd, { env: { ...process.env, ...env }, stdout: 'pipe', stderr: 'pipe' })
-  const [output, stderrText, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
-
-  if (exitCode !== 0) {
-    throw new Error(`Script exited with code ${exitCode}: ${stderrText.trim()}`)
-  }
-  return output
+  return new Promise<string>((resolve, reject) => {
+    const proc = nodeSpawn(cmd[0]!, cmd.slice(1), {
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    proc.stdout!.on('data', (d: Buffer) => { stdout += d.toString() })
+    proc.stderr!.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Script exited with code ${code}: ${stderr.trim()}`))
+      } else {
+        resolve(stdout)
+      }
+    })
+    proc.on('error', reject)
+  })
 }
 
 export async function runSkillScriptByName(skill: Skill, scriptName: string, env: Record<string, string>): Promise<string> {
