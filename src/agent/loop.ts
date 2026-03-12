@@ -70,7 +70,9 @@ export class AgentLoop {
     const controller = new AbortController()
     this.externalAbort = controller
     let stopReason: string | undefined
+    let stoppedInternally = false
     const stop = (reason?: string) => {
+      stoppedInternally = true
       stopReason = reason
       if (reason) console.log(`[ra] loop stopped: ${reason}`)
       controller.abort()
@@ -198,6 +200,7 @@ export class AgentLoop {
     }
 
     this.externalAbort = null
-    return { messages, iterations, usage, ...(stopReason && { stopReason }) }
+    const finalReason = stopReason ?? (signal.aborted && !stoppedInternally ? 'aborted' : undefined)
+    return { messages, iterations, usage, ...(finalReason && { stopReason: finalReason }) }
   }
 }
