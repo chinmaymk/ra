@@ -19,15 +19,12 @@ export function webFetchTool(): ITool {
       const { url, method = 'GET', headers, body } = input as {
         url: string; method?: string; headers?: Record<string, string>; body?: string
       }
-      const resp = await fetch(url, {
-        method,
-        headers,
-        body: body ?? undefined,
+      const resp = await fetch(url, { method, headers, body: body ?? undefined })
+      return JSON.stringify({
+        status: resp.status,
+        headers: Object.fromEntries(resp.headers.entries()),
+        body: await resp.text(),
       })
-      const respBody = await resp.text()
-      const respHeaders: Record<string, string> = {}
-      resp.headers.forEach((v, k) => { respHeaders[k] = v })
-      return JSON.stringify({ status: resp.status, headers: respHeaders, body: respBody })
     },
   }
 }

@@ -19,13 +19,11 @@ export function readFileTool(): ITool {
     async execute(input: unknown) {
       const { path, offset, limit } = input as { path: string; offset?: number; limit?: number }
       const content = await readFile(path, 'utf-8')
-      let lines = content.split('\n')
-      if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
-      const startLine = offset ? Math.max(1, offset) : 1
-      const startIdx = startLine - 1
-      const endIdx = limit ? startIdx + limit : lines.length
-      lines = lines.slice(startIdx, endIdx)
-      return lines.map((line, i) => `${startLine + i}: ${line}`).join('\n')
+      const allLines = content.split('\n')
+      if (allLines.at(-1) === '') allLines.pop()
+      const start = Math.max(0, (offset ?? 1) - 1)
+      const lines = allLines.slice(start, limit ? start + limit : undefined)
+      return lines.map((line, i) => `${start + i + 1}: ${line}`).join('\n')
     },
   }
 }

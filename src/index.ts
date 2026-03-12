@@ -1,3 +1,4 @@
+import { errorMessage } from './utils/errors'
 #!/usr/bin/env bun
 import { loadConfig } from './config'
 import { bootstrap, type AppContext } from './bootstrap'
@@ -271,6 +272,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err))
+  console.error(errorMessage(err))
   process.exit(1)
 })

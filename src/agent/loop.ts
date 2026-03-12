@@ -1,3 +1,4 @@
+import { errorMessage } from '../utils/errors'
 import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
@@ -162,7 +163,7 @@ export class AgentLoop {
               await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             } catch (err) {
               isError = true
-              content = err instanceof Error ? err.message : String(err)
+              content = errorMessage(err)
               await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: true }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             }
             messages.push({ role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) })

@@ -1,3 +1,4 @@
+import { errorMessage } from '../utils/errors'
 import type { IMessage, IProvider } from '../providers/types'
 import type { Middleware, ModelCallContext } from './types'
 import { estimateTokens } from './token-estimator'
@@ -129,7 +130,7 @@ export function createCompactionMiddleware(
         messages: [{ role: 'user', content: `${SUMMARIZATION_PROMPT}\n\n${conversationText}` }],
       })
     } catch (err) {
-      console.error('[compaction] summarization failed:', err instanceof Error ? err.message : String(err))
+      console.error('[compaction] summarization failed:', errorMessage(err))
       return // Leave messages unchanged on summarization failure
     }
 

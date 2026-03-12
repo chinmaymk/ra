@@ -1,5 +1,5 @@
 import type { ITool } from '../providers/types'
-import { rm, stat } from 'fs/promises'
+import { rm } from 'fs/promises'
 
 export function deleteFileTool(): ITool {
   return {
@@ -16,7 +16,6 @@ export function deleteFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { path } = input as { path: string }
-      await stat(path)
       await rm(path, { recursive: true })
       return `Deleted: ${path}`
     },

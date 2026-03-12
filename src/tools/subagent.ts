@@ -1,3 +1,4 @@
+import { errorMessage } from '../utils/errors'
 import type { ITool, IMessage, IProvider, TokenUsage } from '../providers/types'
 import type { MiddlewareConfig } from '../agent/types'
 import { AgentLoop, type AgentLoopOptions } from '../agent/loop'
@@ -102,7 +103,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
           return {
             task,
             status: 'error' as const,
-            result: err instanceof Error ? err.message : String(err),
+            result: errorMessage(err),
             iterations: 0,
             usage: { inputTokens: 0, outputTokens: 0 } as TokenUsage,
           }

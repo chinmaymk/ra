@@ -1,6 +1,7 @@
 import readline from 'readline'
 import { AgentLoop } from '../agent/loop'
 import { fileToContentPart } from '../utils/files'
+import { errorMessage } from '../utils/errors'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
@@ -129,7 +130,7 @@ export class Repl {
             const response = await this.handleCommand(trimmed)
             if (response) tui.printCommandResponse(response)
           } catch (err) {
-            tui.printError(err instanceof Error ? err.message : String(err))
+            tui.printError(errorMessage(err))
           }
         } else {
           await this.processInput(trimmed)
@@ -263,7 +264,7 @@ export class Repl {
       if (err instanceof DOMException && err.name === 'AbortError') {
         tui.printInterrupt('Request cancelled.')
       } else {
-        tui.printError(err instanceof Error ? err.message : String(err))
+        tui.printError(errorMessage(err))
       }
     } finally {
       this.activeLoop = null
@@ -339,7 +340,7 @@ export class Repl {
           this.pendingAttachments.push(await fileToContentPart(filePath))
           return `Attached: ${filePath}`
         } catch (err) {
-          return `Failed to attach file: ${err instanceof Error ? err.message : String(err)}`
+          return `Failed to attach file: ${errorMessage(err)}`
         }
       }
       case '/memories': {
