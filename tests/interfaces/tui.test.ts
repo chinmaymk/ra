@@ -88,7 +88,7 @@ describe('closeAssistantBox', () => {
 
 describe('printToolCall', () => {
   it('outputs tool name with diamond marker', () => {
-    const output = captureStdout(() => printToolCall('read_file'))
+    const output = captureStdout(() => printToolCall('read_file', '{"path":"/tmp/x"}'))
     expect(output).toContain('◆')
     expect(output).toContain('read_file')
   })

@@ -163,7 +163,7 @@ export class Repl {
             tui.stopSpinner(true)
             boxOpened = false
             toolStartTimes.set(ctx.toolCall.id, Date.now())
-            tui.printToolCall(ctx.toolCall.name)
+            tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
           },
           ...(userMw.beforeToolExecution ?? []),
         ],

@@ -142,8 +142,22 @@ export class StreamBuffer {
   }
 }
 
-export function printToolCall(name: string): void {
-  process.stdout.write(`  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
+export function printToolCall(name: string, args: string): void {
+  const cols = process.stdout.columns || 80
+  // Collapse JSON args to a single line and trim outer braces/whitespace
+  let flat: string
+  try {
+    flat = JSON.stringify(JSON.parse(args))
+      .replace(/^\{|\}$/g, '')   // strip outer braces
+      .replace(/^"|"$/g, '')     // strip outer quotes for scalar values
+  } catch {
+    flat = args.replace(/\s+/g, ' ').trim()
+  }
+  // Budget: indent(2) + '◆ '(2) + name + ' '(1) + '…'(1) + reset codes — keep it simple
+  const prefix = `  ◆ ${name} `
+  const maxFlat = cols - prefix.length - 1  // -1 for the ellipsis if truncated
+  const truncated = flat.length > maxFlat ? flat.slice(0, maxFlat) + '…' : flat
+  process.stdout.write(`  ${c.yellow}◆ ${name}${c.reset} ${c.dim}${truncated}${c.reset}`)
 }
 
 export function printToolResult(name: string, ms: number): void {
