@@ -2,7 +2,12 @@ import { OutputWriter } from './output-writer'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
-const LOG_LEVEL_RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 }
+const LOG_LEVEL_RANK: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+}
 
 export interface LogEntry {
   timestamp: string
@@ -30,12 +35,25 @@ export class Logger {
     this.sessionId = options.sessionId
   }
 
-  setSessionId(sessionId: string): void { this.sessionId = sessionId }
+  setSessionId(sessionId: string): void {
+    this.sessionId = sessionId
+  }
 
-  debug(message: string, data?: Record<string, unknown>): void { this.log('debug', message, data) }
-  info(message: string, data?: Record<string, unknown>): void { this.log('info', message, data) }
-  warn(message: string, data?: Record<string, unknown>): void { this.log('warn', message, data) }
-  error(message: string, data?: Record<string, unknown>): void { this.log('error', message, data) }
+  debug(message: string, data?: Record<string, unknown>): void {
+    this.log('debug', message, data)
+  }
+
+  info(message: string, data?: Record<string, unknown>): void {
+    this.log('info', message, data)
+  }
+
+  warn(message: string, data?: Record<string, unknown>): void {
+    this.log('warn', message, data)
+  }
+
+  error(message: string, data?: Record<string, unknown>): void {
+    this.log('error', message, data)
+  }
 
   protected log(level: LogLevel, message: string, data?: Record<string, unknown>): void {
     if (LOG_LEVEL_RANK[level] < LOG_LEVEL_RANK[this.level]) return
@@ -48,12 +66,17 @@ export class Logger {
     })
   }
 
-  async flush(): Promise<void> { await this.writer.flush() }
+  async flush(): Promise<void> {
+    await this.writer.flush()
+  }
 }
 
 /** A no-op logger that silently discards all messages. */
 export class NoopLogger extends Logger {
-  constructor() { super({ level: 'error', output: 'stderr' }) }
+  constructor() {
+    super({ level: 'error', output: 'stderr' })
+  }
+
   protected override log(): void {}
   override async flush(): Promise<void> {}
 }

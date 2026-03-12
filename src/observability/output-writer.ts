@@ -13,12 +13,18 @@ export class OutputWriter {
 
   write(record: unknown): void {
     const line = JSON.stringify(record) + '\n'
-    if (this.fileWriter) this.fileWriter.write(line)
-    else if (this.output === 'stdout') process.stdout.write(line)
-    else process.stderr.write(line)
+    if (this.fileWriter) {
+      this.fileWriter.write(line)
+    } else if (this.output === 'stdout') {
+      process.stdout.write(line)
+    } else {
+      process.stderr.write(line)
+    }
   }
 
   async flush(): Promise<void> {
-    if (this.fileWriter) await this.fileWriter.flush()
+    if (this.fileWriter) {
+      await this.fileWriter.flush()
+    }
   }
 }

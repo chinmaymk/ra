@@ -45,15 +45,28 @@ export function checklistTool(): ITool {
           items.push({ text: item, checked: false })
           return `Added: ${item} | ${remaining()} remaining`
         }
-        case 'check': { at(index).checked = true; return `Checked: ${at(index).text} | ${remaining()} remaining` }
-        case 'uncheck': { at(index).checked = false; return `Unchecked: ${at(index).text} | ${remaining()} remaining` }
-        case 'remove': { at(index); return `Removed: ${items.splice(index as number, 1)[0]!.text} | ${remaining()} remaining` }
+        case 'check': {
+          const it = at(index)
+          it.checked = true
+          return `Checked: ${it.text} | ${remaining()} remaining`
+        }
+        case 'uncheck': {
+          const it = at(index)
+          it.checked = false
+          return `Unchecked: ${it.text} | ${remaining()} remaining`
+        }
+        case 'remove': {
+          at(index)
+          const removed = items.splice(index as number, 1)[0]!
+          return `Removed: ${removed.text} | ${remaining()} remaining`
+        }
         case 'list': {
           if (items.length === 0) return 'Checklist is empty.'
           const lines = items.map((it, i) => `${i}: ${it.checked ? '[x]' : '[ ]'} ${it.text}`)
           return `${lines.join('\n')}\n${remaining()} of ${items.length} remaining`
         }
-        default: throw new Error(`Unknown action: ${action}`)
+        default:
+          throw new Error(`Unknown action: ${action}`)
       }
     },
   }

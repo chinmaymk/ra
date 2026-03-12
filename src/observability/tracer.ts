@@ -51,8 +51,13 @@ export class Tracer {
     this.sessionId = options?.sessionId
   }
 
-  getTraceId(): string { return this.traceId }
-  setSessionId(sessionId: string): void { this.sessionId = sessionId }
+  getTraceId(): string {
+    return this.traceId
+  }
+
+  setSessionId(sessionId: string): void {
+    this.sessionId = sessionId
+  }
 
   startSpan(name: string, attributes?: Record<string, unknown>, parentSpanId?: string): Span {
     const span: Span = {
@@ -96,16 +101,25 @@ export class Tracer {
     } satisfies TraceRecord)
   }
 
-  async flush(): Promise<void> { await this.writer.flush() }
+  async flush(): Promise<void> {
+    await this.writer.flush()
+  }
 }
 
 /** A no-op tracer that silently discards all spans. */
 export class NoopTracer extends Tracer {
-  constructor() { super(null, 'noop') }
+  constructor() {
+    super(null, 'noop')
+  }
 
   private static NOOP_SPAN: Span = {
-    traceId: 'noop', spanId: 'noop', name: 'noop',
-    startTime: 0, attributes: {}, status: 'ok', events: [],
+    traceId: 'noop',
+    spanId: 'noop',
+    name: 'noop',
+    startTime: 0,
+    attributes: {},
+    status: 'ok',
+    events: [],
   }
 
   override startSpan(_name: string, _attributes?: Record<string, unknown>, _parentSpanId?: string): Span { return NoopTracer.NOOP_SPAN }
