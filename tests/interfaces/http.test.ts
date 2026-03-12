@@ -353,4 +353,75 @@ describe('HttpServer', () => {
     const data = await res.json() as { response: string }
     expect(data.response).toBe('part1 part2')
   })
+
+  it('POST /chat/sync returns askUser field when model calls ask_user', async () => {
+    let callCount = 0
+    const askProvider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        if (callCount++ === 0) {
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'ask_user' }
+          yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{"question":"What color?"}' }
+          yield { type: 'tool_call_end' as const, id: 'tc1' }
+          yield { type: 'done' as const }
+        } else {
+          yield { type: 'text' as const, delta: 'ok' }
+          yield { type: 'done' as const }
+        }
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 15,
+      model: 'test',
+      provider: askProvider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 15}/chat/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    const data = await res.json() as { askUser?: string; sessionId?: string }
+    expect(data.askUser).toBe('What color?')
+  })
+
+  it('POST /chat streams ask_user event when model calls ask_user', async () => {
+    let callCount = 0
+    const askProvider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        if (callCount++ === 0) {
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'ask_user' }
+          yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{"question":"What color?"}' }
+          yield { type: 'tool_call_end' as const, id: 'tc1' }
+          yield { type: 'done' as const }
+        } else {
+          yield { type: 'text' as const, delta: 'ok' }
+          yield { type: 'done' as const }
+        }
+      },
+    }
+    server = new HttpServer({
+      port: TEST_PORT + 16,
+      model: 'test',
+      provider: askProvider,
+      tools: new ToolRegistry(),
+      storage: await makeStorage(),
+    })
+    await server.start()
+    const res = await fetch(`http://localhost:${TEST_PORT + 16}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    })
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text).toContain('"type":"ask_user"')
+    expect(text).toContain('"question":"What color?"')
+    expect(text).toContain('"type":"done"')
+  })
 })
