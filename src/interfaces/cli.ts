@@ -61,8 +61,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
 
   const priorCount = initialMessages.length
 
-  const fileParts = await Promise.all(files.map(fileToContentPart))
-  const parts: ContentPart[] = [{ type: 'text', text: prompt }, ...fileParts]
+  const parts: ContentPart[] = [{ type: 'text', text: prompt }, ...await Promise.all(files.map(fileToContentPart))]
   const content: string | ContentPart[] = parts.length === 1 ? prompt : parts
   initialMessages.push({ role: 'user', content })
 

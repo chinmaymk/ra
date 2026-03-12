@@ -153,7 +153,7 @@ export class Repl {
       : input
     this.pendingSkill = undefined
 
-    const parts: ContentPart[] = [{ type: 'text', text } as ContentPart].concat(this.pendingAttachments)
+    const parts: ContentPart[] = [{ type: 'text', text }, ...this.pendingAttachments]
     this.pendingAttachments = []
 
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
