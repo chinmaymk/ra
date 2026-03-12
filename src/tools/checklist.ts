@@ -10,6 +10,11 @@ export function checklistTool(): ITool {
 
   const remaining = () => items.filter(i => !i.checked).length
 
+  const at = (index: number | undefined): ChecklistItem => {
+    if (index === undefined || index < 0 || index >= items.length) throw new Error(`Invalid index: ${index}`)
+    return items[index]!
+  }
+
   return {
     name: 'TodoWrite',
     get description() {
@@ -32,9 +37,7 @@ export function checklistTool(): ITool {
       required: ['action'],
     },
     async execute(input: unknown) {
-      const { action, item, index } = input as {
-        action: string; item?: string; index?: number
-      }
+      const { action, item, index } = input as { action: string; item?: string; index?: number }
 
       switch (action) {
         case 'add': {
@@ -42,19 +45,11 @@ export function checklistTool(): ITool {
           items.push({ text: item, checked: false })
           return `Added: ${item} | ${remaining()} remaining`
         }
-        case 'check': {
-          if (index === undefined || index < 0 || index >= items.length) throw new Error(`Invalid index: ${index}`)
-          items[index]!.checked = true
-          return `Checked: ${items[index]!.text} | ${remaining()} remaining`
-        }
-        case 'uncheck': {
-          if (index === undefined || index < 0 || index >= items.length) throw new Error(`Invalid index: ${index}`)
-          items[index]!.checked = false
-          return `Unchecked: ${items[index]!.text} | ${remaining()} remaining`
-        }
+        case 'check':   { at(index).checked = true;  return `Checked: ${at(index).text} | ${remaining()} remaining` }
+        case 'uncheck':  { at(index).checked = false; return `Unchecked: ${at(index).text} | ${remaining()} remaining` }
         case 'remove': {
-          if (index === undefined || index < 0 || index >= items.length) throw new Error(`Invalid index: ${index}`)
-          const removed = items.splice(index, 1)[0]!
+          at(index)
+          const removed = items.splice(index!, 1)[0]!
           return `Removed: ${removed.text} | ${remaining()} remaining`
         }
         case 'list': {

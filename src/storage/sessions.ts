@@ -81,16 +81,6 @@ export class SessionStorage {
       .filter((msg): msg is IMessage => msg !== null)
   }
 
-  async saveCheckpoint(id: string, data: Record<string, unknown>): Promise<void> {
-    await Bun.write(join(this.sessionDir(id), 'checkpoint.json'), JSON.stringify(data, null, 2))
-  }
-
-  async loadCheckpoint(id: string): Promise<Record<string, unknown> | null> {
-    const file = join(this.sessionDir(id), 'checkpoint.json')
-    const f = Bun.file(file)
-    if (!(await f.exists())) return null
-    return JSON.parse(await f.text())
-  }
 
   async list(): Promise<Session[]> {
     const glob = new Bun.Glob('*/meta.json')

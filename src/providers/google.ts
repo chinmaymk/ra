@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Content, Part, Tool as GeminiTool, GenerateContentResponse } from '@google/generative-ai'
-import { extractSystemMessages, mergeConsecutive, parseToolArguments } from './utils'
+import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
@@ -96,7 +96,7 @@ export class GoogleProvider implements IProvider {
         const toolName = msg.toolCallId!.substring(0, msg.toolCallId!.lastIndexOf('_'))
         return {
           role: 'user',
-          parts: [{ functionResponse: { name: toolName, response: { content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) } } }],
+          parts: [{ functionResponse: { name: toolName, response: { content: serializeContent(msg.content) } } }],
         }
       }
       const role = msg.role === 'assistant' ? 'model' : 'user'

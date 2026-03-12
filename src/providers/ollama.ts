@@ -1,5 +1,5 @@
 import { Ollama, type ChatRequest as OllamaChatRequest, type Message as OllamaMessage, type Tool as OllamaTool, type ToolCall as OllamaToolCall } from 'ollama'
-import { extractTextContent, parseToolArguments } from './utils'
+import { extractTextContent, parseToolArguments, serializeContent } from './utils'
 import type { IProvider, IMessage, ITool, ChatRequest, ChatResponse, StreamChunk } from './types'
 
 export interface OllamaProviderOptions {
@@ -63,7 +63,7 @@ export class OllamaProvider implements IProvider {
         return { role: 'system', content: extractTextContent(msg.content) }
       }
       if (msg.role === 'tool') {
-        return { role: 'tool', content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }
+        return { role: 'tool', content: serializeContent(msg.content) }
       }
       if (msg.role === 'assistant') {
         const content = typeof msg.content === 'string' ? msg.content : ''

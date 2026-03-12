@@ -43,6 +43,14 @@ export function extractTextContent(content: string | ContentPart[]): string {
   return content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
 }
 
+/** Serialize message content to string for tool results. */
+export function serializeContent(content: string | ContentPart[]): string {
+  return typeof content === 'string' ? content : JSON.stringify(content)
+}
+
+/** Thinking budget tokens shared by Anthropic and Bedrock providers. */
+export const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
+
 /** Parse tool call arguments from string or object, returning {} on failure. */
 export function parseToolArguments(args: string | Record<string, unknown>): Record<string, unknown> {
   if (typeof args !== 'string') return args

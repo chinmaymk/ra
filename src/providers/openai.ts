@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { extractTextContent } from './utils'
+import { extractTextContent, serializeContent } from './utils'
 import type { IProvider, IMessage, ITool, ChatRequest, ChatResponse, StreamChunk, ContentPart, TokenUsage } from './types'
 
 export interface OpenAIProviderOptions {
@@ -86,7 +86,7 @@ export class OpenAIProvider implements IProvider {
         return { role: 'system', content: extractTextContent(msg.content) }
       }
       if (msg.role === 'tool') {
-        return { role: 'tool', content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content), tool_call_id: msg.toolCallId ?? '' }
+        return { role: 'tool', content: serializeContent(msg.content), tool_call_id: msg.toolCallId ?? '' }
       }
       if (msg.role === 'assistant') {
         const content = extractTextContent(msg.content)
