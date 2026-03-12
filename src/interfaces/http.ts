@@ -1,12 +1,12 @@
 import type { IProvider, IMessage } from '../providers/types'
-import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
+import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext } from '../agent/types'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml } from '../skills/loader'
-import { ASK_USER_SIGNAL } from '../tools/ask-user'
+import { askUserTool } from '../tools/ask-user'
 
 export interface HttpOptions {
   port: number
@@ -31,6 +31,7 @@ export class HttpServer {
 
   constructor(options: HttpOptions) {
     this.options = options
+    options.tools.register(askUserTool())
   }
 
   get port(): number { return (this.server?.port ?? this.options.port) as number }
@@ -123,11 +124,24 @@ export class HttpServer {
 
     const messages = this.prependSystem(body.messages ?? [])
 
+    let askQuestion: string | undefined
     const loop = new AgentLoop({
       provider: this.options.provider,
       tools: this.options.tools,
       model: this.options.model,
-      middleware: this.options.middleware,
+      middleware: {
+        ...this.options.middleware,
+        beforeToolExecution: [
+          async (ctx: ToolExecutionContext) => {
+            if (ctx.toolCall.name === 'ask_user') {
+              const input = JSON.parse(ctx.toolCall.arguments || '{}') as { question: string }
+              askQuestion = input.question
+              ctx.stop()
+            }
+          },
+          ...(this.options.middleware?.beforeToolExecution ?? []),
+        ],
+      },
       maxIterations: this.options.maxIterations,
       toolTimeout: this.options.toolTimeout,
       sessionId: body.sessionId,
@@ -138,7 +152,6 @@ export class HttpServer {
     try {
       const result = await loop.run(messages)
 
-      // Extract last assistant message text
       const assistantMessages = result.messages.filter(m => m.role === 'assistant')
       const last = assistantMessages[assistantMessages.length - 1]
       const responseText = typeof last?.content === 'string'
@@ -146,15 +159,6 @@ export class HttpServer {
         : Array.isArray(last?.content)
           ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
           : ''
-
-      let askQuestion: string | undefined
-      for (let i = result.messages.length - 1; i >= 0; i--) {
-        const m = result.messages[i]!
-        if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-          askQuestion = m.content.slice(ASK_USER_SIGNAL.length)
-          break
-        }
-      }
 
       return new Response(JSON.stringify({
         response: responseText,
@@ -190,11 +194,22 @@ export class HttpServer {
           }
         }
 
+        let askQuestion: string | undefined
         const middleware: Partial<MiddlewareConfig> = {
           ...(opts.middleware ?? {}),
           onStreamChunk: [
             ...(opts.middleware?.onStreamChunk ?? []),
             onStreamChunk,
+          ],
+          beforeToolExecution: [
+            async (ctx: ToolExecutionContext) => {
+              if (ctx.toolCall.name === 'ask_user') {
+                const input = JSON.parse(ctx.toolCall.arguments || '{}') as { question: string }
+                askQuestion = input.question
+                ctx.stop()
+              }
+            },
+            ...(opts.middleware?.beforeToolExecution ?? []),
           ],
         }
 
@@ -211,16 +226,9 @@ export class HttpServer {
         })
 
         try {
-          const result = await loop.run(messages)
+          await loop.run(messages)
 
-          for (let i = result.messages.length - 1; i >= 0; i--) {
-            const m = result.messages[i]!
-            if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-              send({ type: 'ask_user', question: m.content.slice(ASK_USER_SIGNAL.length) })
-              break
-            }
-          }
-
+          if (askQuestion) send({ type: 'ask_user', question: askQuestion })
           send({ type: 'done' })
         } catch (err) {
           send({ type: 'error', error: err instanceof Error ? err.message : String(err) })

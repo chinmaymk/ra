@@ -9,6 +9,7 @@ import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { MemoryStore } from '../memory/store'
+import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
 import * as tui from './tui'
 
@@ -61,24 +62,21 @@ export class Repl {
       tui.printResumeHeader(this.sessionId!, this.messages.length)
     }
 
-    // Override ask_user to read inline from the terminal
-    const askUserTool = this.options.tools.get('ask_user')
-    if (askUserTool) {
-      const { description, inputSchema } = askUserTool
-      this.options.tools.register({
-        name: 'ask_user',
-        description,
-        inputSchema,
-        execute: async (input: unknown) => {
-          const { question } = input as { question: string }
-          tui.stopSpinner(true)
-          tui.printCommandResponse(question)
-          rl.setPrompt('  > ')
-          rl.prompt()
-          return new Promise<string>(resolve => { this.askUserResolve = resolve })
-        },
-      })
-    }
+    // Register ask_user to read inline from the terminal
+    const { description, inputSchema } = askUserTool()
+    this.options.tools.register({
+      name: 'ask_user',
+      description,
+      inputSchema,
+      execute: async (input: unknown) => {
+        const { question } = input as { question: string }
+        tui.stopSpinner(true)
+        tui.printCommandResponse(question)
+        rl.setPrompt('  > ')
+        rl.prompt()
+        return new Promise<string>(resolve => { this.askUserResolve = resolve })
+      },
+    })
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdout.isTTY })
     rl.setPrompt(tui.PROMPT)

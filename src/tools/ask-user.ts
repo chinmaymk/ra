@@ -1,12 +1,10 @@
 import type { ITool } from '../providers/types'
 
-export const ASK_USER_SIGNAL = '__RA_ASK_USER__'
-
 export function askUserTool(): ITool {
   return {
     name: 'ask_user',
     description:
-      'Ask the user a question. The agent loop pauses until the user replies. ' +
+      'Ask the user a question and wait for their reply. ' +
       'Use when you need clarification or confirmation before proceeding. Call only once per turn.',
     inputSchema: {
       type: 'object',
@@ -15,9 +13,8 @@ export function askUserTool(): ITool {
       },
       required: ['question'],
     },
-    async execute(input: unknown) {
-      const { question } = input as { question: string }
-      return `${ASK_USER_SIGNAL}${question}`
+    async execute() {
+      throw new Error('ask_user is not available in this context')
     },
   }
 }
