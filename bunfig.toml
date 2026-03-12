@@ -1,0 +1,4 @@
+[test]
+
+# Exclude Node.js-specific tests (run via vitest instead)
+exclude = ["tests/node/**"]

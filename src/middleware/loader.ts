@@ -12,7 +12,7 @@ const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
 /** Detect whether Bun's transpiler is available at runtime. */
 function hasBunTranspiler(): boolean {
   try {
-    return typeof (globalThis as Record<string, any>).Bun?.Transpiler === 'function'
+    return 'Bun' in globalThis && typeof (globalThis.Bun).Transpiler === 'function'
   } catch {
     return false
   }
@@ -21,8 +21,8 @@ function hasBunTranspiler(): boolean {
 /** Transpile a TypeScript expression to JavaScript. Tries Bun first, falls back to esbuild, then raw eval. */
 async function transpileExpression(code: string): Promise<string> {
   if (hasBunTranspiler()) {
-    const transpiler = new (globalThis as Record<string, any>).Bun.Transpiler({ loader: 'ts', deadCodeElimination: false })
-    return transpiler.transform(code) as string
+    const transpiler = new (globalThis.Bun).Transpiler({ loader: 'ts', deadCodeElimination: false })
+    return await transpiler.transform(code)
   }
 
   // Try esbuild if installed
