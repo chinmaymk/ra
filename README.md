@@ -24,7 +24,7 @@
 
 ## What is ra?
 
-ra is a small, hackable agent. Nothing hidden behind abstractions you can't reach. It doesn't even ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks let you intercept every step — model calls, tool execution, streaming, all of it.
+ra is a small and mighty, hackable agent. Nothing hidden behind abstractions you can't reach. It doesn't even ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks let you intercept every step — model calls, tool execution, streaming, all of it.
 
 It comes with built-in tools for filesystem, shell, network, and user interaction, connects to MCP servers for additional tools. Provides persistent resumable sessions. Has An FTS5 memory backed by SQLite. It speaks MCP both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease. Extended thinking for models that support it. 
 
