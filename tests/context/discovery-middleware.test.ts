@@ -177,10 +177,10 @@ describe('createDiscoveryMiddleware', () => {
     expect(ctx.request.messages[0]!.content).toBe('hello')
   })
 
-  it('ignores paths outside the git root', async () => {
+  it('discovers context files outside the git root', async () => {
     const outsideDir = join(tmpdir(), `ra-outside-${Date.now()}`)
     mkdirSync(outsideDir, { recursive: true })
-    writeFileSync(join(outsideDir, 'CLAUDE.md'), '# Sneaky')
+    writeFileSync(join(outsideDir, 'CLAUDE.md'), '# External rules')
 
     const mw = createDiscoveryMiddleware({
       patterns: ['CLAUDE.md'],
@@ -200,10 +200,10 @@ describe('createDiscoveryMiddleware', () => {
     const ctx = makeCtx(messages)
     await mw(ctx)
 
-    const injected = ctx.request.messages.filter(m =>
-      typeof m.content === 'string' && m.content.includes('<context-file')
+    const injected = ctx.request.messages.find(m =>
+      typeof m.content === 'string' && m.content.includes('External rules')
     )
-    expect(injected).toHaveLength(0)
+    expect(injected).toBeTruthy()
     rmSync(outsideDir, { recursive: true, force: true })
   })
 

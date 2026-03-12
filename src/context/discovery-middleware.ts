@@ -1,4 +1,4 @@
-import { dirname, isAbsolute, resolve } from 'path'
+import { dirname, isAbsolute } from 'path'
 import type { ModelCallContext, Middleware } from '../agent/types'
 import type { IMessage } from '../providers/types'
 import { discoverContextInDirs } from './discovery'
@@ -7,7 +7,7 @@ import { buildContextMessages } from './inject'
 export interface DiscoveryMiddlewareOptions {
   /** Glob patterns to match context files (e.g. CLAUDE.md, .cursorrules) */
   patterns: string[]
-  /** Git root (or project root) for computing relative paths */
+  /** Fallback root for computing relative paths in context-file XML */
   gitRoot: string
   /** Absolute paths of context files already injected at bootstrap */
   initialPaths: Set<string>
@@ -20,7 +20,7 @@ const ABS_PATH_RE = /(?:^|[\s"'=:])(\/.+?)(?=[\s"',)\]}>]|$)/g
  * Extract directory paths from tool call arguments and tool results
  * in the message list, starting from `startIdx`.
  */
-function extractDirsFromMessages(messages: IMessage[], startIdx: number, gitRoot: string): Set<string> {
+function extractDirsFromMessages(messages: IMessage[], startIdx: number): Set<string> {
   const dirs = new Set<string>()
 
   for (let i = startIdx; i < messages.length; i++) {
@@ -34,8 +34,7 @@ function extractDirsFromMessages(messages: IMessage[], startIdx: number, gitRoot
           for (const key of Object.keys(args)) {
             const val = args[key]
             if (typeof val === 'string' && isAbsolute(val)) {
-              const dir = looksLikeFile(val) ? dirname(val) : val
-              if (dir.startsWith(gitRoot)) dirs.add(dir)
+              dirs.add(looksLikeFile(val) ? dirname(val) : val)
             }
           }
         } catch {
@@ -50,8 +49,7 @@ function extractDirsFromMessages(messages: IMessage[], startIdx: number, gitRoot
       let match: RegExpExecArray | null
       while ((match = ABS_PATH_RE.exec(msg.content)) !== null) {
         const p = match[1]!
-        const dir = looksLikeFile(p) ? dirname(p) : p
-        if (dir.startsWith(gitRoot)) dirs.add(dir)
+        dirs.add(looksLikeFile(p) ? dirname(p) : p)
       }
     }
   }
@@ -87,7 +85,7 @@ export function createDiscoveryMiddleware(
     const messages = ctx.request.messages
 
     // Extract dirs from messages we haven't scanned yet
-    const dirs = extractDirsFromMessages(messages, lastScannedIdx, opts.gitRoot)
+    const dirs = extractDirsFromMessages(messages, lastScannedIdx)
     lastScannedIdx = messages.length
 
     // Filter to dirs we haven't checked
