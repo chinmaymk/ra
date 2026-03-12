@@ -105,7 +105,7 @@ export async function bootstrap(
   if (config.context.enabled) {
     const root = (await findGitRoot(process.cwd())) ?? process.cwd()
     const discoveryMw = createDiscoveryMiddleware(config.context.patterns, root, new Set(contextFiles.map(f => f.path)))
-    middleware.beforeModelCall = [...(middleware.beforeModelCall ?? []), discoveryMw]
+    middleware.afterToolExecution = [...(middleware.afterToolExecution ?? []), discoveryMw]
   }
 
   // ── Provider ───────────────────────────────────────────────────────

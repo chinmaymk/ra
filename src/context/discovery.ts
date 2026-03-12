@@ -1,8 +1,7 @@
 import { resolve, relative, dirname, isAbsolute } from 'path'
 import { realpathSync } from 'fs'
 import type { ContextFile } from './types'
-import type { ModelCallContext, Middleware } from '../agent/types'
-import type { IMessage } from '../providers/types'
+import type { ToolResultContext, Middleware } from '../agent/types'
 import { buildContextMessages } from './inject'
 
 export interface DiscoverOptions {
@@ -56,49 +55,34 @@ async function scanDirs(dirs: string[], patterns: string[], root: string, exclud
 
 // ── Dynamic discovery middleware ─────────────────────────────────────
 
-/** Extract directories from tool call arguments (structured JSON with file paths). */
-function extractDirs(messages: IMessage[], from: number): Set<string> {
-  const dirs = new Set<string>()
-  for (let i = from; i < messages.length; i++) {
-    const msg = messages[i]!
-    if (msg.role !== 'assistant' || !msg.toolCalls?.length) continue
-    for (const tc of msg.toolCalls) {
-      try {
-        for (const v of Object.values(JSON.parse(tc.arguments || '{}')))
-          if (typeof v === 'string' && isAbsolute(v)) dirs.add(dirname(v))
-      } catch { /* skip */ }
-    }
-  }
-  return dirs
-}
-
-/** beforeModelCall middleware — discovers context files in directories the agent touches. */
+/** afterToolExecution middleware — discovers context files from directories the agent touches. */
 export function createDiscoveryMiddleware(
   patterns: string[], root: string, initialPaths: Set<string>,
-): Middleware<ModelCallContext> {
+): Middleware<ToolResultContext> {
   const seen = new Set(initialPaths)
   const checked = new Set<string>()
-  let cursor = 0
 
-  return async (ctx: ModelCallContext) => {
-    const messages = ctx.request.messages
-    const dirs = extractDirs(messages, cursor)
-    cursor = messages.length
+  return async (ctx: ToolResultContext) => {
+    const dirs: string[] = []
+    try {
+      for (const v of Object.values(JSON.parse(ctx.toolCall.arguments || '{}')))
+        if (typeof v === 'string' && isAbsolute(v)) {
+          const d = dirname(v)
+          if (!checked.has(d)) { checked.add(d); dirs.push(d) }
+        }
+    } catch { /* skip */ }
+    if (dirs.length === 0) return
 
-    const newDirs = [...dirs].filter(d => !checked.has(d))
-    for (const d of newDirs) checked.add(d)
-    if (newDirs.length === 0) return
-
-    const files = await scanDirs(newDirs, patterns, root, seen)
+    const files = await scanDirs(dirs, patterns, root, seen)
     if (files.length === 0) return
     for (const f of files) seen.add(f.path)
 
     const msgs = buildContextMessages(files)
+    const messages = ctx.loop.messages
     let idx = 0
     for (let i = 0; i < messages.length; i++)
       if (typeof messages[i]!.content === 'string' && (messages[i]!.content as string).includes('<context-file '))
         idx = i + 1
     messages.splice(idx, 0, ...msgs)
-    cursor += msgs.length
   }
 }

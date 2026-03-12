@@ -1,25 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { createDiscoveryMiddleware } from '../../src/context/discovery'
-import type { ModelCallContext } from '../../src/agent/types'
+import type { ToolResultContext } from '../../src/agent/types'
 import type { IMessage } from '../../src/providers/types'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-function makeCtx(messages: IMessage[]): ModelCallContext {
+function makeCtx(messages: IMessage[], filePath: string): ToolResultContext {
   const controller = new AbortController()
+  const toolCall = { id: 'tc1', name: 'ReadFile', arguments: JSON.stringify({ file_path: filePath }) }
   return {
     stop: () => controller.abort(), signal: controller.signal,
-    request: { model: 'test', messages },
+    toolCall,
+    result: { toolCallId: 'tc1', content: 'file content', isError: false },
     loop: { stop: () => controller.abort(), signal: controller.signal, messages, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
   }
-}
-
-function toolMsg(filePath: string): IMessage[] {
-  return [
-    { role: 'assistant', content: '', toolCalls: [{ id: 'tc1', name: 'ReadFile', arguments: JSON.stringify({ file_path: filePath }) }] },
-    { role: 'tool', content: 'file content', toolCallId: 'tc1' },
-  ]
 }
 
 function countContext(messages: IMessage[]): number {
@@ -41,38 +36,42 @@ describe('createDiscoveryMiddleware', () => {
   it('discovers context from tool call file paths', async () => {
     writeFileSync(join(subDir, 'CLAUDE.md'), '# Utils rules')
     const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())
-    const ctx = makeCtx([{ role: 'user', content: 'hi' }, ...toolMsg(join(subDir, 'helpers.ts'))])
-    await mw(ctx)
-    expect(ctx.request.messages.find(m => typeof m.content === 'string' && m.content.includes('Utils rules'))).toBeTruthy()
+    const msgs: IMessage[] = [{ role: 'user', content: 'hi' }]
+    await mw(makeCtx(msgs, join(subDir, 'helpers.ts')))
+    expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Utils rules'))).toBeTruthy()
   })
-
 
   it('skips files already in initialPaths', async () => {
     const p = join(tmp, 'CLAUDE.md')
     writeFileSync(p, '# Root')
     const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set([p]))
-    const ctx = makeCtx([{ role: 'user', content: 'hi' }, ...toolMsg(join(tmp, 'index.ts'))])
-    await mw(ctx)
-    expect(countContext(ctx.request.messages)).toBe(0)
+    const msgs: IMessage[] = [{ role: 'user', content: 'hi' }]
+    await mw(makeCtx(msgs, join(tmp, 'index.ts')))
+    expect(countContext(msgs)).toBe(0)
   })
 
   it('does not duplicate on repeated calls', async () => {
     writeFileSync(join(subDir, 'CLAUDE.md'), '# Utils')
     const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())
-    const ctx1 = makeCtx([{ role: 'user', content: 'hi' }, ...toolMsg(join(subDir, 'a.ts'))])
-    await mw(ctx1)
-    expect(countContext(ctx1.request.messages)).toBe(1)
+    const msgs: IMessage[] = [{ role: 'user', content: 'hi' }]
+    await mw(makeCtx(msgs, join(subDir, 'a.ts')))
+    expect(countContext(msgs)).toBe(1)
 
-    const ctx2 = makeCtx([...ctx1.request.messages, { role: 'user', content: 'more' }])
-    await mw(ctx2)
-    expect(countContext(ctx2.request.messages)).toBe(1)
+    await mw(makeCtx(msgs, join(subDir, 'b.ts')))
+    expect(countContext(msgs)).toBe(1)
   })
 
-  it('does nothing without tool file paths', async () => {
+  it('does nothing for tool calls without file paths', async () => {
     const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())
-    const ctx = makeCtx([{ role: 'user', content: 'hello' }])
-    await mw(ctx)
-    expect(ctx.request.messages).toHaveLength(1)
+    const msgs: IMessage[] = [{ role: 'user', content: 'hello' }]
+    const controller = new AbortController()
+    await mw({
+      stop: () => controller.abort(), signal: controller.signal,
+      toolCall: { id: 'tc1', name: 'Bash', arguments: JSON.stringify({ command: 'echo hi' }) },
+      result: { toolCallId: 'tc1', content: 'hi', isError: false },
+      loop: { stop: () => controller.abort(), signal: controller.signal, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+    })
+    expect(msgs).toHaveLength(1)
   })
 
   it('discovers context outside git root', async () => {
@@ -80,22 +79,21 @@ describe('createDiscoveryMiddleware', () => {
     mkdirSync(ext, { recursive: true })
     writeFileSync(join(ext, 'CLAUDE.md'), '# External')
     const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())
-    const ctx = makeCtx([{ role: 'user', content: 'hi' }, ...toolMsg(join(ext, 'foo.ts'))])
-    await mw(ctx)
-    expect(ctx.request.messages.find(m => typeof m.content === 'string' && m.content.includes('External'))).toBeTruthy()
+    const msgs: IMessage[] = [{ role: 'user', content: 'hi' }]
+    await mw(makeCtx(msgs, join(ext, 'foo.ts')))
+    expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('External'))).toBeTruthy()
     rmSync(ext, { recursive: true, force: true })
   })
 
   it('inserts after existing context-file messages', async () => {
     writeFileSync(join(subDir, 'CLAUDE.md'), '# Sub rules')
     const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())
-    const ctx = makeCtx([
+    const msgs: IMessage[] = [
       { role: 'user', content: '<context-file path="CLAUDE.md">\n# Root\n</context-file>' },
       { role: 'user', content: 'read a file' },
-      ...toolMsg(join(subDir, 'x.ts')),
-    ])
-    await mw(ctx)
-    const idx = ctx.request.messages.findIndex(m => typeof m.content === 'string' && m.content.includes('Sub rules'))
+    ]
+    await mw(makeCtx(msgs, join(subDir, 'x.ts')))
+    const idx = msgs.findIndex(m => typeof m.content === 'string' && m.content.includes('Sub rules'))
     expect(idx).toBe(1)
   })
 })
