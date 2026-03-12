@@ -353,10 +353,10 @@ ra --resume <session-id> "Continue with the next step"
 ```
 
 ```yaml
+dataDir: .ra              # root for all runtime data (sessions, memory, etc.)
 storage:
-  path: .ra/sessions
-  maxSessions: 100     # auto-prune oldest
-  ttlDays: 30           # auto-expire
+  maxSessions: 100        # auto-prune oldest
+  ttlDays: 30             # auto-expire
 ```
 
 Sessions are auto-saved after each turn. The REPL has `/resume <id>` and the HTTP API accepts a `sessionId` field. When `AskUserQuestion` suspends a CLI run, the session ID is printed to stderr so you can resume later.
@@ -435,17 +435,12 @@ Structured JSON logging and tracing are built in. By default, logs and traces ar
   traces.jsonl       # trace spans
 ```
 
-```yaml
-# ra.config.yml
-observability:
-  enabled: true          # default: true
-  logs:
-    level: info          # debug | info | warn | error
-    output: session      # session | stderr | stdout | file
-    filePath: .ra/logs.jsonl  # only used when output is 'file'
-  traces:
-    output: session      # session | stderr | stdout | file
-    filePath: .ra/traces.jsonl
+Logs and traces are enabled by default and written to the session directory. Control them with environment variables:
+
+```bash
+RA_LOGS_ENABLED=true       # toggle session logs (default: true)
+RA_LOG_LEVEL=info          # debug | info | warn | error
+RA_TRACES_ENABLED=true     # toggle session traces (default: true)
 ```
 
 Every startup event, model call, tool execution, compaction, and error is logged. Traces follow an OpenTelemetry-inspired span hierarchy (`agent.loop` → `agent.iteration` → `agent.model_call` / `agent.tool_execution`), each recording duration, status, and attributes. Both emit JSONL — pipe through `jq` to explore. See [docs/observability.md](docs/observability.md) for the full event reference.
@@ -464,7 +459,6 @@ ra --forget "dark mode"           # delete matching memories
 ```yaml
 memory:
   enabled: true
-  path: .ra/memory.db
   maxMemories: 1000
   ttlDays: 90
   injectLimit: 5           # inject top-N recent memories (0 to disable)

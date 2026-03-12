@@ -45,7 +45,7 @@ function buildEnv(opts: BinaryEnv): Record<string, string> {
   if (opts.anthropicBaseURL) env['RA_ANTHROPIC_BASE_URL'] = opts.anthropicBaseURL
   if (opts.openaiBaseURL) env['RA_OPENAI_BASE_URL'] = opts.openaiBaseURL
   if (opts.googleBaseURL) env['RA_GOOGLE_BASE_URL'] = opts.googleBaseURL
-  if (opts.storageDir) env['RA_STORAGE_PATH'] = opts.storageDir
+  if (opts.storageDir) env['RA_DATA_DIR'] = opts.storageDir
   if (opts.extra) Object.assign(env, opts.extra)
   return env
 }

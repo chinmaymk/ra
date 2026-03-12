@@ -43,8 +43,9 @@ context:
     - "CLAUDE.md"
     - "AGENTS.md"
 
+dataDir: .ra              # root for all runtime data
+
 storage:
-  path: .ra/sessions
   maxSessions: 100
   ttlDays: 30
 
@@ -58,7 +59,6 @@ middleware:
 
 memory:
   enabled: true
-  path: .ra/memory.db
   maxMemories: 1000
   ttlDays: 90
   injectLimit: 5
@@ -138,23 +138,37 @@ The `Agent` tool forks parallel copies of the agent. Forks inherit the parent's 
 |-------|---------|----------|---------|-------------|
 | `maxConcurrency` | — | — | `4` | Max parallel subagent tasks per invocation |
 
+### Data directory
+
+| Field | Env var | CLI flag | Default | Description |
+|-------|---------|----------|---------|-------------|
+| `dataDir` | `RA_DATA_DIR` | `--data-dir` | `.ra` | Root directory for all runtime data (sessions, memory, etc.) |
+
+All runtime data is organized under `dataDir`: sessions in `{dataDir}/sessions/`, memory in `{dataDir}/memory.db`.
+
 ### Storage
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `storage.path` | — | — | `.ra/sessions` | Session storage directory |
-| `storage.maxSessions` | — | — | `100` | Max sessions before auto-pruning |
-| `storage.ttlDays` | — | — | `30` | Auto-expire sessions older than this |
+| `storage.maxSessions` | `RA_STORAGE_MAX_SESSIONS` | `--storage-max-sessions` | `100` | Max sessions before auto-pruning |
+| `storage.ttlDays` | `RA_STORAGE_TTL_DAYS` | `--storage-ttl-days` | `30` | Auto-expire sessions older than this |
 
 ### Memory
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
 | `memory.enabled` | `RA_MEMORY_ENABLED` | `--memory` | `false` | Enable persistent memory |
-| `memory.path` | `RA_MEMORY_PATH` | — | `.ra/memory.db` | SQLite database path |
 | `memory.maxMemories` | `RA_MEMORY_MAX_MEMORIES` | — | `1000` | Max stored memories (oldest trimmed) |
 | `memory.ttlDays` | `RA_MEMORY_TTL_DAYS` | — | `90` | Auto-prune memories older than this |
 | `memory.injectLimit` | `RA_MEMORY_INJECT_LIMIT` | — | `5` | Memories to inject as context per loop (0 to disable) |
+
+### Observability
+
+| Field | Env var | Default | Description |
+|-------|---------|---------|-------------|
+| `logsEnabled` | `RA_LOGS_ENABLED` | `true` | Enable session logs |
+| `logLevel` | `RA_LOG_LEVEL` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
+| `tracesEnabled` | `RA_TRACES_ENABLED` | `true` | Enable session traces |
 
 ### MCP
 

@@ -25,6 +25,7 @@ import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath } from './utils/paths'
+import type { ObservabilityConfig } from './observability'
 import type { Logger } from './observability/logger'
 import type { Tracer } from './observability/tracer'
 
@@ -48,8 +49,12 @@ export async function bootstrap(
   config: RaConfig,
   opts: { sessionId?: string },
 ): Promise<AppContext> {
+  // ── Paths derived from dataDir ───────────────────────────────────
+  const { join } = await import('path')
+  const storagePath = join(config.dataDir, 'sessions')
+  const memoryPath = join(config.dataDir, 'memory.db')
+
   // ── Storage & session ──────────────────────────────────────────────
-  const storagePath = resolvePath(config.storage.path, config.configDir)
   const storage = new SessionStorage(storagePath)
   await storage.init()
 
@@ -62,7 +67,12 @@ export async function bootstrap(
   await mkdir(sessionDir, { recursive: true })
 
   // ── Observability ──────────────────────────────────────────────────
-  const { logger, tracer } = createObservability(config.observability, { sessionId, sessionDir })
+  const obsConfig: ObservabilityConfig = {
+    enabled: config.logsEnabled || config.tracesEnabled,
+    logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
+    traces: { enabled: config.tracesEnabled, output: 'session' },
+  }
+  const { logger, tracer } = createObservability(obsConfig, { sessionId, sessionDir })
   const obsMw = createObservabilityMiddleware(logger, tracer)
 
   // ── Compaction model default ───────────────────────────────────────
@@ -117,7 +127,6 @@ export async function bootstrap(
   // ── Memory ─────────────────────────────────────────────────────────
   let memoryStore: MemoryStore | undefined
   if (config.memory.enabled) {
-    const memoryPath = resolvePath(config.memory.path, config.configDir)
     memoryStore = new MemoryStore({
       path: memoryPath,
       maxMemories: config.memory.maxMemories,

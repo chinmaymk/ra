@@ -8,11 +8,13 @@ import { Tracer, NoopTracer } from './tracer'
 export interface ObservabilityConfig {
   enabled: boolean
   logs: {
+    enabled?: boolean
     level: LogLevel
     output: 'stderr' | 'stdout' | 'file' | 'session'
     filePath?: string
   }
   traces: {
+    enabled?: boolean
     output: 'stderr' | 'stdout' | 'file' | 'session'
     filePath?: string
   }
@@ -28,33 +30,44 @@ export function createObservability(config: ObservabilityConfig, options?: { ses
     return { logger: new NoopLogger(), tracer: new NoopTracer() }
   }
 
-  // Resolve 'session' → 'file' with path in sessionDir, or fall back to stderr
-  const logOutput = config.logs.output === 'session'
-    ? (options?.sessionDir ? 'file' as const : 'stderr' as const)
-    : config.logs.output
-  const logFilePath = config.logs.output === 'session' && options?.sessionDir
-    ? `${options.sessionDir}/logs.jsonl`
-    : config.logs.filePath
+  // Logs — individually toggleable
+  const logsEnabled = config.logs.enabled ?? true
+  let logger: Logger | NoopLogger
+  if (!logsEnabled) {
+    logger = new NoopLogger()
+  } else {
+    const logOutput = config.logs.output === 'session'
+      ? (options?.sessionDir ? 'file' as const : 'stderr' as const)
+      : config.logs.output
+    const logFilePath = config.logs.output === 'session' && options?.sessionDir
+      ? `${options.sessionDir}/logs.jsonl`
+      : config.logs.filePath
+    logger = new Logger({
+      level: config.logs.level,
+      output: logOutput,
+      filePath: logFilePath,
+      sessionId: options?.sessionId,
+    })
+  }
 
-  const traceOutput = config.traces.output === 'session'
-    ? (options?.sessionDir ? 'file' as const : 'stderr' as const)
-    : config.traces.output
-  const traceFilePath = config.traces.output === 'session' && options?.sessionDir
-    ? `${options.sessionDir}/traces.jsonl`
-    : config.traces.filePath
-
-  const logger = new Logger({
-    level: config.logs.level,
-    output: logOutput,
-    filePath: logFilePath,
-    sessionId: options?.sessionId,
-  })
-
-  const tracer = new Tracer({
-    output: traceOutput,
-    filePath: traceFilePath,
-    sessionId: options?.sessionId,
-  })
+  // Traces — individually toggleable
+  const tracesEnabled = config.traces.enabled ?? true
+  let tracer: Tracer | NoopTracer
+  if (!tracesEnabled) {
+    tracer = new NoopTracer()
+  } else {
+    const traceOutput = config.traces.output === 'session'
+      ? (options?.sessionDir ? 'file' as const : 'stderr' as const)
+      : config.traces.output
+    const traceFilePath = config.traces.output === 'session' && options?.sessionDir
+      ? `${options.sessionDir}/traces.jsonl`
+      : config.traces.filePath
+    tracer = new Tracer({
+      output: traceOutput,
+      filePath: traceFilePath,
+      sessionId: options?.sessionId,
+    })
+  }
 
   return { logger, tracer }
 }

@@ -24,6 +24,7 @@ defaults.ts → ra.config.{yml,json,toml} → RA_* env vars → --cli-flags
 | `provider` | `'anthropic'` | LLM backend |
 | `model` | `'claude-sonnet-4-6'` | Model ID |
 | `interface` | `'repl'` | Entry point: cli, repl, http, mcp |
+| `dataDir` | `'.ra'` | Root directory for all runtime data (sessions, memory) |
 | `maxIterations` | `50` | Loop iteration limit |
 | `toolTimeout` | `30000` | Tool execution timeout (ms) |
 | `builtinTools` | `true` | Register built-in tools |
@@ -31,6 +32,9 @@ defaults.ts → ra.config.{yml,json,toml} → RA_* env vars → --cli-flags
 | `compaction.enabled` | `true` | Auto-summarize old messages |
 | `compaction.threshold` | `0.80` | Trigger compaction at 80% context window |
 | `memory.enabled` | `false` | SQLite-backed persistent memory |
+| `logsEnabled` | `true` | Enable session logs |
+| `logLevel` | `'info'` | Minimum log level |
+| `tracesEnabled` | `true` | Enable session traces |
 | `skills` | `[]` | Active skill names |
 | `skillDirs` | `[]` | Directories to scan for skills |
 
