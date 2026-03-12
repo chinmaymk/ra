@@ -44,7 +44,10 @@ export class OpenAIProvider implements IProvider {
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const stream = await this.client.chat.completions.create({ ...this.buildParams(request), stream: true, stream_options: { include_usage: true } })
+    const stream = await this.client.chat.completions.create(
+      { ...this.buildParams(request), stream: true, stream_options: { include_usage: true } },
+      ...(request.signal ? [{ signal: request.signal }] : []),
+    )
     const activeToolCalls = new Map<number, string>()
     let usage: TokenUsage | undefined
 

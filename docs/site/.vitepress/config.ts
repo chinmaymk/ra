@@ -11,6 +11,7 @@ export default defineConfig({
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/ra/favicon.svg' }],
   ],
   transformPageData(pageData) {
     const filePath = path.resolve(__dirname, '..', pageData.relativePath)
@@ -53,6 +54,7 @@ export default defineConfig({
           { text: 'REPL', link: '/modes/repl' },
           { text: 'HTTP Server', link: '/modes/http' },
           { text: 'MCP', link: '/modes/mcp' },
+          { text: 'GitHub Actions', link: '/modes/github-actions' },
         ],
       },
       {
@@ -61,6 +63,8 @@ export default defineConfig({
           { text: 'Built-in Tools', link: '/tools/' },
           { text: 'Skills', link: '/skills/' },
           { text: 'Middleware', link: '/middleware/' },
+          { text: 'Permissions', link: '/permissions/' },
+          { text: 'Observability', link: '/observability/' },
         ],
       },
       {

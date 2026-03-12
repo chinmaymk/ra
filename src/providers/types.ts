@@ -54,6 +54,7 @@ export interface ChatRequest {
   tools?: ITool[]
   thinking?: 'low' | 'medium' | 'high'
   providerOptions?: Record<string, unknown>
+  signal?: AbortSignal
 }
 
 export interface ChatResponse {

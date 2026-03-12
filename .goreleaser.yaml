@@ -4,6 +4,7 @@ project_name: ra
 
 builds:
   - builder: bun
+    main: src/index.ts
     flags:
       - --compile
       - --define

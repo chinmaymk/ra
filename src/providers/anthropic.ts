@@ -36,7 +36,10 @@ export class AnthropicProvider implements IProvider {
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const stream = await this.client.messages.create({ ...this.buildParams(request), stream: true } as Anthropic.MessageCreateParamsStreaming)
+    const stream = await this.client.messages.create(
+      { ...this.buildParams(request), stream: true } as Anthropic.MessageCreateParamsStreaming,
+      ...(request.signal ? [{ signal: request.signal }] : []),
+    )
 
     let usage: TokenUsage | undefined
     let inputTokens = 0

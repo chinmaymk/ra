@@ -54,7 +54,10 @@ export class BedrockProvider implements IProvider {
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const response = await this.client.send(new ConverseStreamCommand(this.buildParams(request)))
+    const response = await this.client.send(
+      new ConverseStreamCommand(this.buildParams(request)),
+      ...(request.signal ? [{ abortSignal: request.signal }] : []),
+    )
     if (!response.stream) return
 
     let usage: TokenUsage | undefined

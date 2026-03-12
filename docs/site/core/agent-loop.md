@@ -66,6 +66,6 @@ export default async (ctx) => {
 ## See also
 
 - [Middleware](/middleware/) — all available hooks and their context shapes
-- [Built-in Tools](/tools/) — the 14 tools available to the agent
+- [Built-in Tools](/tools/) — tools available to the agent
 - [Context Control](/core/context-control) — how ra manages what the model sees
 - [Configuration](/configuration/) — `maxIterations` and `toolTimeout` settings

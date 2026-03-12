@@ -1,6 +1,6 @@
 # Built-in Tools
 
-ra ships with 15 built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. These are registered automatically when `builtinTools` is enabled (the default).
+ra ships with built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. When [memory](/configuration/#memory) is enabled, additional memory tools are registered. All tools are registered automatically when `builtinTools` is enabled (the default).
 
 Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 
@@ -247,7 +247,7 @@ Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to c
 
 ## MCP
 
-When [MCP clients](/modes/mcp/) are configured, all MCP tools are registered with server-prefixed names (`github__search`) to avoid conflicts. When `mcp.lazySchemas` is enabled (the default), schemas are additionally stripped — on the first call to each tool, ra returns the full schema as an error, and the model retries with correct parameters. See [MCP](/modes/mcp/#server-prefixed-tool-names) for details.
+When [MCP clients](/modes/mcp) are configured, all MCP tools are registered with server-prefixed names (`github__search`) to avoid conflicts. When `mcp.lazySchemas` is enabled (the default), schemas are additionally stripped — on the first call to each tool, ra returns the full schema as an error, and the model retries with correct parameters. See [MCP](/modes/mcp#server-prefixed-tool-names) for details.
 
 ## Memory
 

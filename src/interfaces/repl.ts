@@ -37,6 +37,8 @@ export class Repl {
   private pendingSkill: Skill | undefined
   private pendingAttachments: ContentPart[] = []
   private pendingAskUser: { toolCallId: string; deferredMessages: IMessage[] } | undefined
+  private activeLoop: AgentLoop | null = null
+  private lastInterruptTime = 0
 
   constructor(options: ReplOptions) {
     this.options = options
@@ -63,6 +65,24 @@ export class Repl {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdout.isTTY })
     rl.setPrompt(tui.PROMPT)
     const prompt = () => rl.prompt()
+
+    // Ctrl+C: cancel active request or double-press to exit
+    rl.on('SIGINT', () => {
+      if (this.activeLoop) {
+        this.activeLoop.abort()
+        return
+      }
+      const now = Date.now()
+      if (now - this.lastInterruptTime < 1000) {
+        tui.printInterrupt('Goodbye!')
+        rl.close()
+        return
+      }
+      this.lastInterruptTime = now
+      tui.printInterrupt('Press Ctrl+C again to exit, or type a message.')
+      prompt()
+    })
+
     prompt()
 
     for await (const line of rl) {
@@ -81,6 +101,9 @@ export class Repl {
       }
       prompt()
     }
+
+    // Reached when readline closes (Ctrl+D or stream end)
+    tui.printInterrupt('Goodbye!')
   }
 
   async processInput(input: string): Promise<void> {
@@ -158,6 +181,7 @@ export class Repl {
       thinking: this.options.thinking,
       compaction: this.options.compaction,
       middleware: {
+
         ...userMw,
         onStreamChunk: [
           async (ctx: StreamChunkContext) => {
@@ -205,6 +229,7 @@ export class Repl {
       },
     })
 
+    this.activeLoop = loop
     try {
       const result = await loop.run(initialMessages)
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
@@ -262,7 +287,14 @@ export class Repl {
       const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
-      tui.printError(err instanceof Error ? err.message : String(err))
+      // AbortError from Ctrl+C is not a real error — just notify the user
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        tui.printInterrupt('Request cancelled.')
+      } else {
+        tui.printError(err instanceof Error ? err.message : String(err))
+      }
+    } finally {
+      this.activeLoop = null
     }
   }
 

@@ -283,6 +283,119 @@ describe('Repl', () => {
   })
 })
 
+describe('Repl interrupt handling', () => {
+  afterEach(async () => { await Bun.$`rm -rf ${TEST_STORAGE}`.quiet() })
+
+  it('abort during streaming does not print Error', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        yield { type: 'text', delta: 'hello ' }
+        await new Promise(resolve => setTimeout(resolve, 300))
+        yield { type: 'text', delta: 'world' }
+        yield { type: 'done' }
+      },
+    }
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider, tools: new ToolRegistry(), storage })
+
+    const chunks: string[] = []
+    const origWrite = process.stdout.write.bind(process.stdout)
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString())
+      return true
+    }
+
+    const processPromise = repl.processInput('hi')
+    await new Promise(resolve => setTimeout(resolve, 50))
+    const activeLoop = (repl as any).activeLoop
+    expect(activeLoop).not.toBeNull()
+    activeLoop.abort()
+
+    try {
+      await processPromise
+    } finally {
+      process.stdout.write = origWrite
+    }
+
+    const output = chunks.join('')
+    expect(output).not.toContain('Error:')
+    expect((repl as any).activeLoop).toBeNull()
+  })
+
+  it('repl can process new input after an aborted request', async () => {
+    let callCount = 0
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        callCount++
+        if (callCount === 1) {
+          yield { type: 'text', delta: 'slow ' }
+          await new Promise(resolve => setTimeout(resolve, 300))
+          yield { type: 'text', delta: 'response' }
+        } else {
+          yield { type: 'text', delta: 'fast reply' }
+        }
+        yield { type: 'done' }
+      },
+    }
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider, tools: new ToolRegistry(), storage })
+
+    const origWrite = process.stdout.write.bind(process.stdout)
+    process.stdout.write = () => true
+
+    try {
+      const p1 = repl.processInput('first')
+      await new Promise(resolve => setTimeout(resolve, 50));
+      (repl as any).activeLoop.abort()
+      await p1
+
+      await repl.processInput('second')
+    } finally {
+      process.stdout.write = origWrite
+    }
+
+    expect(callCount).toBe(2)
+    const messages = (repl as any).messages
+    expect(messages.some((m: any) => m.role === 'assistant' && typeof m.content === 'string' && m.content.includes('fast reply'))).toBe(true)
+  })
+
+  it('Ctrl+D (stream close) prints Goodbye', async () => {
+    const storage = await makeStorage()
+    const input = new PassThrough()
+
+    const outputChunks: string[] = []
+    const origWrite = process.stdout.write.bind(process.stdout)
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      outputChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString())
+      return true
+    }
+    const origStdin = process.stdin
+    const origIsTTY = process.stdout.isTTY
+    Object.defineProperty(process, 'stdin', { value: input, writable: true, configurable: true })
+    process.stdout.isTTY = false as any
+
+    const repl = new Repl({ model: 'test', provider: mockProvider('ok'), tools: new ToolRegistry(), storage })
+
+    setTimeout(() => { input.end() }, 10)
+
+    try {
+      await repl.start()
+    } finally {
+      process.stdout.write = origWrite
+      Object.defineProperty(process, 'stdin', { value: origStdin, writable: true, configurable: true })
+      process.stdout.isTTY = origIsTTY
+    }
+
+    const output = outputChunks.join('')
+    expect(output).toContain('Goodbye!')
+  })
+})
+
+
 describe('Repl.start()', () => {
   afterEach(async () => { await Bun.$`rm -rf ${TEST_STORAGE}`.quiet() })
 
