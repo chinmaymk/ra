@@ -1,4 +1,5 @@
 import type { ContextConfig } from '../context/types'
+import type { LogLevel } from '../observability/logger'
 import type { AnthropicProviderOptions } from '../providers/anthropic'
 import type { OpenAIProviderOptions } from '../providers/openai'
 import type { GoogleProviderOptions } from '../providers/google'
@@ -84,6 +85,9 @@ export interface RaConfig {
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
   }
+  logsEnabled: boolean
+  logLevel: LogLevel
+  tracesEnabled: boolean
 }
 
 export interface McpClientConfig {

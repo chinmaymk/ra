@@ -121,6 +121,12 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   if (env.RA_SKILL_DIRS !== undefined) set(['skillDirs'], env.RA_SKILL_DIRS.split(',').filter(Boolean))
   if (env.RA_SKILLS !== undefined)     set(['skills'], env.RA_SKILLS.split(',').filter(Boolean))
 
+  // Observability
+  if (env.RA_LOGS_ENABLED !== undefined)  set(['logsEnabled'], env.RA_LOGS_ENABLED === 'true')
+  if (env.RA_LOG_LEVEL !== undefined && ['debug', 'info', 'warn', 'error'].includes(env.RA_LOG_LEVEL))
+    set(['logLevel'], env.RA_LOG_LEVEL)
+  if (env.RA_TRACES_ENABLED !== undefined) set(['tracesEnabled'], env.RA_TRACES_ENABLED === 'true')
+
   // Memory
   if (env.RA_MEMORY_ENABLED !== undefined)       set(['memory', 'enabled'], env.RA_MEMORY_ENABLED === 'true')
   if (env.RA_MEMORY_MAX_MEMORIES !== undefined)  setInt(['memory', 'maxMemories'], env.RA_MEMORY_MAX_MEMORIES)

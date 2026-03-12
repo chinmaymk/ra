@@ -68,9 +68,9 @@ export async function bootstrap(
 
   // ── Observability ──────────────────────────────────────────────────
   const obsConfig: ObservabilityConfig = {
-    enabled: true,
-    logs: { level: 'info', output: 'session' },
-    traces: { output: 'session' },
+    enabled: config.logsEnabled || config.tracesEnabled,
+    logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
+    traces: { enabled: config.tracesEnabled, output: 'session' },
   }
   const { logger, tracer } = createObservability(obsConfig, { sessionId, sessionDir })
   const obsMw = createObservabilityMiddleware(logger, tracer)
