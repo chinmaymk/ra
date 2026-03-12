@@ -1,4 +1,5 @@
 // Pure ANSI TUI utilities — no external dependencies
+import wrapAnsi from 'wrap-ansi'
 
 export const c = {
   reset: '\x1b[0m',
@@ -77,13 +78,16 @@ export function startSpinner(): void {
 }
 
 export function stopSpinner(silent = false): void {
-  if (!spinnerTimer) return
-  clearInterval(spinnerTimer)
-  spinnerTimer = null
+  const wasRunning = !!spinnerTimer
+  if (spinnerTimer) {
+    clearInterval(spinnerTimer)
+    spinnerTimer = null
+  }
   if (silent) {
-    process.stdout.write('\r\x1b[K')
+    if (wasRunning) process.stdout.write('\r\x1b[K')
   } else {
-    process.stdout.write(`\r${c.dim}${c.cyan}›${c.reset} `)
+    // Clear spinner/current line then indent prefix for model response
+    process.stdout.write(`\r\x1b[K${RESPONSE_PREFIX}`)
   }
 }
 
@@ -91,8 +95,69 @@ export function closeAssistantBox(): void {
   process.stdout.write('\n\n')
 }
 
-export function printToolCall(name: string): void {
-  process.stdout.write(`\n  ${c.yellow}◆ ${name}${c.dim} …${c.reset}`)
+/** Prefix written at the start of each response line (2 visible chars). */
+export const RESPONSE_PREFIX = `  `
+/** Visible column width of RESPONSE_PREFIX. */
+export const RESPONSE_PREFIX_LEN = 2
+
+/** Streaming line-buffer that wraps completed logical lines with wrap-ansi.
+ *
+ * Text is accumulated until a `\n` is received; each complete line is then
+ * word-wrapped at `contentWidth` (hard-breaking any word that exceeds the
+ * limit) and re-prefixed with RESPONSE_PREFIX on every visual sub-line.
+ *
+ * The in-progress (last, incomplete) line is held in the buffer and only
+ * output when `end()` is called or the next `\n` arrives. */
+export class StreamBuffer {
+  private buf = ''
+
+  constructor(private readonly contentWidth: number) {}
+
+  write(text: string): string {
+    this.buf += text
+    const parts = this.buf.split('\n')
+    this.buf = parts.pop() ?? ''   // keep last incomplete line
+    if (parts.length === 0) return ''
+
+    // Each complete line → wrap → re-prefix continuation sub-lines
+    const formatted = parts.map(l => this._wrapLine(l))
+    // Join with newline+prefix (next line starts with prefix already on screen
+    // from the previous continuation, so we just need \n + prefix between lines)
+    return formatted.join('\n' + RESPONSE_PREFIX) + '\n' + RESPONSE_PREFIX
+  }
+
+  /** Flush the buffered incomplete line — call once when streaming ends. */
+  end(): string {
+    const out = this._wrapLine(this.buf)
+    this.buf = ''
+    return out
+  }
+
+  private _wrapLine(line: string): string {
+    if (!line) return ''
+    const wrapped = wrapAnsi(line, this.contentWidth, { hard: true, trim: false })
+    // trim: false preserves leading whitespace (code indents) but leaves trailing
+    // spaces at word-break points — remove those.
+    return wrapped.split('\n').map(l => l.trimEnd()).join('\n' + RESPONSE_PREFIX)
+  }
+}
+
+export function printToolCall(name: string, args: string): void {
+  const cols = process.stdout.columns || 80
+  // Collapse JSON args to a single line and trim outer braces/whitespace
+  let flat: string
+  try {
+    flat = JSON.stringify(JSON.parse(args))
+      .replace(/^\{|\}$/g, '')   // strip outer braces
+      .replace(/^"|"$/g, '')     // strip outer quotes for scalar values
+  } catch {
+    flat = args.replace(/\s+/g, ' ').trim()
+  }
+  // Budget: indent(2) + '◆ '(2) + name + ' '(1) + '…'(1) + reset codes — keep it simple
+  const prefix = `  ◆ ${name} `
+  const maxFlat = cols - prefix.length - 1  // -1 for the ellipsis if truncated
+  const truncated = flat.length > maxFlat ? flat.slice(0, maxFlat) + '…' : flat
+  process.stdout.write(`  ${c.yellow}◆ ${name}${c.reset} ${c.dim}${truncated}${c.reset}`)
 }
 
 export function printToolResult(name: string, ms: number): void {

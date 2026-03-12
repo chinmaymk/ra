@@ -1,8 +1,10 @@
 import { defineConfig } from 'vitepress'
+import fs from 'node:fs'
+import path from 'node:path'
 
 export default defineConfig({
   title: 'ra',
-  description: 'One Loop. Infinite Agents. An open-source AI agent framework with full control over the agentic loop.',
+  description: 'One Loop. Infinite Agents. A small, hackable agent.',
   base: '/ra/',
   appearance: 'dark',
   head: [
@@ -10,6 +12,14 @@ export default defineConfig({
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap' }],
   ],
+  transformPageData(pageData) {
+    const filePath = path.resolve(__dirname, '..', pageData.relativePath)
+    try {
+      pageData.rawMarkdown = fs.readFileSync(filePath, 'utf-8')
+    } catch {
+      pageData.rawMarkdown = ''
+    }
+  },
   themeConfig: {
     logo: '/logo.svg',
     nav: [
