@@ -354,7 +354,7 @@ describe('HttpServer', () => {
     expect(data.response).toBe('part1 part2')
   })
 
-  it('POST /chat/sync returns askUser field when model calls ask_user', async () => {
+  it('POST /chat/sync returns model response when ask_user is called (no special field)', async () => {
     let callCount = 0
     const askProvider: IProvider = {
       name: 'mock',
@@ -384,11 +384,12 @@ describe('HttpServer', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
     })
-    const data = await res.json() as { askUser?: string; sessionId?: string }
-    expect(data.askUser).toBe('What color?')
+    const data = await res.json() as Record<string, unknown>
+    expect(data.askUser).toBeUndefined()
+    expect(typeof data.response).toBe('string')
   })
 
-  it('POST /chat streams ask_user event when model calls ask_user', async () => {
+  it('POST /chat streams tool_call_start events so client can handle ask_user', async () => {
     let callCount = 0
     const askProvider: IProvider = {
       name: 'mock',
@@ -420,8 +421,8 @@ describe('HttpServer', () => {
     })
     expect(res.status).toBe(200)
     const text = await res.text()
-    expect(text).toContain('"type":"ask_user"')
-    expect(text).toContain('"question":"What color?"')
+    expect(text).toContain('"type":"tool_call_start"')
+    expect(text).toContain('"name":"ask_user"')
     expect(text).toContain('"type":"done"')
   })
 })

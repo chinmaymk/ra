@@ -1,5 +1,5 @@
 import type { IProvider, IMessage } from '../providers/types'
-import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext } from '../agent/types'
+import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
@@ -87,7 +87,6 @@ export class HttpServer {
     try {
       const body = await req.json() as Record<string, unknown>
       if (!body || typeof body !== 'object') return null
-      // Ensure messages is an array (default to empty if missing)
       const messages = Array.isArray(body.messages) ? body.messages as IMessage[] : []
       const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined
       return { messages, sessionId }
@@ -124,24 +123,11 @@ export class HttpServer {
 
     const messages = this.prependSystem(body.messages ?? [])
 
-    let askQuestion: string | undefined
     const loop = new AgentLoop({
       provider: this.options.provider,
       tools: this.options.tools,
       model: this.options.model,
-      middleware: {
-        ...this.options.middleware,
-        beforeToolExecution: [
-          async (ctx: ToolExecutionContext) => {
-            if (ctx.toolCall.name === 'ask_user') {
-              const input = JSON.parse(ctx.toolCall.arguments || '{}') as { question: string }
-              askQuestion = input.question
-              ctx.stop()
-            }
-          },
-          ...(this.options.middleware?.beforeToolExecution ?? []),
-        ],
-      },
+      middleware: this.options.middleware,
       maxIterations: this.options.maxIterations,
       toolTimeout: this.options.toolTimeout,
       sessionId: body.sessionId,
@@ -160,10 +146,7 @@ export class HttpServer {
           ? last.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
           : ''
 
-      return new Response(JSON.stringify({
-        response: responseText,
-        ...(askQuestion && { askUser: askQuestion, sessionId: body.sessionId }),
-      }), {
+      return new Response(JSON.stringify({ response: responseText }), {
         headers: { 'Content-Type': 'application/json' },
       })
     } catch (err) {
@@ -189,27 +172,23 @@ export class HttpServer {
         }
 
         const onStreamChunk = async (ctx: StreamChunkContext) => {
-          if (ctx.chunk.type === 'text') {
-            send({ type: 'text', delta: ctx.chunk.delta })
+          const { chunk } = ctx
+          if (chunk.type === 'text') {
+            send({ type: 'text', delta: chunk.delta })
+          } else if (chunk.type === 'tool_call_start') {
+            send({ type: 'tool_call_start', id: chunk.id, name: chunk.name })
+          } else if (chunk.type === 'tool_call_delta') {
+            send({ type: 'tool_call_delta', id: chunk.id, argsDelta: chunk.argsDelta })
+          } else if (chunk.type === 'tool_call_end') {
+            send({ type: 'tool_call_end', id: chunk.id })
           }
         }
 
-        let askQuestion: string | undefined
         const middleware: Partial<MiddlewareConfig> = {
           ...(opts.middleware ?? {}),
           onStreamChunk: [
             ...(opts.middleware?.onStreamChunk ?? []),
             onStreamChunk,
-          ],
-          beforeToolExecution: [
-            async (ctx: ToolExecutionContext) => {
-              if (ctx.toolCall.name === 'ask_user') {
-                const input = JSON.parse(ctx.toolCall.arguments || '{}') as { question: string }
-                askQuestion = input.question
-                ctx.stop()
-              }
-            },
-            ...(opts.middleware?.beforeToolExecution ?? []),
           ],
         }
 
@@ -227,8 +206,6 @@ export class HttpServer {
 
         try {
           await loop.run(messages)
-
-          if (askQuestion) send({ type: 'ask_user', question: askQuestion })
           send({ type: 'done' })
         } catch (err) {
           send({ type: 'error', error: err instanceof Error ? err.message : String(err) })
