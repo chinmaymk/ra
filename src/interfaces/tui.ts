@@ -176,6 +176,10 @@ export function printError(msg: string): void {
   process.stdout.write(`${c.red}Error: ${msg}${c.reset}\n`)
 }
 
+export function printInterrupt(msg: string): void {
+  process.stdout.write(`\n${c.yellow}${msg}${c.reset}\n`)
+}
+
 // Styled prompt for readline — ANSI OK here, cursor math only breaks on very long wrapped lines
 export const PROMPT = `\x1b[96m›\x1b[0m `
 

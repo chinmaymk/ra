@@ -41,6 +41,7 @@ export class AgentLoop {
   private sessionId: string
   private thinking: 'low' | 'medium' | 'high' | undefined
   private toolTimeout: number
+  private controller: AbortController | null = null
 
   constructor(options: AgentLoopOptions) {
     this.provider = options.provider
@@ -59,10 +60,15 @@ export class AgentLoop {
     }
   }
 
+  abort(): void {
+    this.controller?.abort()
+  }
+
   async run(initialMessages: IMessage[]): Promise<LoopResult> {
     const messages: IMessage[] = [...initialMessages]
     let iterations = 0
     const controller = new AbortController()
+    this.controller = controller
     let stopReason: string | undefined
     const stop = (reason?: string) => {
       stopReason = reason
@@ -180,11 +186,17 @@ export class AgentLoop {
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopComplete, this.toolTimeout)
       }
     } catch (err) {
+      // If the loop was aborted (e.g. Ctrl+C), swallow the error and return partial results
+      if (signal.aborted) {
+        this.controller = null
+        return { messages, iterations, usage, stopReason: stopReason ?? 'aborted' }
+      }
       const error = err instanceof Error ? err : new Error(String(err))
       await runMiddlewareChain({ ...stoppable, error, loop: loopCtx(), phase: currentPhase } satisfies ErrorContext, this.middleware.onError, this.toolTimeout)
       throw err
     }
 
+    this.controller = null
     return { messages, iterations, usage, ...(stopReason && { stopReason }) }
   }
 }
