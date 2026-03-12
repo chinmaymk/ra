@@ -71,8 +71,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
       ...middleware,
       onStreamChunk: [
         async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) },
-        ...(middleware?.onStreamChunk ?? []),
-      ],
+      ].concat(middleware?.onStreamChunk ?? []),
     },
   })
 

@@ -178,7 +178,7 @@ export async function bootstrap(
   // ── Prepend observability hooks (obs runs first) ───────────────────
   for (const key of Object.keys(obsMw)) {
     const k = key as keyof MiddlewareConfig
-    ;(middleware as any)[k] = [...((obsMw as any)[k] ?? []), ...((middleware as any)[k] ?? [])]
+    ;(middleware as any)[k] = ((obsMw as any)[k] ?? []).concat((middleware as any)[k] ?? [])
   }
 
   // ── Subagent tool (registered last — child registry built lazily) ──

@@ -54,10 +54,9 @@ export class AgentLoop {
     this.thinking = options.thinking
     this.toolTimeout = options.toolTimeout ?? 0
     if (options.compaction?.enabled) {
-      this.middleware.beforeModelCall = [
+      this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
-        ...this.middleware.beforeModelCall,
-      ]
+      )
     }
   }
 
@@ -66,7 +65,7 @@ export class AgentLoop {
   }
 
   async run(initialMessages: IMessage[]): Promise<LoopResult> {
-    const messages: IMessage[] = [...initialMessages]
+    const messages = initialMessages
     let iterations = 0
     const controller = new AbortController()
     this.externalAbort = controller

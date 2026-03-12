@@ -86,7 +86,7 @@ function appendToMessage(msg: IMessage, text: string, extraParts: ContentPart[] 
   }
   const base = typeof msg.content === 'string'
     ? [{ type: 'text' as const, text: msg.content }]
-    : [...msg.content]
+    : msg.content
   return { ...msg, content: [...base, { type: 'text' as const, text: `\n\n${text}` }, ...extraParts] }
 }
 
@@ -154,18 +154,16 @@ export function createCompactionMiddleware(
 
     // Merge summary into the last pinned user message to avoid consecutive user messages.
     // Pinned always ends with a user message. If recent also starts with user, merge that too.
-    const mergedPinned = [...pinned]
-    let mergedRecent = [...recent]
-
     // Find the last pinned user message to merge into
-    const userIdx = mergedPinned.findLastIndex(m => m.role === 'user')
+    let recentStart = 0
+    const userIdx = pinned.findLastIndex(m => m.role === 'user')
     if (userIdx >= 0) {
       let extraText = summaryText
       let nonTextParts: ContentPart[] = []
 
       // Absorb first recent user message if present (avoids consecutive user messages)
-      if (mergedRecent.length > 0 && mergedRecent[0]!.role === 'user') {
-        const recentMsg = mergedRecent[0]!
+      if (recent.length > 0 && recent[0]!.role === 'user') {
+        const recentMsg = recent[0]!
         if (typeof recentMsg.content === 'string') {
           extraText += `\n\n${recentMsg.content}`
         } else {
@@ -173,14 +171,14 @@ export function createCompactionMiddleware(
           if (text) extraText += `\n\n${text}`
           nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
         }
-        mergedRecent = mergedRecent.slice(1)
+        recentStart = 1
       }
 
-      mergedPinned[userIdx] = appendToMessage(mergedPinned[userIdx]!, extraText, nonTextParts)
+      pinned[userIdx] = appendToMessage(pinned[userIdx]!, extraText, nonTextParts)
     }
     const originalCount = messages.length
     ctx.request.messages.length = 0
-    ctx.request.messages.push(...mergedPinned, ...mergedRecent)
+    ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
     config.onCompact?.({
       originalMessages: originalCount,
       compactedMessages: ctx.request.messages.length,

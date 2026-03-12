@@ -158,12 +158,10 @@ export class Repl {
 
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
 
-    const initialMessages: IMessage[] = [
-      ...(this.options.systemPrompt ? [{ role: 'system' as const, content: this.options.systemPrompt }] : []),
-      ...(this.options.contextMessages?.length ? this.options.contextMessages : []),
-      ...this.messages,
-      userMessage,
-    ]
+    const initialMessages: IMessage[] = []
+    if (this.options.systemPrompt) initialMessages.push({ role: 'system', content: this.options.systemPrompt })
+    if (this.options.contextMessages?.length) initialMessages.push(...this.options.contextMessages)
+    initialMessages.push(...this.messages, userMessage)
 
     // Inject available skills XML as first user message if skills exist
     if (this.options.skillMap && this.options.skillMap.size > 0 && this.messages.length === 0) {
@@ -218,8 +216,7 @@ export class Repl {
               process.stdout.write(streamBuf!.write(ctx.chunk.delta))
             }
           },
-          ...(userMw.onStreamChunk ?? []),
-        ],
+        ].concat(userMw.onStreamChunk ?? []),
         beforeToolExecution: [
           async (ctx: ToolExecutionContext) => {
             // TS narrows streamBuf to null (closure writes aren't tracked); cast back
@@ -229,19 +226,18 @@ export class Repl {
             toolStartTimes.set(ctx.toolCall.id, Date.now())
             tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
           },
-          ...(userMw.beforeToolExecution ?? []),
-        ],
+        ].concat(userMw.beforeToolExecution ?? []),
         afterToolExecution: [
           async (ctx: ToolResultContext) => {
             tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
             tui.startSpinner()
           },
-          ...(userMw.afterToolExecution ?? []),
-        ],
+        ].concat(userMw.afterToolExecution ?? []),
       },
     })
 
     this.activeLoop = loop
+    const priorCount = initialMessages.length
     try {
       const result = await loop.run(initialMessages)
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
@@ -251,7 +247,7 @@ export class Repl {
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
 
-      const newMessages = result.messages.slice(initialMessages.length)
+      const newMessages = result.messages.slice(priorCount)
       this.messages.push(userMessage, ...newMessages)
       await Promise.all([userMessage, ...newMessages].map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
     } catch (err) {
