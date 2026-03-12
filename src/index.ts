@@ -1,8 +1,8 @@
-import { errorMessage } from './utils/errors'
 #!/usr/bin/env bun
 import { loadConfig } from './config'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
+import { errorMessage } from './utils/errors'
 import { HELP } from './interfaces/help'
 import { runExecScript, runSkillCommand, showContext, runMemoryCommand } from './interfaces/commands'
 import { runCli } from './interfaces/cli'

@@ -54,9 +54,9 @@ export class Logger {
 /** A no-op logger that silently discards all messages. */
 export class NoopLogger extends Logger {
   constructor() { super({ level: 'error', output: 'stderr' }) }
-  override debug(): void {}
-  override info(): void {}
-  override warn(): void {}
-  override error(): void {}
+  override debug(_message: string, _data?: Record<string, unknown>): void {}
+  override info(_message: string, _data?: Record<string, unknown>): void {}
+  override warn(_message: string, _data?: Record<string, unknown>): void {}
+  override error(_message: string, _data?: Record<string, unknown>): void {}
   override async flush(): Promise<void> {}
 }

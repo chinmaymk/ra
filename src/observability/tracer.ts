@@ -106,8 +106,8 @@ export class NoopTracer extends Tracer {
     startTime: 0, attributes: {}, status: 'ok', events: [],
   }
 
-  override startSpan(): Span { return NoopTracer.NOOP_SPAN }
-  override addEvent(): void {}
-  override endSpan(): void {}
+  override startSpan(_name: string, _attributes?: Record<string, unknown>, _parentSpanId?: string): Span { return NoopTracer.NOOP_SPAN }
+  override addEvent(_span: Span, _name: string, _attributes?: Record<string, unknown>): void {}
+  override endSpan(_span: Span, _status?: 'ok' | 'error', _attributes?: Record<string, unknown>): void {}
   override async flush(): Promise<void> {}
 }
