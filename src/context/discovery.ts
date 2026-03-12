@@ -56,28 +56,17 @@ async function scanDirs(dirs: string[], patterns: string[], root: string, exclud
 
 // ── Dynamic discovery middleware ─────────────────────────────────────
 
-const ABS_PATH_RE = /(?:^|[\s"'=:])(\/.+?)(?=[\s"',)\]}>]|$)/g
-
-function toDir(p: string): string {
-  return !p.endsWith('/') && p.slice(p.lastIndexOf('/') + 1).includes('.') ? dirname(p) : p
-}
-
+/** Extract directories from tool call arguments (structured JSON with file paths). */
 function extractDirs(messages: IMessage[], from: number): Set<string> {
   const dirs = new Set<string>()
   for (let i = from; i < messages.length; i++) {
     const msg = messages[i]!
-    if (msg.role === 'assistant' && msg.toolCalls?.length) {
-      for (const tc of msg.toolCalls) {
-        try {
-          for (const v of Object.values(JSON.parse(tc.arguments || '{}')))
-            if (typeof v === 'string' && isAbsolute(v)) dirs.add(toDir(v))
-        } catch { /* skip */ }
-      }
-    }
-    if (msg.role === 'tool' && typeof msg.content === 'string') {
-      ABS_PATH_RE.lastIndex = 0
-      let m: RegExpExecArray | null
-      while ((m = ABS_PATH_RE.exec(msg.content)) !== null) dirs.add(toDir(m[1]!))
+    if (msg.role !== 'assistant' || !msg.toolCalls?.length) continue
+    for (const tc of msg.toolCalls) {
+      try {
+        for (const v of Object.values(JSON.parse(tc.arguments || '{}')))
+          if (typeof v === 'string' && isAbsolute(v)) dirs.add(dirname(v))
+      } catch { /* skip */ }
     }
   }
   return dirs

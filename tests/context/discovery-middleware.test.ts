@@ -46,17 +46,6 @@ describe('createDiscoveryMiddleware', () => {
     expect(ctx.request.messages.find(m => typeof m.content === 'string' && m.content.includes('Utils rules'))).toBeTruthy()
   })
 
-  it('discovers context from absolute paths in tool results', async () => {
-    writeFileSync(join(subDir, '.cursorrules'), 'use semicolons')
-    const mw = createDiscoveryMiddleware(['.cursorrules'], tmp, new Set())
-    const ctx = makeCtx([
-      { role: 'user', content: 'list' },
-      { role: 'assistant', content: '', toolCalls: [{ id: 'tc1', name: 'Bash', arguments: '{"command":"ls"}' }] },
-      { role: 'tool', content: `${join(subDir, 'index.ts')}\n${join(subDir, 'utils.ts')}`, toolCallId: 'tc1' },
-    ])
-    await mw(ctx)
-    expect(ctx.request.messages.find(m => typeof m.content === 'string' && m.content.includes('use semicolons'))).toBeTruthy()
-  })
 
   it('skips files already in initialPaths', async () => {
     const p = join(tmp, 'CLAUDE.md')
