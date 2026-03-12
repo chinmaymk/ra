@@ -10,6 +10,7 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { AgentLoop } from './agent/loop'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
+import { serializeContent } from './providers/utils'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -95,7 +96,7 @@ function createMcpHandler(app: AppContext) {
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const result = await loop.run([{ role: 'user', content: prompt }])
     const last = result.messages.at(-1)
-    return typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content)
+    return last ? serializeContent(last.content) : ''
   }
 }
 

@@ -3,6 +3,7 @@ import type { IMessage, IProvider } from '../providers/types'
 import type { Middleware, ModelCallContext } from './types'
 import { estimateTokens } from './token-estimator'
 import { getContextWindowSize } from './model-registry'
+import { serializeContent } from '../providers/utils'
 
 export interface MessageZones {
   pinned: IMessage[]
@@ -76,6 +77,19 @@ function adjustToolCallBoundary(messages: IMessage[], boundary: number): number 
   return boundary
 }
 
+import type { ContentPart } from '../providers/types'
+
+/** Append extra text (and optional non-text parts) to a message, preserving its content type. */
+function appendToMessage(msg: IMessage, text: string, extraParts: ContentPart[] = []): IMessage {
+  if (typeof msg.content === 'string' && extraParts.length === 0) {
+    return { ...msg, content: `${msg.content}\n\n${text}` }
+  }
+  const base = typeof msg.content === 'string'
+    ? [{ type: 'text' as const, text: msg.content }]
+    : [...msg.content]
+  return { ...msg, content: [...base, { type: 'text' as const, text: `\n\n${text}` }, ...extraParts] }
+}
+
 export interface CompactionConfig {
   enabled: boolean
   threshold: number
@@ -116,7 +130,7 @@ export function createCompactionMiddleware(
     if (compactable.length === 0) return
 
     const conversationText = compactable.map(m => {
-      const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+      const content = serializeContent(m.content)
       const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
       const toolId = m.toolCallId ? ` [tool result for: ${m.toolCallId}]` : ''
       return `${m.role}${toolInfo}${toolId}: ${content}`
@@ -134,9 +148,7 @@ export function createCompactionMiddleware(
       return // Leave messages unchanged on summarization failure
     }
 
-    const summaryContent = typeof summaryResponse.message.content === 'string'
-      ? summaryResponse.message.content
-      : JSON.stringify(summaryResponse.message.content)
+    const summaryContent = serializeContent(summaryResponse.message.content)
 
     const summaryText = `[Context Summary]\n${summaryContent}`
 
@@ -145,53 +157,26 @@ export function createCompactionMiddleware(
     const mergedPinned = [...pinned]
     let mergedRecent = [...recent]
 
-    // Build the combined content: pinned user text + summary + (optionally) first recent user text
-    for (let i = mergedPinned.length - 1; i >= 0; i--) {
-      if (mergedPinned[i]!.role === 'user') {
-        const orig = mergedPinned[i]!
+    // Find the last pinned user message to merge into
+    const userIdx = mergedPinned.findLastIndex(m => m.role === 'user')
+    if (userIdx >= 0) {
+      let extraText = summaryText
+      let nonTextParts: ContentPart[] = []
 
-        // Build extra text parts to append (summary + optional absorbed user)
-        let extraText = summaryText
-        if (mergedRecent.length > 0 && mergedRecent[0]!.role === 'user') {
-          const recentMsg = mergedRecent[0]!
-          if (typeof recentMsg.content === 'string') {
-            extraText += `\n\n${recentMsg.content}`
-          } else {
-            // Preserve non-text parts (images, files) by keeping them in the merged message
-            const textParts = recentMsg.content.filter(p => p.type === 'text')
-            const nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
-            const recentText = textParts.map(p => (p as { type: 'text'; text: string }).text).join('\n')
-            if (recentText) extraText += `\n\n${recentText}`
-            if (nonTextParts.length > 0) {
-              // Append non-text parts to the merged pinned message content
-              if (typeof orig.content === 'string') {
-                mergedPinned[i] = { ...orig, content: [{ type: 'text' as const, text: `${orig.content}\n\n${extraText}` }, ...nonTextParts] }
-                mergedRecent = mergedRecent.slice(1)
-                break
-              } else {
-                mergedPinned[i] = {
-                  ...orig,
-                  content: [...orig.content, { type: 'text' as const, text: `\n\n${extraText}` }, ...nonTextParts],
-                }
-                mergedRecent = mergedRecent.slice(1)
-                break
-              }
-            }
-          }
-          mergedRecent = mergedRecent.slice(1)
-        }
-
-        // Preserve ContentPart[] structure if original uses it
-        if (typeof orig.content === 'string') {
-          mergedPinned[i] = { ...orig, content: `${orig.content}\n\n${extraText}` }
+      // Absorb first recent user message if present (avoids consecutive user messages)
+      if (mergedRecent.length > 0 && mergedRecent[0]!.role === 'user') {
+        const recentMsg = mergedRecent[0]!
+        if (typeof recentMsg.content === 'string') {
+          extraText += `\n\n${recentMsg.content}`
         } else {
-          mergedPinned[i] = {
-            ...orig,
-            content: [...orig.content, { type: 'text' as const, text: `\n\n${extraText}` }],
-          }
+          const text = recentMsg.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
+          if (text) extraText += `\n\n${text}`
+          nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
         }
-        break
+        mergedRecent = mergedRecent.slice(1)
       }
+
+      mergedPinned[userIdx] = appendToMessage(mergedPinned[userIdx]!, extraText, nonTextParts)
     }
     const originalCount = messages.length
     ctx.request.messages.length = 0
