@@ -1,8 +1,24 @@
 # What is ra?
 
-ra is an open-source AI agent framework that gives you a configurable agentic loop and stays out of your way. It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server.
+ra is a small, hackable agent. Nothing hidden behind abstractions you can't reach.
 
-Every message, every tool call, every stream chunk is visible and interceptable through [middleware hooks](/middleware/). You configure agents in YAML — define tools, skills, system prompts, and context — and drop down to TypeScript only where you need custom logic.
+It doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](/middleware/) let you intercept every step — model calls, tool execution, streaming, all of it.
+
+It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease.
+
+It comes with [built-in tools](/tools/) for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent [sessions](/core/sessions) via JSONL. An FTS5 [memory](/configuration/#memory) backed by SQLite.
+
+It speaks [MCP](/modes/mcp) both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol.
+
+It gives you real control over [context](/core/context-control). Deterministic discovery for common formats (CLAUDE.md, AGENTS.md, README.md), pattern resolution, prompt caching, compaction, token tracking. A [skill system](/skills/) that can pull skills from GitHub repos or npm packages.
+
+Extended thinking for models that support it — watch the model reason in real time.
+
+It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), or [MCP server](/modes/mcp). No runtime dependencies.
+
+Structured logs and traces per session, so you can actually see what your agent is doing.
+
+All of this is [configurable](/configuration/) via a layered config system — env vars, config files (JSON, YAML, TOML), or CLI flags. Each layer overrides the last.
 
 ```bash
 ra "What is the capital of France?"

@@ -4,7 +4,7 @@ import path from 'node:path'
 
 export default defineConfig({
   title: 'ra',
-  description: 'One Loop. Infinite Agents. An open-source AI agent framework with full control over the agentic loop.',
+  description: 'One Loop. Infinite Agents. A small, hackable agent.',
   base: '/ra/',
   appearance: 'dark',
   head: [
