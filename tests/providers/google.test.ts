@@ -126,13 +126,13 @@ describe('GoogleProvider', () => {
   it('maps tool result messages to functionResponse parts', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
-      { role: 'tool' as const, content: 'result text', toolCallId: 'read_file_0' },
+      { role: 'tool' as const, content: 'result text', toolCallId: 'Read_0' },
     ]
     const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('user')
     const frPart = mapped[0].parts.find((p: any) => p.functionResponse)
     expect(frPart).toBeDefined()
-    expect(frPart!.functionResponse.name).toBe('read_file')
+    expect(frPart!.functionResponse.name).toBe('Read')
     expect(frPart!.functionResponse.response.content).toBe('result text')
   })
 
@@ -358,7 +358,7 @@ describe('GoogleProvider - stream()', () => {
   it('yields tool call events for functionCall parts', async () => {
     mockGenerateContentStream.mockResolvedValue({
       stream: (async function* () {
-        yield { candidates: [{ content: { parts: [{ functionCall: { name: 'read_file', args: { path: 'x' } } }] } }] }
+        yield { candidates: [{ content: { parts: [{ functionCall: { name: 'Read', args: { path: 'x' } } }] } }] }
       })(),
     })
     const provider = new GoogleProvider({ apiKey: 'test' })
@@ -366,17 +366,17 @@ describe('GoogleProvider - stream()', () => {
     for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
     }
-    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'read_file_0', name: 'read_file' })
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'Read_0', name: 'Read' })
     expect(chunks[1].type).toBe('tool_call_delta')
-    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'read_file_0' })
+    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'Read_0' })
   })
 
   it('assigns unique IDs when same tool is called multiple times', async () => {
     mockGenerateContentStream.mockResolvedValue({
       stream: (async function* () {
         yield { candidates: [{ content: { parts: [
-          { functionCall: { name: 'read_file', args: { path: 'a.ts' } } },
-          { functionCall: { name: 'read_file', args: { path: 'b.ts' } } },
+          { functionCall: { name: 'Read', args: { path: 'a.ts' } } },
+          { functionCall: { name: 'Read', args: { path: 'b.ts' } } },
         ] } }] }
       })(),
     })
@@ -387,8 +387,8 @@ describe('GoogleProvider - stream()', () => {
     }
     const starts = chunks.filter(c => c.type === 'tool_call_start')
     expect(starts).toHaveLength(2)
-    expect(starts[0].id).toBe('read_file_0')
-    expect(starts[1].id).toBe('read_file_1')
+    expect(starts[0].id).toBe('Read_0')
+    expect(starts[1].id).toBe('Read_1')
     expect(starts[0].id).not.toBe(starts[1].id)
   })
 })
@@ -451,14 +451,14 @@ describe('GoogleProvider - tool result ID mapping', () => {
   it('strips counter suffix from toolCallId for functionResponse name', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
-      { role: 'tool' as const, content: 'file contents', toolCallId: 'read_file_0' },
-      { role: 'tool' as const, content: 'more contents', toolCallId: 'read_file_1' },
+      { role: 'tool' as const, content: 'file contents', toolCallId: 'Read_0' },
+      { role: 'tool' as const, content: 'more contents', toolCallId: 'Read_1' },
     ]
     const mapped = provider.mapMessages(messages) as any[]
     // Consecutive tool results (both user role) get merged into one message
     expect(mapped).toHaveLength(1)
-    expect(mapped[0].parts[0].functionResponse.name).toBe('read_file')
-    expect(mapped[0].parts[1].functionResponse.name).toBe('read_file')
+    expect(mapped[0].parts[0].functionResponse.name).toBe('Read')
+    expect(mapped[0].parts[1].functionResponse.name).toBe('Read')
   })
 
   it('mapResponseToMessage assigns unique IDs for duplicate function calls', () => {

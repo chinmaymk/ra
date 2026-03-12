@@ -4,7 +4,7 @@ import { dirname } from 'path'
 
 export function moveFileTool(): ITool {
   return {
-    name: 'move_file',
+    name: 'MoveFile',
     description:
       'Move or rename a file or directory. Creates parent directories at the destination automatically.',
     inputSchema: {

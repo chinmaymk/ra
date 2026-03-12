@@ -62,10 +62,10 @@ export class Repl {
       tui.printResumeHeader(this.sessionId!, this.messages.length)
     }
 
-    // Register ask_user to read inline from the terminal
+    // Register AskUserQuestion to read inline from the terminal
     const { description, inputSchema } = askUserTool()
     this.options.tools.register({
-      name: 'ask_user',
+      name: 'AskUserQuestion',
       description,
       inputSchema,
       execute: async (input: unknown) => {

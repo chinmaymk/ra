@@ -6,22 +6,22 @@
 
 | File | Tool Name | Category |
 |------|-----------|----------|
-| `read-file.ts` | `read_file` | Filesystem |
-| `write-file.ts` | `write_file` | Filesystem |
-| `update-file.ts` | `update_file` | Filesystem |
-| `append-file.ts` | `append_file` | Filesystem |
-| `list-directory.ts` | `list_directory` | Filesystem |
-| `search-files.ts` | `search_files` | Filesystem |
-| `glob-files.ts` | `glob_files` | Filesystem |
-| `move-file.ts` | `move_file` | Filesystem |
-| `copy-file.ts` | `copy_file` | Filesystem |
-| `delete-file.ts` | `delete_file` | Filesystem |
-| `execute-bash.ts` | `execute_bash` | Shell (Linux/macOS) |
-| `execute-powershell.ts` | `execute_powershell` | Shell (Windows) |
-| `web-fetch.ts` | `web_fetch` | Network |
-| `ask-user.ts` | `ask_user` | Agent interaction |
-| `checklist.ts` | `checklist` | Agent interaction |
-| `subagent.ts` | `subagent` | Agent interaction (exported separately, not auto-registered) |
+| `read-file.ts` | `Read` | Filesystem |
+| `write-file.ts` | `Write` | Filesystem |
+| `update-file.ts` | `Edit` | Filesystem |
+| `append-file.ts` | `AppendFile` | Filesystem |
+| `list-directory.ts` | `LS` | Filesystem |
+| `search-files.ts` | `Grep` | Filesystem |
+| `glob-files.ts` | `Glob` | Filesystem |
+| `move-file.ts` | `MoveFile` | Filesystem |
+| `copy-file.ts` | `CopyFile` | Filesystem |
+| `delete-file.ts` | `DeleteFile` | Filesystem |
+| `execute-bash.ts` | `Bash` | Shell (Linux/macOS) |
+| `execute-powershell.ts` | `PowerShell` | Shell (Windows) |
+| `web-fetch.ts` | `WebFetch` | Network |
+| `ask-user.ts` | `AskUserQuestion` | Agent interaction |
+| `checklist.ts` | `TodoWrite` | Agent interaction |
+| `subagent.ts` | `Agent` | Agent interaction (exported separately, not auto-registered) |
 
 ## Tool Pattern
 
@@ -46,4 +46,4 @@ registry.register(myTool())
 - Return strings when possible (objects get `JSON.stringify()`'d)
 - Thrown errors become tool results with `isError: true`
 - Tools are subject to `toolTimeout` (default 30s)
-- All tools except `ask_user` are exposed when ra runs as MCP server
+- All tools except `AskUserQuestion` are exposed when ra runs as MCP server

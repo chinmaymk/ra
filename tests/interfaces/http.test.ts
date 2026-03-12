@@ -361,7 +361,7 @@ describe('HttpServer', () => {
       chat: async () => { throw new Error() },
       async *stream() {
         if (callCount++ === 0) {
-          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'ask_user' }
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'AskUserQuestion' }
           yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{"question":"What color?"}' }
           yield { type: 'tool_call_end' as const, id: 'tc1' }
           yield { type: 'done' as const }
@@ -396,7 +396,7 @@ describe('HttpServer', () => {
       chat: async () => { throw new Error() },
       async *stream() {
         if (callCount++ === 0) {
-          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'ask_user' }
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'AskUserQuestion' }
           yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{"question":"What color?"}' }
           yield { type: 'tool_call_end' as const, id: 'tc1' }
           yield { type: 'done' as const }
@@ -422,7 +422,7 @@ describe('HttpServer', () => {
     expect(res.status).toBe(200)
     const text = await res.text()
     expect(text).toContain('"type":"tool_call_start"')
-    expect(text).toContain('"name":"ask_user"')
+    expect(text).toContain('"name":"AskUserQuestion"')
     expect(text).toContain('"type":"done"')
   })
 })

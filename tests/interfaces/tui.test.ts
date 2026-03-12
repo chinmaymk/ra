@@ -88,17 +88,17 @@ describe('closeAssistantBox', () => {
 
 describe('printToolCall', () => {
   it('outputs tool name with diamond marker', () => {
-    const output = captureStdout(() => printToolCall('read_file', '{"path":"/tmp/x"}'))
+    const output = captureStdout(() => printToolCall('Read', '{"path":"/tmp/x"}'))
     expect(output).toContain('◆')
-    expect(output).toContain('read_file')
+    expect(output).toContain('Read')
   })
 })
 
 describe('printToolResult', () => {
   it('outputs tool name with checkmark and timing', () => {
-    const output = captureStdout(() => printToolResult('read_file', 42))
+    const output = captureStdout(() => printToolResult('Read', 42))
     expect(output).toContain('✔')
-    expect(output).toContain('read_file')
+    expect(output).toContain('Read')
     expect(output).toContain('42ms')
   })
 })

@@ -132,7 +132,7 @@ permissions:
 
 ### Subagent
 
-The `subagent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`.
+The `Agent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`.
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|

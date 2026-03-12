@@ -2,7 +2,7 @@ import type { ITool } from '../providers/types'
 
 export function askUserTool(): ITool {
   return {
-    name: 'ask_user',
+    name: 'AskUserQuestion',
     description:
       'Ask the user a question and wait for their reply. ' +
       'Use when you need clarification or confirmation before proceeding. Call only once per turn.',

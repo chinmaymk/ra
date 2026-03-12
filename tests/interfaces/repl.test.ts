@@ -530,7 +530,7 @@ describe('Repl.start()', () => {
       chat: async () => { throw new Error() },
       async *stream() {
         if (callCount++ === 0) {
-          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'ask_user' }
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'AskUserQuestion' }
           yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{"question":"What is your name?"}' }
           yield { type: 'tool_call_end' as const, id: 'tc1' }
           yield { type: 'done' as const }

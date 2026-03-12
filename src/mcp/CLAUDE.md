@@ -40,5 +40,5 @@ When `mcp.lazySchemas` is enabled (default: `true`), MCP tools are additionally 
 
 Configured via `mcp.server` in config. Exposes:
 - The agent itself as a single MCP tool (name + description configurable)
-- All built-in tools except `ask_user` as individual MCP tools
+- All built-in tools except `AskUserQuestion` as individual MCP tools
 - Supports stdio (long-lived child process) and HTTP (per-session with `mcp-session-id` header) transports
