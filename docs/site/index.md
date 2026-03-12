@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "ra"
-  text: "One Loop. Infinite Agents."
-  tagline: A configurable agentic loop. Define tools, skills, and context in YAML — drop to TypeScript when you need it.
+  text: "An agentic loop you can take apart and put back together."
+  tagline: One binary. Nothing hidden behind abstractions you can't reach.
   actions:
     - theme: brand
       text: Get Started
@@ -14,16 +14,16 @@ hero:
       link: /getting-started/quick-start
 
 features:
-  - title: Full Control Over Context
-    details: Every message, tool call, and stream chunk is visible and interceptable through middleware hooks. You decide what the model sees and when.
-  - title: Any Provider, One Config
-    details: Anthropic, OpenAI, Google, Azure, AWS Bedrock, Ollama. Switch with a flag — the rest of your config stays the same.
-  - title: Four Interfaces, Same Agent
-    details: CLI command, interactive REPL, streaming HTTP API, or MCP server. One binary, every context.
-  - title: Config-Driven Agents
-    details: Define tools, skills, system prompts, and context in YAML. Drop down to TypeScript only where you need custom logic. The config is the agent.
-  - title: Skills & MCP
-    details: Reusable instruction bundles with progressive disclosure. Connect external MCP servers or expose ra as a tool for Cursor and Claude Desktop.
-  - title: Smart Context
-    details: Automatic context compaction, token tracking, prompt caching, pattern resolution, and extended thinking — all built in.
+  - title: No System Prompt Included
+    details: ra ships empty. Every part of the loop is exposed via config and extended by writing scripts or plain TypeScript. You define the agent, not us.
+  - title: Six Providers, Same Code
+    details: Anthropic, OpenAI, Google, Ollama, Bedrock, Azure. Switch with a flag — your agent code doesn't change.
+  - title: MCP Both Ways
+    details: Connect to MCP servers for additional tools, or expose ra itself as an MCP server for Cursor, Claude Desktop, or anything else that speaks the protocol.
+  - title: Real Context Control
+    details: Deterministic context discovery, pattern resolution, prompt caching, extended thinking, compaction, token tracking. You decide what the model sees.
+  - title: Middleware Hooks Everywhere
+    details: Intercept model calls, tool execution, streaming chunks, errors — 9 hooks covering every step of the loop. Inline expressions or TypeScript files.
+  - title: One Binary, Four Interfaces
+    details: CLI, REPL, HTTP server, MCP server. Single self-contained binary compiled via bun build. No runtime dependencies.
 ---

@@ -1,10 +1,6 @@
 <h1 align="center">ra</h1>
 
 <p align="center">
-  <b>One Loop. Infinite Agents.</b><br>
-</p>
-
-<p align="center">
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#the-agent-loop">The Agent Loop</a> &middot;
@@ -26,9 +22,23 @@
 
 ## What is ra?
 
-ra is an open-source AI agent framework that gives you a configurable agentic loop and stays out of your way. It's a single binary that turns any LLM — Anthropic, OpenAI, Google, Ollama, AWS Bedrock, Azure — into a tool-using agent you can run as a CLI command, an interactive REPL, a streaming HTTP API, or an MCP server.
+ra is an agentic loop you can take apart and put back together. One binary, nothing hidden behind abstractions you can't reach.
 
-Every message, every tool call, every stream chunk is visible and interceptable through middleware hooks. You configure agents in YAML — define tools, skills, system prompts, and context — and drop down to TypeScript only where you need custom logic.
+It doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks let you intercept every step — model calls, tool execution, streaming, all of it.
+
+It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers without changing your agent code.
+
+It comes with built-in tools for filesystem, shell, network, and user interaction. Persistent sessions via JSONL. An FTS5 memory backed by SQLite. A skill system that can pull skills from GitHub repos or npm packages.
+
+It speaks MCP both ways — connect to MCP servers for additional tools, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol.
+
+It gives you real control over context. Deterministic discovery for common formats (CLAUDE.md, AGENTS.md, README.md), pattern resolution, prompt caching, extended thinking, compaction, token tracking.
+
+It runs as a CLI, REPL, HTTP server, or MCP server — all from a single self-contained binary compiled via `bun build --compile`. No runtime dependencies.
+
+Structured logs and traces per session, so you can actually see what your agent is doing.
+
+All of this is configurable via a layered config system — env vars, config files (JSON, YAML, TOML), or CLI flags. Each layer overrides the last.
 
 ```bash
 ra "What is the capital of France?"
