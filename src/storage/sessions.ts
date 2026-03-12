@@ -1,5 +1,7 @@
 import { join } from 'path'
-import { appendFile, mkdir, rm } from 'node:fs/promises'
+import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import fg from 'fast-glob'
+import { fileExists, readText } from '../utils/fs'
 import type { IMessage } from '../providers/types'
 
 export interface SessionMeta {
@@ -49,7 +51,7 @@ export class SessionStorage {
     const meta: SessionMeta = { id, created, ...options }
     const dir = this.sessionDir(id)
     await mkdir(dir, { recursive: true })
-    await Bun.write(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
+    await writeFile(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
     return { id, meta }
   }
 
@@ -58,9 +60,9 @@ export class SessionStorage {
   }
 
   async readMessages(id: string): Promise<IMessage[]> {
-    const f = Bun.file(join(this.sessionDir(id), 'messages.jsonl'))
-    if (!(await f.exists())) return []
-    return (await f.text())
+    const path = join(this.sessionDir(id), 'messages.jsonl')
+    if (!(await fileExists(path))) return []
+    return (await readText(path))
       .split('\n')
       .filter(line => line.trim().length > 0)
       .map(line => { try { return JSON.parse(line) as IMessage } catch { return null } })
@@ -68,10 +70,10 @@ export class SessionStorage {
   }
 
   async list(): Promise<Session[]> {
-    const glob = new Bun.Glob('*/meta.json')
     const sessions: Session[] = []
-    for await (const rel of glob.scan({ cwd: this.storagePath, onlyFiles: true })) {
-      const meta = JSON.parse(await Bun.file(join(this.storagePath, rel)).text()) as SessionMeta
+    const matches = await fg('*/meta.json', { cwd: this.storagePath, onlyFiles: true })
+    for (const rel of matches) {
+      const meta = JSON.parse(await readText(join(this.storagePath, rel))) as SessionMeta
       sessions.push({ id: meta.id, meta })
     }
     return sessions

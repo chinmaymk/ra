@@ -2,6 +2,7 @@ import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
+import { fileExists, readText } from '../utils/fs'
 import { setPath, safeParseInt } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions } from './types'
@@ -44,14 +45,14 @@ function deepMerge(
 async function loadConfigFile(cwd: string, configPath?: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
   if (configPath) {
     const full = isAbsolute(configPath) ? configPath : join(cwd, configPath)
-    if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
+    if (await fileExists(full)) return { config: await parseFile(full), filePath: full }
     return { config: {} }
   }
   let dir = cwd
   while (true) {
     for (const name of CONFIG_FILES) {
       const full = join(dir, name)
-      if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
+      if (await fileExists(full)) return { config: await parseFile(full), filePath: full }
     }
     const parent = dirname(dir)
     if (parent === dir) break
@@ -61,7 +62,7 @@ async function loadConfigFile(cwd: string, configPath?: string): Promise<{ confi
 }
 
 async function parseFile(path: string): Promise<Partial<RaConfig>> {
-  const content = await Bun.file(path).text()
+  const content = await readText(path)
   if (path.endsWith('.json')) return JSON.parse(content) as Partial<RaConfig>
   if (path.endsWith('.yaml') || path.endsWith('.yml')) return yaml.load(content) as Partial<RaConfig>
   if (path.endsWith('.toml')) return parseToml(content) as Partial<RaConfig>
@@ -157,8 +158,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   // Only try loading systemPrompt as a file if it looks like a path
   if (config.systemPrompt && looksLikePath(config.systemPrompt, ['.txt', '.md'])) {
     const resolved = resolvePath(config.systemPrompt, configDir)
-    const f = Bun.file(resolved)
-    if (await f.exists()) config.systemPrompt = await f.text()
+    if (await fileExists(resolved)) config.systemPrompt = await readText(resolved)
   }
 
   return config

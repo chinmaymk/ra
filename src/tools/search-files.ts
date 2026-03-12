@@ -1,6 +1,7 @@
 import type { ITool } from '../providers/types'
 import { readFile } from 'fs/promises'
 import { join, relative } from 'path'
+import fg from 'fast-glob'
 
 export function searchFilesTool(): ITool {
   return {
@@ -20,9 +21,10 @@ export function searchFilesTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, pattern, include } = input as { path: string; pattern: string; include?: string }
-      const glob = new Bun.Glob(include ? `**/${include}` : '**/*')
+      const globPattern = include ? `**/${include}` : '**/*'
       const results: string[] = []
-      for await (const rel of glob.scan({ cwd: path, onlyFiles: true })) {
+      const files = await fg(globPattern, { cwd: path, onlyFiles: true })
+      for (const rel of files) {
         try {
           const content = await readFile(join(path, rel), 'utf-8')
           const lines = content.split('\n')

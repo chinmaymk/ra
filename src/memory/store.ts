@@ -1,6 +1,15 @@
-import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'fs'
 import { dirname } from 'path'
+
+// Use bun:sqlite when running under Bun, node:sqlite for Node.js.
+// Both share the same API surface (exec, prepare, get, all, run, close).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let Database: new (path: string) => any
+if ('Bun' in globalThis) {
+  Database = require('bun:sqlite').Database
+} else {
+  Database = require('node:sqlite').DatabaseSync
+}
 
 export interface Memory {
   id: number
@@ -16,7 +25,7 @@ export interface MemoryStoreOptions {
 }
 
 export class MemoryStore {
-  private db: Database
+  private db: any
 
   constructor(private options: MemoryStoreOptions) {
     mkdirSync(dirname(options.path), { recursive: true })
@@ -45,7 +54,7 @@ export class MemoryStore {
   save(content: string, tags = ''): Memory {
     return this.db.prepare(
       'INSERT INTO memories (content, tags) VALUES (?, ?) RETURNING id, content, tags, created_at AS createdAt',
-    ).get(content, tags) as Memory
+    ).get(content, tags)
   }
 
   search(query: string, limit = 10): Memory[] {
@@ -53,7 +62,7 @@ export class MemoryStore {
     try {
       return this.db.prepare(
         'SELECT m.id, m.content, m.tags, m.created_at AS createdAt FROM memories_fts f JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?',
-      ).all(query, limit) as Memory[]
+      ).all(query, limit)
     } catch {
       return []
     }
@@ -62,7 +71,7 @@ export class MemoryStore {
   list(limit = 20): Memory[] {
     return this.db.prepare(
       'SELECT id, content, tags, created_at AS createdAt FROM memories ORDER BY id DESC LIMIT ?',
-    ).all(limit) as Memory[]
+    ).all(limit)
   }
 
   forget(query: string, limit = 10): number {
@@ -71,7 +80,7 @@ export class MemoryStore {
     try {
       ids = this.db.prepare(
         'SELECT m.id FROM memories_fts f JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?',
-      ).all(query, limit) as { id: number }[]
+      ).all(query, limit)
     } catch {
       return 0
     }
@@ -91,7 +100,7 @@ export class MemoryStore {
   }
 
   count(): number {
-    return (this.db.prepare('SELECT COUNT(*) AS c FROM memories').get() as { c: number }).c
+    return this.db.prepare('SELECT COUNT(*) AS c FROM memories').get().c
   }
 
   close(): void {

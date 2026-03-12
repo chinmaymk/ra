@@ -1,8 +1,9 @@
+import { readFile } from 'node:fs/promises'
 import type { ContentPart } from '../providers/types'
 import { getMimeType } from './mime'
 
 export async function fileToContentPart(filePath: string): Promise<ContentPart> {
-  const data = await Bun.file(filePath).bytes()
+  const data = await readFile(filePath)
   const mimeType = getMimeType(filePath)
   if (mimeType.startsWith('image/')) {
     return {

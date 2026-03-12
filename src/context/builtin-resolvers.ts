@@ -1,3 +1,5 @@
+import fg from 'fast-glob'
+import { readText } from '../utils/fs'
 import { errorMessage } from '../utils/errors'
 import { resolve, relative } from 'path'
 import type { PatternResolver } from './resolvers'
@@ -24,7 +26,7 @@ async function resolveFile(ref: string, cwd: string): Promise<string | null> {
   // Prevent path traversal outside the working directory
   if (relative(cwd, absPath).startsWith('..')) return null
   try {
-    const content = await Bun.file(absPath).text()
+    const content = await readText(absPath)
     return `[${relative(cwd, absPath)}]\n${content}`
   } catch {
     return null
@@ -32,15 +34,11 @@ async function resolveFile(ref: string, cwd: string): Promise<string | null> {
 }
 
 async function resolveGlob(ref: string, cwd: string): Promise<string | null> {
-  const glob = new Bun.Glob(ref)
-  const matches: string[] = []
-  for await (const match of glob.scan({ cwd, absolute: false, onlyFiles: true })) {
-    matches.push(match)
-  }
+  const matches = await fg(ref, { cwd, absolute: false, onlyFiles: true })
   if (matches.length === 0) return null
   const results = await Promise.allSettled(
     matches.map(async (match) => {
-      const content = await Bun.file(resolve(cwd, match)).text()
+      const content = await readText(resolve(cwd, match))
       return `[${match}]\n${content}`
     })
   )

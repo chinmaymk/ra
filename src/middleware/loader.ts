@@ -9,6 +9,34 @@ const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
   'afterLoopIteration', 'afterLoopComplete', 'onError',
 ])
 
+/** Detect whether Bun's transpiler is available at runtime. */
+function hasBunTranspiler(): boolean {
+  try {
+    return 'Bun' in globalThis && typeof (globalThis.Bun).Transpiler === 'function'
+  } catch {
+    return false
+  }
+}
+
+/** Transpile a TypeScript expression to JavaScript. Tries Bun first, falls back to esbuild, then raw eval. */
+async function transpileExpression(code: string): Promise<string> {
+  if (hasBunTranspiler()) {
+    const transpiler = new (globalThis.Bun).Transpiler({ loader: 'ts', deadCodeElimination: false })
+    return await transpiler.transform(code)
+  }
+
+  // Try esbuild if installed
+  try {
+    // @ts-ignore -- esbuild is an optional dependency
+    const esbuild = await import('esbuild')
+    const result = await esbuild.transform(code, { loader: 'ts' })
+    return result.code
+  } catch { /* esbuild not available */ }
+
+  // Fallback: return as-is (works for plain JS expressions)
+  return code
+}
+
 async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
   if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)
@@ -20,8 +48,7 @@ async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
   }
   let fn: unknown
   try {
-    const transpiler = new Bun.Transpiler({ loader: 'ts', deadCodeElimination: false })
-    const js = await transpiler.transform(`(${entry})`)
+    const js = await transpileExpression(`(${entry})`)
     fn = (0, eval)(js)
   } catch (err) {
     throw new Error(`Failed to parse inline middleware expression: ${errorMessage(err)}\n  Expression: ${entry}`)
