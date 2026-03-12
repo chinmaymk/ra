@@ -53,6 +53,7 @@ export default defineConfig({
           { text: 'REPL', link: '/modes/repl' },
           { text: 'HTTP Server', link: '/modes/http' },
           { text: 'MCP', link: '/modes/mcp' },
+          { text: 'GitHub Actions', link: '/modes/github-actions' },
         ],
       },
       {
@@ -61,6 +62,8 @@ export default defineConfig({
           { text: 'Built-in Tools', link: '/tools/' },
           { text: 'Skills', link: '/skills/' },
           { text: 'Middleware', link: '/middleware/' },
+          { text: 'Permissions', link: '/permissions/' },
+          { text: 'Observability', link: '/observability/' },
         ],
       },
       {
