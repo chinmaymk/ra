@@ -114,25 +114,18 @@ export class Repl {
     if (this.pendingAskUser) {
       const { toolCallId, deferredMessages } = this.pendingAskUser
       this.pendingAskUser = undefined
-      // Patch in-memory history
-      for (let i = this.messages.length - 1; i >= 0; i--) {
-        const m = this.messages[i]!
-        if (m.role === 'tool' && m.toolCallId === toolCallId && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-          this.messages[i] = { ...m, content: input }
-          break
+      const patchSignal = (msgs: IMessage[]) => {
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i]!
+          if (m.role === 'tool' && m.toolCallId === toolCallId && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
+            msgs[i] = { ...m, content: input }
+            break
+          }
         }
       }
-      // Patch deferred messages (same tool result, not yet persisted) and save them now
-      for (let j = deferredMessages.length - 1; j >= 0; j--) {
-        const m = deferredMessages[j]!
-        if (m.role === 'tool' && m.toolCallId === toolCallId && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-          deferredMessages[j] = { ...m, content: input }
-          break
-        }
-      }
-      for (const msg of deferredMessages) {
-        await this.options.storage.appendMessage(this.sessionId!, msg)
-      }
+      patchSignal(this.messages)
+      patchSignal(deferredMessages)
+      await Promise.all(deferredMessages.map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
     } else {
       const text = this.pendingSkill
         ? `${buildActiveSkillXml(this.pendingSkill)}\n\n${input}`
@@ -241,10 +234,10 @@ export class Repl {
 
       const newMessages = result.messages.slice(initialMessages.length)
 
-      // Detect ask_user — find which messages to defer saving until the user answers
+      // Detect ask_user — only search new messages (signal cannot appear in prior history)
       let askToolResult: IMessage | undefined
-      for (let i = result.messages.length - 1; i >= 0; i--) {
-        const m = result.messages[i]!
+      for (let i = newMessages.length - 1; i >= 0; i--) {
+        const m = newMessages[i]!
         if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
           askToolResult = m
           break
@@ -269,18 +262,10 @@ export class Repl {
         tui.printCommandResponse(`[Question for you] ${question}`)
       }
 
-      if (userMessage) {
-        this.messages.push(userMessage, ...newMessages)
-        for (const msg of [userMessage, ...messagesToSaveNow]) {
-          await this.options.storage.appendMessage(this.sessionId!, msg)
-        }
-      } else {
-        // Resuming after ask_user — only save new messages from this continuation
-        this.messages.push(...newMessages)
-        for (const msg of messagesToSaveNow) {
-          await this.options.storage.appendMessage(this.sessionId!, msg)
-        }
-      }
+      const msgsToAdd = userMessage ? [userMessage, ...newMessages] : newMessages
+      const msgsToSave = userMessage ? [userMessage, ...messagesToSaveNow] : messagesToSaveNow
+      this.messages.push(...msgsToAdd)
+      await Promise.all(msgsToSave.map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
     } catch (err) {
       tui.stopSpinner(true)
       // TS narrows streamBuf to null (closure writes aren't tracked); cast back
