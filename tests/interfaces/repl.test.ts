@@ -3,7 +3,7 @@ import { PassThrough } from 'stream'
 import { Repl } from '../../src/interfaces/repl'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import { SessionStorage } from '../../src/storage/sessions'
-import type { IProvider } from '../../src/providers/types'
+import type { IProvider, IMessage } from '../../src/providers/types'
 import { tmpdir } from '../tmpdir'
 
 const TEST_STORAGE = tmpdir('ra-repl-test')
@@ -521,5 +521,61 @@ describe('Repl.start()', () => {
     }
 
     expect((repl as any).sessionId).toBeTruthy()
+  })
+
+  it('ask_user: resolves inline when user types answer, loop continues with result', async () => {
+    let callCount = 0
+    const askProvider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        if (callCount++ === 0) {
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'ask_user' }
+          yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{"question":"What is your name?"}' }
+          yield { type: 'tool_call_end' as const, id: 'tc1' }
+          yield { type: 'done' as const }
+        } else {
+          yield { type: 'text' as const, delta: 'Hello Alice!' }
+          yield { type: 'done' as const }
+        }
+      },
+    }
+
+    const storage = await makeStorage()
+    const input = new PassThrough()
+    const origWrite = process.stdout.write.bind(process.stdout)
+    process.stdout.write = () => true
+    const origStdin = process.stdin
+    const origIsTTY = process.stdout.isTTY
+    Object.defineProperty(process, 'stdin', { value: input, writable: true, configurable: true })
+    process.stdout.isTTY = false as any
+
+    const repl = new Repl({
+      model: 'test',
+      provider: askProvider,
+      tools: new ToolRegistry(),
+      storage,
+    })
+
+    // Send user message, wait for ask_user to be pending, then send answer
+    setTimeout(() => { input.write('hello\n') }, 10)
+    setTimeout(() => { input.write('Alice\n') }, 100)
+    setTimeout(() => { input.end() }, 200)
+
+    try {
+      await repl.start()
+    } finally {
+      process.stdout.write = origWrite
+      Object.defineProperty(process, 'stdin', { value: origStdin, writable: true, configurable: true })
+      process.stdout.isTTY = origIsTTY
+    }
+
+    const msgs = (repl as any).messages as IMessage[]
+    // user, assistant (ask_user call), tool result (Alice), assistant (Hello Alice!)
+    expect(msgs.length).toBe(4)
+    const toolResult = msgs.find(m => m.role === 'tool')
+    expect(toolResult?.content).toBe('Alice')
+    const finalAssistant = msgs.filter(m => m.role === 'assistant').at(-1)
+    expect(finalAssistant?.content).toBe('Hello Alice!')
   })
 })

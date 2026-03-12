@@ -6,7 +6,6 @@ import type { Skill } from '../skills/types'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import { fileToContentPart } from '../utils/files'
-import { ASK_USER_SIGNAL } from '../tools/ask-user'
 
 export interface CliOptions {
   prompt: string
@@ -78,21 +77,6 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   })
 
   const result = await loop.run(initialMessages)
-
-  // Detect ask_user suspension
-  let askMsg: IMessage | undefined
-  for (let i = result.messages.length - 1; i >= 0; i--) {
-    const m = result.messages[i]!
-    if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-      askMsg = m
-      break
-    }
-  }
-  if (askMsg && typeof askMsg.content === 'string') {
-    const question = askMsg.content.slice(ASK_USER_SIGNAL.length)
-    process.stderr.write(`\n[ask_user] ${question}\n`)
-    process.stderr.write(`Resume with: ra --resume <session-id> "your answer"\n`)
-  }
 
   return { messages: result.messages, priorCount }
 }

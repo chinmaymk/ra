@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Content, Part, Tool as GeminiTool, GenerateContentResponse } from '@google/generative-ai'
-import { extractSystemMessages } from './utils'
+import { extractSystemMessages, mergeConsecutive } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
@@ -90,7 +90,7 @@ export class GoogleProvider implements IProvider {
   }
 
   mapMessages(messages: IMessage[]): Content[] {
-    return messages.map((msg): Content => {
+    const mapped = messages.map((msg): Content => {
       if (msg.role === 'tool') {
         // toolCallId is formatted as "functionName_counter" — extract the function name for Gemini
         const toolName = msg.toolCallId!.substring(0, msg.toolCallId!.lastIndexOf('_'))
@@ -116,6 +116,8 @@ export class GoogleProvider implements IProvider {
       }
       return { role, parts }
     })
+    // Merge consecutive same-role messages (required for alternating-turn APIs)
+    return mergeConsecutive(mapped, (a, b) => { a.parts = [...a.parts, ...b.parts] })
   }
 
   mapTools(tools: ITool[]): GeminiTool[] {

@@ -119,10 +119,17 @@ export class AgentLoop {
             if (signal.aborted) break
             textAccumulator += chunk.delta
           } else if (chunk.type === 'tool_call_start') {
+            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
+            if (signal.aborted) break
             toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
           } else if (chunk.type === 'tool_call_delta') {
+            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
+            if (signal.aborted) break
             const tc = toolCallBuf.find(t => t.id === chunk.id)
             if (tc) tc.argsRaw += chunk.argsDelta
+          } else if (chunk.type === 'tool_call_end') {
+            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
+            if (signal.aborted) break
           } else if (chunk.type === 'done') {
             if (chunk.usage) {
               accumulateUsage(usage, chunk.usage)
@@ -176,9 +183,6 @@ export class AgentLoop {
           }
           currentPhase = 'model_call'
         }
-
-        // Break if ask_user was invoked — the loop should suspend
-        if (toolCalls.some(tc => tc.name === 'ask_user')) { stop(); break }
 
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopIteration, this.toolTimeout)
         if (signal.aborted) break
