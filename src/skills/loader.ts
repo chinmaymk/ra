@@ -1,14 +1,7 @@
 import { join } from 'path'
-import yaml from 'js-yaml'
 import { firstSegment } from '../utils/paths'
 import { resolveSkillAsset, type Skill, type SkillMetadata } from './types'
-
-function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
-  if (!match) return { frontmatter: {}, body: content }
-  const frontmatter = (yaml.load(match[1]!) as Record<string, unknown>) ?? {}
-  return { frontmatter, body: match[2] ?? '' }
-}
+import { parseFrontmatter, extractSkillMetadata } from './frontmatter'
 
 async function listSubdirFiles(skillDir: string, subdir: string): Promise<string[]> {
   const files: string[] = []
@@ -35,13 +28,7 @@ async function scanSkillDirs<T>(
 
         if (frontmatter['name'] !== entry) continue
 
-        const metadata: SkillMetadata = {
-          name: (frontmatter['name'] as string) ?? entry,
-          description: (frontmatter['description'] as string) ?? '',
-          license: frontmatter['license'] as string | undefined,
-          compatibility: frontmatter['compatibility'] as string | undefined,
-          metadata: frontmatter['metadata'] as Record<string, string> | undefined,
-        }
+        const metadata = extractSkillMetadata(frontmatter, entry)
 
         result.set(entry, await build(join(dir, entry), metadata, body))
       }

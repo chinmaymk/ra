@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { JsonlWriter } from './writer'
 
 export interface Span {
   traceId: string
@@ -19,7 +20,6 @@ export interface SpanEvent {
   attributes?: Record<string, unknown>
 }
 
-/** A completed span record emitted to the trace output. */
 export interface TraceRecord {
   type: 'span'
   timestamp: string
@@ -41,29 +41,18 @@ export interface TracerOptions {
 
 export class Tracer {
   private traceId: string
-  private output: 'stderr' | 'stdout' | 'file'
-  private filePath: string | undefined
   private sessionId: string | undefined
-  private fileWriter: ReturnType<ReturnType<typeof Bun.file>['writer']> | undefined
+  private writer: JsonlWriter
   private activeSpans: Map<string, Span> = new Map()
 
   constructor(options: TracerOptions | null, traceId?: string) {
     this.traceId = traceId ?? randomUUID()
-    this.output = options?.output ?? 'stderr'
-    this.filePath = options?.filePath
     this.sessionId = options?.sessionId
-    if (this.output === 'file' && this.filePath) {
-      this.fileWriter = Bun.file(this.filePath).writer()
-    }
+    this.writer = new JsonlWriter(options?.output ?? 'stderr', options?.filePath)
   }
 
-  getTraceId(): string {
-    return this.traceId
-  }
-
-  setSessionId(sessionId: string): void {
-    this.sessionId = sessionId
-  }
+  getTraceId(): string { return this.traceId }
+  setSessionId(sessionId: string): void { this.sessionId = sessionId }
 
   startSpan(name: string, attributes?: Record<string, unknown>, parentSpanId?: string): Span {
     const span: Span = {
@@ -81,11 +70,7 @@ export class Tracer {
   }
 
   addEvent(span: Span, name: string, attributes?: Record<string, unknown>): void {
-    span.events.push({
-      name,
-      timestamp: performance.now(),
-      attributes,
-    })
+    span.events.push({ name, timestamp: performance.now(), attributes })
   }
 
   endSpan(span: Span, status?: 'ok' | 'error', attributes?: Record<string, unknown>): void {
@@ -93,10 +78,9 @@ export class Tracer {
     span.durationMs = Math.round((span.endTime! - span.startTime) * 100) / 100
     if (status) span.status = status
     if (attributes) Object.assign(span.attributes, attributes)
-
     this.activeSpans.delete(span.spanId)
 
-    const record: TraceRecord = {
+    this.writer.write({
       type: 'span',
       timestamp: new Date().toISOString(),
       traceId: span.traceId,
@@ -105,49 +89,21 @@ export class Tracer {
       name: span.name,
       durationMs: span.durationMs!,
       status: span.status,
-      attributes: {
-        ...(this.sessionId && { sessionId: this.sessionId }),
-        ...span.attributes,
-      },
+      attributes: { ...(this.sessionId && { sessionId: this.sessionId }), ...span.attributes },
       ...(span.events.length > 0 && { events: span.events }),
-    }
-
-    this.emit(record)
+    } satisfies TraceRecord)
   }
 
-  /** Flush buffered file writes. Call before process exit. */
-  async flush(): Promise<void> {
-    if (this.fileWriter) {
-      await this.fileWriter.flush()
-    }
-  }
-
-  private emit(record: TraceRecord): void {
-    const line = JSON.stringify(record) + '\n'
-    if (this.fileWriter) {
-      this.fileWriter.write(line)
-    } else if (this.output === 'stdout') {
-      process.stdout.write(line)
-    } else {
-      process.stderr.write(line)
-    }
-  }
+  async flush(): Promise<void> { await this.writer.flush() }
 }
 
 /** A no-op tracer that silently discards all spans. */
 export class NoopTracer extends Tracer {
-  constructor() {
-    super(null, 'noop')
-  }
+  constructor() { super(null, 'noop') }
 
   private static NOOP_SPAN: Span = {
-    traceId: 'noop',
-    spanId: 'noop',
-    name: 'noop',
-    startTime: 0,
-    attributes: {},
-    status: 'ok',
-    events: [],
+    traceId: 'noop', spanId: 'noop', name: 'noop',
+    startTime: 0, attributes: {}, status: 'ok', events: [],
   }
 
   override startSpan(_name: string, _attributes?: Record<string, unknown>, _parentSpanId?: string): Span { return NoopTracer.NOOP_SPAN }

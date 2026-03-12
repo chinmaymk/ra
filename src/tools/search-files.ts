@@ -1,23 +1,6 @@
 import type { ITool } from '../providers/types'
-import { readdir, readFile } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { join, relative } from 'path'
-
-async function* walkFiles(dir: string, include?: string): AsyncGenerator<string> {
-  const entries = await readdir(dir, { withFileTypes: true })
-  for (const entry of entries) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory()) {
-      if (entry.name === 'node_modules' || entry.name === '.git') continue
-      yield* walkFiles(full, include)
-    } else {
-      if (include) {
-        const pattern = include.replace(/\*/g, '.*').replace(/\?/g, '.')
-        if (!new RegExp(`^${pattern}$`).test(entry.name)) continue
-      }
-      yield full
-    }
-  }
-}
 
 export function searchFilesTool(): ITool {
   return {
@@ -37,14 +20,15 @@ export function searchFilesTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, pattern, include } = input as { path: string; pattern: string; include?: string }
+      const glob = new Bun.Glob(include ? `**/${include}` : '**/*')
       const results: string[] = []
-      for await (const file of walkFiles(path, include)) {
+      for await (const rel of glob.scan({ cwd: path, onlyFiles: true })) {
         try {
-          const content = await readFile(file, 'utf-8')
+          const content = await readFile(join(path, rel), 'utf-8')
           const lines = content.split('\n')
           for (let i = 0; i < lines.length; i++) {
             if (lines[i]!.includes(pattern)) {
-              results.push(`${relative(path, file)}:${i + 1}:${lines[i]}`)
+              results.push(`${rel}:${i + 1}:${lines[i]}`)
             }
           }
         } catch { /* skip binary/unreadable files */ }

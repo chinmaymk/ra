@@ -8,15 +8,11 @@ export async function runMiddlewareChain<T extends StoppableContext>(
 ): Promise<void> {
   for (const mw of chain) {
     if (ctx.signal.aborted) break
-    if (timeoutMs > 0) {
-      try {
-        await withTimeout(mw(ctx), timeoutMs, 'middleware')
-      } catch (err) {
-        if (err instanceof TimeoutError) continue
-        throw err
-      }
-    } else {
-      await mw(ctx)
+    try {
+      await (timeoutMs > 0 ? withTimeout(mw(ctx), timeoutMs, 'middleware') : mw(ctx))
+    } catch (err) {
+      if (err instanceof TimeoutError) continue
+      throw err
     }
   }
 }

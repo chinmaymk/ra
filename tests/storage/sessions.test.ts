@@ -28,13 +28,6 @@ describe('SessionStorage', () => {
     expect(messages[0]?.content).toBe('hello')
   })
 
-  it('saves and loads checkpoint', async () => {
-    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
-    await storage.saveCheckpoint(session.id, { iteration: 3 })
-    const checkpoint = await storage.loadCheckpoint(session.id)
-    expect(checkpoint?.iteration).toBe(3)
-  })
-
   it('lists all sessions', async () => {
     await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
     await storage.create({ provider: 'openai', model: 'gpt-4o', interface: 'repl' })

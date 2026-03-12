@@ -1,3 +1,4 @@
+import { errorMessage } from '../utils/errors'
 import { resolve } from 'path'
 import type { SkillCommand } from './parse-args'
 import type { IMessage } from '../providers/types'
@@ -30,7 +31,7 @@ export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
           const installed = await installSkill(source)
           console.log(`Installed skills: ${installed.join(', ')} → ${defaultSkillInstallDir()}`)
         } catch (err) {
-          console.error(`Failed to install "${source}": ${err instanceof Error ? err.message : String(err)}`)
+          console.error(`Failed to install "${source}": ${errorMessage(err)}`)
           process.exit(1)
         }
       }
@@ -46,7 +47,7 @@ export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
           await removeSkill(name)
           console.log(`Removed skill: ${name}`)
         } catch (err) {
-          console.error(`Failed to remove "${name}": ${err instanceof Error ? err.message : String(err)}`)
+          console.error(`Failed to remove "${name}": ${errorMessage(err)}`)
           process.exit(1)
         }
       }

@@ -38,7 +38,6 @@ export class SessionStorage {
   }
 
   sessionDir(id: string): string {
-    // Sanitize to prevent path traversal (e.g., ../../etc/passwd)
     const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '')
     if (!sanitized) throw new Error('Invalid session ID')
     return join(this.storagePath, sanitized)
@@ -48,60 +47,33 @@ export class SessionStorage {
     const id = crypto.randomUUID()
     const created = new Date().toISOString()
     const meta: SessionMeta = { id, created, ...options }
-
     const dir = this.sessionDir(id)
     await mkdir(dir, { recursive: true })
-
     await Bun.write(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
-
     return { id, meta }
   }
 
   async appendMessage(id: string, message: IMessage): Promise<void> {
-    const dir = this.sessionDir(id)
-    await mkdir(dir, { recursive: true })
-    const filePath = join(dir, 'messages.jsonl')
-    const line = JSON.stringify(message) + '\n'
-    await appendFile(filePath, line)
+    await appendFile(join(this.sessionDir(id), 'messages.jsonl'), JSON.stringify(message) + '\n')
   }
 
   async readMessages(id: string): Promise<IMessage[]> {
-    const file = join(this.sessionDir(id), 'messages.jsonl')
-    const f = Bun.file(file)
+    const f = Bun.file(join(this.sessionDir(id), 'messages.jsonl'))
     if (!(await f.exists())) return []
-
-    const text = await f.text()
-    return text
+    return (await f.text())
       .split('\n')
       .filter(line => line.trim().length > 0)
-      .map(line => {
-        try { return JSON.parse(line) as IMessage }
-        catch { return null }
-      })
+      .map(line => { try { return JSON.parse(line) as IMessage } catch { return null } })
       .filter((msg): msg is IMessage => msg !== null)
-  }
-
-  async saveCheckpoint(id: string, data: Record<string, unknown>): Promise<void> {
-    await Bun.write(join(this.sessionDir(id), 'checkpoint.json'), JSON.stringify(data, null, 2))
-  }
-
-  async loadCheckpoint(id: string): Promise<Record<string, unknown> | null> {
-    const file = join(this.sessionDir(id), 'checkpoint.json')
-    const f = Bun.file(file)
-    if (!(await f.exists())) return null
-    return JSON.parse(await f.text())
   }
 
   async list(): Promise<Session[]> {
     const glob = new Bun.Glob('*/meta.json')
     const sessions: Session[] = []
-
     for await (const rel of glob.scan({ cwd: this.storagePath, onlyFiles: true })) {
-      const metaFile = join(this.storagePath, rel)
-      const meta = JSON.parse(await Bun.file(metaFile).text()) as SessionMeta
+      const meta = JSON.parse(await Bun.file(join(this.storagePath, rel)).text()) as SessionMeta
       sessions.push({ id: meta.id, meta })
     }
-
     return sessions
   }
 
@@ -111,12 +83,12 @@ export class SessionStorage {
 
     if (options.ttlDays !== undefined) {
       const cutoff = Date.now() - options.ttlDays * 86_400_000
-      sessions.filter(s => new Date(s.meta.created).getTime() < cutoff).forEach(s => toDelete.add(s.id))
+      for (const s of sessions) if (new Date(s.meta.created).getTime() < cutoff) toDelete.add(s.id)
     }
     if (options.maxSessions !== undefined) {
       const remaining = sessions.filter(s => !toDelete.has(s.id))
       if (remaining.length > options.maxSessions) {
-        remaining.slice(0, remaining.length - options.maxSessions).forEach(s => toDelete.add(s.id))
+        for (const s of remaining.slice(0, remaining.length - options.maxSessions)) toDelete.add(s.id)
       }
     }
 

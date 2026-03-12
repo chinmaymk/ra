@@ -1,6 +1,6 @@
 import type { ITool } from '../providers/types'
-import { cp, mkdir } from 'fs/promises'
-import { dirname } from 'path'
+import { cp } from 'fs/promises'
+import { ensureDir } from './ensure-dir'
 
 export function copyFileTool(): ITool {
   return {
@@ -18,7 +18,7 @@ export function copyFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { source, destination } = input as { source: string; destination: string }
-      await mkdir(dirname(destination), { recursive: true })
+      await ensureDir(destination)
       await cp(source, destination, { recursive: true })
       return `Copied: ${source} → ${destination}`
     },

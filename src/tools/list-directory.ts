@@ -1,6 +1,5 @@
 import type { ITool } from '../providers/types'
-import { readdir, stat } from 'fs/promises'
-import { join } from 'path'
+import { readdir } from 'fs/promises'
 
 export function listDirectoryTool(): ITool {
   return {
@@ -17,13 +16,8 @@ export function listDirectoryTool(): ITool {
     },
     async execute(input: unknown) {
       const { path } = input as { path: string }
-      const entries = await readdir(path)
-      const results: string[] = []
-      for (const entry of entries) {
-        const s = await stat(join(path, entry))
-        results.push(s.isDirectory() ? `${entry}/` : entry)
-      }
-      return results.join('\n')
+      const entries = await readdir(path, { withFileTypes: true })
+      return entries.map(e => e.isDirectory() ? `${e.name}/` : e.name).join('\n')
     },
   }
 }

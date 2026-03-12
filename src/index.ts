@@ -2,6 +2,7 @@
 import { loadConfig } from './config'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
+import { errorMessage } from './utils/errors'
 import { HELP } from './interfaces/help'
 import { runExecScript, runSkillCommand, showContext, runMemoryCommand } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
@@ -10,6 +11,7 @@ import { HttpServer } from './interfaces/http'
 import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
+import { serializeContent } from './providers/utils'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -100,7 +102,7 @@ function createMcpHandler(app: AppContext) {
     ]
     const result = await loop.run(messages)
     const last = result.messages.at(-1)
-    return typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content)
+    return last ? serializeContent(last.content) : ''
   }
 }
 
@@ -277,6 +279,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err))
+  console.error(errorMessage(err))
   process.exit(1)
 })

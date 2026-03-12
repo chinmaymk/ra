@@ -1,3 +1,4 @@
+import { errorMessage } from '../utils/errors'
 import { resolve, relative } from 'path'
 import type { PatternResolver } from './resolvers'
 
@@ -75,7 +76,7 @@ export const urlResolver: PatternResolver = {
       }
       return `[${ref}]\n${text.slice(0, 50_000)}`
     } catch (err) {
-      return `[${ref}] Error: ${err instanceof Error ? err.message : String(err)}`
+      return `[${ref}] Error: ${errorMessage(err)}`
     }
   },
 }

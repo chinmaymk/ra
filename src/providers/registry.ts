@@ -27,31 +27,17 @@ export function buildProviderConfig<N extends ProviderName>(
   return { provider: name, ...opts } as ProviderConfig
 }
 
+const constructors = {
+  anthropic: AnthropicProvider,
+  openai: OpenAIProvider,
+  google: GoogleProvider,
+  ollama: OllamaProvider,
+  bedrock: BedrockProvider,
+  azure: AzureProvider,
+} as const
+
 export function createProvider(config: ProviderConfig): IProvider {
-  switch (config.provider) {
-    case 'anthropic': {
-      const { provider: _, ...opts } = config
-      return new AnthropicProvider(opts)
-    }
-    case 'openai': {
-      const { provider: _, ...opts } = config
-      return new OpenAIProvider(opts)
-    }
-    case 'google': {
-      const { provider: _, ...opts } = config
-      return new GoogleProvider(opts)
-    }
-    case 'ollama': {
-      const { provider: _, ...opts } = config
-      return new OllamaProvider(opts)
-    }
-    case 'bedrock': {
-      const { provider: _, ...opts } = config
-      return new BedrockProvider(opts)
-    }
-    case 'azure': {
-      const { provider: _, ...opts } = config
-      return new AzureProvider(opts)
-    }
-  }
+  const { provider, ...opts } = config
+  const Ctor = constructors[provider]
+  return new (Ctor as new (opts: Record<string, unknown>) => IProvider)(opts)
 }
