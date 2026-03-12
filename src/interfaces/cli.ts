@@ -61,7 +61,8 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
 
   const priorCount = initialMessages.length
 
-  const parts: ContentPart[] = [{ type: 'text', text: prompt }, ...await Promise.all(files.map(fileToContentPart))]
+  const fileParts = await Promise.all(files.map(fileToContentPart))
+  const parts: ContentPart[] = [{ type: 'text', text: prompt }, ...fileParts]
   const content: string | ContentPart[] = parts.length === 1 ? prompt : parts
   initialMessages.push({ role: 'user', content })
 
@@ -71,8 +72,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
       ...middleware,
       onStreamChunk: [
         async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) },
-        ...(middleware?.onStreamChunk ?? []),
-      ],
+      ].concat(middleware?.onStreamChunk ?? []),
     },
   })
 

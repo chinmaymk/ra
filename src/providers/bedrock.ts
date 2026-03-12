@@ -103,7 +103,7 @@ export class BedrockProvider implements IProvider {
       return { role: msg.role as 'user' | 'assistant', content: this.mapContentParts(msg.content) }
     })
     // Merge consecutive same-role messages (required for alternating-turn APIs)
-    return mergeConsecutive(mapped, (a, b) => { a.content = [...(a.content ?? []), ...(b.content ?? [])] })
+    return mergeConsecutive(mapped, (a, b) => { a.content = (a.content ?? []).concat(b.content ?? []) })
   }
 
   mapTools(tools: ITool[]): BedrockTool[] {

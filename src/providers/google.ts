@@ -115,7 +115,7 @@ export class GoogleProvider implements IProvider {
       return { role, parts }
     })
     // Merge consecutive same-role messages (required for alternating-turn APIs)
-    return mergeConsecutive(mapped, (a, b) => { a.parts = [...a.parts, ...b.parts] })
+    return mergeConsecutive(mapped, (a, b) => { a.parts = a.parts.concat(b.parts) })
   }
 
   mapTools(tools: ITool[]): GeminiTool[] {

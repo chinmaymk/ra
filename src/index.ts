@@ -95,11 +95,9 @@ function createMcpHandler(app: AppContext) {
       compaction: app.config.compaction,
     })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
-    const messages: IMessage[] = [
-      ...(app.config.systemPrompt ? [{ role: 'system' as const, content: app.config.systemPrompt }] : []),
-      ...app.contextMessages,
-      { role: 'user' as const, content: prompt },
-    ]
+    const messages: IMessage[] = []
+    if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
+    messages.push(...app.contextMessages, { role: 'user', content: prompt })
     const result = await loop.run(messages)
     const last = result.messages.at(-1)
     return last ? serializeContent(last.content) : ''
@@ -149,7 +147,7 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
   if (parsed.meta.resume) {
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
-  const activeSkills = [...app.config.skills, ...parsed.meta.skills]
+  const activeSkills = app.config.skills.concat(parsed.meta.skills)
   const result = await runCli({
     prompt: parsed.meta.prompt!,
     files: parsed.meta.files,

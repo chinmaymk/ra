@@ -111,7 +111,7 @@ export class HttpServer {
     if (this.options.contextMessages?.length) {
       prefix.push(...this.options.contextMessages)
     }
-    return [...prefix, ...messages]
+    return prefix.concat(messages)
   }
 
   private async handleChatSync(req: Request): Promise<Response> {
@@ -174,10 +174,7 @@ export class HttpServer {
 
         const middleware: Partial<MiddlewareConfig> = {
           ...(opts.middleware ?? {}),
-          onStreamChunk: [
-            ...(opts.middleware?.onStreamChunk ?? []),
-            onStreamChunk,
-          ],
+          onStreamChunk: (opts.middleware?.onStreamChunk ?? []).concat(onStreamChunk),
         }
 
         const loop = new AgentLoop({

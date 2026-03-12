@@ -107,7 +107,7 @@ export async function bootstrap(
     const resolvers = await loadResolvers(config.context.resolvers, config.configDir)
     if (resolvers.length > 0) {
       const resolverMw = createResolverMiddleware(resolvers, process.cwd())
-      middleware.beforeModelCall = [resolverMw, ...(middleware.beforeModelCall ?? [])]
+      ;(middleware.beforeModelCall ??= []).unshift(resolverMw)
     }
   }
 
@@ -115,7 +115,7 @@ export async function bootstrap(
   if (config.context.enabled) {
     const root = (await findGitRoot(process.cwd())) ?? process.cwd()
     const discoveryMw = createDiscoveryMiddleware(config.context.patterns, root, new Set(contextFiles.map(f => f.path)))
-    middleware.afterToolExecution = [...(middleware.afterToolExecution ?? []), discoveryMw]
+    ;(middleware.afterToolExecution ??= []).push(discoveryMw)
   }
 
   // ── Provider ───────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ export async function bootstrap(
     tools.register(memoryForgetTool(memoryStore))
 
     const memMw = createMemoryMiddleware({ store: memoryStore, injectLimit: config.memory.injectLimit })
-    middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
+    ;(middleware.beforeLoopBegin ??= []).unshift(memMw.beforeLoopBegin)
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
 
@@ -171,7 +171,7 @@ export async function bootstrap(
   // ── Permissions middleware ─────────────────────────────────────────
   if (config.permissions.rules?.length && !config.permissions.no_rules_rules) {
     const permMw = createPermissionsMiddleware(config.permissions)
-    middleware.beforeToolExecution = [permMw, ...(middleware.beforeToolExecution ?? [])]
+    ;(middleware.beforeToolExecution ??= []).unshift(permMw)
     logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
   }
 
