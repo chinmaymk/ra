@@ -216,7 +216,7 @@ export class HttpServer {
           for (let i = result.messages.length - 1; i >= 0; i--) {
             const m = result.messages[i]!
             if (m.role === 'tool' && typeof m.content === 'string' && m.content.startsWith(ASK_USER_SIGNAL)) {
-              send({ type: 'ask_user', question: m.content.slice(ASK_USER_SIGNAL.length) })
+              send({ type: 'AskUserQuestion', question: m.content.slice(ASK_USER_SIGNAL.length) })
               break
             }
           }

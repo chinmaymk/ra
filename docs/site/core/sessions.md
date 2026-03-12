@@ -29,7 +29,7 @@ ra --resume <session-id> "Continue with the next step"
 
 Sessions are saved automatically after each turn. You never need to explicitly save.
 
-When `ask_user` suspends a CLI run, the session ID is printed to stderr so you can resume later:
+When `AskUserQuestion` suspends a CLI run, the session ID is printed to stderr so you can resume later:
 
 ```
 Session suspended. Resume with: ra --resume ses_abc123

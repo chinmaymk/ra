@@ -33,7 +33,7 @@ beforeAll(() => {
 
 afterAll(() => { rmSync(TMP, { recursive: true, force: true }) })
 
-describe('read_file', () => {
+describe('Read', () => {
   const tool = readFileTool()
 
   it('reads file with line numbers and supports offset/limit', async () => {
@@ -49,7 +49,7 @@ describe('read_file', () => {
   })
 })
 
-describe('write_file', () => {
+describe('Write', () => {
   const tool = writeFileTool()
 
   it('creates files with nested dirs and overwrites', async () => {
@@ -62,7 +62,7 @@ describe('write_file', () => {
   })
 })
 
-describe('update_file', () => {
+describe('Edit', () => {
   const tool = updateFileTool()
 
   it('replaces first occurrence only and errors on missing string', async () => {
@@ -82,7 +82,7 @@ describe('update_file', () => {
   })
 })
 
-describe('append_file', () => {
+describe('AppendFile', () => {
   const tool = appendFileTool()
 
   it('appends to existing and creates new files', async () => {
@@ -97,7 +97,7 @@ describe('append_file', () => {
   })
 })
 
-describe('list_directory', () => {
+describe('LS', () => {
   it('lists entries with trailing / for directories', async () => {
     const tool = listDirectoryTool()
     const result = await tool.execute({ path: TMP }) as string
@@ -107,7 +107,7 @@ describe('list_directory', () => {
   })
 })
 
-describe('search_files', () => {
+describe('Grep', () => {
   it('finds matches recursively with file:line:content format and supports include filter', async () => {
     const tool = searchFilesTool()
     const result = await tool.execute({ path: TMP, pattern: 'hello' }) as string
@@ -121,7 +121,7 @@ describe('search_files', () => {
   })
 })
 
-describe('glob_files', () => {
+describe('Glob', () => {
   it('matches glob patterns', async () => {
     const tool = globFilesTool()
     const ts = await tool.execute({ path: TMP, pattern: '**/*.ts' }) as string
@@ -134,7 +134,7 @@ describe('glob_files', () => {
   })
 })
 
-describe('move_file', () => {
+describe('MoveFile', () => {
   it('moves file and creates destination dirs', async () => {
     const tool = moveFileTool()
     const src = join(TMP, 'move-src.txt')
@@ -146,7 +146,7 @@ describe('move_file', () => {
   })
 })
 
-describe('copy_file', () => {
+describe('CopyFile', () => {
   it('copies files and directories recursively', async () => {
     const tool = copyFileTool()
     const srcDir = join(TMP, 'copy-src')
@@ -162,7 +162,7 @@ describe('copy_file', () => {
   })
 })
 
-describe('delete_file', () => {
+describe('DeleteFile', () => {
   it('deletes files and directories, errors on non-existent', async () => {
     const tool = deleteFileTool()
     const dir = join(TMP, 'del-dir')
@@ -175,7 +175,7 @@ describe('delete_file', () => {
   })
 })
 
-describe('execute_bash', () => {
+describe('Bash', () => {
   if (process.platform === 'win32') return
 
   const tool = executeBashTool()
@@ -191,7 +191,7 @@ describe('execute_bash', () => {
   })
 })
 
-describe('web_fetch', () => {
+describe('WebFetch', () => {
   it('makes HTTP requests and returns structured response', async () => {
     let receivedBody = ''
     const server = Bun.serve({
@@ -222,7 +222,7 @@ describe('web_fetch', () => {
   })
 })
 
-describe('ask_user', () => {
+describe('AskUserQuestion', () => {
   it('returns question prefixed with signal', async () => {
     const tool = askUserTool()
     const result = await tool.execute({ question: 'What color?' }) as string
@@ -230,7 +230,7 @@ describe('ask_user', () => {
   })
 })
 
-describe('checklist', () => {
+describe('TodoWrite', () => {
   it('tracks items through full lifecycle with dynamic description showing remaining', async () => {
     const tool = checklistTool()
 
@@ -267,19 +267,19 @@ describe('registerBuiltinTools', () => {
     const names = registry.all().map(t => t.name)
 
     expect(names).toHaveLength(14)
-    expect(names).toContain('read_file')
-    expect(names).toContain('write_file')
-    expect(names).toContain('update_file')
-    expect(names).toContain('append_file')
-    expect(names).toContain('list_directory')
-    expect(names).toContain('search_files')
-    expect(names).toContain('glob_files')
-    expect(names).toContain('move_file')
-    expect(names).toContain('copy_file')
-    expect(names).toContain('delete_file')
-    expect(names).toContain('web_fetch')
-    expect(names).toContain('ask_user')
-    expect(names).toContain('checklist')
-    expect(names).toContain(process.platform === 'win32' ? 'execute_powershell' : 'execute_bash')
+    expect(names).toContain('Read')
+    expect(names).toContain('Write')
+    expect(names).toContain('Edit')
+    expect(names).toContain('AppendFile')
+    expect(names).toContain('LS')
+    expect(names).toContain('Grep')
+    expect(names).toContain('Glob')
+    expect(names).toContain('MoveFile')
+    expect(names).toContain('CopyFile')
+    expect(names).toContain('DeleteFile')
+    expect(names).toContain('WebFetch')
+    expect(names).toContain('AskUserQuestion')
+    expect(names).toContain('TodoWrite')
+    expect(names).toContain(process.platform === 'win32' ? 'PowerShell' : 'Bash')
   })
 })

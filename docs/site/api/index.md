@@ -55,10 +55,10 @@ data: {"type":"done","usage":{"inputTokens":150,"outputTokens":42}}
 | `tool_call_start` | `id`, `name` | Tool invocation begins |
 | `tool_call_delta` | `id`, `argsDelta` | Tool argument streaming |
 | `tool_call_end` | `id` | Tool invocation complete |
-| `ask_user` | `question`, `sessionId` | Agent needs user input — loop suspended |
+| `AskUserQuestion` | `question`, `sessionId` | Agent needs user input — loop suspended |
 | `done` | `usage` (optional) | Stream complete |
 
-When `ask_user` is emitted, the agent loop is suspended. Send a new `/chat` request with the same `sessionId` to continue the conversation.
+When `AskUserQuestion` is emitted, the agent loop is suspended. Send a new `/chat` request with the same `sessionId` to continue the conversation.
 
 ## POST /chat/sync
 

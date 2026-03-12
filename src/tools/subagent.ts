@@ -6,7 +6,7 @@ import { accumulateUsage } from '../providers/utils'
 import type { CompactionConfig } from '../agent/context-compaction'
 
 /** Tools that can't work from a background fork */
-const EXCLUDED_TOOLS = new Set(['subagent', 'ask_user'])
+const EXCLUDED_TOOLS = new Set(['Agent', 'AskUserQuestion'])
 
 export interface SubagentToolOptions {
   provider: IProvider
@@ -32,7 +32,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
   const maxIterations = options.maxIterations ?? 50
 
   return {
-    name: 'subagent',
+    name: 'Agent',
     description:
       'Fork parallel copies of yourself to work on independent tasks simultaneously. ' +
       'Each fork inherits your tools, model, and system prompt but gets a fresh conversation. ' +

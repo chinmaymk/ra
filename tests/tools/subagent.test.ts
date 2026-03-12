@@ -43,7 +43,7 @@ describe('subagent tool', () => {
 
   it('has correct name and schema', () => {
     const tool = subagentTool(baseOptions())
-    expect(tool.name).toBe('subagent')
+    expect(tool.name).toBe('Agent')
     expect(tool.inputSchema.required).toContain('tasks')
   })
 
@@ -248,15 +248,15 @@ describe('subagent tool', () => {
     })
 
     const tools = new ToolRegistry()
-    tools.register({ name: 'ask_user', description: 'ask', inputSchema: {}, execute: async () => 'answer' })
-    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
+    tools.register({ name: 'AskUserQuestion', description: 'ask', inputSchema: {}, execute: async () => 'answer' })
+    tools.register({ name: 'Read', description: 'read', inputSchema: {}, execute: async () => 'content' })
 
     const tool = subagentTool({ provider, tools, model: 'test' })
     await tool.execute({ tasks: [{ task: 'test' }] })
 
-    expect(capturedTools).toContain('read_file')
-    expect(capturedTools).not.toContain('ask_user')
-    expect(capturedTools).toContain('subagent')
+    expect(capturedTools).toContain('Read')
+    expect(capturedTools).not.toContain('AskUserQuestion')
+    expect(capturedTools).toContain('Agent')
   })
 
   it('forks inherit memory tools', async () => {
@@ -269,12 +269,12 @@ describe('subagent tool', () => {
     tools.register({ name: 'memory_save', description: 'save', inputSchema: {}, execute: async () => 'ok' })
     tools.register({ name: 'memory_search', description: 'search', inputSchema: {}, execute: async () => '[]' })
     tools.register({ name: 'memory_forget', description: 'forget', inputSchema: {}, execute: async () => '0' })
-    tools.register({ name: 'read_file', description: 'read', inputSchema: {}, execute: async () => 'content' })
+    tools.register({ name: 'Read', description: 'read', inputSchema: {}, execute: async () => 'content' })
 
     const tool = subagentTool({ provider, tools, model: 'test' })
     await tool.execute({ tasks: [{ task: 'test' }] })
 
-    expect(capturedTools).toContain('read_file')
+    expect(capturedTools).toContain('Read')
     expect(capturedTools).toContain('memory_save')
     expect(capturedTools).toContain('memory_search')
     expect(capturedTools).toContain('memory_forget')
@@ -311,7 +311,7 @@ describe('subagent tool', () => {
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test', maxDepth: 1, _depth: 0 })
     await tool.execute({ tasks: [{ task: 'test' }] })
 
-    expect(capturedTools[0]).not.toContain('subagent')
+    expect(capturedTools[0]).not.toContain('Agent')
   })
 
   it('children below max depth DO have subagent tool', async () => {
@@ -323,7 +323,7 @@ describe('subagent tool', () => {
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test', maxDepth: 3, _depth: 0 })
     await tool.execute({ tasks: [{ task: 'test' }] })
 
-    expect(capturedTools[0]).toContain('subagent')
+    expect(capturedTools[0]).toContain('Agent')
   })
 
   // ── maxIterations ─────────────────────────────────────────────────

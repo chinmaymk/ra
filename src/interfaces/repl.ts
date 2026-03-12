@@ -217,7 +217,7 @@ export class Repl {
         await this.options.storage.appendMessage(this.sessionId!, msg)
       }
 
-      // Detect ask_user — in REPL, just print the question; next input resumes naturally
+      // Detect AskUserQuestion — in REPL, just print the question; next input resumes naturally
       let askMsg: IMessage | undefined
       for (let i = result.messages.length - 1; i >= 0; i--) {
         const m = result.messages[i]!
