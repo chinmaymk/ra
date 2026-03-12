@@ -1,6 +1,6 @@
 # What is ra?
 
-ra is an agent you can take apart and put back together. One binary, nothing hidden behind abstractions you can't reach.
+ra is an agent you can take apart and put back together. Nothing hidden behind abstractions you can't reach.
 
 It doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](/middleware/) let you intercept every step — model calls, tool execution, streaming, all of it.
 
@@ -14,7 +14,7 @@ It gives you real control over [context](/core/context-control). Deterministic d
 
 Extended thinking for models that support it — watch the model reason in real time.
 
-It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), or [MCP server](/modes/mcp) — all from a single self-contained binary. No runtime dependencies.
+It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), or [MCP server](/modes/mcp). No runtime dependencies.
 
 Structured logs and traces per session, so you can actually see what your agent is doing.
 

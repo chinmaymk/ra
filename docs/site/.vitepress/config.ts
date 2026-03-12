@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'ra',
-  description: 'An agent you can take apart and put back together. One binary, nothing hidden.',
+  description: 'One Loop. Infinite Agents. An agent you can take apart and put back together.',
   base: '/ra/',
   appearance: 'dark',
   head: [
