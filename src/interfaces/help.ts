@@ -67,6 +67,10 @@ SKILL MANAGEMENT
     ra skill install github:user/repo        GitHub repository
     ra skill install https://example.com/s.tgz  URL tarball
 
+BUNDLE
+  ra bundle --output <path>           Compile a custom binary with config, skills & middleware
+  ra bundle --help                    Show bundle help
+
 ENV VARS
   RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
   RA_HTTP_PORT, RA_HTTP_TOKEN
@@ -99,4 +103,40 @@ EXAMPLES
   ra --mcp --mcp-server-port 4000
   ra --mcp-stdio
   ra --mcp-server-enabled --mcp-server-port 4000 --repl
+`.trim()
+
+export const BUNDLE_HELP = `
+ra bundle — compile a custom binary with embedded config, skills & middleware
+
+USAGE
+  ra bundle --output <path> [options]
+
+OPTIONS
+  --output, -o <path>    Output binary path (required)
+  --config, -c <path>    Config file to bundle (default: auto-discovered ra.config.*)
+  --name, -n <name>      Binary name shown in --help/--version (default: ra-custom)
+  --help, -h             Show this help message
+
+DESCRIPTION
+  Reads the current config (or the one specified by --config), discovers all
+  referenced middleware files and skill directories, and compiles everything
+  into a single self-contained binary.
+
+  The resulting binary:
+    - Has config, skills, and middleware baked in
+    - Does NOT load ra.config.* files at runtime
+    - Still reads RA_* env vars for API keys and a few overridable settings
+    - Accepts CLI flags like --model, --provider to override baked-in defaults
+    - Is not extensible — no dynamic skill dirs or middleware loading
+
+EXAMPLES
+  ra bundle -o ./my-agent
+  ra bundle -o ./review-bot -c recipes/code-review-agent/ra.config.yaml
+  ra bundle -o dist/my-agent -n my-agent
+
+  # Use the bundled binary
+  ./my-agent "What is the capital of France?"
+  cat code.ts | ./my-agent "review this"
+  ./my-agent --repl
+  RA_ANTHROPIC_API_KEY=sk-... ./my-agent "hello"
 `.trim()

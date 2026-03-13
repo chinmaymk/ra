@@ -7,6 +7,12 @@ export interface SkillCommand {
   args: string[]
 }
 
+export interface BundleCommand {
+  output: string
+  name?: string
+  configPath?: string
+}
+
 export interface ParsedArgsMeta {
   help: boolean
   version: boolean
@@ -21,6 +27,7 @@ export interface ParsedArgsMeta {
   memories?: string
   forget?: string
   skillCommand?: SkillCommand
+  bundleCommand?: BundleCommand
 }
 
 export interface ParsedArgs {
@@ -80,6 +87,52 @@ export function parseArgs(argv: string[]): ParsedArgs {
         files: [],
         skills: [],
         skillCommand: { action, args: subArgs },
+      },
+    }
+  }
+
+  // Check for bundle subcommand: ra bundle --output ./my-agent [--config path] [--name name]
+  if (userArgs[0] === 'bundle') {
+    const bundleArgs = userArgs.slice(1)
+    const { values: bv } = utilParseArgs({
+      args: bundleArgs,
+      options: {
+        output:  { type: 'string', short: 'o' },
+        config:  { type: 'string', short: 'c' },
+        name:    { type: 'string', short: 'n' },
+        help:    { type: 'boolean', short: 'h' },
+      },
+      strict: false,
+      allowPositionals: true,
+    })
+    if (bv.help || !bv.output) {
+      return {
+        config: {},
+        meta: {
+          help: true,
+          version: false,
+          showContext: false,
+          listMemories: false,
+          files: [],
+          skills: [],
+          bundleCommand: { output: bv.output as string ?? '' },
+        },
+      }
+    }
+    return {
+      config: {},
+      meta: {
+        help: false,
+        version: false,
+        showContext: false,
+        listMemories: false,
+        files: [],
+        skills: [],
+        bundleCommand: {
+          output: bv.output as string,
+          name: bv.name as string | undefined,
+          configPath: bv.config as string | undefined,
+        },
       },
     }
   }

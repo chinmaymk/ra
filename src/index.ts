@@ -3,7 +3,7 @@ import { loadConfig } from './config'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { errorMessage } from './utils/errors'
-import { HELP } from './interfaces/help'
+import { HELP, BUNDLE_HELP } from './interfaces/help'
 import { runExecScript, runSkillCommand, showContext, runMemoryCommand } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
@@ -45,6 +45,19 @@ async function handleEarlyExits(parsed: ReturnType<typeof parseArgs>): Promise<v
   if (parsed.meta.version) {
     const { versionString } = await import('./version')
     console.log(versionString())
+    process.exit(0)
+  }
+  if (parsed.meta.bundleCommand) {
+    if (parsed.meta.help || !parsed.meta.bundleCommand.output) {
+      console.log(BUNDLE_HELP)
+      process.exit(0)
+    }
+    const { bundle } = await import('./bundle')
+    await bundle({
+      output: parsed.meta.bundleCommand.output,
+      name: parsed.meta.bundleCommand.name,
+      configPath: parsed.meta.bundleCommand.configPath,
+    })
     process.exit(0)
   }
   if (parsed.meta.help) {
