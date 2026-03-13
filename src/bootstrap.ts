@@ -45,9 +45,17 @@ export interface AppContext {
   shutdown: () => Promise<void>
 }
 
+export interface BootstrapOverrides {
+  sessionId?: string
+  /** Pre-resolved skills — skips filesystem skill loading when provided. */
+  skills?: Map<string, Skill>
+  /** Pre-resolved middleware fns — merged after system middleware (observability, permissions, etc.). */
+  middleware?: Partial<MiddlewareConfig>
+}
+
 export async function bootstrap(
   config: RaConfig,
-  opts: { sessionId?: string },
+  opts: BootstrapOverrides = {},
 ): Promise<AppContext> {
   // ── Paths derived from dataDir ───────────────────────────────────
   const { join } = await import('path')
@@ -149,10 +157,17 @@ export async function bootstrap(
   }
 
   // ── Skills ─────────────────────────────────────────────────────────
-  const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
-  const skillMap = await loadSkills(resolvedSkillDirs)
-  if (skillMap.size > 0) {
-    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+  let skillMap: Map<string, Skill>
+  if (opts.skills) {
+    // Pre-resolved skills (e.g. from a bundled binary)
+    skillMap = new Map(opts.skills)
+    logger.info('skills loaded (pre-resolved)', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+  } else {
+    const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
+    skillMap = await loadSkills(resolvedSkillDirs)
+    if (skillMap.size > 0) {
+      logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+    }
   }
 
   const builtinSkills = loadBuiltinSkills(config.builtinSkills)
@@ -173,6 +188,19 @@ export async function bootstrap(
     const permMw = createPermissionsMiddleware(config.permissions)
     middleware.beforeToolExecution = [permMw, ...(middleware.beforeToolExecution ?? [])]
     logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
+  }
+
+  // ── Merge pre-resolved middleware overrides ─────────────────────────
+  if (opts.middleware) {
+    for (const key of Object.keys(opts.middleware)) {
+      const k = key as keyof MiddlewareConfig
+      const overrideFns = (opts.middleware as any)[k] ?? []
+      ;(middleware as any)[k] = [...((middleware as any)[k] ?? []), ...overrideFns]
+    }
+    const overrideCount = Object.values(opts.middleware).reduce((n, hooks) => n + ((hooks as unknown[])?.length ?? 0), 0)
+    if (overrideCount > 0) {
+      logger.info('bundled middleware merged', { hookCount: overrideCount })
+    }
   }
 
   // ── Prepend observability hooks (obs runs first) ───────────────────

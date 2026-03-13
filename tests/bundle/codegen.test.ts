@@ -84,7 +84,7 @@ describe('generateEntryPoint', () => {
     expect(source).toContain('onStreamChunk: [((ctx) => { console.log(ctx) })]')
   })
 
-  it('includes ra source imports', () => {
+  it('imports from ra/run instead of duplicating interface logic', () => {
     const source = generateEntryPoint({
       config: makeConfig(),
       embeddedSkills: [],
@@ -93,9 +93,27 @@ describe('generateEntryPoint', () => {
       binaryName: 'test-agent',
     })
 
+    expect(source).toContain("from '/home/user/ra/src/run'")
     expect(source).toContain("from '/home/user/ra/src/bootstrap'")
     expect(source).toContain("from '/home/user/ra/src/config'")
-    expect(source).toContain("from '/home/user/ra/src/agent/loop'")
+    // Should NOT contain duplicated interface code
+    expect(source).not.toContain('new AgentLoop')
+    expect(source).not.toContain('new HttpServer')
+    expect(source).not.toContain('new Repl')
+  })
+
+  it('passes skills and middleware as bootstrap overrides', () => {
+    const source = generateEntryPoint({
+      config: makeConfig(),
+      embeddedSkills: [],
+      middlewareImports: [],
+      raSourceDir: '/home/user/ra/src',
+      binaryName: 'test-agent',
+    })
+
+    expect(source).toContain('skills: BUNDLED_SKILLS')
+    expect(source).toContain('middleware: BUNDLED_MIDDLEWARE')
+    expect(source).toContain('await bootstrap(config, {')
   })
 
   it('strips middleware and configDir from serialized config', () => {
@@ -111,7 +129,6 @@ describe('generateEntryPoint', () => {
       binaryName: 'test-agent',
     })
 
-    // middleware is handled separately, not in BUNDLED_CONFIG
     expect(source).toContain('config.middleware = {}')
   })
 
@@ -128,7 +145,6 @@ describe('generateEntryPoint', () => {
       binaryName: 'test-agent',
     })
 
-    // skillDirs should be empty — skills are embedded, not loaded from disk
     expect(source).toContain('"skillDirs": []')
   })
 
@@ -141,7 +157,6 @@ describe('generateEntryPoint', () => {
       binaryName: 'test-agent',
     })
 
-    // Should pass a sentinel configPath to prevent loadConfig from discovering files
     expect(source).toContain("configPath: '__bundled__'")
   })
 
@@ -154,7 +169,6 @@ describe('generateEntryPoint', () => {
       binaryName: 'test-agent',
     })
 
-    // compaction should be in BUNDLED_CONFIG (not stripped)
     expect(source).toContain('"compaction"')
     expect(source).toContain('"threshold"')
   })
@@ -177,7 +191,6 @@ describe('generateEntryPoint', () => {
       binaryName: 'test-agent',
     })
 
-    // Should escape backticks and dollar signs for template literal safety
     expect(source).toContain('\\`code\\`')
     expect(source).toContain('\\$variable')
     expect(source).toContain('\\${template}')
