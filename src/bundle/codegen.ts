@@ -31,9 +31,10 @@ function serializeConfig(config: RaConfig): string {
   const serializable: Record<string, unknown> = { ...config }
   delete serializable.middleware
   delete serializable.configDir
-  delete serializable.compaction  // rebuilt at runtime
+  // Clear skillDirs — skills are embedded, no filesystem scanning at runtime
+  serializable.skillDirs = []
 
-  // Remove functions and undefined values
+  // Remove functions and undefined values (e.g. compaction.onCompact callback)
   return JSON.stringify(serializable, (_, v) => {
     if (typeof v === 'function') return undefined
     return v
@@ -181,9 +182,10 @@ ENV VARS
     }
   }
 
-  // Load config starting from bundled defaults, then overlay env + CLI flags
+  // Load config with env vars + CLI flags only (skip config file discovery — everything is bundled)
   const config = await loadConfig({
     cwd: process.cwd(),
+    configPath: '__bundled__',
     cliArgs: parsed.config,
     env: process.env,
   })

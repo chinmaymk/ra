@@ -115,6 +115,50 @@ describe('generateEntryPoint', () => {
     expect(source).toContain('config.middleware = {}')
   })
 
+  it('clears skillDirs in serialized config', () => {
+    const config = makeConfig({
+      skillDirs: ['./skills', '.claude/skills'],
+    })
+
+    const source = generateEntryPoint({
+      config,
+      embeddedSkills: [],
+      middlewareImports: [],
+      raSourceDir: '/home/user/ra/src',
+      binaryName: 'test-agent',
+    })
+
+    // skillDirs should be empty — skills are embedded, not loaded from disk
+    expect(source).toContain('"skillDirs": []')
+  })
+
+  it('skips config file discovery at runtime', () => {
+    const source = generateEntryPoint({
+      config: makeConfig(),
+      embeddedSkills: [],
+      middlewareImports: [],
+      raSourceDir: '/home/user/ra/src',
+      binaryName: 'test-agent',
+    })
+
+    // Should pass a sentinel configPath to prevent loadConfig from discovering files
+    expect(source).toContain("configPath: '__bundled__'")
+  })
+
+  it('preserves compaction settings in serialized config', () => {
+    const source = generateEntryPoint({
+      config: makeConfig(),
+      embeddedSkills: [],
+      middlewareImports: [],
+      raSourceDir: '/home/user/ra/src',
+      binaryName: 'test-agent',
+    })
+
+    // compaction should be in BUNDLED_CONFIG (not stripped)
+    expect(source).toContain('"compaction"')
+    expect(source).toContain('"threshold"')
+  })
+
   it('escapes backticks and dollar signs in skill bodies', () => {
     const skills: EmbeddedSkill[] = [{
       name: 'escape-test',
