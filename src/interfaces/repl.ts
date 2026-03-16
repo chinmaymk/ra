@@ -189,8 +189,9 @@ export class Repl {
       storage: this.options.storage,
       sessionId: this.sessionId!,
       obsConfig: this.options.obsConfig,
+      logger: this.options.logger,
     })
-    const userMw = session.middleware ?? {}
+    const mw = session.middleware
 
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -201,9 +202,9 @@ export class Repl {
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
-      logger: session.logger ?? this.options.logger,
+      logger: session.logger,
       middleware: {
-        ...userMw,
+        ...mw,
         onStreamChunk: [
           async (ctx: StreamChunkContext) => {
             if (ctx.chunk.type === 'thinking') {
@@ -227,7 +228,7 @@ export class Repl {
               process.stdout.write(streamBuf!.write(ctx.chunk.delta))
             }
           },
-        ].concat(userMw.onStreamChunk ?? []),
+        ].concat(mw.onStreamChunk),
         beforeToolExecution: [
           async (ctx: ToolExecutionContext) => {
             // TS narrows streamBuf to null (closure writes aren't tracked); cast back
@@ -237,13 +238,13 @@ export class Repl {
             toolStartTimes.set(ctx.toolCall.id, Date.now())
             tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
           },
-        ].concat(userMw.beforeToolExecution ?? []),
+        ].concat(mw.beforeToolExecution),
         afterToolExecution: [
           async (ctx: ToolResultContext) => {
             tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
             tui.startSpinner()
           },
-        ].concat(userMw.afterToolExecution ?? []),
+        ].concat(mw.afterToolExecution),
       },
     })
 

@@ -95,6 +95,7 @@ function createMcpHandler(app: AppContext) {
       storage: app.storage,
       sessionId: session.id,
       obsConfig: app.obsConfig,
+      logger: app.logger,
     })
     const loop = new AgentLoop({
       provider: app.provider,
@@ -104,7 +105,7 @@ function createMcpHandler(app: AppContext) {
       toolTimeout: app.config.toolTimeout,
       middleware: loopSession.middleware,
       compaction: app.config.compaction,
-      logger: loopSession.logger ?? app.logger,
+      logger: loopSession.logger,
       sessionId: session.id,
     })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)

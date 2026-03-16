@@ -150,6 +150,7 @@ export class HttpServer {
       storage: this.options.storage,
       sessionId,
       obsConfig: this.options.obsConfig,
+      logger: this.options.logger,
     })
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -161,7 +162,7 @@ export class HttpServer {
       sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
-      logger: session.logger ?? this.options.logger,
+      logger: session.logger,
     })
 
     try {
@@ -214,11 +215,11 @@ export class HttpServer {
           storage: opts.storage,
           sessionId,
           obsConfig: opts.obsConfig,
+          logger: opts.logger,
         })
-        const loopMw = session.middleware ?? {}
-        const middleware: Partial<MiddlewareConfig> = {
-          ...loopMw,
-          onStreamChunk: (loopMw?.onStreamChunk ?? []).concat(onStreamChunk),
+        const middleware: MiddlewareConfig = {
+          ...session.middleware,
+          onStreamChunk: session.middleware.onStreamChunk.concat(onStreamChunk),
         }
 
         const loop = new AgentLoop({
@@ -231,7 +232,7 @@ export class HttpServer {
           sessionId,
           thinking: opts.thinking,
           compaction: opts.compaction,
-          logger: session.logger ?? opts.logger,
+          logger: session.logger,
         })
 
         try {

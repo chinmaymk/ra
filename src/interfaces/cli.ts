@@ -80,17 +80,16 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   }
 
   const session = storage && sessionId
-    ? createLoopMiddleware(middleware, { storage, sessionId, obsConfig })
-    : { middleware, logger: undefined, tracer: undefined }
-  const loopMw = session.middleware ?? {}
+    ? createLoopMiddleware(middleware, { storage, sessionId, obsConfig, logger })
+    : { middleware: middleware ?? {}, logger }
   const loop = new AgentLoop({
     provider, tools, model, maxIterations, toolTimeout, thinking, compaction, sessionId,
-    logger: session.logger ?? logger,
+    logger: session.logger,
     middleware: {
-      ...loopMw,
+      ...session.middleware,
       onStreamChunk: [
         async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) },
-      ].concat(loopMw?.onStreamChunk ?? []),
+      ].concat(session.middleware.onStreamChunk ?? []),
     },
   })
 
