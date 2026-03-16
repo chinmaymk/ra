@@ -24,7 +24,17 @@
 
 ---
 
-Ra is an agent loop you configure with a YAML file and run as a single binary. The config lives in your repo — skills, permissions, model routing, middleware — versioned and reviewable like any other piece of your infrastructure. When a new engineer clones the project, they get the same agent behavior everyone else has. No setup docs. It's just there.
+Ra is an agent loop you configure with a YAML file and run as a single binary. It reads stdin, talks to the model, writes to stdout. Pipe it, chain it, cron it. Run it as a CLI, REPL, HTTP server, or MCP server. No runtime dependencies.
+
+```bash
+ra "What is the capital of France?"
+ra --provider openai --model gpt-4.1 "Explain this error"
+ra --skill code-review --file diff.patch "Review this diff"
+cat server.log | ra "Find the root cause of these errors"
+ra   # interactive REPL
+```
+
+The config lives in your repo — skills, permissions, model routing, middleware — versioned and reviewable. When a new engineer clones the project, they get the same agent behavior everyone else has. No setup docs. It's just there.
 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
@@ -42,9 +52,9 @@ permissions:
         deny: ["--force", "--hard"]
 ```
 
-Nothing is hidden behind abstractions you can't reach. Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — ra has an answer: here's the config, here's the middleware, here's the [audit log](#observability).
+Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [9 middleware hooks](#middleware) intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](#observability).
 
-It talks to 6 providers, and different models are better at different tasks. Ra lets you route different skills to different models — Sonnet for deep code review, Flash for quick docs, a local Ollama model for code that shouldn't leave your machine:
+It talks to [6 providers](#providers), and different models are better at different tasks. Route skills to different models — Sonnet for deep code review, Flash for quick docs, a local Ollama model for code that shouldn't leave your machine:
 
 ```yaml
 skills:
@@ -60,16 +70,6 @@ skills:
 ```
 
 The sensitive stuff never leaves your machine. The expensive reasoning only runs when needed. One config, three providers, no code changes.
-
-It reads stdin, talks to the model, writes to stdout — composes the same way shell commands do. Pipe it, chain it, cron it. Run it as a CLI, REPL, HTTP server, or MCP server. No runtime dependencies.
-
-```bash
-ra "What is the capital of France?"
-ra --provider openai --model gpt-4.1 "Explain this error"
-ra --skill code-review --file diff.patch "Review this diff"
-cat server.log | ra "Find the root cause of these errors"
-ra   # interactive REPL
-```
 
 ## Install
 
@@ -184,7 +184,7 @@ Two built-in resolvers (`@` for files/globs, `url:` for URLs) are enabled by def
 
 ## Providers
 
-Same config, any backend. Switch with a flag.
+Six backends. Switch with a flag or set it in config.
 
 ```bash
 ra --provider anthropic --model claude-sonnet-4-6 "Review this PR"
@@ -515,7 +515,7 @@ Reviews diffs for correctness, style, and performance. Connects to GitHub via MC
 ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review this"
 ```
 
-The same pattern works for any repeatable workflow — standup prep that reads your git log and open PRs, dependency upgrade bots that audit `package.json` and open PRs with test results, incident postmortem drafters, new-engineer onboarding agents that answer questions using your actual codebase as context. Each is a config file committed to your repo.
+The same pattern works for any repeatable workflow — standup prep from your git log, dependency upgrade bots, incident postmortem drafters, onboarding agents that answer questions using your actual codebase. Each is a config file you can fork and commit to your repo.
 
 ## GitHub Actions
 
