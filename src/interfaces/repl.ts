@@ -12,6 +12,7 @@ import type { CompactionConfig } from '../agent/context-compaction'
 import type { MemoryStore } from '../memory/store'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
+import type { AppContext } from '../bootstrap'
 import * as tui from './tui'
 
 export interface ReplOptions {
@@ -29,6 +30,30 @@ export interface ReplOptions {
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
   memoryStore?: MemoryStore
+  /** Optional command interceptor — return a string to handle the command, undefined to fall through. */
+  onCommand?: (input: string) => string | undefined
+  /** Extra text to display after the header on start. */
+  headerExtra?: string
+}
+
+/** Build ReplOptions from an AppContext. */
+export function toReplOptions(app: AppContext): ReplOptions {
+  return {
+    model: app.config.model,
+    provider: app.provider,
+    tools: app.tools,
+    storage: app.storage,
+    systemPrompt: app.config.systemPrompt,
+    skillMap: app.skillMap,
+    maxIterations: app.config.maxIterations,
+    toolTimeout: app.config.toolTimeout,
+    sessionId: app.sessionId,
+    middleware: app.middleware,
+    thinking: app.config.thinking,
+    compaction: app.config.compaction,
+    contextMessages: app.contextMessages,
+    memoryStore: app.memoryStore,
+  }
 }
 
 export interface ReplAgentState {
@@ -125,6 +150,7 @@ export class Repl {
     }
 
     tui.printHeader(this.options.model, this.sessionId!)
+    if (this.options.headerExtra) console.log(this.options.headerExtra)
     if (this.options.sessionId) {
       tui.printResumeHeader(this.sessionId!, this.messages.length)
     }
@@ -175,7 +201,7 @@ export class Repl {
       inflight = (async () => {
         if (trimmed.startsWith('/')) {
           try {
-            const response = await this.handleCommand(trimmed)
+            const response = this.options.onCommand?.(trimmed) ?? await this.handleCommand(trimmed)
             if (response) tui.printCommandResponse(response)
           } catch (err) {
             tui.printError(errorMessage(err))

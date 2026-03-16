@@ -10,6 +10,28 @@ import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
 import { errorMessage } from '../utils/errors'
 import type { MultiAgentContext } from '../multi-agent'
+import type { AppContext } from '../bootstrap'
+
+/** Build HttpOptions from an AppContext. */
+export function toHttpOptions(app: AppContext, overrides?: { agents?: MultiAgentContext }): HttpOptions {
+  return {
+    port: app.config.http.port,
+    token: app.config.http.token || undefined,
+    model: app.config.model,
+    provider: app.provider,
+    tools: app.tools,
+    storage: app.storage,
+    systemPrompt: app.config.systemPrompt,
+    skillMap: app.skillMap,
+    maxIterations: app.config.maxIterations,
+    toolTimeout: app.config.toolTimeout,
+    middleware: app.middleware,
+    thinking: app.config.thinking,
+    compaction: app.config.compaction,
+    contextMessages: app.contextMessages,
+    ...overrides,
+  }
+}
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -108,22 +130,7 @@ export class HttpServer {
     if (!agentName || !this.options.agents) return this.options
     const app = this.options.agents.agents.get(agentName)
     if (!app) return null
-    return {
-      port: this.options.port,
-      token: this.options.token,
-      model: app.config.model,
-      provider: app.provider,
-      tools: app.tools,
-      storage: app.storage,
-      systemPrompt: app.config.systemPrompt,
-      skillMap: app.skillMap,
-      maxIterations: app.config.maxIterations,
-      toolTimeout: app.config.toolTimeout,
-      middleware: app.middleware,
-      thinking: app.config.thinking,
-      compaction: app.config.compaction,
-      contextMessages: app.contextMessages,
-    }
+    return toHttpOptions(app)
   }
 
   private prependSystemWith(opts: HttpOptions, messages: IMessage[]): IMessage[] {

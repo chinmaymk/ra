@@ -38,22 +38,28 @@ function deepMerge(
   return result
 }
 
+async function walkUpForFile(cwd: string, fileNames: string[]): Promise<string | undefined> {
+  let dir = cwd
+  while (true) {
+    for (const name of fileNames) {
+      const full = join(dir, name)
+      if (await Bun.file(full).exists()) return full
+    }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return undefined
+}
+
 async function loadConfigFile(cwd: string, configPath?: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
   if (configPath) {
     const full = isAbsolute(configPath) ? configPath : join(cwd, configPath)
     if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
     return { config: {} }
   }
-  let dir = cwd
-  while (true) {
-    for (const name of CONFIG_FILES) {
-      const full = join(dir, name)
-      if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
-    }
-    const parent = dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
+  const found = await walkUpForFile(cwd, CONFIG_FILES)
+  if (found) return { config: await parseFile(found), filePath: found }
   return { config: {} }
 }
 
@@ -131,16 +137,8 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
 }
 
 async function loadAgentsFile(cwd: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
-  let dir = cwd
-  while (true) {
-    for (const name of AGENTS_FILES) {
-      const full = join(dir, name)
-      if (await Bun.file(full).exists()) return { config: await parseFile(full) as Partial<RaConfig>, filePath: full }
-    }
-    const parent = dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
+  const found = await walkUpForFile(cwd, AGENTS_FILES)
+  if (found) return { config: await parseFile(found) as Partial<RaConfig>, filePath: found }
   return { config: {} }
 }
 

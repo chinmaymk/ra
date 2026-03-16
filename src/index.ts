@@ -6,8 +6,8 @@ import { errorMessage } from './utils/errors'
 import { HELP } from './interfaces/help'
 import { runExecScript, runSkillCommand, showContext, runMemoryCommand } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
-import { Repl } from './interfaces/repl'
-import { HttpServer } from './interfaces/http'
+import { Repl, toReplOptions } from './interfaces/repl'
+import { HttpServer, toHttpOptions } from './interfaces/http'
 import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
@@ -174,32 +174,25 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
   await app.shutdown()
 }
 
-async function launchHttp(app: AppContext, signals: { remove: () => void }): Promise<void> {
-  const stopMcpHttp = await startSidecarMcp(app)
+async function launchHttp(
+  app: AppContext,
+  signals: { remove: () => void },
+  overrides?: { port?: number; token?: string; agents?: MultiAgentContext; shutdown?: () => Promise<void> },
+): Promise<void> {
+  const stopMcpHttp = overrides ? null : await startSidecarMcp(app)
+  const opts = toHttpOptions(app, { agents: overrides?.agents })
+  if (overrides?.port) opts.port = overrides.port
+  if (overrides?.token) opts.token = overrides.token
 
-  const httpServer = new HttpServer({
-    port: app.config.http.port,
-    token: app.config.http.token || undefined,
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    toolTimeout: app.config.toolTimeout,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
-  })
+  const httpServer = new HttpServer(opts)
   await httpServer.start()
   console.error(`HTTP server listening on port ${httpServer.port}`)
 
+  const shutdownFn = overrides?.shutdown ?? app.shutdown
   const httpShutdown = async () => {
     try { await httpServer.stop() } catch { /* best-effort */ }
     try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }
-    await app.shutdown()
+    await shutdownFn()
   }
   signals.remove()
   onSignals(httpShutdown)
@@ -208,23 +201,7 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
 
 async function launchRepl(app: AppContext): Promise<void> {
   const stopMcpHttp = await startSidecarMcp(app)
-
-  const repl = new Repl({
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    toolTimeout: app.config.toolTimeout,
-    sessionId: app.sessionId,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
-    memoryStore: app.memoryStore,
-  })
+  const repl = new Repl(toReplOptions(app))
   await repl.start()
   try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }
   await app.shutdown()
@@ -308,35 +285,13 @@ async function launchMultiAgentHttp(
   config: RaConfig,
   signals: { remove: () => void },
 ): Promise<void> {
-  // Use the first agent's config for HTTP server settings, but route per-agent
   const firstApp = ctx.agents.values().next().value!
-  const httpServer = new HttpServer({
+  return launchHttp(firstApp, signals, {
     port: config.http?.port ?? firstApp.config.http.port,
     token: config.http?.token || firstApp.config.http.token || undefined,
-    model: firstApp.config.model,
-    provider: firstApp.provider,
-    tools: firstApp.tools,
-    storage: firstApp.storage,
-    systemPrompt: firstApp.config.systemPrompt,
-    skillMap: firstApp.skillMap,
-    maxIterations: firstApp.config.maxIterations,
-    toolTimeout: firstApp.config.toolTimeout,
-    middleware: firstApp.middleware,
-    thinking: firstApp.config.thinking,
-    compaction: firstApp.config.compaction,
-    contextMessages: firstApp.contextMessages,
     agents: ctx,
+    shutdown: ctx.shutdown,
   })
-  await httpServer.start()
-  console.error(`HTTP server listening on port ${httpServer.port}`)
-
-  const httpShutdown = async () => {
-    try { await httpServer.stop() } catch { /* best-effort */ }
-    await ctx.shutdown()
-  }
-  signals.remove()
-  onSignals(httpShutdown)
-  await new Promise(() => {}) // keep alive
 }
 
 async function launchMultiAgentMcp(
