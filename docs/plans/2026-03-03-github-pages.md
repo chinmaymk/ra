@@ -390,7 +390,7 @@ You get a `›` prompt. Type. It streams back, runs tools, saves the conversatio
 
 - [Configure a provider](/providers/anthropic) — set your API key
 - [Learn the modes](/modes/cli) — CLI, REPL, HTTP, MCP
-- [Explore layered config](/concepts/config) — file → env → CLI
+- [Explore layered config](/concepts/config) — file > env > CLI
 ```
 
 **Step 3: Commit**
@@ -448,7 +448,7 @@ That's what makes ra powerful for **agentic loops**. Drop a config file alongsid
 | **Skills** | Reusable instruction bundles — roles, behaviors, and assets |
 | **File attachments** | Attach files in CLI and REPL |
 | **Session storage** | Persist conversations, resume later, auto-prune old ones |
-| **Layered config** | File → env → CLI override order; commit a baseline, tweak per-run |
+| **Layered config** | File > env > CLI override order; commit a baseline, tweak per-run |
 ```
 
 **Step 2: Create `docs/site/concepts/config.md`**

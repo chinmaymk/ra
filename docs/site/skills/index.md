@@ -162,9 +162,9 @@ git diff --staged
 | Extension | Default runtime | Shebang example |
 |-----------|----------------|-----------------|
 | `.sh` | `sh` | `#!/bin/bash` |
-| `.py` | `python3` → `python` | `#!/usr/bin/env python3` |
-| `.ts` | `bun` → `node` → `deno` | `#!/usr/bin/env bun` |
-| `.js` | `bun` → `node` → `deno` | `#!/usr/bin/env node` |
+| `.py` | `python3` > `python` | `#!/usr/bin/env python3` |
+| `.ts` | `bun` > `node` > `deno` | `#!/usr/bin/env bun` |
+| `.js` | `bun` > `node` > `deno` | `#!/usr/bin/env node` |
 | `.go` | `go run` | `#!/usr/bin/env go` |
 
 TypeScript and JavaScript scripts prefer Bun, falling back to Node then Deno. If a shebang is present, it takes priority over extension-based detection.
