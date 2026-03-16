@@ -9,7 +9,6 @@
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> &middot;
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#the-agent-loop">The Agent Loop</a> &middot;
@@ -17,6 +16,11 @@
   <a href="#tools">Tools</a> &middot;
   <a href="#skills">Skills</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
+  <a href="#mcp-server">MCP Server</a> &middot;
+  <a href="#parallel-agents">Parallel Agents</a> &middot;
+  <a href="#observability">Observability</a> &middot;
+  <a href="#memory">Memory</a> &middot;
+  <a href="#context-discovery">Context Discovery</a> &middot;
   <a href="#interfaces">Interfaces</a> &middot;
   <a href="#configuration">Configuration</a>
 </p>
@@ -69,14 +73,6 @@ ra --mcp-stdio --skill code-review
 # Serve a streaming HTTP API for your product
 ra --http --http-port 3000
 ```
-
-## Features
-
-- **[MCP Server](https://chinmaymk.github.io/ra/modes/mcp/)** — Run ra as an MCP server so tools like Cursor, Claude Desktop, or other agents can call it directly. Any skill becomes an externally-invocable tool with a single flag.
-- **[Parallel Agents](https://chinmaymk.github.io/ra/tools/#agent)** — Fork sub-agents to work on independent tasks simultaneously. The built-in `Agent` tool spawns parallel copies of the loop, each with its own context, and merges results back.
-- **[Observability](https://chinmaymk.github.io/ra/observability/)** — Structured event logs for every model call, tool execution, and middleware hook. Stream to stdout, a file, or an external collector. Know exactly what your agent did and why.
-- **[Memory](https://chinmaymk.github.io/ra/memory/)** — SQLite-backed persistent memory that survives across sessions. The agent can store and retrieve facts, decisions, and context without re-reading files every time.
-- **[Context Discovery](https://chinmaymk.github.io/ra/context/)** — Automatically discovers and loads project context from `CLAUDE.md`, `ra.config.yml`, and glob patterns. The agent starts every session already knowing your repo's conventions and rules.
 
 ## Install
 
@@ -170,6 +166,61 @@ export default async (ctx) => {
 ```
 
 Hooks are available for every phase: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelResponse`, `beforeToolExecution`, `afterToolExecution`, `afterLoopIteration`, `afterLoopComplete`, and `onError`.
+
+## [MCP Server](https://chinmaymk.github.io/ra/modes/mcp/)
+
+Ra can run as an MCP server, turning any skill into a tool that Cursor, Claude Desktop, or other MCP-aware agents can call directly. One flag and your agent is available to other tools in your workflow.
+
+```bash
+ra --mcp-stdio --skill code-review          # expose as a stdio MCP server
+ra --mcp --mcp-port 4000 --skill architect   # expose over HTTP
+```
+
+Ra also speaks MCP as a client — connect to external MCP servers and their tools become available to the model alongside the built-in ones.
+
+## [Parallel Agents](https://chinmaymk.github.io/ra/tools/#agent)
+
+The built-in `Agent` tool spawns parallel copies of the agent loop to work on independent tasks simultaneously. Each sub-agent gets its own context and tool access, runs to completion, and returns its result to the parent. Use it to fan out across files, run multiple investigations at once, or divide a large task into parallel workstreams.
+
+```yaml
+# allow the model to spawn up to 4 parallel agents
+tools:
+  agent:
+    maxConcurrency: 4
+```
+
+## [Observability](https://chinmaymk.github.io/ra/observability/)
+
+Every model call, tool execution, and middleware hook emits structured events. Stream them to stdout, a file, or an external collector. When something goes wrong — or someone asks what the agent did — you have a complete, machine-readable trace.
+
+```bash
+ra --log-level debug --log-file agent.log "Fix the failing test"
+```
+
+Events include token usage, latency, tool inputs/outputs, and middleware decisions. Pair with the `afterLoopComplete` hook to ship traces to your observability stack.
+
+## [Memory](https://chinmaymk.github.io/ra/memory/)
+
+SQLite-backed persistent memory that survives across sessions. The agent can store facts, decisions, and learned context — then recall them in future sessions without re-reading files or re-asking questions. Memory is scoped per-project and searchable.
+
+```bash
+ra "Remember that our API rate limit is 1000 req/min"
+# later, in a new session:
+ra "What's our API rate limit?"   # recalls from memory
+```
+
+## [Context Discovery](https://chinmaymk.github.io/ra/context/)
+
+Ra automatically discovers and loads project context at startup. It finds `CLAUDE.md` files, `ra.config.yml`, and any files matching configured glob patterns — so the agent starts every session already knowing your repo's conventions, architecture, and rules.
+
+```yaml
+context:
+  - "CLAUDE.md"
+  - "docs/architecture.md"
+  - "src/**/*.prompt.md"
+```
+
+No manual copy-pasting of instructions. Check your context files into the repo and every engineer — and every agent session — gets the same baseline.
 
 ## Interfaces
 
