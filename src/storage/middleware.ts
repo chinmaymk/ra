@@ -1,4 +1,4 @@
-import type { LoopContext, ModelCallContext, ErrorContext, MiddlewareConfig } from '../agent/types'
+import type { LoopContext, ModelCallContext, MiddlewareConfig } from '../agent/types'
 import type { SessionStorage } from './sessions'
 import { createObservability, createObservabilityMiddleware, type ObservabilityConfig } from '../observability'
 import type { Logger } from '../observability/logger'
@@ -99,8 +99,8 @@ export function createLoopMiddleware(
       sessionId: options.sessionId,
       sessionDir,
     })
-    sessionLogger = logger as Logger
-    sessionTracer = tracer as Tracer
+    sessionLogger = logger
+    sessionTracer = tracer
 
     const obsMw = createObservabilityMiddleware(logger, tracer)
 
