@@ -85,6 +85,11 @@ async function handleStandaloneCommands(
 
 function createMcpHandler(app: AppContext) {
   return async (input: unknown) => {
+    const session = await app.storage.create({
+      provider: app.provider.name,
+      model: app.config.model,
+      interface: 'mcp',
+    })
     const loop = new AgentLoop({
       provider: app.provider,
       tools: app.tools,
@@ -94,12 +99,16 @@ function createMcpHandler(app: AppContext) {
       middleware: app.middleware,
       compaction: app.config.compaction,
       logger: app.logger,
+      sessionId: session.id,
     })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const messages: IMessage[] = []
     if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
     messages.push(...app.contextMessages, { role: 'user', content: prompt })
+    const priorCount = messages.length
     const result = await loop.run(messages)
+    const newMessages = result.messages.slice(priorCount)
+    await Promise.all(newMessages.map(msg => app.storage.appendMessage(session.id, msg)))
     const last = result.messages.at(-1)
     return last ? serializeContent(last.content) : ''
   }
