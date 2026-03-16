@@ -2,97 +2,89 @@ import type { LoopContext, ModelCallContext, MiddlewareConfig } from '../agent/t
 import type { SessionStorage } from './sessions'
 import { createObservability, createObservabilityMiddleware, type ObservabilityConfig } from '../observability'
 import type { Logger } from '../observability/logger'
-import type { Tracer } from '../observability/tracer'
+
+// ── Helpers ──────────────────────────────────────────────────────────
 
 /**
- * Creates per-session middleware hooks that persist messages to storage in
- * real time.  Each call returns a fresh set of hooks with their own closure
- * state — no shared mutable maps, no concurrency concerns.
+ * Concatenates multiple partial middleware configs into one.  Hooks from
+ * later layers run after hooks from earlier layers.
  *
- * Hooks into `afterLoopIteration` to append new messages after each model
- * call + tool execution cycle.  A `beforeModelCall` hook tracks the message
- * count after context compaction (which shrinks the array in-place) so the
- * iteration hook knows where "new" messages start.
+ *   concatMiddleware(obsHooks, baseHooks, historyHooks)
+ *   // → each hook array is [...obs, ...base, ...history]
  */
-function createSessionHistoryHooks(storage: SessionStorage) {
+function concatMiddleware(
+  ...layers: (Partial<MiddlewareConfig> | undefined)[]
+): Partial<MiddlewareConfig> {
+  const result: Partial<MiddlewareConfig> = {}
+  for (const layer of layers) {
+    if (!layer) continue
+    for (const key of Object.keys(layer) as (keyof MiddlewareConfig)[]) {
+      const existing = result[key] as unknown[] | undefined
+      const incoming = layer[key] as unknown[] | undefined
+      if (incoming?.length) {
+        ;(result as Record<string, unknown[]>)[key] = [...(existing ?? []), ...incoming]
+      }
+    }
+  }
+  return result
+}
+
+/**
+ * Returns middleware hooks that persist new messages to storage in real
+ * time.  Each call returns fresh closure state — safe for concurrent use.
+ *
+ * `beforeLoopBegin` snapshots the initial message count.
+ * `beforeModelCall` re-snapshots after context compaction shrinks the array.
+ * `afterLoopIteration` appends only the messages added since the snapshot.
+ */
+function createHistoryHooks(storage: SessionStorage): Partial<MiddlewareConfig> {
   let lastCount = 0
 
-  const beforeLoopBegin = async (ctx: LoopContext): Promise<void> => {
-    lastCount = ctx.messages.length
-  }
-
-  const beforeModelCall = async (ctx: ModelCallContext): Promise<void> => {
-    // Context compaction (a prior beforeModelCall middleware) may have shrunk
-    // the messages array in-place.  Snap the baseline to the compacted length
-    // so afterLoopIteration captures messages added during this iteration.
-    if (ctx.request.messages.length < lastCount) {
-      lastCount = ctx.request.messages.length
-    }
-  }
-
-  const afterLoopIteration = async (ctx: LoopContext): Promise<void> => {
-    const newMessages = ctx.messages.slice(lastCount)
-    if (newMessages.length > 0) {
-      await storage.appendMessages(ctx.sessionId, newMessages)
-    }
-    lastCount = ctx.messages.length
-  }
-
-  return { beforeLoopBegin, beforeModelCall, afterLoopIteration }
-}
-
-/**
- * Returns a new middleware config with per-session history hooks merged in.
- * Call this each time you create an AgentLoop so each loop gets its own
- * isolated tracking state.
- */
-export function withSessionHistory(
-  middleware: Partial<MiddlewareConfig> | undefined,
-  storage: SessionStorage,
-): Partial<MiddlewareConfig> {
-  const hooks = createSessionHistoryHooks(storage)
-  const mw = middleware ?? {}
   return {
-    ...mw,
-    beforeLoopBegin: [...(mw.beforeLoopBegin ?? []), hooks.beforeLoopBegin],
-    beforeModelCall: [...(mw.beforeModelCall ?? []), hooks.beforeModelCall],
-    afterLoopIteration: [...(mw.afterLoopIteration ?? []), hooks.afterLoopIteration],
+    beforeLoopBegin: [async (ctx: LoopContext) => {
+      lastCount = ctx.messages.length
+    }],
+    beforeModelCall: [async (ctx: ModelCallContext) => {
+      if (ctx.request.messages.length < lastCount) {
+        lastCount = ctx.request.messages.length
+      }
+    }],
+    afterLoopIteration: [async (ctx: LoopContext) => {
+      const newMessages = ctx.messages.slice(lastCount)
+      if (newMessages.length > 0) {
+        await storage.appendMessages(ctx.sessionId, newMessages)
+      }
+      lastCount = ctx.messages.length
+    }],
   }
 }
 
-export interface LoopMiddlewareOptions {
-  storage: SessionStorage
-  sessionId: string
-  obsConfig?: ObservabilityConfig
-}
-
-export interface LoopMiddlewareResult {
-  middleware: Partial<MiddlewareConfig>
-  logger: Logger | undefined
-  tracer: Tracer | undefined
-}
+// ── Public API ───────────────────────────────────────────────────────
 
 /**
- * Creates all per-session middleware for an AgentLoop: observability (logs +
- * traces written to the session directory) and real-time message persistence.
+ * Creates all per-session middleware for an AgentLoop.  Returns the
+ * composed middleware and an optional per-session logger.
  *
- * Each invocation returns fresh closure state — safe for concurrent loops.
+ * Flow:
+ *   1. Create per-session observability (logger + tracer → obs hooks)
+ *   2. Create per-session history hooks
+ *   3. Concatenate:  obs → base → history
+ *   4. Append flush hooks so buffered data hits disk
  *
- * Middleware ordering:
- *   [obs hooks]  →  [base hooks]  →  [history hooks]
- *
- * (Compaction is unshifted by AgentLoop's constructor, so it always runs first.)
+ * Each call returns fresh closure state — safe for concurrent loops.
  */
 export function createLoopMiddleware(
   baseMiddleware: Partial<MiddlewareConfig> | undefined,
-  options: LoopMiddlewareOptions,
-): LoopMiddlewareResult {
-  const base = baseMiddleware ?? {}
+  options: {
+    storage: SessionStorage
+    sessionId: string
+    obsConfig?: ObservabilityConfig
+  },
+): { middleware: Partial<MiddlewareConfig>; logger: Logger | undefined } {
+  let obsHooks: Partial<MiddlewareConfig> | undefined
+  let flushHooks: Partial<MiddlewareConfig> | undefined
   let sessionLogger: Logger | undefined
-  let sessionTracer: Tracer | undefined
-  let merged: Partial<MiddlewareConfig> = { ...base }
 
-  // ── Per-session observability ──────────────────────────────────────
   if (options.obsConfig) {
     const sessionDir = options.storage.sessionDir(options.sessionId)
     const { logger, tracer } = createObservability(options.obsConfig, {
@@ -100,27 +92,19 @@ export function createLoopMiddleware(
       sessionDir,
     })
     sessionLogger = logger
-    sessionTracer = tracer
+    obsHooks = createObservabilityMiddleware(logger, tracer)
 
-    const obsMw = createObservabilityMiddleware(logger, tracer)
-
-    // Prepend obs hooks so they run before user/system middleware
-    for (const key of Object.keys(obsMw)) {
-      const k = key as keyof MiddlewareConfig
-      ;(merged as any)[k] = [...((obsMw as any)[k] ?? []), ...((base as any)[k] ?? [])]
-    }
-
-    // Flush writers after loop completes or on error
     const flush = async () => { await logger.flush(); await tracer.flush() }
-    merged.afterLoopComplete = [...(merged.afterLoopComplete ?? []), async () => { await flush() }]
-    merged.onError = [...(merged.onError ?? []), async () => { await flush() }]
+    flushHooks = {
+      afterLoopComplete: [async () => { await flush() }],
+      onError: [async () => { await flush() }],
+    }
   }
 
-  // ── Per-session message persistence ────────────────────────────────
-  const history = createSessionHistoryHooks(options.storage)
-  merged.beforeLoopBegin = [...(merged.beforeLoopBegin ?? []), history.beforeLoopBegin]
-  merged.beforeModelCall = [...(merged.beforeModelCall ?? []), history.beforeModelCall]
-  merged.afterLoopIteration = [...(merged.afterLoopIteration ?? []), history.afterLoopIteration]
+  const historyHooks = createHistoryHooks(options.storage)
 
-  return { middleware: merged, logger: sessionLogger, tracer: sessionTracer }
+  // obs runs first → user/system base → history last → flush last
+  const middleware = concatMiddleware(obsHooks, baseMiddleware, historyHooks, flushHooks)
+
+  return { middleware, logger: sessionLogger }
 }

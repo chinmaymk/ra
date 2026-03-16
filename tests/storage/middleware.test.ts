@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { join } from 'path'
 import { SessionStorage } from '../../src/storage/sessions'
-import { withSessionHistory, createLoopMiddleware } from '../../src/storage/middleware'
+import { createLoopMiddleware } from '../../src/storage/middleware'
 import { AgentLoop } from '../../src/agent/loop'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import type { IProvider, IMessage } from '../../src/providers/types'
@@ -43,6 +43,10 @@ function toolCallProvider(toolName: string, text: string): IProvider {
   }
 }
 
+function sessionMiddleware(storage: SessionStorage, sessionId: string) {
+  return createLoopMiddleware(undefined, { storage, sessionId }).middleware
+}
+
 describe('SessionHistoryMiddleware', () => {
   let storage: SessionStorage
 
@@ -54,14 +58,13 @@ describe('SessionHistoryMiddleware', () => {
 
   it('persists messages in real time during loop iterations', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
-    const middleware = withSessionHistory(undefined, storage)
 
     const loop = new AgentLoop({
       provider: mockProvider(['hello world']),
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
-      middleware,
+      middleware: sessionMiddleware(storage, session.id),
     })
 
     const messages: IMessage[] = [{ role: 'user', content: 'hi' }]
@@ -88,7 +91,7 @@ describe('SessionHistoryMiddleware', () => {
       tools,
       model: 'test',
       sessionId: session.id,
-      middleware: withSessionHistory(undefined, storage),
+      middleware: sessionMiddleware(storage, session.id),
     })
 
     const messages: IMessage[] = [{ role: 'user', content: 'run echo' }]
@@ -145,12 +148,11 @@ describe('SessionHistoryMiddleware', () => {
       }
     }
 
-    const baseMw = withSessionHistory(undefined, storage)
-    const middleware = {
-      ...baseMw,
-      // Compaction runs BEFORE session history's beforeModelCall
-      beforeModelCall: [fakeCompaction, ...(baseMw.beforeModelCall ?? [])],
-    }
+    const baseMw = { beforeModelCall: [fakeCompaction] }
+    const { middleware } = createLoopMiddleware(baseMw, {
+      storage,
+      sessionId: session.id,
+    })
 
     const loop = new AgentLoop({
       provider,
@@ -234,7 +236,7 @@ describe('SessionHistoryMiddleware', () => {
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
-      middleware: withSessionHistory(undefined, storage),
+      middleware: sessionMiddleware(storage, session.id),
     })
 
     // Pass system + context + user messages as initial
