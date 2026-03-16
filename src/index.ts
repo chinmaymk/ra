@@ -12,7 +12,7 @@ import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { serializeContent } from './providers/utils'
-import { withSessionHistory } from './storage/middleware'
+import { createLoopMiddleware } from './storage/middleware'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -91,15 +91,20 @@ function createMcpHandler(app: AppContext) {
       model: app.config.model,
       interface: 'mcp',
     })
+    const loopSession = createLoopMiddleware(app.middleware, {
+      storage: app.storage,
+      sessionId: session.id,
+      obsConfig: app.obsConfig,
+    })
     const loop = new AgentLoop({
       provider: app.provider,
       tools: app.tools,
       model: app.config.model,
       maxIterations: app.config.maxIterations,
       toolTimeout: app.config.toolTimeout,
-      middleware: withSessionHistory(app.middleware, app.storage),
+      middleware: loopSession.middleware,
       compaction: app.config.compaction,
-      logger: app.logger,
+      logger: loopSession.logger ?? app.logger,
       sessionId: session.id,
     })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
@@ -175,6 +180,7 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     contextMessages: app.contextMessages,
     sessionMessages,
     logger: app.logger,
+    obsConfig: app.obsConfig,
     storage: app.storage,
     sessionId: app.sessionId,
   })
@@ -201,6 +207,7 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
     compaction: app.config.compaction,
     contextMessages: app.contextMessages,
     logger: app.logger,
+    obsConfig: app.obsConfig,
   })
   await httpServer.start()
   console.error(`HTTP server listening on port ${httpServer.port}`)
@@ -234,6 +241,7 @@ async function launchRepl(app: AppContext): Promise<void> {
     contextMessages: app.contextMessages,
     memoryStore: app.memoryStore,
     logger: app.logger,
+    obsConfig: app.obsConfig,
   })
   await repl.start()
   try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }

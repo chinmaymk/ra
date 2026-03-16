@@ -5,9 +5,10 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { Logger } from '../observability/logger'
+import type { ObservabilityConfig } from '../observability'
 import { mkdir } from 'node:fs/promises'
 import { AgentLoop } from '../agent/loop'
-import { withSessionHistory } from '../storage/middleware'
+import { createLoopMiddleware } from '../storage/middleware'
 import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
@@ -33,6 +34,7 @@ export interface HttpOptions {
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
   logger?: Logger
+  obsConfig?: ObservabilityConfig
 }
 
 export class HttpServer {
@@ -144,17 +146,22 @@ export class HttpServer {
     const userMessages = (body.messages ?? []).filter((m: IMessage) => m.role === 'user')
     await this.options.storage.appendMessages(sessionId, userMessages)
 
+    const session = createLoopMiddleware(this.options.middleware, {
+      storage: this.options.storage,
+      sessionId,
+      obsConfig: this.options.obsConfig,
+    })
     const loop = new AgentLoop({
       provider: this.options.provider,
       tools: this.options.tools,
       model: this.options.model,
-      middleware: withSessionHistory(this.options.middleware, this.options.storage),
+      middleware: session.middleware,
       maxIterations: this.options.maxIterations,
       toolTimeout: this.options.toolTimeout,
       sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
-      logger: this.options.logger,
+      logger: session.logger ?? this.options.logger,
     })
 
     try {
@@ -203,10 +210,15 @@ export class HttpServer {
           }
         }
 
-        const baseMw = withSessionHistory(opts.middleware, opts.storage)
+        const session = createLoopMiddleware(opts.middleware, {
+          storage: opts.storage,
+          sessionId,
+          obsConfig: opts.obsConfig,
+        })
+        const loopMw = session.middleware ?? {}
         const middleware: Partial<MiddlewareConfig> = {
-          ...baseMw,
-          onStreamChunk: (baseMw?.onStreamChunk ?? []).concat(onStreamChunk),
+          ...loopMw,
+          onStreamChunk: (loopMw?.onStreamChunk ?? []).concat(onStreamChunk),
         }
 
         const loop = new AgentLoop({
@@ -219,7 +231,7 @@ export class HttpServer {
           sessionId,
           thinking: opts.thinking,
           compaction: opts.compaction,
-          logger: opts.logger,
+          logger: session.logger ?? opts.logger,
         })
 
         try {

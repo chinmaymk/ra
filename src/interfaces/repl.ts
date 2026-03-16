@@ -6,7 +6,8 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
-import { withSessionHistory } from '../storage/middleware'
+import type { ObservabilityConfig } from '../observability'
+import { createLoopMiddleware } from '../storage/middleware'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
@@ -32,6 +33,7 @@ export interface ReplOptions {
   contextMessages?: IMessage[]
   memoryStore?: MemoryStore
   logger?: Logger
+  obsConfig?: ObservabilityConfig
 }
 
 export class Repl {
@@ -183,7 +185,12 @@ export class Repl {
     let streamBuf: tui.StreamBuffer | null = null
     const toolStartTimes = new Map<string, number>()
     tui.startSpinner()
-    const userMw = withSessionHistory(this.options.middleware, this.options.storage)
+    const session = createLoopMiddleware(this.options.middleware, {
+      storage: this.options.storage,
+      sessionId: this.sessionId!,
+      obsConfig: this.options.obsConfig,
+    })
+    const userMw = session.middleware ?? {}
 
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -194,7 +201,7 @@ export class Repl {
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
-      logger: this.options.logger,
+      logger: session.logger ?? this.options.logger,
       middleware: {
         ...userMw,
         onStreamChunk: [

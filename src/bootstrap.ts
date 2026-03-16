@@ -16,7 +16,6 @@ import { McpClient } from './mcp/client'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
-import { createObservabilityMiddleware } from './observability/middleware'
 import type { IMessage, IProvider } from './providers/types'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { loadBuiltinSkills } from './skills/builtin'
@@ -25,7 +24,7 @@ import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath } from './utils/paths'
-import type { ObservabilityConfig } from './observability'
+import { type ObservabilityConfig } from './observability'
 import type { Logger } from './observability/logger'
 import type { Tracer } from './observability/tracer'
 
@@ -40,6 +39,7 @@ export interface AppContext {
   contextMessages: IMessage[]
   memoryStore: MemoryStore | undefined
   mcpClient: McpClient
+  obsConfig: ObservabilityConfig
   logger: Logger
   tracer: Tracer
   shutdown: () => Promise<void>
@@ -73,7 +73,6 @@ export async function bootstrap(
     traces: { enabled: config.tracesEnabled, output: 'session' },
   }
   const { logger, tracer } = createObservability(obsConfig, { sessionId, sessionDir })
-  const obsMw = createObservabilityMiddleware(logger, tracer)
 
   // ── Compaction model default ───────────────────────────────────────
   if (!config.compaction.model) {
@@ -175,12 +174,6 @@ export async function bootstrap(
     logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
   }
 
-  // ── Prepend observability hooks (obs runs first) ───────────────────
-  for (const key of Object.keys(obsMw)) {
-    const k = key as keyof MiddlewareConfig
-    ;(middleware as any)[k] = ((obsMw as any)[k] ?? []).concat((middleware as any)[k] ?? [])
-  }
-
   // ── Subagent tool (registered last — child registry built lazily) ──
   tools.register(subagentTool({
     provider,
@@ -216,6 +209,7 @@ export async function bootstrap(
     contextMessages,
     memoryStore,
     mcpClient,
+    obsConfig,
     logger,
     tracer,
     shutdown,

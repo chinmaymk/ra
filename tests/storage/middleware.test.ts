@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { join } from 'path'
 import { SessionStorage } from '../../src/storage/sessions'
-import { withSessionHistory } from '../../src/storage/middleware'
+import { withSessionHistory, createLoopMiddleware } from '../../src/storage/middleware'
 import { AgentLoop } from '../../src/agent/loop'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import type { IProvider, IMessage } from '../../src/providers/types'
+import type { ObservabilityConfig } from '../../src/observability'
 import { tmpdir } from '../tmpdir'
 
 const TEST_PATH = tmpdir('ra-test-history-mw')
@@ -170,6 +172,58 @@ describe('SessionHistoryMiddleware', () => {
     expect(stored[1]?.role).toBe('tool')
     expect(stored[2]?.role).toBe('assistant')
     expect(stored[2]?.content).toBe('post-compaction answer')
+  })
+
+  it('writes logs and traces to the session directory via createLoopMiddleware', async () => {
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
+
+    const obsConfig: ObservabilityConfig = {
+      enabled: true,
+      logs: { enabled: true, level: 'info', output: 'session' },
+      traces: { enabled: true, output: 'session' },
+    }
+
+    const { middleware, logger } = createLoopMiddleware(undefined, {
+      storage,
+      sessionId: session.id,
+      obsConfig,
+    })
+
+    const loop = new AgentLoop({
+      provider: mockProvider(['hello']),
+      tools: new ToolRegistry(),
+      model: 'test',
+      sessionId: session.id,
+      middleware,
+      logger,
+    })
+
+    await loop.run([{ role: 'user', content: 'hi' }])
+
+    // Verify logs.jsonl exists in the session directory
+    const sessionDir = storage.sessionDir(session.id)
+    const logsFile = Bun.file(join(sessionDir, 'logs.jsonl'))
+    expect(await logsFile.exists()).toBe(true)
+
+    const logsContent = await logsFile.text()
+    const logLines = logsContent.trim().split('\n').map(l => JSON.parse(l))
+    expect(logLines.some((e: any) => e.message === 'agent loop starting')).toBe(true)
+    expect(logLines.some((e: any) => e.message === 'agent loop complete')).toBe(true)
+    expect(logLines.every((e: any) => e.sessionId === session.id)).toBe(true)
+
+    // Verify traces.jsonl exists in the session directory
+    const tracesFile = Bun.file(join(sessionDir, 'traces.jsonl'))
+    expect(await tracesFile.exists()).toBe(true)
+
+    const tracesContent = await tracesFile.text()
+    const traceLines = tracesContent.trim().split('\n').map(l => JSON.parse(l))
+    expect(traceLines.some((e: any) => e.name === 'agent.loop')).toBe(true)
+    expect(traceLines.some((e: any) => e.name === 'agent.model_call')).toBe(true)
+
+    // Verify messages.jsonl is also written (session history still works)
+    const stored = await storage.readMessages(session.id)
+    expect(stored.length).toBeGreaterThan(0)
+    expect(stored[0]?.role).toBe('assistant')
   })
 
   it('does not persist initial messages (only loop-generated)', async () => {

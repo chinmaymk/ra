@@ -4,8 +4,9 @@ import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { Skill } from '../skills/types'
 import type { Logger } from '../observability/logger'
+import type { ObservabilityConfig } from '../observability'
 import type { SessionStorage } from '../storage/sessions'
-import { withSessionHistory } from '../storage/middleware'
+import { createLoopMiddleware } from '../storage/middleware'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import { fileToContentPart } from '../utils/files'
@@ -28,6 +29,7 @@ export interface CliOptions {
   contextMessages?: IMessage[]
   sessionMessages?: IMessage[]
   logger?: Logger
+  obsConfig?: ObservabilityConfig
   storage?: SessionStorage
   sessionId?: string
 }
@@ -38,7 +40,7 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, storage, sessionId } = options
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, obsConfig, storage, sessionId } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -77,14 +79,18 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
     await storage.appendMessage(sessionId, userMessage)
   }
 
-  const baseMw = storage ? withSessionHistory(middleware, storage) : middleware
+  const session = storage && sessionId
+    ? createLoopMiddleware(middleware, { storage, sessionId, obsConfig })
+    : { middleware, logger: undefined, tracer: undefined }
+  const loopMw = session.middleware ?? {}
   const loop = new AgentLoop({
-    provider, tools, model, maxIterations, toolTimeout, thinking, compaction, logger, sessionId,
+    provider, tools, model, maxIterations, toolTimeout, thinking, compaction, sessionId,
+    logger: session.logger ?? logger,
     middleware: {
-      ...baseMw,
+      ...loopMw,
       onStreamChunk: [
         async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) },
-      ].concat(baseMw?.onStreamChunk ?? []),
+      ].concat(loopMw?.onStreamChunk ?? []),
     },
   })
 
