@@ -5,7 +5,6 @@
 <p align="center">
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
-  <a href="#why-ra">Why ra</a> &middot;
   <a href="#the-agent-loop">The Agent Loop</a> &middot;
   <a href="#context-control">Context Control</a> &middot;
   <a href="#providers">Providers</a> &middot;
@@ -25,7 +24,7 @@
 
 ---
 
-Every developer already has opinions about their tooling committed to their codebase — `.eslintrc`, `.prettierrc`, `Dockerfile`. Your AI agent behavior should live there too. Ra makes it versioned, reviewable, and consistent across machines and teammates the same way a linter config is.
+Ra is an agent loop you configure with a YAML file and run as a single binary. The config lives in your repo — skills, permissions, model routing, middleware — versioned and reviewable like any other piece of your infrastructure. When a new engineer clones the project, they get the same agent behavior everyone else has. No setup docs. It's just there.
 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
@@ -42,6 +41,27 @@ permissions:
         allow: ["^git ", "^bun "]
         deny: ["--force", "--hard"]
 ```
+
+Nothing is hidden behind abstractions you can't reach. Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — ra has an answer: here's the config, here's the middleware, here's the [audit log](#observability).
+
+It talks to 6 providers, and different models are better at different tasks. Ra lets you route different skills to different models — Sonnet for deep code review, Flash for quick docs, a local Ollama model for code that shouldn't leave your machine:
+
+```yaml
+skills:
+  - name: code-review
+    provider: anthropic
+    model: claude-sonnet-4-6
+  - name: documentation
+    provider: google
+    model: gemini-flash-2.5
+  - name: internal-secrets-audit
+    provider: ollama
+    model: llama3
+```
+
+The sensitive stuff never leaves your machine. The expensive reasoning only runs when needed. One config, three providers, no code changes.
+
+It reads stdin, talks to the model, writes to stdout — composes the same way shell commands do. Pipe it, chain it, cron it. Run it as a CLI, REPL, HTTP server, or MCP server. No runtime dependencies.
 
 ```bash
 ra "What is the capital of France?"
@@ -70,50 +90,6 @@ git diff | ra --skill code-review "Review these changes"        # pipe + skill
 ra --http                                                       # streaming HTTP API
 ra --mcp-stdio                                                  # MCP server for Cursor / Claude Desktop
 ```
-
-## Why ra
-
-### Your agent, in your repo
-
-Ra is a config file and a binary. The config lives in your repo. When a new engineer clones the project, they get the same agent behavior everyone else has — same skills, same permissions, same middleware, same model routing. No setup docs. No "make sure you configure your AI tool like this." It's just there, like your test runner.
-
-### The agent you can explain
-
-When someone asks "what is our AI agent actually doing?" — ra has an answer. Here's the config. Here's the middleware. Here's the audit log. Every model call, tool execution, and decision is logged as structured JSON with OpenTelemetry-style traces. In enterprise contexts where AI governance is a real concern, this isn't a nice-to-have — it's the difference between "we use AI" and "here's exactly how we use AI."
-
-### Multi-model as a superpower
-
-Different models are better at different tasks. Sonnet for deep reasoning, Flash for quick lookups, a local Ollama model for code that shouldn't leave your machine. Ra routes different skills to different models based on rules you define:
-
-```yaml
-skills:
-  - name: code-review
-    provider: anthropic
-    model: claude-sonnet-4-6
-  - name: documentation
-    provider: google
-    model: gemini-flash-2.5
-  - name: internal-secrets-audit
-    provider: ollama
-    model: llama3
-```
-
-The sensitive stuff never leaves your machine. The expensive reasoning only runs when needed. One config, three providers, no code changes.
-
-### Composable like Unix tools
-
-`cat error.log | ra "explain this"` — ra reads stdin, talks to the model, writes to stdout. It composes the same way shell commands compose. Pipe it, chain it, cron it. The agent loop is the primitive; what you build with it is up to you.
-
-### The recipe book
-
-Ra ships with ready-to-use recipes — complete agent configurations that solve specific problems:
-
-```bash
-ra --config recipes/coding-agent/ra.config.yaml        # full coding agent with tools, thinking, compaction
-ra --config recipes/code-review-agent/ra.config.yaml    # code reviewer with GitHub MCP, style guide, token budget
-```
-
-Each recipe is a standalone `ra.config.yml` you can fork and customize. Build your own for daily standup prep, dependency upgrades, incident postmortems, or onboarding bots — whatever your team needs, defined as config.
 
 ## The Agent Loop
 
@@ -521,7 +497,7 @@ The agent decides when to save and forget — tool descriptions guide it to capt
 
 ## Recipes
 
-Complete agent configurations you can use directly or fork. Each recipe is a `ra.config.yml` that solves a specific problem — clone it, tweak it, commit it to your repo.
+Complete agent configurations you can use directly or fork. Each recipe is a `ra.config.yml` that solves a specific, named problem — clone it, tweak it, commit it to your repo.
 
 ### [Coding Agent](recipes/coding-agent/)
 
@@ -539,7 +515,7 @@ Reviews diffs for correctness, style, and performance. Connects to GitHub via MC
 ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review this"
 ```
 
-Build your own recipes for standup prep, dependency upgrades, incident postmortems, onboarding bots — any repeatable workflow your team runs, defined as config and committed to your repo.
+The same pattern works for any repeatable workflow — standup prep that reads your git log and open PRs, dependency upgrade bots that audit `package.json` and open PRs with test results, incident postmortem drafters, new-engineer onboarding agents that answer questions using your actual codebase as context. Each is a config file committed to your repo.
 
 ## GitHub Actions
 
