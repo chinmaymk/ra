@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="ra demo" width="800">
+  <img src="docs/demo.gif" alt="ra demo" width="800">
 </p>
 
 ---
