@@ -172,7 +172,7 @@ Layered config — each layer overrides the previous.
 defaults → ra.config.yml → env vars → CLI flags
 ```
 
-Supports YAML, JSON, and TOML config files. Environment variables use the `RA_` prefix. See the [docs](docs/) for the full configuration reference covering context discovery, compaction, observability, memory, MCP, and more.
+Supports YAML, JSON, and TOML config files. Environment variables use the `RA_` prefix. CLI flags override everything.
 
 ## Recipes
 
@@ -196,6 +196,10 @@ ra --config recipes/coding-agent/ra.config.yaml
   env:
     RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
+
+## Documentation
+
+This README covers the highlights. For the full reference — context discovery, compaction, observability, memory, MCP, sessions, scripting, and all configuration options — see the [docs](docs/site/).
 
 ## Building from Source
 
