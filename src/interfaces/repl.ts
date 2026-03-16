@@ -10,6 +10,7 @@ import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { MemoryStore } from '../memory/store'
+import type { Logger } from '../observability/logger'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
 import * as tui from './tui'
@@ -29,6 +30,7 @@ export interface ReplOptions {
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
   memoryStore?: MemoryStore
+  logger?: Logger
 }
 
 export class Repl {
@@ -191,6 +193,7 @@ export class Repl {
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
+      logger: this.options.logger,
       middleware: {
         ...userMw,
         onStreamChunk: [

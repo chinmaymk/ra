@@ -1,12 +1,16 @@
 import { test, expect } from 'bun:test'
 import { runMiddlewareChain } from '../../src/agent/middleware'
 import type { LoopContext } from '../../src/agent/types'
+import { NoopLogger } from '../../src/observability/logger'
+
+const logger = new NoopLogger()
 
 function makeCtx(controller: AbortController): LoopContext {
   return {
     messages: [], iteration: 0, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined,
     stop: () => controller.abort(),
     signal: controller.signal,
+    logger,
   }
 }
 

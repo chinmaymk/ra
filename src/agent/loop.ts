@@ -7,6 +7,7 @@ import { createCompactionMiddleware, type CompactionConfig } from './context-com
 import { accumulateUsage, parseToolArguments } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
+import { type Logger, NoopLogger } from '../observability/logger'
 
 export interface AgentLoopOptions {
   provider: IProvider
@@ -18,6 +19,7 @@ export interface AgentLoopOptions {
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   toolTimeout?: number
+  logger?: Logger
 }
 
 export interface LoopResult {
@@ -42,6 +44,7 @@ export class AgentLoop {
   private sessionId: string
   private thinking: 'low' | 'medium' | 'high' | undefined
   private toolTimeout: number
+  private logger: Logger
   private externalAbort: AbortController | null = null
 
   constructor(options: AgentLoopOptions) {
@@ -53,6 +56,7 @@ export class AgentLoop {
     this.middleware = { ...EMPTY_MW, ...options.middleware }
     this.thinking = options.thinking
     this.toolTimeout = options.toolTimeout ?? 0
+    this.logger = options.logger ?? new NoopLogger()
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
@@ -79,7 +83,7 @@ export class AgentLoop {
     }
     const { signal } = controller
 
-    const stoppable: StoppableContext = { stop, signal }
+    const stoppable: StoppableContext = { stop, signal, logger: this.logger }
 
     const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
     let lastUsage: TokenUsage | undefined

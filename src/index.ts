@@ -93,6 +93,7 @@ function createMcpHandler(app: AppContext) {
       toolTimeout: app.config.toolTimeout,
       middleware: app.middleware,
       compaction: app.config.compaction,
+      logger: app.logger,
     })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const messages: IMessage[] = []
@@ -163,6 +164,7 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     compaction: app.config.compaction,
     contextMessages: app.contextMessages,
     sessionMessages,
+    logger: app.logger,
   })
   for (const msg of result.messages.slice(result.priorCount)) {
     await app.storage.appendMessage(app.sessionId, msg)
@@ -189,6 +191,7 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
     thinking: app.config.thinking,
     compaction: app.config.compaction,
     contextMessages: app.contextMessages,
+    logger: app.logger,
   })
   await httpServer.start()
   console.error(`HTTP server listening on port ${httpServer.port}`)
@@ -221,6 +224,7 @@ async function launchRepl(app: AppContext): Promise<void> {
     compaction: app.config.compaction,
     contextMessages: app.contextMessages,
     memoryStore: app.memoryStore,
+    logger: app.logger,
   })
   await repl.start()
   try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }
