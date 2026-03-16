@@ -2,33 +2,17 @@ import readline from 'readline'
 import { AgentLoop } from '../agent/loop'
 import { fileToContentPart } from '../utils/files'
 import { errorMessage } from '../utils/errors'
-import type { ToolRegistry } from '../agent/tool-registry'
-import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
-import type { IMessage, IProvider, ContentPart } from '../providers/types'
-import type { SessionStorage } from '../storage/sessions'
-import type { Skill } from '../skills/types'
-import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
-import type { CompactionConfig } from '../agent/context-compaction'
+import type { StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
+import type { IMessage, ContentPart } from '../providers/types'
 import type { MemoryStore } from '../memory/store'
+import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
-import { toBaseOptions, type AppContext } from '../bootstrap'
+import { toBaseOptions, type AppContext, type BaseOptions } from '../bootstrap'
 import * as tui from './tui'
 
-export interface ReplOptions {
-  model: string
-  provider: IProvider
-  tools: ToolRegistry
-  storage: SessionStorage
-  systemPrompt?: string
-  skillMap?: Map<string, Skill>
-  middleware?: Partial<MiddlewareConfig>
-  maxIterations?: number
-  toolTimeout?: number
+export interface ReplOptions extends BaseOptions {
   sessionId?: string
-  thinking?: 'low' | 'medium' | 'high'
-  compaction?: CompactionConfig
-  contextMessages?: IMessage[]
   memoryStore?: MemoryStore
   /** Optional command interceptor — return a string to handle the command, undefined to fall through. */
   onCommand?: (input: string) => string | undefined

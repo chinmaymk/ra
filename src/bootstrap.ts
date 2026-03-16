@@ -63,6 +63,9 @@ export function toBaseOptions(app: AppContext) {
   }
 }
 
+/** Base option fields common to CLI, REPL, and HTTP interfaces. */
+export type BaseOptions = ReturnType<typeof toBaseOptions>
+
 export async function bootstrap(
   config: RaConfig,
   opts: { sessionId?: string },

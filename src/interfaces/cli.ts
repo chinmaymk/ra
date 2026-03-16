@@ -1,28 +1,15 @@
-import type { IProvider, IMessage, ContentPart } from '../providers/types'
-import type { ToolRegistry } from '../agent/tool-registry'
-import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
-import type { CompactionConfig } from '../agent/context-compaction'
-import type { Skill } from '../skills/types'
+import type { IMessage, ContentPart } from '../providers/types'
+import type { StreamChunkContext } from '../agent/types'
+import type { BaseOptions } from '../bootstrap'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import { fileToContentPart } from '../utils/files'
 
-export interface CliOptions {
+export interface CliOptions extends BaseOptions {
   prompt: string
   files?: string[]
   skills?: string[]
-  systemPrompt?: string
-  model: string
-  provider: IProvider
-  tools: ToolRegistry
-  skillMap?: Map<string, Skill>
-  middleware?: Partial<MiddlewareConfig>
-  maxIterations?: number
-  toolTimeout?: number
   onChunk?: (text: string) => void
-  thinking?: 'low' | 'medium' | 'high'
-  compaction?: CompactionConfig
-  contextMessages?: IMessage[]
   sessionMessages?: IMessage[]
 }
 

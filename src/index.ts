@@ -165,11 +165,7 @@ async function launchHttp(ctx: MultiAgentContext, config: RaConfig, signals: { r
   const defaultApp = resolveAgent(ctx)
   const stopMcpHttp = await startSidecarMcp(defaultApp)
 
-  const opts = toHttpOptions(defaultApp, { agents: ctx })
-  opts.port = config.http.port
-  opts.token = config.http.token || undefined
-
-  const httpServer = new HttpServer(opts)
+  const httpServer = new HttpServer(toHttpOptions(defaultApp, { agents: ctx }))
   await httpServer.start()
   console.error(`HTTP server listening on port ${httpServer.port}`)
 

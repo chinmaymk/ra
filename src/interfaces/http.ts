@@ -1,16 +1,12 @@
-import type { IProvider, IMessage } from '../providers/types'
+import type { IMessage } from '../providers/types'
 import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
-import type { ToolRegistry } from '../agent/tool-registry'
-import type { SessionStorage } from '../storage/sessions'
-import type { Skill } from '../skills/types'
-import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
 import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
 import { errorMessage } from '../utils/errors'
 import type { MultiAgentContext } from '../multi-agent'
-import { toBaseOptions, type AppContext } from '../bootstrap'
+import { toBaseOptions, type AppContext, type BaseOptions } from '../bootstrap'
 
 /** Build HttpOptions from an AppContext. */
 export function toHttpOptions(app: AppContext, overrides?: { agents?: MultiAgentContext }): HttpOptions {
@@ -26,21 +22,9 @@ function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-export interface HttpOptions {
+export interface HttpOptions extends BaseOptions {
   port: number
   token?: string
-  model: string
-  provider: IProvider
-  tools: ToolRegistry
-  storage: SessionStorage
-  systemPrompt?: string
-  skillMap?: Map<string, Skill>
-  middleware?: Partial<MiddlewareConfig>
-  maxIterations?: number
-  toolTimeout?: number
-  thinking?: 'low' | 'medium' | 'high'
-  compaction?: CompactionConfig
-  contextMessages?: IMessage[]
   /** Multi-agent context — when set, requests can specify an `agent` field to route to a specific agent. */
   agents?: MultiAgentContext
 }
