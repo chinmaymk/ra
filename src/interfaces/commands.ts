@@ -121,12 +121,13 @@ export function runMemoryCommand(
 const REDACT_KEYS = new Set(['token', 'apiKey', 'api_key', 'secret', 'password'])
 
 /** Handle --dry-run-config: print resolved config as JSON with secrets redacted. */
-export function showDryRunConfig(config: RaConfig): void {
+export function showDryRunConfig(config: RaConfig, contextFiles: string[] = []): void {
   const redacted = JSON.parse(JSON.stringify(config, (_key, value) => {
     if (typeof value === 'string' && REDACT_KEYS.has(_key) && value) return '***'
     return value
   }))
   // Drop non-serializable fields (callbacks)
   delete redacted.compaction?.onCompact
+  if (contextFiles.length > 0) redacted.context.files = contextFiles
   console.log(JSON.stringify(redacted, null, 2))
 }

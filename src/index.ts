@@ -62,12 +62,6 @@ async function handleStandaloneCommands(
   parsed: ReturnType<typeof parseArgs>,
   app: AppContext,
 ): Promise<void> {
-  if (parsed.meta.showContext) {
-    showContext(app.contextMessages)
-    await app.shutdown()
-    process.exit(0)
-  }
-
   if (parsed.meta.listMemories || parsed.meta.memories !== undefined) {
     runMemoryCommand(app.memoryStore, { list: parsed.meta.listMemories, search: parsed.meta.memories })
     await app.shutdown()
@@ -253,8 +247,18 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
-  if (parsed.meta.dryRunConfig) {
-    showDryRunConfig(config)
+  if (parsed.meta.dryRunConfig || parsed.meta.showContext) {
+    const { discoverContextFiles, buildContextMessages } = await import('./context')
+    const contextFiles = config.context.enabled
+      ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
+      : []
+
+    if (parsed.meta.dryRunConfig) {
+      showDryRunConfig(config, contextFiles.map(f => f.relativePath))
+    }
+    if (parsed.meta.showContext) {
+      showContext(buildContextMessages(contextFiles))
+    }
     process.exit(0)
   }
 

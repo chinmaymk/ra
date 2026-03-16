@@ -46,4 +46,10 @@ describe('showDryRunConfig', () => {
     expect(parsed.context).toBeDefined()
     expect(parsed.permissions).toBeDefined()
   })
+
+  it('includes context files when provided', () => {
+    const output = captureLog(() => showDryRunConfig(defaultConfig as RaConfig, ['CLAUDE.md', '.cursorrules']))
+    const parsed = JSON.parse(output)
+    expect(parsed.context.files).toEqual(['CLAUDE.md', '.cursorrules'])
+  })
 })
