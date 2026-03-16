@@ -54,11 +54,6 @@ export class Tracer {
   getTraceId(): string { return this.traceId }
   setSessionId(sessionId: string): void { this.sessionId = sessionId }
 
-  /** Redirect trace output to a new session directory. */
-  async setSessionDir(sessionDir: string): Promise<void> {
-    await this.writer.setFilePath(`${sessionDir}/traces.jsonl`)
-  }
-
   startSpan(name: string, attributes?: Record<string, unknown>, parentSpanId?: string): Span {
     const span: Span = {
       traceId: this.traceId,
@@ -114,6 +109,5 @@ export class NoopTracer extends Tracer {
   override startSpan(_name: string, _attributes?: Record<string, unknown>, _parentSpanId?: string): Span { return NoopTracer.NOOP_SPAN }
   override addEvent(_span: Span, _name: string, _attributes?: Record<string, unknown>): void {}
   override endSpan(_span: Span, _status?: 'ok' | 'error', _attributes?: Record<string, unknown>): void {}
-  override async setSessionDir(_sessionDir: string): Promise<void> {}
   override async flush(): Promise<void> {}
 }

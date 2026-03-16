@@ -5,6 +5,7 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { Logger } from '../observability/logger'
+import { mkdir } from 'node:fs/promises'
 import { AgentLoop } from '../agent/loop'
 import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
@@ -118,7 +119,11 @@ export class HttpServer {
   }
 
   private async ensureSession(clientSessionId?: string): Promise<string> {
-    if (clientSessionId) return clientSessionId
+    if (clientSessionId) {
+      // Ensure session directory exists for client-provided IDs
+      await mkdir(this.options.storage.sessionDir(clientSessionId), { recursive: true })
+      return clientSessionId
+    }
     const session = await this.options.storage.create({
       provider: this.options.provider.name,
       model: this.options.model,
@@ -136,7 +141,7 @@ export class HttpServer {
 
     // Persist incoming user messages before starting the loop
     const userMessages = (body.messages ?? []).filter((m: IMessage) => m.role === 'user')
-    await Promise.all(userMessages.map(msg => this.options.storage.appendMessage(sessionId, msg)))
+    await this.options.storage.appendMessages(sessionId, userMessages)
 
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -173,7 +178,7 @@ export class HttpServer {
 
     // Persist incoming user messages before starting the loop
     const userMessages = (body.messages ?? []).filter((m: IMessage) => m.role === 'user')
-    await Promise.all(userMessages.map(msg => this.options.storage.appendMessage(sessionId, msg)))
+    await this.options.storage.appendMessages(sessionId, userMessages)
 
     const opts = this.options
     const stream = new ReadableStream({

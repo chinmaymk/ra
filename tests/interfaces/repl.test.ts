@@ -271,7 +271,7 @@ describe('Repl', () => {
 
   it('stores messages to session after processing', async () => {
     const storage = await makeStorage()
-    const historyMw = createSessionHistoryMiddleware({ storage })
+    const historyMw = createSessionHistoryMiddleware(storage)
     const repl = new Repl({
       model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage,
       middleware: {

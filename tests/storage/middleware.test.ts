@@ -52,7 +52,7 @@ describe('SessionHistoryMiddleware', () => {
 
   it('persists messages in real time during loop iterations', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
-    const mw = createSessionHistoryMiddleware({ storage })
+    const mw = createSessionHistoryMiddleware(storage)
 
     const loop = new AgentLoop({
       provider: mockProvider(['hello world']),
@@ -76,7 +76,7 @@ describe('SessionHistoryMiddleware', () => {
 
   it('persists tool call results alongside assistant messages', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
-    const mw = createSessionHistoryMiddleware({ storage })
+    const mw = createSessionHistoryMiddleware(storage)
     const tools = new ToolRegistry()
     tools.register({
       name: 'echo',
@@ -109,7 +109,7 @@ describe('SessionHistoryMiddleware', () => {
 
   it('does not persist initial messages (only loop-generated)', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
-    const mw = createSessionHistoryMiddleware({ storage })
+    const mw = createSessionHistoryMiddleware(storage)
 
     const loop = new AgentLoop({
       provider: mockProvider(['response']),

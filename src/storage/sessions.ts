@@ -57,6 +57,13 @@ export class SessionStorage {
     await appendFile(join(this.sessionDir(id), 'messages.jsonl'), JSON.stringify(message) + '\n')
   }
 
+  /** Append multiple messages in a single filesystem write. */
+  async appendMessages(id: string, messages: IMessage[]): Promise<void> {
+    if (messages.length === 0) return
+    const data = messages.map(m => JSON.stringify(m)).join('\n') + '\n'
+    await appendFile(join(this.sessionDir(id), 'messages.jsonl'), data)
+  }
+
   async readMessages(id: string): Promise<IMessage[]> {
     const f = Bun.file(join(this.sessionDir(id), 'messages.jsonl'))
     if (!(await f.exists())) return []

@@ -182,10 +182,12 @@ export async function bootstrap(
     ;(middleware as any)[k] = ((obsMw as any)[k] ?? []).concat((middleware as any)[k] ?? [])
   }
 
-  // ── Session history middleware (persist messages + route logs in real time)
-  const historyMw = createSessionHistoryMiddleware({ storage, logger, tracer })
+  // ── Session history middleware (persist messages in real time) ───────
+  const historyMw = createSessionHistoryMiddleware(storage)
   middleware.beforeLoopBegin = [...(middleware.beforeLoopBegin ?? []), historyMw.beforeLoopBegin]
   middleware.afterLoopIteration = [...(middleware.afterLoopIteration ?? []), historyMw.afterLoopIteration]
+  middleware.afterLoopComplete = [...(middleware.afterLoopComplete ?? []), historyMw.afterLoopComplete]
+  middleware.onError = [...(middleware.onError ?? []), historyMw.onError]
 
   // ── Subagent tool (registered last — child registry built lazily) ──
   tools.register(subagentTool({
