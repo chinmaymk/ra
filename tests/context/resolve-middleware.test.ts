@@ -2,6 +2,9 @@ import { describe, it, expect } from 'bun:test'
 import { createResolverMiddleware } from '../../src/context/resolve-middleware'
 import type { ModelCallContext } from '../../src/agent/types'
 import type { PatternResolver } from '../../src/context/resolvers'
+import { NoopLogger } from '../../src/observability/logger'
+
+const logger = new NoopLogger()
 
 const echoResolver: PatternResolver = {
   name: 'echo',
@@ -16,6 +19,7 @@ function makeCtx(messages: { role: string; content: string }[]): ModelCallContex
   return {
     stop: () => controller.abort(),
     signal: controller.signal,
+    logger,
     request: {
       model: 'test',
       messages: messages as any,
@@ -23,6 +27,7 @@ function makeCtx(messages: { role: string; content: string }[]): ModelCallContex
     loop: {
       stop: () => controller.abort(),
       signal: controller.signal,
+      logger,
       messages: messages as any,
       iteration: 1,
       maxIterations: 10,

@@ -5,6 +5,7 @@ import { AgentLoop, type AgentLoopOptions } from '../agent/loop'
 import { ToolRegistry } from '../agent/tool-registry'
 import { accumulateUsage, serializeContent } from '../providers/utils'
 import type { CompactionConfig } from '../agent/context-compaction'
+import type { Logger } from '../observability/logger'
 
 /** Tools that can't work from a background fork */
 const EXCLUDED_TOOLS = new Set(['Agent', 'AskUserQuestion'])
@@ -20,6 +21,7 @@ export interface SubagentToolOptions {
   toolTimeout?: number
   maxIterations?: number
   maxConcurrency?: number
+  logger?: Logger
   /** Max nesting depth (default: 2) */
   maxDepth?: number
   /** @internal */
@@ -82,6 +84,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
         thinking: options.thinking,
         compaction: options.compaction,
         toolTimeout: options.toolTimeout,
+        logger: options.logger,
       }
 
       const results = await Promise.all(tasks.map(async ({ task }) => {

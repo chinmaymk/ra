@@ -1,8 +1,10 @@
 import type { IToolCall, IToolResult, StreamChunk, IMessage, ChatRequest, TokenUsage } from '../providers/types'
+import type { Logger } from '../observability/logger'
 
 export interface StoppableContext {
   stop: (reason?: string) => void
   signal: AbortSignal
+  logger: Logger
 }
 
 export interface LoopContext extends StoppableContext {

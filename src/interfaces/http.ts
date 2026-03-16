@@ -4,6 +4,7 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
+import type { Logger } from '../observability/logger'
 import { AgentLoop } from '../agent/loop'
 import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
@@ -29,6 +30,7 @@ export interface HttpOptions {
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
+  logger?: Logger
 }
 
 export class HttpServer {
@@ -131,6 +133,7 @@ export class HttpServer {
       sessionId: body.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
+      logger: this.options.logger,
     })
 
     try {
@@ -188,6 +191,7 @@ export class HttpServer {
           sessionId: body.sessionId,
           thinking: opts.thinking,
           compaction: opts.compaction,
+          logger: opts.logger,
         })
 
         try {

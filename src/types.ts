@@ -59,6 +59,9 @@ export type {
 } from './context/resolvers.ts'
 export type { ResolverConfig } from './context/types.ts'
 
+// Observability types
+export type { Logger, LogLevel, LogEntry } from './observability/logger.ts'
+
 // Provider option types
 export type { AnthropicProviderOptions } from './providers/anthropic.ts'
 export type { OpenAIProviderOptions } from './providers/openai.ts'

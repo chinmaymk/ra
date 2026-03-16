@@ -193,6 +193,7 @@ export async function bootstrap(
     toolTimeout: config.toolTimeout,
     maxIterations: config.maxIterations,
     maxConcurrency: config.maxConcurrency,
+    logger,
   }))
 
   // ── Shutdown ───────────────────────────────────────────────────────
