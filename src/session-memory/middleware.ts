@@ -38,9 +38,9 @@ export function createSessionMemoryMiddleware(store: SessionMemoryStore) {
 
     const block =
       `${SESSION_MEMORY_MARKER}\n` +
-      'Session memory — ephemeral state you stored during this session. ' +
-      'This survives context compaction. Update or remove entries as needed ' +
-      'using session_memory_write / session_memory_delete.\n\n' +
+      'Below are entries you previously saved to session memory during this conversation. ' +
+      'These entries are guaranteed to remain visible to you even as older messages are summarized. ' +
+      'You can update entries with session_memory_write or remove them with session_memory_delete.\n\n' +
       lines.join('\n\n') +
       `\n${SESSION_MEMORY_MARKER_END}`
 
