@@ -108,4 +108,4 @@ Now Cursor or Claude Desktop has a dedicated code reviewer that uses your projec
 | [Middleware](/middleware/) | Hooks at every loop stage — intercept, modify, or stop the loop |
 | [Sessions](/core/sessions) | Persist conversations as JSONL, resume from any interface, auto-prune |
 | [Memory](/configuration/#memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
-| [Configuration](/configuration/) | Layered: defaults > file > env > CLI. The config is the agent |
+| [Configuration](/configuration/) | Layered: CLI > env > file. The config is the agent |

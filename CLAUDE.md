@@ -19,7 +19,7 @@ src/
   agent/       # Core loop, middleware chain, tool registry, context compaction
   providers/   # LLM adapters: anthropic, openai, google, ollama, bedrock, azure
   tools/       # Built-in tools (filesystem, shell, network, agent interaction)
-  config/      # Layered config: defaults > file > env > CLI flags
+  config/      # Layered config: CLI flags > env > file
   interfaces/  # Entry points: cli, repl, http, mcp
   skills/      # Skill loader, runner, installer
   middleware/   # Middleware file loader
@@ -59,7 +59,7 @@ Middleware hooks intercept every step. Context compaction is itself a `beforeMod
 
 - **Factory functions for tools**: each tool file exports a function returning `ITool`
 - **Provider adapters**: each provider maps `IMessage`/`ITool` to SDK-specific formats via `mapMessages()`, `mapTools()`, `buildParams()`
-- **Config merging**: `defaults.ts` > `ra.config.{yml,json,toml}` > `RA_*` env vars > `--cli-flags`
+- **Config merging**: `--cli-flags` > `RA_*` env vars > `ra.config.{yml,json,toml}`
 - **Middleware as arrays**: config defines `middleware: { hookName: ["./path.ts"] }`, loaded at startup
 - **Skills as directories**: `SKILL.md` with YAML frontmatter, optional `scripts/` and `references/` subdirs
 
