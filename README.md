@@ -1,6 +1,6 @@
 <h1 align="center">ra</h1>
 
-<p align="center"><strong>Your agent config, committed to git.</strong></p>
+<p align="center"><strong>The agent loop, without the black box.</strong></p>
 
 <p align="center">
   <a href="#install">Install</a> &middot;
@@ -567,5 +567,5 @@ MIT
 ---
 
 <p align="center">
-  <b>ra</b> — Your agent config, committed to git.
+  <b>ra</b> — The agent loop, without the black box.
 </p>
