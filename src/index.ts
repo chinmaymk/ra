@@ -4,7 +4,7 @@ import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { errorMessage } from './utils/errors'
 import { HELP } from './interfaces/help'
-import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showDryRunConfig } from './interfaces/commands'
+import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showConfig } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
@@ -247,14 +247,14 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
-  if (parsed.meta.dryRunConfig || parsed.meta.showContext) {
+  if (parsed.meta.showConfig || parsed.meta.showContext) {
     const { discoverContextFiles, buildContextMessages } = await import('./context')
     const contextFiles = config.context.enabled
       ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
       : []
 
-    if (parsed.meta.dryRunConfig) {
-      showDryRunConfig(config, contextFiles.map(f => f.relativePath))
+    if (parsed.meta.showConfig) {
+      showConfig(config, contextFiles.map(f => f.relativePath))
     }
     if (parsed.meta.showContext) {
       showContext(buildContextMessages(contextFiles))

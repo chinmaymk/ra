@@ -154,12 +154,12 @@ describe('parseArgs', () => {
       const result = parseArgs(['bun', 'src/index.ts', '--show-context'])
       expect(result.meta.showContext).toBe(true)
     })
-    it('parses --dry-run-config flag', () => {
-      const result = parseArgs(['bun', 'src/index.ts', '--dry-run-config'])
-      expect(result.meta.dryRunConfig).toBe(true)
+    it('parses --show-config flag', () => {
+      const result = parseArgs(['bun', 'src/index.ts', '--show-config'])
+      expect(result.meta.showConfig).toBe(true)
     })
-    it('defaults dryRunConfig to false', () => {
-      expect(parseArgs(dev()).meta.dryRunConfig).toBe(false)
+    it('defaults showConfig to false', () => {
+      expect(parseArgs(dev()).meta.showConfig).toBe(false)
     })
     it('multiple --skill flags', () => {
       expect(parseArgs(dev('--skill', 'code', '--skill', 'search')).meta.skills).toEqual(['code', 'search'])

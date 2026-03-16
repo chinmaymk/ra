@@ -196,7 +196,7 @@ See [MCP](/modes/mcp#lazy-schema-loading) for details.
 | — | — | `--resume` | — | Resume a previous session |
 | — | — | `--file` | — | Attach files to the prompt |
 | — | — | `--exec` | — | Run a script file |
-| — | — | `--dry-run-config` | — | Show resolved configuration and exit |
+| — | — | `--show-config` | — | Show resolved configuration and exit |
 | — | — | `--config` | — | Path to config file |
 
 ## Environment variables
@@ -250,14 +250,14 @@ Credentials are env-only — never exposed as CLI flags to keep them out of shel
 | Bedrock | `RA_BEDROCK_API_KEY`, `RA_BEDROCK_REGION` | [Setup](/providers/bedrock) |
 | Ollama | `RA_OLLAMA_HOST` | [Setup](/providers/ollama) |
 
-## Dry run
+## Inspect
 
-Use `--dry-run-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, config file, env vars, and CLI flags. Sensitive values (tokens, API keys) are redacted.
+Use `--show-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, config file, env vars, and CLI flags. Sensitive values (tokens, API keys) are redacted.
 
 ```bash
-ra --dry-run-config
-ra --dry-run-config --provider openai --model gpt-4.1
-ra --dry-run-config --config recipes/coding-agent/ra.config.yaml
+ra --show-config
+ra --show-config --provider openai --model gpt-4.1
+ra --show-context   # print discovered context files
 ```
 
 ## See also

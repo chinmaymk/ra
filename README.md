@@ -510,13 +510,12 @@ Every option shown in the sections above (`compaction`, `permissions`, `memory`,
 ra --provider openai --model gpt-4.1 --thinking high --max-iterations 10 "Review this"
 ```
 
-### Dry run
-
-Use `--dry-run-config` to print the fully resolved configuration without starting the agent. Shows provider, model, tools, middleware, context files, skills, compaction, memory, MCP, permissions, and observability settings — all after merging defaults, config file, env vars, and CLI flags.
+### Inspect
 
 ```bash
-ra --dry-run-config
-ra --dry-run-config --provider openai --model gpt-4.1
+ra --show-config                                    # print resolved config as JSON
+ra --show-config --provider openai --model gpt-4.1  # see how overrides merge
+ra --show-context                                   # print discovered context files
 ```
 
 ## Scripting
