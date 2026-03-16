@@ -491,7 +491,7 @@ ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review t
 Layered config. Each layer overrides the previous.
 
 ```
-defaults → config file → env vars → CLI flags
+defaults > config file > env vars > CLI flags
 ```
 
 ```yaml

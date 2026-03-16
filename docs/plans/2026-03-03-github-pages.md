@@ -146,7 +146,7 @@ features:
   - title: Four Modes
     details: One-shot CLI, interactive REPL, HTTP server, MCP server. Same binary, different flags.
   - title: Layered Config
-    details: defaults → file → env → CLI. Commit a baseline, override per-run. No surprises.
+    details: defaults > file > env > CLI. Commit a baseline, override per-run. No surprises.
   - title: Skills & Middleware
     details: Reusable instruction bundles and composable middleware. Build any agent from config.
 ---
@@ -458,7 +458,7 @@ Migrate from README `### Layered config` section:
 ```md
 # Layered Config
 
-**defaults → file → env → CLI.** Each layer overrides the previous. No surprise precedence.
+**defaults > file > env > CLI.** Each layer overrides the previous. No surprise precedence.
 
 Commit a `ra.config.yml` for a team or project baseline. Use environment variables for secrets and per-environment behavior. Use CLI flags when you need a one-off override.
 
@@ -729,7 +729,7 @@ git commit -m "docs: add modes pages (CLI, REPL, HTTP server, MCP server)"
 ```md
 # Configuration Reference
 
-ra uses a layered config system: **defaults → file → env → CLI**. See [Layered Config](/concepts/config) for how it works.
+ra uses a layered config system: **defaults > file > env > CLI**. See [Layered Config](/concepts/config) for how it works.
 
 ## Config file
 

@@ -1,6 +1,6 @@
 # src/config/
 
-Layered configuration system: defaults → config file → env vars → CLI flags.
+Layered configuration system: defaults > config file > env vars > CLI flags.
 
 ## Files
 
@@ -14,7 +14,7 @@ Layered configuration system: defaults → config file → env vars → CLI flag
 
 Each layer overrides the previous:
 ```
-defaults.ts → ra.config.{yml,json,toml} → RA_* env vars → --cli-flags
+defaults.ts > ra.config.{yml,json,toml} > RA_* env vars > --cli-flags
 ```
 
 ## Key RaConfig Fields
