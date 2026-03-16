@@ -56,9 +56,9 @@ permissions:
         deny: ["--force", "--hard"]
 ```
 
-Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the audit log.
+Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](https://chinmaymk.github.io/ra/middleware/) intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](https://chinmaymk.github.io/ra/observability/).
 
-It talks to multiple providers — Anthropic, OpenAI, Google, Ollama, Bedrock, Azure. Switch with a flag or lock it in config. Use a local Ollama model for code that shouldn't leave your machine, a frontier model when you need the reasoning.
+It talks to [multiple providers](https://chinmaymk.github.io/ra/providers/anthropic/) — Anthropic, OpenAI, Google, Ollama, Bedrock, Azure. Switch with a flag or lock it in config. Use a local Ollama model for code that shouldn't leave your machine, a frontier model when you need the reasoning.
 
 ## Install
 
@@ -81,6 +81,7 @@ ra --mcp-stdio                                                  # MCP server
 ```
 
 ## The Agent Loop
+<sup>[docs](https://chinmaymk.github.io/ra/core/agent-loop/)</sup>
 
 Send messages to the model, stream the response, execute any tool calls, repeat. Every step fires a middleware hook you can intercept.
 
@@ -91,9 +92,10 @@ User message → [beforeLoopBegin]
   → [afterLoopIteration] → repeat or [afterLoopComplete]
 ```
 
-The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. Context compaction kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context.
+The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. [Context compaction](https://chinmaymk.github.io/ra/core/context-control/) kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context.
 
 ## Providers
+<sup>[docs](https://chinmaymk.github.io/ra/providers/anthropic/)</sup>
 
 Switch with a flag or set it in config.
 
@@ -109,10 +111,11 @@ ra --provider azure --azure-deployment my-gpt4o "Analyze this log"
 Each provider needs an API key via environment variable (`RA_ANTHROPIC_API_KEY`, `RA_OPENAI_API_KEY`, `RA_GOOGLE_API_KEY`, etc). Bedrock and Azure fall back to their standard credential chains.
 
 ## Tools
+<sup>[docs](https://chinmaymk.github.io/ra/tools/)</sup>
 
 Ra ships with built-in tools for filesystem operations (`Read`, `Write`, `Edit`, `Glob`, `Grep`, ...), shell execution (`Bash`/`PowerShell`), web fetching, and agent interaction (`AskUserQuestion`, `TodoWrite`, `Agent`). The `Agent` tool forks parallel copies of the agent to work on independent tasks simultaneously.
 
-Control what tools can do with regex-based allow/deny rules:
+Control what tools can do with regex-based [allow/deny rules](https://chinmaymk.github.io/ra/permissions/):
 
 ```yaml
 permissions:
@@ -127,6 +130,7 @@ permissions:
 ```
 
 ## Skills
+<sup>[docs](https://chinmaymk.github.io/ra/skills/)</sup>
 
 Reusable instruction bundles — roles, behaviors, scripts, and reference docs packaged as directories.
 
@@ -139,6 +143,7 @@ ra --skill debugger --file crash.log "Find the root cause"
 Ra ships with built-in skills (`code-review`, `architect`, `planner`, `debugger`, `code-style`, `writer`) and you can install more from GitHub repos, npm packages, or URLs. Each skill is a `SKILL.md` with YAML frontmatter, optional scripts, and reference docs.
 
 ## Middleware
+<sup>[docs](https://chinmaymk.github.io/ra/middleware/)</sup>
 
 Hook into every step of the agent loop with TypeScript files or inline expressions.
 
@@ -164,9 +169,10 @@ Same agent, multiple entry points.
 | **HTTP** | `--http` | Streaming SSE or sync JSON |
 | **MCP** | `--mcp-stdio` / `--mcp` | Expose ra as a tool for Cursor, Claude Desktop, other agents |
 
-Ra also speaks MCP as a client — connect to external MCP servers and their tools become available to the model. Sessions are persisted as JSONL and can be resumed from any interface with `--resume`.
+Ra also speaks [MCP as a client](https://chinmaymk.github.io/ra/modes/mcp/) — connect to external MCP servers and their tools become available to the model. [Sessions](https://chinmaymk.github.io/ra/core/sessions/) are persisted as JSONL and can be resumed from any interface with `--resume`.
 
 ## Configuration
+<sup>[docs](https://chinmaymk.github.io/ra/configuration/)</sup>
 
 Layered config — each layer overrides the previous.
 
@@ -177,6 +183,7 @@ defaults → ra.config.yml → env vars → CLI flags
 Supports YAML, JSON, and TOML config files. Environment variables use the `RA_` prefix. CLI flags override everything.
 
 ## Recipes
+<sup>[docs](https://chinmaymk.github.io/ra/recipes/)</sup>
 
 Pre-built agent configurations you can fork and commit to your repo.
 
@@ -188,6 +195,7 @@ ra --config recipes/coding-agent/ra.config.yaml
 ```
 
 ## GitHub Actions
+<sup>[docs](https://chinmaymk.github.io/ra/modes/github-actions/)</sup>
 
 ```yaml
 - uses: chinmaymk/ra@latest
@@ -201,7 +209,7 @@ ra --config recipes/coding-agent/ra.config.yaml
 
 ## Documentation
 
-This README covers the highlights. For the full reference — context discovery, compaction, observability, memory, MCP, sessions, scripting, and all configuration options — see the [docs](docs/site/).
+This README covers the highlights. For the full reference — context discovery, compaction, observability, memory, MCP, sessions, scripting, and all configuration options — see the [docs](https://chinmaymk.github.io/ra/).
 
 ## Building from Source
 
