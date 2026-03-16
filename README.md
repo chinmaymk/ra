@@ -34,7 +34,7 @@ cat server.log | ra "Find the root cause of these errors"
 ra   # interactive REPL
 ```
 
-The config lives in your repo — skills, permissions, model routing, middleware — versioned and reviewable. When a new engineer clones the project, they get the same agent behavior everyone else has. No setup docs. It's just there.
+The config lives in your repo — skills, permissions, middleware — versioned and reviewable. When a new engineer clones the project, they get the same agent behavior everyone else has. No setup docs. It's just there.
 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
@@ -52,24 +52,9 @@ permissions:
         deny: ["--force", "--hard"]
 ```
 
-Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [9 middleware hooks](#middleware) intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](#observability).
+Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](#middleware) intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](#observability).
 
-It talks to [6 providers](#providers), and different models are better at different tasks. Route skills to different models — Sonnet for deep code review, Flash for quick docs, a local Ollama model for code that shouldn't leave your machine:
-
-```yaml
-skills:
-  - name: code-review
-    provider: anthropic
-    model: claude-sonnet-4-6
-  - name: documentation
-    provider: google
-    model: gemini-flash-2.5
-  - name: internal-secrets-audit
-    provider: ollama
-    model: llama3
-```
-
-The sensitive stuff never leaves your machine. The expensive reasoning only runs when needed. One config, three providers, no code changes.
+It talks to [multiple providers](#providers) — Anthropic, OpenAI, Google, Ollama, Bedrock, Azure. Switch with a flag or lock it in config. Use a local Ollama model for code that shouldn't leave your machine, a frontier model when you need the reasoning. Same config, different `--provider` flag.
 
 ## Install
 
