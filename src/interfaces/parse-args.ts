@@ -16,6 +16,7 @@ export interface ParsedArgsMeta {
   resume?: string
   configPath?: string
   exec?: string
+  agent?: string
   showContext: boolean
   listMemories: boolean
   memories?: string
@@ -118,6 +119,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'mcp-server-port':             { type: 'string' },
       'mcp-server-tool-name':        { type: 'string' },
       'mcp-server-tool-description': { type: 'string' },
+      // Multi-agent
+      'agent':                       { type: 'string' },
       // Memory
       'memory':                      { type: 'boolean' },
       'list-memories':               { type: 'boolean' },
@@ -167,6 +170,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     meta: {
       help:         (values.help as boolean | undefined) ?? false,
       version:      (values.version as boolean | undefined) ?? false,
+      agent:        values.agent as string | undefined,
       showContext:   (values['show-context'] as boolean | undefined) ?? false,
       listMemories:  (values['list-memories'] as boolean | undefined) ?? false,
       memories:      values.memories as string | undefined,

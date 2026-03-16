@@ -15,6 +15,9 @@ OPTIONS
   --file <path>                       File to attach (repeatable)
   --resume <session-id>               Resume a previous session
 
+MULTI-AGENT
+  --agent <name>                      Select agent in multi-agent mode
+
 INTERFACE
   --cli                               Oneshot mode: run prompt and exit
   --repl                              Interactive REPL mode (default)
@@ -99,4 +102,5 @@ EXAMPLES
   ra --mcp --mcp-server-port 4000
   ra --mcp-stdio
   ra --mcp-server-enabled --mcp-server-port 4000 --repl
+  ra --agent coder "Write a function"
 `.trim()

@@ -12,6 +12,9 @@ import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { serializeContent } from './providers/utils'
+import type { RaConfig } from './config/types'
+import { bootstrapMultiAgent, type MultiAgentContext } from './multi-agent'
+import { MultiAgentRepl } from './interfaces/multi-agent-repl'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -227,6 +230,155 @@ async function launchRepl(app: AppContext): Promise<void> {
   await app.shutdown()
 }
 
+// ── Multi-agent launchers ─────────────────────────────────────────────
+
+async function launchMultiAgent(
+  parsed: ReturnType<typeof parseArgs>,
+  config: RaConfig,
+  ctx: MultiAgentContext,
+): Promise<void> {
+  const signals = onSignals(ctx.shutdown)
+
+  // Standalone commands require --agent in multi-agent mode
+  if (parsed.meta.showContext || parsed.meta.listMemories || parsed.meta.memories !== undefined || parsed.meta.forget !== undefined) {
+    if (!parsed.meta.agent) {
+      console.error('Error: --agent <name> is required for this command in multi-agent mode')
+      await ctx.shutdown()
+      process.exit(1)
+    }
+    const app = ctx.agents.get(parsed.meta.agent)
+    if (!app) {
+      console.error(`Error: unknown agent "${parsed.meta.agent}". Available: ${[...ctx.agents.keys()].join(', ')}`)
+      await ctx.shutdown()
+      process.exit(1)
+    }
+    await handleStandaloneCommands(parsed, app)
+  }
+
+  switch (config.interface) {
+    case 'http': {
+      return launchMultiAgentHttp(ctx, config, signals)
+    }
+    case 'mcp':
+    case 'mcp-stdio': {
+      return launchMultiAgentMcp(ctx, config)
+    }
+    case 'cli': {
+      return launchMultiAgentCli(parsed, ctx)
+    }
+    default: {
+      if (parsed.meta.prompt && !parsed.config.interface) {
+        return launchMultiAgentCli(parsed, ctx)
+      }
+      return launchMultiAgentRepl(ctx)
+    }
+  }
+}
+
+async function launchMultiAgentRepl(ctx: MultiAgentContext): Promise<void> {
+  const repl = new MultiAgentRepl(ctx)
+  await repl.start()
+  await ctx.shutdown()
+}
+
+async function launchMultiAgentCli(
+  parsed: ReturnType<typeof parseArgs>,
+  ctx: MultiAgentContext,
+): Promise<void> {
+  const agentName = parsed.meta.agent ?? ctx.defaultAgent
+  let app = ctx.agents.get(agentName)
+  if (!app) {
+    console.error(`Error: unknown agent "${agentName}". Available: ${[...ctx.agents.keys()].join(', ')}`)
+    await ctx.shutdown()
+    process.exit(1)
+  }
+  // --resume: re-bootstrap the target agent with the resume sessionId
+  if (parsed.meta.resume) {
+    const oldApp = app
+    await oldApp.shutdown()
+    app = await bootstrap(oldApp.config, { sessionId: parsed.meta.resume })
+    ctx.agents.set(agentName, app)
+  }
+  await launchCli(parsed, app)
+  await ctx.shutdown()
+}
+
+async function launchMultiAgentHttp(
+  ctx: MultiAgentContext,
+  config: RaConfig,
+  signals: { remove: () => void },
+): Promise<void> {
+  // Use the first agent's config for HTTP server settings, but route per-agent
+  const firstApp = ctx.agents.values().next().value!
+  const httpServer = new HttpServer({
+    port: config.http?.port ?? firstApp.config.http.port,
+    token: config.http?.token || firstApp.config.http.token || undefined,
+    model: firstApp.config.model,
+    provider: firstApp.provider,
+    tools: firstApp.tools,
+    storage: firstApp.storage,
+    systemPrompt: firstApp.config.systemPrompt,
+    skillMap: firstApp.skillMap,
+    maxIterations: firstApp.config.maxIterations,
+    toolTimeout: firstApp.config.toolTimeout,
+    middleware: firstApp.middleware,
+    thinking: firstApp.config.thinking,
+    compaction: firstApp.config.compaction,
+    contextMessages: firstApp.contextMessages,
+    agents: ctx,
+  })
+  await httpServer.start()
+  console.error(`HTTP server listening on port ${httpServer.port}`)
+
+  const httpShutdown = async () => {
+    try { await httpServer.stop() } catch { /* best-effort */ }
+    await ctx.shutdown()
+  }
+  signals.remove()
+  onSignals(httpShutdown)
+  await new Promise(() => {}) // keep alive
+}
+
+async function launchMultiAgentMcp(
+  ctx: MultiAgentContext,
+  config: RaConfig,
+): Promise<void> {
+  const { z } = await import('zod')
+
+  // Build an MCP server that exposes each agent as a separate tool
+  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
+  const server = new McpServer({ name: 'ra-multi-agent', version: '1.0.0' })
+
+  for (const [name, app] of ctx.agents) {
+    server.tool(
+      name,
+      `Agent: ${name} (${app.config.provider}/${app.config.model})`,
+      { prompt: z.string().describe('The prompt to send to the agent') },
+      async ({ prompt }) => {
+        const handler = createMcpHandler(app)
+        const text = await handler(prompt)
+        return { content: [{ type: 'text' as const, text }] }
+      },
+    )
+  }
+
+  if (config.interface === 'mcp-stdio') {
+    const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
+    process.stderr.write(`MCP stdio server starting with agents: ${[...ctx.agents.keys()].join(', ')}\n`)
+    await server.connect(new StdioServerTransport())
+    await ctx.shutdown()
+  } else {
+    const { startMcpHttp: startHttp } = await import('./mcp/server')
+    // Use the first agent's MCP server config
+    const firstApp = ctx.agents.values().next().value!
+    const mcpConfig = firstApp.config.mcp.server
+    const handler = createMcpHandler(firstApp)
+    await startHttp(mcpConfig, handler)
+    console.error(`MCP server (http) listening on port ${mcpConfig.port}`)
+    await new Promise(() => {}) // keep alive
+  }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -252,6 +404,12 @@ async function main(): Promise<void> {
     cliArgs: parsed.config,
     env: process.env as Record<string, string | undefined>,
   })
+
+  // Multi-agent mode
+  if (config.agents && Object.keys(config.agents).length > 0) {
+    const ctx = await bootstrapMultiAgent(config)
+    return launchMultiAgent(parsed, config, ctx)
+  }
 
   const app = await bootstrap(config, { sessionId: parsed.meta.resume })
 

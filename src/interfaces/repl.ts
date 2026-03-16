@@ -31,6 +31,13 @@ export interface ReplOptions {
   memoryStore?: MemoryStore
 }
 
+export interface ReplAgentState {
+  messages: IMessage[]
+  sessionId: string | undefined
+  pendingSkill: Skill | undefined
+  pendingAttachments: ContentPart[]
+}
+
 export class Repl {
   private options: ReplOptions
   private messages: IMessage[] = []
@@ -40,6 +47,7 @@ export class Repl {
   private askUserResolve: ((answer: string) => void) | undefined
   private activeLoop: AgentLoop | null = null
   private lastInterruptTime = 0
+  private rl: readline.Interface | undefined
 
   constructor(options: ReplOptions) {
     this.options = options
@@ -51,19 +59,9 @@ export class Repl {
     return s.id
   }
 
-  async start(): Promise<void> {
-    if (this.sessionId) {
-      this.messages = await this.options.storage.readMessages(this.sessionId)
-    } else {
-      this.sessionId = await this.newSession()
-    }
-
-    tui.printHeader(this.options.model, this.sessionId!)
-    if (this.options.sessionId) {
-      tui.printResumeHeader(this.sessionId!, this.messages.length)
-    }
-
-    // Register AskUserQuestion to read inline from the terminal
+  /** Register AskUserQuestion tool wired to an external readline interface. */
+  registerAskUser(rl: readline.Interface): void {
+    this.rl = rl
     const { description, inputSchema } = askUserTool()
     this.options.tools.register({
       name: 'AskUserQuestion',
@@ -78,17 +76,69 @@ export class Repl {
         return new Promise<string>(resolve => { this.askUserResolve = resolve })
       },
     })
+  }
+
+  /** Snapshot per-agent conversation state (for multi-agent context switching). */
+  saveAgentState(): ReplAgentState {
+    return {
+      messages: this.messages,
+      sessionId: this.sessionId,
+      pendingSkill: this.pendingSkill,
+      pendingAttachments: this.pendingAttachments,
+    }
+  }
+
+  /** Restore per-agent conversation state and swap backing options. Re-registers AskUser on new tools. */
+  loadAgentState(state: ReplAgentState, options: ReplOptions): void {
+    this.messages = state.messages
+    this.sessionId = state.sessionId
+    this.pendingSkill = state.pendingSkill
+    this.pendingAttachments = state.pendingAttachments
+    this.options = options
+    if (this.rl) this.registerAskUser(this.rl)
+  }
+
+  /** Whether an AskUserQuestion is waiting for input. */
+  hasPendingAsk(): boolean { return !!this.askUserResolve }
+
+  /** Resolve a pending AskUserQuestion with the given answer. */
+  resolveAsk(answer: string): void {
+    const resolve = this.askUserResolve
+    this.askUserResolve = undefined
+    resolve?.(answer)
+  }
+
+  /** Cancel a pending AskUserQuestion (empty answer). */
+  cancelAsk(): void { this.resolveAsk('') }
+
+  /** Abort the currently running agent loop. */
+  abort(): void { this.activeLoop?.abort() }
+
+  /** Whether a loop is currently running. */
+  get isRunning(): boolean { return !!this.activeLoop }
+
+  async start(): Promise<void> {
+    if (this.sessionId) {
+      this.messages = await this.options.storage.readMessages(this.sessionId)
+    } else {
+      this.sessionId = await this.newSession()
+    }
+
+    tui.printHeader(this.options.model, this.sessionId!)
+    if (this.options.sessionId) {
+      tui.printResumeHeader(this.sessionId!, this.messages.length)
+    }
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdout.isTTY })
     rl.setPrompt(tui.PROMPT)
 
+    this.registerAskUser(rl)
+
     // Ctrl+C: cancel active request or double-press to exit
     rl.on('SIGINT', () => {
-      if (this.askUserResolve) {
-        const resolve = this.askUserResolve
-        this.askUserResolve = undefined
+      if (this.hasPendingAsk()) {
+        this.cancelAsk()
         rl.setPrompt(tui.PROMPT)
-        resolve('')
         return
       }
       if (this.activeLoop) {
@@ -112,12 +162,10 @@ export class Repl {
       const trimmed = line.trim()
 
       // Route answer to waiting ask_user Promise
-      if (this.askUserResolve) {
+      if (this.hasPendingAsk()) {
         if (!trimmed) { rl.prompt(); return }
-        const resolve = this.askUserResolve
-        this.askUserResolve = undefined
+        this.resolveAsk(trimmed)
         rl.setPrompt(tui.PROMPT)
-        resolve(trimmed)
         return
       }
 

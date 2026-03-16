@@ -9,6 +9,7 @@ import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
 import { errorMessage } from '../utils/errors'
+import type { MultiAgentContext } from '../multi-agent'
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -29,6 +30,8 @@ export interface HttpOptions {
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
+  /** Multi-agent context — when set, requests can specify an `agent` field to route to a specific agent. */
+  agents?: MultiAgentContext
 }
 
 export class HttpServer {
@@ -83,33 +86,57 @@ export class HttpServer {
     }
   }
 
-  private async parseBody(req: Request): Promise<{ messages: IMessage[]; sessionId?: string } | null> {
+  private async parseBody(req: Request): Promise<{ messages: IMessage[]; sessionId?: string; agent?: string } | null> {
     try {
       const body = await req.json() as Record<string, unknown>
       if (!body || typeof body !== 'object') return null
       const messages = Array.isArray(body.messages) ? body.messages as IMessage[] : []
       const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined
-      return { messages, sessionId }
+      const agent = typeof body.agent === 'string' ? body.agent : undefined
+      return { messages, sessionId, agent }
     } catch {
       return null
     }
   }
 
-  private static badRequest(): Response {
-    return jsonResponse({ error: 'Invalid JSON' }, 400)
+  private static badRequest(msg = 'Invalid JSON'): Response {
+    return jsonResponse({ error: msg }, 400)
   }
 
-  private prependSystem(messages: IMessage[]): IMessage[] {
-    const prefix: IMessage[] = []
-    if (this.options.systemPrompt) {
-      prefix.push({ role: 'system', content: this.options.systemPrompt })
+  /** Resolve which options to use — routes to agent context in multi-agent mode. */
+  private resolveOptions(agentName?: string): HttpOptions | null {
+    if (!agentName || !this.options.agents) return this.options
+    const app = this.options.agents.agents.get(agentName)
+    if (!app) return null
+    return {
+      port: this.options.port,
+      token: this.options.token,
+      model: app.config.model,
+      provider: app.provider,
+      tools: app.tools,
+      storage: app.storage,
+      systemPrompt: app.config.systemPrompt,
+      skillMap: app.skillMap,
+      maxIterations: app.config.maxIterations,
+      toolTimeout: app.config.toolTimeout,
+      middleware: app.middleware,
+      thinking: app.config.thinking,
+      compaction: app.config.compaction,
+      contextMessages: app.contextMessages,
     }
-    if (this.options.skillMap && this.options.skillMap.size > 0) {
-      const xml = buildAvailableSkillsXml(this.options.skillMap)
+  }
+
+  private prependSystemWith(opts: HttpOptions, messages: IMessage[]): IMessage[] {
+    const prefix: IMessage[] = []
+    if (opts.systemPrompt) {
+      prefix.push({ role: 'system', content: opts.systemPrompt })
+    }
+    if (opts.skillMap && opts.skillMap.size > 0) {
+      const xml = buildAvailableSkillsXml(opts.skillMap)
       if (xml) prefix.push({ role: 'user', content: xml })
     }
-    if (this.options.contextMessages?.length) {
-      prefix.push(...this.options.contextMessages)
+    if (opts.contextMessages?.length) {
+      prefix.push(...opts.contextMessages)
     }
     prefix.push(...messages)
     return prefix
@@ -119,18 +146,22 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const messages = this.prependSystem(body.messages ?? [])
+    const resolved = this.resolveOptions(body.agent)
+    if (!resolved) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
+    const opts = resolved
+
+    const messages = this.prependSystemWith(opts, body.messages ?? [])
 
     const loop = new AgentLoop({
-      provider: this.options.provider,
-      tools: this.options.tools,
-      model: this.options.model,
-      middleware: this.options.middleware,
-      maxIterations: this.options.maxIterations,
-      toolTimeout: this.options.toolTimeout,
+      provider: opts.provider,
+      tools: opts.tools,
+      model: opts.model,
+      middleware: opts.middleware,
+      maxIterations: opts.maxIterations,
+      toolTimeout: opts.toolTimeout,
       sessionId: body.sessionId,
-      thinking: this.options.thinking,
-      compaction: this.options.compaction,
+      thinking: opts.thinking,
+      compaction: opts.compaction,
     })
 
     try {
@@ -150,8 +181,10 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const messages = this.prependSystem(body.messages ?? [])
-    const opts = this.options
+    const resolved = this.resolveOptions(body.agent)
+    if (!resolved) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
+    const opts = resolved
+    const messages = this.prependSystemWith(opts, body.messages ?? [])
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()

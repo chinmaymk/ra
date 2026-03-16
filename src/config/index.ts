@@ -9,12 +9,9 @@ import type { RaConfig, LoadConfigOptions } from './types'
 export { defaultConfig } from './defaults'
 export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule } from './types'
 
-const CONFIG_FILES = [
-  'ra.config.json',
-  'ra.config.yaml',
-  'ra.config.yml',
-  'ra.config.toml',
-]
+const CONFIG_EXTENSIONS = ['json', 'yaml', 'yml', 'toml']
+const CONFIG_FILES = CONFIG_EXTENSIONS.map(ext => `ra.config.${ext}`)
+const AGENTS_FILES = CONFIG_EXTENSIONS.map(ext => `ra.agents.${ext}`)
 
 function deepMerge(
   target: Record<string, unknown>,
@@ -133,6 +130,20 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   return r
 }
 
+async function loadAgentsFile(cwd: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
+  let dir = cwd
+  while (true) {
+    for (const name of AGENTS_FILES) {
+      const full = join(dir, name)
+      if (await Bun.file(full).exists()) return { config: await parseFile(full) as Partial<RaConfig>, filePath: full }
+    }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return { config: {} }
+}
+
 export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaConfig> {
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
@@ -159,6 +170,19 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
     const resolved = resolvePath(config.systemPrompt, configDir)
     const f = Bun.file(resolved)
     if (await f.exists()) config.systemPrompt = await f.text()
+  }
+
+  // If no configPath was explicitly provided and no agents key from the config file,
+  // check for a standalone ra.agents.* file
+  if (!options.configPath && !config.agents) {
+    const { config: agentsConfig, filePath: agentsFilePath } = await loadAgentsFile(cwd)
+    if (agentsFilePath && (agentsConfig as Record<string, unknown>).agents) {
+      const ac = agentsConfig as Record<string, unknown>
+      config.agents = ac.agents as Record<string, string>
+      if (ac.defaultAgent) config.defaultAgent = ac.defaultAgent as string
+      if (ac.interface) config.interface = ac.interface as RaConfig['interface']
+      if (ac.dataDir) config.dataDir = resolvePath(ac.dataDir as string, dirname(agentsFilePath))
+    }
   }
 
   return config

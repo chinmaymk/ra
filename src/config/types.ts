@@ -88,6 +88,10 @@ export interface RaConfig {
   logsEnabled: boolean
   logLevel: LogLevel
   tracesEnabled: boolean
+  /** Multi-agent: map of agent name → config file path. When set, orchestrator mode is enabled. */
+  agents?: Record<string, string>
+  /** Multi-agent: which agent receives messages by default. Defaults to first listed agent. */
+  defaultAgent?: string
 }
 
 export interface McpClientConfig {
