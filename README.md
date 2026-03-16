@@ -82,6 +82,10 @@ Ra is a general-purpose agent loop — the same binary powers wildly different w
 - **Code agent** — edit files, run tests, fix bugs, review PRs. Point it at a repo with the right tools and permissions and it's a full coding assistant.
 - **Research agent** — feed it docs, URLs, or a knowledge base. Pair with web fetch and memory to build an agent that investigates questions, synthesizes sources, and remembers what it learned.
 - **CI agent** — run in GitHub Actions or any CI pipeline to review PRs, enforce style, triage failing tests, or generate changelogs on every push.
+- **Documentation agent** — point it at a codebase or doc set and it can generate docs, keep them in sync with code, or answer questions grounded in the content. Use the writer skill to draft, or run it as an MCP server so other tools can query your docs through it.
+- **Security agent** — audit code for vulnerabilities, enforce policies, run compliance checks. Middleware logging gives you a full audit trail of every action the agent took and why.
+- **Data analysis agent** — pipe in CSVs, query results, or log files. Let it summarize, spot anomalies, generate reports. Combine with memory to track trends across runs.
+- **On-call agent** — pipe alerts or production logs in, let it triage and correlate. Memory means it learns from past incidents — it gets better at your system over time.
 - **Personal agent** — wire it up as a REPL or HTTP server for daily tasks: drafting emails, summarizing meeting notes, managing todos, querying your own data via MCP tools.
 
 The building blocks are the same — providers, tools, skills, middleware — you just compose them differently. One config file defines a code reviewer; another defines a research assistant. Versatility is the point.
