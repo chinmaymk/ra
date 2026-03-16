@@ -59,10 +59,17 @@ export interface HttpOptions {
 export class HttpServer {
   private options: HttpOptions
   private server: ReturnType<typeof Bun.serve> | null = null
+  private agentOptionsCache = new Map<string, HttpOptions>()
 
   constructor(options: HttpOptions) {
     this.options = options
     options.tools.register(askUserTool())
+    // Pre-compute agent options for multi-agent routing
+    if (options.agents) {
+      for (const [name, app] of options.agents.agents) {
+        this.agentOptionsCache.set(name, toHttpOptions(app))
+      }
+    }
   }
 
   get port(): number { return (this.server?.port ?? this.options.port) as number }
@@ -128,9 +135,7 @@ export class HttpServer {
   /** Resolve which options to use — routes to agent context in multi-agent mode. */
   private resolveOptions(agentName?: string): HttpOptions | null {
     if (!agentName || !this.options.agents) return this.options
-    const app = this.options.agents.agents.get(agentName)
-    if (!app) return null
-    return toHttpOptions(app)
+    return this.agentOptionsCache.get(agentName) ?? null
   }
 
   private prependSystemWith(opts: HttpOptions, messages: IMessage[]): IMessage[] {
@@ -153,9 +158,8 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const resolved = this.resolveOptions(body.agent)
-    if (!resolved) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
-    const opts = resolved
+    const opts = this.resolveOptions(body.agent)
+    if (!opts) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
 
     const messages = this.prependSystemWith(opts, body.messages ?? [])
 
@@ -188,9 +192,8 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const resolved = this.resolveOptions(body.agent)
-    if (!resolved) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
-    const opts = resolved
+    const opts = this.resolveOptions(body.agent)
+    if (!opts) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
     const messages = this.prependSystemWith(opts, body.messages ?? [])
     const stream = new ReadableStream({
       async start(controller) {

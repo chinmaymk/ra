@@ -18,20 +18,15 @@ export async function bootstrapMultiAgent(config: RaConfig): Promise<MultiAgentC
   const entries = Object.entries(config.agents!)
   const defaultAgent = config.defaultAgent ?? entries[0]![0]
 
-  for (const [name, configPath] of entries) {
-    // Load the agent's own config file
+  const results = await Promise.all(entries.map(async ([name, configPath]) => {
     const agentConfig = await loadConfig({ configPath, cwd: config.configDir })
-
-    // Override dataDir to nest under orchestrator's dataDir
     agentConfig.dataDir = join(config.dataDir, name)
-
-    // Strip orchestrator-level fields from agent config
     delete agentConfig.agents
     delete agentConfig.defaultAgent
-
     const app = await bootstrap(agentConfig, {})
-    agents.set(name, app)
-  }
+    return [name, app] as const
+  }))
+  for (const [name, app] of results) agents.set(name, app)
 
   const shutdown = async () => {
     for (const app of agents.values()) {

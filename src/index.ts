@@ -298,19 +298,24 @@ async function launchMultiAgentMcp(
   ctx: MultiAgentContext,
   config: RaConfig,
 ): Promise<void> {
-  const { z } = await import('zod')
+  const [{ z }, { McpServer }] = await Promise.all([
+    import('zod'),
+    import('@modelcontextprotocol/sdk/server/mcp.js'),
+  ])
 
-  // Build an MCP server that exposes each agent as a separate tool
-  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
   const server = new McpServer({ name: 'ra-multi-agent', version: '1.0.0' })
 
+  // Pre-create handlers outside tool callbacks
+  const handlers = new Map<string, ReturnType<typeof createMcpHandler>>()
+  for (const [name, app] of ctx.agents) handlers.set(name, createMcpHandler(app))
+
   for (const [name, app] of ctx.agents) {
+    const handler = handlers.get(name)!
     server.tool(
       name,
       `Agent: ${name} (${app.config.provider}/${app.config.model})`,
       { prompt: z.string().describe('The prompt to send to the agent') },
       async ({ prompt }) => {
-        const handler = createMcpHandler(app)
         const text = await handler(prompt)
         return { content: [{ type: 'text' as const, text }] }
       },
@@ -323,13 +328,62 @@ async function launchMultiAgentMcp(
     await server.connect(new StdioServerTransport())
     await ctx.shutdown()
   } else {
-    const { startMcpHttp: startHttp } = await import('./mcp/server')
-    // Use the first agent's MCP server config
+    // Use StreamableHTTPServerTransport to serve the multi-agent McpServer over HTTP
+    const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js')
+    const { createServer } = await import('node:http')
+    const { randomUUID } = await import('node:crypto')
     const firstApp = ctx.agents.values().next().value!
-    const mcpConfig = firstApp.config.mcp.server
-    const handler = createMcpHandler(firstApp)
-    await startHttp(mcpConfig, handler)
-    console.error(`MCP server (http) listening on port ${mcpConfig.port}`)
+    const port = firstApp.config.mcp.server?.port ?? 3100
+    const transports = new Map<string, StreamableHTTPServerTransport>()
+
+    const httpServer = createServer(async (req, res) => {
+      const url = new URL(req.url ?? '/', `http://localhost:${port}`)
+      if (url.pathname !== '/mcp') { res.writeHead(404).end('Not found'); return }
+      const sessionId = (req.headers['mcp-session-id'] as string | undefined) ?? ''
+
+      if (req.method === 'DELETE') {
+        const t = transports.get(sessionId)
+        if (!t) { res.writeHead(404).end('Session not found'); return }
+        await t.close()
+        transports.delete(sessionId)
+        res.writeHead(200).end()
+        return
+      }
+
+      let transport: StreamableHTTPServerTransport
+      let isNew = false
+      if (req.method === 'POST' && !sessionId) {
+        transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() })
+        transport.onclose = () => { if (transport.sessionId) transports.delete(transport.sessionId) }
+        await server.connect(transport)
+        isNew = true
+      } else if (sessionId && transports.has(sessionId)) {
+        transport = transports.get(sessionId)!
+      } else {
+        res.writeHead(400).end('Bad request: missing or invalid session')
+        return
+      }
+
+      if (isNew && transport.sessionId) transports.set(transport.sessionId, transport)
+      try {
+        await transport.handleRequest(req, res)
+        if (isNew && transport.sessionId && !transports.has(transport.sessionId)) {
+          transports.set(transport.sessionId, transport)
+        }
+      } catch {
+        if (isNew) {
+          if (transport.sessionId) transports.delete(transport.sessionId)
+          await transport.close().catch(() => {})
+        }
+        if (!res.headersSent) res.writeHead(500).end('Internal server error')
+      }
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      httpServer.listen(port, () => resolve())
+      httpServer.once('error', reject)
+    })
+    console.error(`MCP server (http) listening on port ${port}`)
     await new Promise(() => {}) // keep alive
   }
 }
