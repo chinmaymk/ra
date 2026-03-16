@@ -12,7 +12,7 @@ import type { CompactionConfig } from '../agent/context-compaction'
 import type { MemoryStore } from '../memory/store'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
-import type { AppContext } from '../bootstrap'
+import { toBaseOptions, type AppContext } from '../bootstrap'
 import * as tui from './tui'
 
 export interface ReplOptions {
@@ -38,22 +38,7 @@ export interface ReplOptions {
 
 /** Build ReplOptions from an AppContext. */
 export function toReplOptions(app: AppContext): ReplOptions {
-  return {
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    toolTimeout: app.config.toolTimeout,
-    sessionId: app.sessionId,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
-    memoryStore: app.memoryStore,
-  }
+  return { ...toBaseOptions(app), sessionId: app.sessionId, memoryStore: app.memoryStore }
 }
 
 export interface ReplAgentState {

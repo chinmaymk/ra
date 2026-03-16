@@ -45,6 +45,24 @@ export interface AppContext {
   shutdown: () => Promise<void>
 }
 
+/** Common fields shared by all interface option builders (CLI, REPL, HTTP). */
+export function toBaseOptions(app: AppContext) {
+  return {
+    model: app.config.model,
+    provider: app.provider,
+    tools: app.tools,
+    storage: app.storage,
+    systemPrompt: app.config.systemPrompt,
+    skillMap: app.skillMap,
+    maxIterations: app.config.maxIterations,
+    toolTimeout: app.config.toolTimeout,
+    middleware: app.middleware,
+    thinking: app.config.thinking,
+    compaction: app.config.compaction,
+    contextMessages: app.contextMessages,
+  }
+}
+
 export async function bootstrap(
   config: RaConfig,
   opts: { sessionId?: string },

@@ -44,12 +44,12 @@ export async function startMcpStdio(config: McpServerConfig, handler: McpToolHan
   await server.connect(new StdioServerTransport())
 }
 
-export async function startMcpHttp(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): Promise<() => Promise<void>> {
-  const server = buildServer(config, handler, builtinTools)
+/** Serve an already-built McpServer over HTTP with StreamableHTTPServerTransport. */
+export async function serveMcpHttp(server: McpServer, port: number): Promise<() => Promise<void>> {
   const transports = new Map<string, StreamableHTTPServerTransport>()
 
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    const url = new URL(req.url ?? '/', `http://localhost:${config.port}`)
+    const url = new URL(req.url ?? '/', `http://localhost:${port}`)
     if (url.pathname !== '/mcp') {
       res.writeHead(404).end('Not found')
       return
@@ -104,7 +104,7 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
   })
 
   await new Promise<void>((resolve, reject) => {
-    httpServer.listen(config.port, () => resolve())
+    httpServer.listen(port, () => resolve())
     httpServer.once('error', reject)
   })
 
@@ -114,4 +114,9 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
     await server.close()
     await new Promise<void>((resolve, reject) => httpServer.close(err => err ? reject(err) : resolve()))
   }
+}
+
+export async function startMcpHttp(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): Promise<() => Promise<void>> {
+  const server = buildServer(config, handler, builtinTools)
+  return serveMcpHttp(server, config.port)
 }

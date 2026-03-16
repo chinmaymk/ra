@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { loadConfig } from './config'
-import { bootstrap, type AppContext } from './bootstrap'
+import { bootstrap, toBaseOptions, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { errorMessage } from './utils/errors'
 import { HELP } from './interfaces/help'
@@ -9,7 +9,7 @@ import { runCli } from './interfaces/cli'
 import { HttpServer, toHttpOptions } from './interfaces/http'
 import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
-import { startMcpStdio, startMcpHttp } from './mcp/server'
+import { startMcpStdio, startMcpHttp, serveMcpHttp } from './mcp/server'
 import { serializeContent } from './providers/utils'
 import type { RaConfig } from './config/types'
 import { bootstrapAgents, type MultiAgentContext } from './multi-agent'
@@ -148,19 +148,10 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, ctx: MultiAgentCo
   }
   const activeSkills = app.config.skills.concat(parsed.meta.skills)
   const result = await runCli({
+    ...toBaseOptions(app),
     prompt: parsed.meta.prompt!,
     files: parsed.meta.files,
     skills: activeSkills,
-    systemPrompt: app.config.systemPrompt,
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
     sessionMessages,
   })
   for (const msg of result.messages.slice(result.priorCount)) {
@@ -257,60 +248,9 @@ async function launchMcp(ctx: MultiAgentContext, config: RaConfig): Promise<void
     await server.connect(new StdioServerTransport())
     await ctx.shutdown()
   } else {
-    const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js')
-    const { createServer } = await import('node:http')
-    const { randomUUID } = await import('node:crypto')
     const firstApp = ctx.agents.values().next().value!
     const port = firstApp.config.mcp.server?.port ?? 3100
-    const transports = new Map<string, StreamableHTTPServerTransport>()
-
-    const httpServer = createServer(async (req, res) => {
-      const url = new URL(req.url ?? '/', `http://localhost:${port}`)
-      if (url.pathname !== '/mcp') { res.writeHead(404).end('Not found'); return }
-      const sessionId = (req.headers['mcp-session-id'] as string | undefined) ?? ''
-
-      if (req.method === 'DELETE') {
-        const t = transports.get(sessionId)
-        if (!t) { res.writeHead(404).end('Session not found'); return }
-        await t.close()
-        transports.delete(sessionId)
-        res.writeHead(200).end()
-        return
-      }
-
-      let transport: StreamableHTTPServerTransport
-      let isNew = false
-      if (req.method === 'POST' && !sessionId) {
-        transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() })
-        transport.onclose = () => { if (transport.sessionId) transports.delete(transport.sessionId) }
-        await server.connect(transport)
-        isNew = true
-      } else if (sessionId && transports.has(sessionId)) {
-        transport = transports.get(sessionId)!
-      } else {
-        res.writeHead(400).end('Bad request: missing or invalid session')
-        return
-      }
-
-      if (isNew && transport.sessionId) transports.set(transport.sessionId, transport)
-      try {
-        await transport.handleRequest(req, res)
-        if (isNew && transport.sessionId && !transports.has(transport.sessionId)) {
-          transports.set(transport.sessionId, transport)
-        }
-      } catch {
-        if (isNew) {
-          if (transport.sessionId) transports.delete(transport.sessionId)
-          await transport.close().catch(() => {})
-        }
-        if (!res.headersSent) res.writeHead(500).end('Internal server error')
-      }
-    })
-
-    await new Promise<void>((resolve, reject) => {
-      httpServer.listen(port, () => resolve())
-      httpServer.once('error', reject)
-    })
+    await serveMcpHttp(server, port)
     console.error(`MCP server (http) listening on port ${port}`)
     await new Promise(() => {}) // keep alive
   }

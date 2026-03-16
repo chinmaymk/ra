@@ -10,25 +10,14 @@ import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
 import { errorMessage } from '../utils/errors'
 import type { MultiAgentContext } from '../multi-agent'
-import type { AppContext } from '../bootstrap'
+import { toBaseOptions, type AppContext } from '../bootstrap'
 
 /** Build HttpOptions from an AppContext. */
 export function toHttpOptions(app: AppContext, overrides?: { agents?: MultiAgentContext }): HttpOptions {
   return {
+    ...toBaseOptions(app),
     port: app.config.http.port,
     token: app.config.http.token || undefined,
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    toolTimeout: app.config.toolTimeout,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
     ...overrides,
   }
 }
@@ -59,17 +48,10 @@ export interface HttpOptions {
 export class HttpServer {
   private options: HttpOptions
   private server: ReturnType<typeof Bun.serve> | null = null
-  private agentOptionsCache = new Map<string, HttpOptions>()
 
   constructor(options: HttpOptions) {
     this.options = options
     options.tools.register(askUserTool())
-    // Pre-compute agent options for multi-agent routing
-    if (options.agents) {
-      for (const [name, app] of options.agents.agents) {
-        this.agentOptionsCache.set(name, toHttpOptions(app))
-      }
-    }
   }
 
   get port(): number { return (this.server?.port ?? this.options.port) as number }
@@ -135,7 +117,22 @@ export class HttpServer {
   /** Resolve which options to use — routes to agent context in multi-agent mode. */
   private resolveOptions(agentName?: string): HttpOptions | null {
     if (!agentName || !this.options.agents) return this.options
-    return this.agentOptionsCache.get(agentName) ?? null
+    const app = this.options.agents.agents.get(agentName)
+    return app ? toHttpOptions(app) : null
+  }
+
+  private createLoop(opts: HttpOptions, sessionId?: string, middlewareOverride?: Partial<MiddlewareConfig>): AgentLoop {
+    return new AgentLoop({
+      provider: opts.provider,
+      tools: opts.tools,
+      model: opts.model,
+      middleware: middlewareOverride ?? opts.middleware,
+      maxIterations: opts.maxIterations,
+      toolTimeout: opts.toolTimeout,
+      sessionId,
+      thinking: opts.thinking,
+      compaction: opts.compaction,
+    })
   }
 
   private prependSystemWith(opts: HttpOptions, messages: IMessage[]): IMessage[] {
@@ -162,18 +159,7 @@ export class HttpServer {
     if (!opts) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
 
     const messages = this.prependSystemWith(opts, body.messages ?? [])
-
-    const loop = new AgentLoop({
-      provider: opts.provider,
-      tools: opts.tools,
-      model: opts.model,
-      middleware: opts.middleware,
-      maxIterations: opts.maxIterations,
-      toolTimeout: opts.toolTimeout,
-      sessionId: body.sessionId,
-      thinking: opts.thinking,
-      compaction: opts.compaction,
-    })
+    const loop = this.createLoop(opts, body.sessionId)
 
     try {
       const result = await loop.run(messages)
@@ -195,6 +181,7 @@ export class HttpServer {
     const opts = this.resolveOptions(body.agent)
     if (!opts) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
     const messages = this.prependSystemWith(opts, body.messages ?? [])
+    const self = this
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()
@@ -221,17 +208,7 @@ export class HttpServer {
           onStreamChunk: (opts.middleware?.onStreamChunk ?? []).concat(onStreamChunk),
         }
 
-        const loop = new AgentLoop({
-          provider: opts.provider,
-          tools: opts.tools,
-          model: opts.model,
-          middleware,
-          maxIterations: opts.maxIterations,
-          toolTimeout: opts.toolTimeout,
-          sessionId: body.sessionId,
-          thinking: opts.thinking,
-          compaction: opts.compaction,
-        })
+        const loop = self.createLoop(opts, body.sessionId, middleware)
 
         try {
           await loop.run(messages)
