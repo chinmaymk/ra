@@ -23,7 +23,6 @@ import { loadBuiltinSkills } from './skills/builtin'
 import { loadSkills } from './skills/loader'
 import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
-import { createSessionHistoryMiddleware } from './storage/middleware'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath } from './utils/paths'
 import type { ObservabilityConfig } from './observability'
@@ -181,13 +180,6 @@ export async function bootstrap(
     const k = key as keyof MiddlewareConfig
     ;(middleware as any)[k] = ((obsMw as any)[k] ?? []).concat((middleware as any)[k] ?? [])
   }
-
-  // ── Session history middleware (persist messages in real time) ───────
-  const historyMw = createSessionHistoryMiddleware(storage)
-  middleware.beforeLoopBegin = [...(middleware.beforeLoopBegin ?? []), historyMw.beforeLoopBegin]
-  middleware.afterLoopIteration = [...(middleware.afterLoopIteration ?? []), historyMw.afterLoopIteration]
-  middleware.afterLoopComplete = [...(middleware.afterLoopComplete ?? []), historyMw.afterLoopComplete]
-  middleware.onError = [...(middleware.onError ?? []), historyMw.onError]
 
   // ── Subagent tool (registered last — child registry built lazily) ──
   tools.register(subagentTool({

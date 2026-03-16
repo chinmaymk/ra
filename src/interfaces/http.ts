@@ -7,6 +7,7 @@ import type { CompactionConfig } from '../agent/context-compaction'
 import type { Logger } from '../observability/logger'
 import { mkdir } from 'node:fs/promises'
 import { AgentLoop } from '../agent/loop'
+import { withSessionHistory } from '../storage/middleware'
 import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
@@ -147,7 +148,7 @@ export class HttpServer {
       provider: this.options.provider,
       tools: this.options.tools,
       model: this.options.model,
-      middleware: this.options.middleware,
+      middleware: withSessionHistory(this.options.middleware, this.options.storage),
       maxIterations: this.options.maxIterations,
       toolTimeout: this.options.toolTimeout,
       sessionId,
@@ -202,9 +203,10 @@ export class HttpServer {
           }
         }
 
+        const baseMw = withSessionHistory(opts.middleware, opts.storage)
         const middleware: Partial<MiddlewareConfig> = {
-          ...(opts.middleware ?? {}),
-          onStreamChunk: (opts.middleware?.onStreamChunk ?? []).concat(onStreamChunk),
+          ...baseMw,
+          onStreamChunk: (baseMw?.onStreamChunk ?? []).concat(onStreamChunk),
         }
 
         const loop = new AgentLoop({

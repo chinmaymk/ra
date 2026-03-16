@@ -5,6 +5,7 @@ import type { CompactionConfig } from '../agent/context-compaction'
 import type { Skill } from '../skills/types'
 import type { Logger } from '../observability/logger'
 import type { SessionStorage } from '../storage/sessions'
+import { withSessionHistory } from '../storage/middleware'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import { fileToContentPart } from '../utils/files'
@@ -76,13 +77,14 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
     await storage.appendMessage(sessionId, userMessage)
   }
 
+  const baseMw = storage ? withSessionHistory(middleware, storage) : middleware
   const loop = new AgentLoop({
     provider, tools, model, maxIterations, toolTimeout, thinking, compaction, logger, sessionId,
     middleware: {
-      ...middleware,
+      ...baseMw,
       onStreamChunk: [
         async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) },
-      ].concat(middleware?.onStreamChunk ?? []),
+      ].concat(baseMw?.onStreamChunk ?? []),
     },
   })
 

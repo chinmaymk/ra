@@ -3,7 +3,6 @@ import { PassThrough } from 'stream'
 import { Repl } from '../../src/interfaces/repl'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import { SessionStorage } from '../../src/storage/sessions'
-import { createSessionHistoryMiddleware } from '../../src/storage/middleware'
 import type { IProvider, IMessage } from '../../src/providers/types'
 import { tmpdir } from '../tmpdir'
 
@@ -271,13 +270,8 @@ describe('Repl', () => {
 
   it('stores messages to session after processing', async () => {
     const storage = await makeStorage()
-    const historyMw = createSessionHistoryMiddleware(storage)
     const repl = new Repl({
       model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage,
-      middleware: {
-        beforeLoopBegin: [historyMw.beforeLoopBegin],
-        afterLoopIteration: [historyMw.afterLoopIteration],
-      },
     })
 
     await repl.processInput('hi')

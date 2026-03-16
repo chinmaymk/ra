@@ -6,6 +6,7 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
+import { withSessionHistory } from '../storage/middleware'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
@@ -182,7 +183,7 @@ export class Repl {
     let streamBuf: tui.StreamBuffer | null = null
     const toolStartTimes = new Map<string, number>()
     tui.startSpinner()
-    const userMw = this.options.middleware ?? {}
+    const userMw = withSessionHistory(this.options.middleware, this.options.storage)
 
     const loop = new AgentLoop({
       provider: this.options.provider,

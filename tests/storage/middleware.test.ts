@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { SessionStorage } from '../../src/storage/sessions'
-import { createSessionHistoryMiddleware } from '../../src/storage/middleware'
+import { withSessionHistory } from '../../src/storage/middleware'
 import { AgentLoop } from '../../src/agent/loop'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import type { IProvider, IMessage } from '../../src/providers/types'
@@ -52,17 +52,14 @@ describe('SessionHistoryMiddleware', () => {
 
   it('persists messages in real time during loop iterations', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
-    const mw = createSessionHistoryMiddleware(storage)
+    const middleware = withSessionHistory(undefined, storage)
 
     const loop = new AgentLoop({
       provider: mockProvider(['hello world']),
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
-      middleware: {
-        beforeLoopBegin: [mw.beforeLoopBegin],
-        afterLoopIteration: [mw.afterLoopIteration],
-      },
+      middleware,
     })
 
     const messages: IMessage[] = [{ role: 'user', content: 'hi' }]
@@ -76,7 +73,6 @@ describe('SessionHistoryMiddleware', () => {
 
   it('persists tool call results alongside assistant messages', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
-    const mw = createSessionHistoryMiddleware(storage)
     const tools = new ToolRegistry()
     tools.register({
       name: 'echo',
@@ -90,10 +86,7 @@ describe('SessionHistoryMiddleware', () => {
       tools,
       model: 'test',
       sessionId: session.id,
-      middleware: {
-        beforeLoopBegin: [mw.beforeLoopBegin],
-        afterLoopIteration: [mw.afterLoopIteration],
-      },
+      middleware: withSessionHistory(undefined, storage),
     })
 
     const messages: IMessage[] = [{ role: 'user', content: 'run echo' }]
@@ -107,19 +100,87 @@ describe('SessionHistoryMiddleware', () => {
     expect(stored[2]?.role).toBe('assistant')
   })
 
+  it('captures messages after context compaction shrinks the array', async () => {
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
+
+    // Provider that yields 2 iterations: tool call then final answer
+    let iteration = 0
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('not implemented') },
+      async *stream(request) {
+        if (iteration++ === 0) {
+          yield { type: 'text' as const, delta: 'calling tool' }
+          yield { type: 'tool_call_start' as const, id: 'tc1', name: 'noop' }
+          yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{}' }
+          yield { type: 'tool_call_end' as const, id: 'tc1' }
+          yield { type: 'done' as const }
+        } else {
+          yield { type: 'text' as const, delta: 'post-compaction answer' }
+          yield { type: 'done' as const }
+        }
+      },
+    }
+
+    const tools = new ToolRegistry()
+    tools.register({
+      name: 'noop',
+      description: 'does nothing',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => 'ok',
+    })
+
+    // Simulate compaction via a beforeModelCall middleware that shrinks the
+    // messages array on the second iteration (after the first response + tool result)
+    let modelCallCount = 0
+    const fakeCompaction = async (ctx: any) => {
+      modelCallCount++
+      if (modelCallCount === 2) {
+        // Simulate compaction: keep only a summary
+        const msgs = ctx.request.messages
+        msgs.length = 0
+        msgs.push({ role: 'system', content: '[compacted summary]' })
+      }
+    }
+
+    const baseMw = withSessionHistory(undefined, storage)
+    const middleware = {
+      ...baseMw,
+      // Compaction runs BEFORE session history's beforeModelCall
+      beforeModelCall: [fakeCompaction, ...(baseMw.beforeModelCall ?? [])],
+    }
+
+    const loop = new AgentLoop({
+      provider,
+      tools,
+      model: 'test',
+      sessionId: session.id,
+      middleware,
+    })
+
+    const messages: IMessage[] = [{ role: 'user', content: 'hi' }]
+    await loop.run(messages)
+
+    const stored = await storage.readMessages(session.id)
+    // Iteration 1: assistant (tool call) + tool result = 2 messages
+    // Compaction shrinks array
+    // Iteration 2: assistant (final answer) = 1 message
+    expect(stored.length).toBe(3)
+    expect(stored[0]?.role).toBe('assistant')
+    expect(stored[1]?.role).toBe('tool')
+    expect(stored[2]?.role).toBe('assistant')
+    expect(stored[2]?.content).toBe('post-compaction answer')
+  })
+
   it('does not persist initial messages (only loop-generated)', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
-    const mw = createSessionHistoryMiddleware(storage)
 
     const loop = new AgentLoop({
       provider: mockProvider(['response']),
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
-      middleware: {
-        beforeLoopBegin: [mw.beforeLoopBegin],
-        afterLoopIteration: [mw.afterLoopIteration],
-      },
+      middleware: withSessionHistory(undefined, storage),
     })
 
     // Pass system + context + user messages as initial

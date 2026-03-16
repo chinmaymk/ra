@@ -12,6 +12,7 @@ import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { serializeContent } from './providers/utils'
+import { withSessionHistory } from './storage/middleware'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ function createMcpHandler(app: AppContext) {
       model: app.config.model,
       maxIterations: app.config.maxIterations,
       toolTimeout: app.config.toolTimeout,
-      middleware: app.middleware,
+      middleware: withSessionHistory(app.middleware, app.storage),
       compaction: app.config.compaction,
       logger: app.logger,
       sessionId: session.id,

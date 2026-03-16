@@ -1,41 +1,58 @@
-import type { LoopContext, ErrorContext } from '../agent/types'
+import type { LoopContext, ModelCallContext, MiddlewareConfig } from '../agent/types'
 import type { SessionStorage } from './sessions'
 
 /**
- * Creates middleware that persists messages to session storage in real time.
+ * Creates per-session middleware hooks that persist messages to storage in
+ * real time.  Each call returns a fresh set of hooks with their own closure
+ * state — no shared mutable maps, no concurrency concerns.
  *
- * Hooks into `afterLoopIteration` — after each model call + tool execution
- * cycle, any new messages (assistant responses, tool results) are immediately
- * appended to the session's JSONL file.  This ensures observability even if
- * the process crashes mid-run (CI, long HTTP requests, etc.).
- *
- * State is tracked per sessionId so concurrent loop runs (e.g. parallel HTTP
- * requests) do not interfere with each other.
+ * Hooks into `afterLoopIteration` to append new messages after each model
+ * call + tool execution cycle.  A `beforeModelCall` hook tracks the message
+ * count after context compaction (which shrinks the array in-place) so the
+ * iteration hook knows where "new" messages start.
  */
-export function createSessionHistoryMiddleware(storage: SessionStorage) {
-  // Per-session tracking of how many messages have been persisted.
-  // Keyed by sessionId so concurrent loops don't share mutable state.
-  const persistedCounts = new Map<string, number>()
+function createSessionHistoryHooks(storage: SessionStorage) {
+  let lastCount = 0
 
   const beforeLoopBegin = async (ctx: LoopContext): Promise<void> => {
-    // Record the initial message count so we only persist messages the loop adds
-    persistedCounts.set(ctx.sessionId, ctx.messages.length)
+    lastCount = ctx.messages.length
   }
 
-  const afterLoopIteration = async (ctx: LoopContext): Promise<void> => {
-    const lastCount = persistedCounts.get(ctx.sessionId) ?? 0
-    const newMessages = ctx.messages.slice(lastCount)
-    if (newMessages.length > 0) {
-      await storage.appendMessages(ctx.sessionId, newMessages)
-      persistedCounts.set(ctx.sessionId, ctx.messages.length)
+  const beforeModelCall = async (ctx: ModelCallContext): Promise<void> => {
+    // Context compaction (a prior beforeModelCall middleware) may have shrunk
+    // the messages array in-place.  Snap the baseline to the compacted length
+    // so afterLoopIteration captures messages added during this iteration.
+    if (ctx.request.messages.length < lastCount) {
+      lastCount = ctx.request.messages.length
     }
   }
 
-  const cleanup = (sessionId: string) => { persistedCounts.delete(sessionId) }
+  const afterLoopIteration = async (ctx: LoopContext): Promise<void> => {
+    const newMessages = ctx.messages.slice(lastCount)
+    if (newMessages.length > 0) {
+      await storage.appendMessages(ctx.sessionId, newMessages)
+    }
+    lastCount = ctx.messages.length
+  }
 
-  const afterLoopComplete = async (ctx: LoopContext): Promise<void> => { cleanup(ctx.sessionId) }
+  return { beforeLoopBegin, beforeModelCall, afterLoopIteration }
+}
 
-  const onError = async (ctx: ErrorContext): Promise<void> => { cleanup(ctx.loop.sessionId) }
-
-  return { beforeLoopBegin, afterLoopIteration, afterLoopComplete, onError }
+/**
+ * Returns a new middleware config with per-session history hooks merged in.
+ * Call this each time you create an AgentLoop so each loop gets its own
+ * isolated tracking state.
+ */
+export function withSessionHistory(
+  middleware: Partial<MiddlewareConfig> | undefined,
+  storage: SessionStorage,
+): Partial<MiddlewareConfig> {
+  const hooks = createSessionHistoryHooks(storage)
+  const mw = middleware ?? {}
+  return {
+    ...mw,
+    beforeLoopBegin: [...(mw.beforeLoopBegin ?? []), hooks.beforeLoopBegin],
+    beforeModelCall: [...(mw.beforeModelCall ?? []), hooks.beforeModelCall],
+    afterLoopIteration: [...(mw.afterLoopIteration ?? []), hooks.afterLoopIteration],
+  }
 }
