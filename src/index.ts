@@ -4,7 +4,7 @@ import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { errorMessage } from './utils/errors'
 import { HELP } from './interfaces/help'
-import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showDryRunConfig, bootstrapDryRun } from './interfaces/commands'
+import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showDryRunConfig } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
@@ -253,10 +253,8 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
-  // Dry-run: lightweight bootstrap — no provider, MCP, sessions, or observability
   if (parsed.meta.dryRunConfig) {
-    const info = await bootstrapDryRun(config)
-    showDryRunConfig(info)
+    showDryRunConfig(config)
     process.exit(0)
   }
 

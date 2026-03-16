@@ -252,31 +252,13 @@ Credentials are env-only — never exposed as CLI flags to keep them out of shel
 
 ## Dry run
 
-Use `--dry-run-config` to inspect the fully resolved configuration without starting the agent loop. This is useful for debugging config layering, verifying which context files will be loaded, which middleware hooks are active, and what tools are registered.
+Use `--dry-run-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, config file, env vars, and CLI flags. Sensitive values (tokens, API keys) are redacted.
 
 ```bash
 ra --dry-run-config
 ra --dry-run-config --provider openai --model gpt-4.1
 ra --dry-run-config --config recipes/coding-agent/ra.config.yaml
 ```
-
-The output includes:
-
-- **Core** — provider, model, interface, maxIterations, thinking, systemPrompt
-- **Paths** — configDir, dataDir
-- **Context** — patterns, resolvers, discovered context files
-- **Middleware** — hook counts and config file sources
-- **Tools** — all registered tools
-- **Skills** — active skills, skill directories, available skills
-- **Compaction** — threshold, model, settings
-- **Memory** — enabled state, limits, stored count
-- **Storage** — format, session limits
-- **MCP** — client connections, server settings
-- **HTTP** — port, token (masked)
-- **Permissions** — default action, rules
-- **Observability** — logs, log level, traces
-
-Sensitive values (HTTP token, API keys) are masked in the output.
 
 ## See also
 
