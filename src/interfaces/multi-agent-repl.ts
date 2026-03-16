@@ -25,11 +25,13 @@ export class MultiAgentRepl {
       })
     }
 
-    const agentNames = [...ctx.agents.keys()]
+    const isMulti = ctx.agents.size > 1
     this.repl = new Repl({
       ...this.agentOptions.get(ctx.defaultAgent)!,
-      onCommand: (input) => this.handleMultiAgentCommand(input),
-      headerExtra: `  Agents: ${agentNames.join(', ')} (active: ${this.currentAgent})`,
+      ...(isMulti && {
+        onCommand: (input: string) => this.handleMultiAgentCommand(input),
+        headerExtra: `  Agents: ${[...ctx.agents.keys()].join(', ')} (active: ${this.currentAgent})`,
+      }),
     })
   }
 
