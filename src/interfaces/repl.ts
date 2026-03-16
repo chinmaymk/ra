@@ -12,6 +12,7 @@ import type { CompactionConfig } from '../agent/context-compaction'
 import type { MemoryStore } from '../memory/store'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
+import { extractContextFilePath } from '../context'
 import * as tui from './tui'
 
 export interface ReplOptions {
@@ -359,10 +360,8 @@ export class Repl {
       case '/context': {
         if (!this.options.contextMessages?.length) return 'No context files discovered.'
         const lines = this.options.contextMessages.map(m => {
-          const content = typeof m.content === 'string' ? m.content : ''
-          const pathMatch = content.match(/<context-file path="([^"]+)">/)
-          const path = pathMatch?.[1] ?? 'unknown'
-          const size = content.length
+          const path = extractContextFilePath(m) ?? 'unknown'
+          const size = (typeof m.content === 'string' ? m.content : '').length
           return `  ${path}  (${size} chars)`
         })
         return `Discovered context files:\n${lines.join('\n')}`

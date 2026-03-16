@@ -1,5 +1,5 @@
 export { discoverContextFiles, findGitRoot, createDiscoveryMiddleware } from './discovery'
-export { buildContextMessages } from './inject'
+export { buildContextMessages, extractContextFilePath } from './inject'
 export { resolvePatterns, formatResolvedReferences } from './resolvers'
 export { createResolverMiddleware } from './resolve-middleware'
 export { builtinResolvers } from './builtin-resolvers'

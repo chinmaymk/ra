@@ -7,3 +7,10 @@ export function buildContextMessages(files: ContextFile[]): IMessage[] {
     content: `<context-file path="${file.relativePath}">\n${file.content}\n</context-file>`,
   }))
 }
+
+/** Extract the file path from a context-file XML message. */
+export function extractContextFilePath(msg: IMessage): string | undefined {
+  const content = typeof msg.content === 'string' ? msg.content : ''
+  const match = content.match(/<context-file path="([^"]+)"/)
+  return match?.[1]
+}

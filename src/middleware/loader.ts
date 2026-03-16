@@ -3,7 +3,7 @@ import { errorMessage } from '../utils/errors'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '../agent/types'
 
-const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
+export const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
   'beforeLoopBegin', 'beforeModelCall', 'onStreamChunk',
   'beforeToolExecution', 'afterToolExecution', 'afterModelResponse',
   'afterLoopIteration', 'afterLoopComplete', 'onError',

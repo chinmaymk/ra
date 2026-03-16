@@ -3,7 +3,12 @@ import { resolve } from 'path'
 import type { SkillCommand } from './parse-args'
 import type { IMessage } from '../providers/types'
 import type { MemoryStore } from '../memory'
-import type { AppContext } from '../bootstrap'
+import type { RaConfig } from '../config/types'
+import type { MiddlewareConfig } from '../agent/types'
+import type { PermissionFieldRule } from '../config/types'
+import type { Skill } from '../skills/types'
+import { VALID_HOOKS } from '../middleware/loader'
+import { extractContextFilePath } from '../context'
 
 /** Run --exec <script> */
 export async function runExecScript(scriptPath: string): Promise<void> {
@@ -118,9 +123,49 @@ export function runMemoryCommand(
   }
 }
 
+/** Info gathered by lightweight dry-run bootstrap (no provider, MCP, sessions, or observability). */
+export interface DryRunInfo {
+  config: RaConfig
+  toolNames: string[]
+  middleware: Partial<MiddlewareConfig>
+  skillMap: Map<string, Skill>
+  contextMessages: IMessage[]
+}
+
+/** Lightweight bootstrap for --dry-run-config. Skips provider, MCP, sessions, memory, and observability. */
+export async function bootstrapDryRun(config: RaConfig): Promise<DryRunInfo> {
+  const { discoverContextFiles, buildContextMessages } = await import('../context')
+  const { loadMiddleware } = await import('../middleware/loader')
+  const { loadSkills } = await import('../skills/loader')
+  const { loadBuiltinSkills } = await import('../skills/builtin')
+  const { ToolRegistry } = await import('../agent/tool-registry')
+  const { registerBuiltinTools } = await import('../tools')
+  const { resolvePath } = await import('../utils/paths')
+
+  const contextFiles = config.context.enabled
+    ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
+    : []
+  const contextMessages = buildContextMessages(contextFiles)
+
+  const middleware = await loadMiddleware(config, config.configDir)
+
+  const tools = new ToolRegistry()
+  if (config.builtinTools) registerBuiltinTools(tools)
+  const toolNames = tools.all().map(t => t.name)
+
+  const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
+  const skillMap = await loadSkills(resolvedSkillDirs)
+  const builtinSkills = loadBuiltinSkills(config.builtinSkills)
+  for (const [name, skill] of builtinSkills) {
+    if (!skillMap.has(name)) skillMap.set(name, skill)
+  }
+
+  return { config, toolNames, middleware, skillMap, contextMessages }
+}
+
 /** Handle --dry-run-config */
-export function showDryRunConfig(app: AppContext): void {
-  const { config, tools, middleware, skillMap, contextMessages, memoryStore } = app
+export function showDryRunConfig(info: DryRunInfo): void {
+  const { config, toolNames, middleware, skillMap, contextMessages } = info
   const lines: string[] = []
 
   const section = (title: string) => { lines.push(''); lines.push(`── ${title} ${'─'.repeat(Math.max(0, 56 - title.length))}`) }
@@ -168,9 +213,8 @@ export function showDryRunConfig(app: AppContext): void {
     lines.push('')
     lines.push('  Discovered context files:')
     for (const msg of contextMessages) {
-      const content = typeof msg.content === 'string' ? msg.content : ''
-      const match = content.match(/<context-file path="([^"]+)"/)
-      if (match) lines.push(`    - ${match[1]}`)
+      const path = extractContextFilePath(msg)
+      if (path) lines.push(`    - ${path}`)
     }
   } else {
     lines.push('  No context files discovered.')
@@ -178,45 +222,29 @@ export function showDryRunConfig(app: AppContext): void {
 
   // ── Middleware ──
   section('Middleware')
-  const hookNames = [
-    'beforeLoopBegin', 'beforeModelCall', 'onStreamChunk',
-    'beforeToolExecution', 'afterToolExecution', 'afterModelResponse',
-    'afterLoopIteration', 'afterLoopComplete', 'onError',
-  ] as const
+  const configMw = config.middleware ?? {}
   let hasMiddleware = false
-  for (const hook of hookNames) {
-    const hooks = (middleware as Record<string, unknown[]>)[hook]
-    if (hooks?.length) {
-      field(hook, `${hooks.length} hook(s)`)
+  for (const hook of VALID_HOOKS) {
+    const loaded = middleware[hook]
+    const sources = configMw[hook]
+    if (loaded?.length || sources?.length) {
+      const parts = [`${loaded?.length ?? 0} hook(s)`]
+      if (sources?.length) parts.push(`from: ${sources.join(', ')}`)
+      field(hook, parts.join(' '))
       hasMiddleware = true
     }
   }
   if (!hasMiddleware) lines.push('  No middleware configured.')
 
-  // ── Config file middleware sources ──
-  const configMw = config.middleware
-  if (configMw && Object.keys(configMw).length > 0) {
-    lines.push('')
-    lines.push('  Middleware sources (from config):')
-    for (const [hook, sources] of Object.entries(configMw)) {
-      if (sources?.length) {
-        for (const src of sources) {
-          lines.push(`    ${hook}: ${src}`)
-        }
-      }
-    }
-  }
-
   // ── Tools ──
   section('Tools')
-  const allTools = tools.all()
-  if (allTools.length > 0) {
-    field('total', allTools.length)
-    const toolNames = allTools.map(t => t.name)
-    // Wrap tool names at ~80 chars
+  if (toolNames.length > 0) {
+    field('total', toolNames.length)
+    if (config.mcp.client?.length) {
+      lines.push('  (MCP tools not shown in dry-run)')
+    }
     let line = '  '
-    for (let i = 0; i < toolNames.length; i++) {
-      const name = toolNames[i]!
+    for (const name of toolNames) {
       if (line.length + name.length + 2 > 80 && line.length > 2) {
         lines.push(line)
         line = '  '
@@ -264,7 +292,6 @@ export function showDryRunConfig(app: AppContext): void {
     field('maxMemories', config.memory.maxMemories)
     field('ttlDays', config.memory.ttlDays)
     field('injectLimit', config.memory.injectLimit)
-    if (memoryStore) field('stored', memoryStore.count())
   }
 
   // ── Storage ──
@@ -306,9 +333,9 @@ export function showDryRunConfig(app: AppContext): void {
       lines.push(`    - tool: ${rule.tool}`)
       for (const [key, val] of Object.entries(rule)) {
         if (key === 'tool') continue
-        const fieldRule = val as { allow?: string[]; deny?: string[] }
-        if (fieldRule.allow) lines.push(`      ${key}.allow: ${JSON.stringify(fieldRule.allow)}`)
-        if (fieldRule.deny) lines.push(`      ${key}.deny: ${JSON.stringify(fieldRule.deny)}`)
+        const fieldRule = val as PermissionFieldRule
+        if (fieldRule?.allow) lines.push(`      ${key}.allow: ${JSON.stringify(fieldRule.allow)}`)
+        if (fieldRule?.deny) lines.push(`      ${key}.deny: ${JSON.stringify(fieldRule.deny)}`)
       }
     }
   }
