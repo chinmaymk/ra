@@ -3,6 +3,12 @@
 <p align="center"><strong>The agent loop, without the black box.</strong></p>
 
 <p align="center">
+  <a href="https://github.com/chinmaymk/ra/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <a href="https://github.com/chinmaymk/ra/actions"><img src="https://img.shields.io/github/actions/workflow/status/chinmaymk/ra/ci.yml?branch=main" alt="Build"></a>
+  <a href="https://github.com/chinmaymk/ra/releases"><img src="https://img.shields.io/github/v/release/chinmaymk/ra?include_prereleases" alt="Release"></a>
+</p>
+
+<p align="center">
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#the-agent-loop">The Agent Loop</a> &middot;
@@ -12,6 +18,10 @@
   <a href="#middleware">Middleware</a> &middot;
   <a href="#interfaces">Interfaces</a> &middot;
   <a href="#configuration">Configuration</a>
+</p>
+
+<p align="center">
+  <img src="assets/demo.gif" alt="ra demo" width="800">
 </p>
 
 ---
