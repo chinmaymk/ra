@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="#use-cases">Use Cases</a> &middot;
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#the-agent-loop">The Agent Loop</a> &middot;
@@ -73,6 +74,17 @@ ra --mcp-stdio --skill code-review
 # Serve a streaming HTTP API for your product
 ra --http --http-port 3000
 ```
+
+## Use Cases
+
+Ra is a general-purpose agent loop — the same binary powers wildly different workflows depending on how you configure it.
+
+- **Code agent** — edit files, run tests, fix bugs, review PRs. Point it at a repo with the right tools and permissions and it's a full coding assistant.
+- **Research agent** — feed it docs, URLs, or a knowledge base. Pair with web fetch and memory to build an agent that investigates questions, synthesizes sources, and remembers what it learned.
+- **CI agent** — run in GitHub Actions or any CI pipeline to review PRs, enforce style, triage failing tests, or generate changelogs on every push.
+- **Personal agent** — wire it up as a REPL or HTTP server for daily tasks: drafting emails, summarizing meeting notes, managing todos, querying your own data via MCP tools.
+
+The building blocks are the same — providers, tools, skills, middleware — you just compose them differently. One config file defines a code reviewer; another defines a research assistant. Versatility is the point.
 
 ## Install
 
