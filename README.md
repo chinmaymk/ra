@@ -44,7 +44,9 @@ provider: anthropic
 model: claude-sonnet-4-6
 maxIterations: 50
 thinking: medium
-skills: [code-review, architect]
+skills:
+  - code-review
+  - architect
 
 permissions:
   rules:
