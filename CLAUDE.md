@@ -1,6 +1,6 @@
 # ra
 
-ra is an agentic loop framework. One binary, multiple interfaces (CLI/REPL/HTTP/MCP), provider-portable across 6 LLM backends. Deployed as a single self-contained binary compiled via `bun build --compile` — no runtime dependencies needed.
+ra is an agentic loop framework. One binary, multiple interfaces (CLI/REPL/HTTP/MCP), provider-portable across multiple LLM backends. Deployed as a single self-contained binary compiled via `bun build --compile` — no runtime dependencies needed.
 
 ## Quick Reference
 
@@ -18,7 +18,7 @@ bun test tests/agent/   # run tests in a directory
 src/
   agent/       # Core loop, middleware chain, tool registry, context compaction
   providers/   # LLM adapters: anthropic, openai, google, ollama, bedrock, azure
-  tools/       # 14 built-in tools (filesystem, shell, network, agent interaction)
+  tools/       # Built-in tools (filesystem, shell, network, agent interaction)
   config/      # Layered config: defaults → file → env → CLI flags
   interfaces/  # Entry points: cli, repl, http, mcp
   skills/      # Skill loader, runner, installer
@@ -29,8 +29,8 @@ src/
   storage/     # JSONL session persistence
   utils/       # Shared utilities
 tests/         # Mirrors src/ structure
-skills/        # 6 built-in skills (code-review, architect, planner, debugger, code-style, writer)
-recipes/       # 2 complete agent configurations (coding-agent, code-review-agent)
+skills/        # Built-in skills (code-review, architect, planner, debugger, code-style, writer)
+recipes/       # Complete agent configurations (coding-agent, code-review-agent)
 ```
 
 ## Architecture
@@ -45,7 +45,7 @@ User message → [beforeLoopBegin]
   → repeat or [afterLoopComplete]
 ```
 
-9 middleware hooks intercept every step. Context compaction is itself a `beforeModelCall` middleware.
+Middleware hooks intercept every step. Context compaction is itself a `beforeModelCall` middleware.
 
 ## Key Types (src/providers/types.ts)
 

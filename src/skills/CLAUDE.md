@@ -31,6 +31,6 @@ skills/<name>/
 
 ## Built-in Skills (in repo root `skills/`)
 
-6 skills: `code-review`, `architect`, `planner`, `debugger`, `code-style`, `writer`
+`code-review`, `architect`, `planner`, `debugger`, `code-style`, `writer`
 
 These are separate from the `.claude/skills/` which are Claude Code project skills for developing ra itself.

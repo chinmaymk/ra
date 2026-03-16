@@ -1,6 +1,6 @@
 # src/tools/
 
-14 built-in tools, each in its own file. `index.ts` registers them all.
+Built-in tools, each in its own file. `index.ts` registers them all.
 
 ## Files
 
