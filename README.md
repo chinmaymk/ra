@@ -1,6 +1,6 @@
 <h1 align="center">ra</h1>
 
-<p align="center"><strong>The agent loop, without the black box.</strong></p>
+<p align="center"><strong>The raw agent loop, without the black box.</strong></p>
 
 <p align="center">
   <a href="https://github.com/chinmaymk/ra/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
@@ -228,5 +228,5 @@ MIT
 ---
 
 <p align="center">
-  <b>ra</b> — The agent loop, without the black box.
+  <b>ra</b> — The raw agent loop, without the black box.
 </p>
