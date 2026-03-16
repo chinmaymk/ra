@@ -4,6 +4,7 @@ import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { Skill } from '../skills/types'
 import type { Logger } from '../observability/logger'
+import type { SessionStorage } from '../storage/sessions'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import { fileToContentPart } from '../utils/files'
@@ -26,6 +27,8 @@ export interface CliOptions {
   contextMessages?: IMessage[]
   sessionMessages?: IMessage[]
   logger?: Logger
+  storage?: SessionStorage
+  sessionId?: string
 }
 
 export interface CliResult {
@@ -34,7 +37,7 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger } = options
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, storage, sessionId } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -65,10 +68,16 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
 
   const parts: ContentPart[] = [{ type: 'text', text: prompt }, ...await Promise.all(files.map(fileToContentPart))]
   const content: string | ContentPart[] = parts.length === 1 ? prompt : parts
-  initialMessages.push({ role: 'user', content })
+  const userMessage: IMessage = { role: 'user', content }
+  initialMessages.push(userMessage)
+
+  // Persist the user message immediately before starting the loop
+  if (storage && sessionId) {
+    await storage.appendMessage(sessionId, userMessage)
+  }
 
   const loop = new AgentLoop({
-    provider, tools, model, maxIterations, toolTimeout, thinking, compaction, logger,
+    provider, tools, model, maxIterations, toolTimeout, thinking, compaction, logger, sessionId,
     middleware: {
       ...middleware,
       onStreamChunk: [

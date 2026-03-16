@@ -102,13 +102,13 @@ function createMcpHandler(app: AppContext) {
       sessionId: session.id,
     })
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
+    const userMessage: IMessage = { role: 'user', content: prompt }
+    // Persist the user message immediately before starting the loop
+    await app.storage.appendMessage(session.id, userMessage)
     const messages: IMessage[] = []
     if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
-    messages.push(...app.contextMessages, { role: 'user', content: prompt })
-    const priorCount = messages.length
+    messages.push(...app.contextMessages, userMessage)
     const result = await loop.run(messages)
-    const newMessages = result.messages.slice(priorCount)
-    await Promise.all(newMessages.map(msg => app.storage.appendMessage(session.id, msg)))
     const last = result.messages.at(-1)
     return last ? serializeContent(last.content) : ''
   }
@@ -158,7 +158,7 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
   const activeSkills = app.config.skills.concat(parsed.meta.skills)
-  const result = await runCli({
+  await runCli({
     prompt: parsed.meta.prompt!,
     files: parsed.meta.files,
     skills: activeSkills,
@@ -174,10 +174,9 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     contextMessages: app.contextMessages,
     sessionMessages,
     logger: app.logger,
+    storage: app.storage,
+    sessionId: app.sessionId,
   })
-  for (const msg of result.messages.slice(result.priorCount)) {
-    await app.storage.appendMessage(app.sessionId, msg)
-  }
   process.stdout.write('\n')
   await app.shutdown()
 }

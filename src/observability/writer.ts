@@ -10,6 +10,13 @@ export class JsonlWriter {
     }
   }
 
+  /** Redirect file output to a new path, flushing the old writer first. */
+  async setFilePath(filePath: string): Promise<void> {
+    if (this.fileWriter) await this.fileWriter.flush()
+    this.output = 'file'
+    this.fileWriter = Bun.file(filePath).writer()
+  }
+
   write(data: unknown): void {
     const line = JSON.stringify(data) + '\n'
     if (this.fileWriter) this.fileWriter.write(line)

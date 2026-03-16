@@ -32,6 +32,11 @@ export class Logger {
 
   setSessionId(sessionId: string): void { this.sessionId = sessionId }
 
+  /** Redirect log output to a new session directory. */
+  async setSessionDir(sessionDir: string): Promise<void> {
+    await this.writer.setFilePath(`${sessionDir}/logs.jsonl`)
+  }
+
   debug(message: string, data?: Record<string, unknown>): void { this.log('debug', message, data) }
   info(message: string, data?: Record<string, unknown>): void { this.log('info', message, data) }
   warn(message: string, data?: Record<string, unknown>): void { this.log('warn', message, data) }
@@ -58,5 +63,6 @@ export class NoopLogger extends Logger {
   override info(_message: string, _data?: Record<string, unknown>): void {}
   override warn(_message: string, _data?: Record<string, unknown>): void {}
   override error(_message: string, _data?: Record<string, unknown>): void {}
+  override async setSessionDir(_sessionDir: string): Promise<void> {}
   override async flush(): Promise<void> {}
 }

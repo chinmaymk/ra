@@ -127,18 +127,16 @@ export class HttpServer {
     return session.id
   }
 
-  private async persistMessages(sessionId: string, messages: IMessage[], priorCount: number): Promise<void> {
-    const newMessages = messages.slice(priorCount)
-    await Promise.all(newMessages.map(msg => this.options.storage.appendMessage(sessionId, msg)))
-  }
-
   private async handleChatSync(req: Request): Promise<Response> {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
     const messages = this.prependSystem(body.messages ?? [])
-    const priorCount = messages.length
     const sessionId = await this.ensureSession(body.sessionId)
+
+    // Persist incoming user messages before starting the loop
+    const userMessages = (body.messages ?? []).filter((m: IMessage) => m.role === 'user')
+    await Promise.all(userMessages.map(msg => this.options.storage.appendMessage(sessionId, msg)))
 
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -155,7 +153,6 @@ export class HttpServer {
 
     try {
       const result = await loop.run(messages)
-      await this.persistMessages(sessionId, result.messages, priorCount)
 
       const assistantMessages = result.messages.filter(m => m.role === 'assistant')
       const last = assistantMessages[assistantMessages.length - 1]
@@ -172,10 +169,13 @@ export class HttpServer {
     if (!body) return HttpServer.badRequest()
 
     const messages = this.prependSystem(body.messages ?? [])
-    const priorCount = messages.length
     const sessionId = await this.ensureSession(body.sessionId)
+
+    // Persist incoming user messages before starting the loop
+    const userMessages = (body.messages ?? []).filter((m: IMessage) => m.role === 'user')
+    await Promise.all(userMessages.map(msg => this.options.storage.appendMessage(sessionId, msg)))
+
     const opts = this.options
-    const storage = this.options.storage
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()
@@ -216,9 +216,7 @@ export class HttpServer {
         })
 
         try {
-          const result = await loop.run(messages)
-          const newMessages = result.messages.slice(priorCount)
-          await Promise.all(newMessages.map(msg => storage.appendMessage(sessionId, msg)))
+          await loop.run(messages)
           send({ type: 'done', sessionId })
         } catch (err) {
           send({ type: 'error', error: errorMessage(err) })

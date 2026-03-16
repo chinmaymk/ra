@@ -240,6 +240,9 @@ export class Repl {
     })
 
     this.activeLoop = loop
+    // Persist the user message immediately (loop-generated messages are
+    // persisted in real time by the session history middleware)
+    await this.options.storage.appendMessage(this.sessionId!, userMessage)
     const priorCount = initialMessages.length
     try {
       const result = await loop.run(initialMessages)
@@ -252,7 +255,6 @@ export class Repl {
 
       const newMessages = result.messages.slice(priorCount)
       this.messages.push(userMessage, ...newMessages)
-      await Promise.all([userMessage, ...newMessages].map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
     } catch (err) {
       tui.stopSpinner(true)
       // TS narrows streamBuf to null (closure writes aren't tracked); cast back
