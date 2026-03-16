@@ -1,8 +1,11 @@
 <h1 align="center">ra</h1>
 
+<p align="center"><strong>Your agent config, committed to git.</strong></p>
+
 <p align="center">
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#why-ra">Why ra</a> &middot;
   <a href="#the-agent-loop">The Agent Loop</a> &middot;
   <a href="#context-control">Context Control</a> &middot;
   <a href="#providers">Providers</a> &middot;
@@ -15,24 +18,30 @@
   <a href="#middleware">Middleware</a> &middot;
   <a href="#observability">Observability</a> &middot;
   <a href="#memory">Memory</a> &middot;
-  <a href="#github-actions">GitHub Actions</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
+  <a href="#github-actions">GitHub Actions</a> &middot;
   <a href="#configuration">Configuration</a>
 </p>
 
 ---
 
-## What is ra?
+Every developer already has opinions about their tooling committed to their codebase — `.eslintrc`, `.prettierrc`, `Dockerfile`. Your AI agent behavior should live there too. Ra makes it versioned, reviewable, and consistent across machines and teammates the same way a linter config is.
 
-ra is a small and mighty, hackable agent. Nothing hidden behind abstractions you can't reach. It doesn't even ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. Middleware hooks let you intercept every step — model calls, tool execution, streaming, all of it.
+```yaml
+# ra.config.yml — checked into your repo, reviewed in PRs
+provider: anthropic
+model: claude-sonnet-4-6
+maxIterations: 50
+thinking: medium
+skills: [code-review, architect]
 
-It comes with built-in tools for filesystem, shell, network, and user interaction, connects to MCP servers for additional tools. Provides persistent resumable sessions. Has An FTS5 memory backed by SQLite. It speaks MCP both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease. Extended thinking for models that support it. 
-
-It gives you real control over context. Deterministic discovery for common formats (CLAUDE.md, AGENTS.md, README.md), pattern resolution, prompt caching, compaction, token tracking. A skill system that can pull skills from GitHub repos or npm packages.
-
-It runs as a CLI, REPL, HTTP server, or MCP server. No runtime dependencies. Fully observable via structured logs and traces for each session, so you can actually see what your agent is doing.
-
-All of this is configurable via a layered config system — env vars, config files (JSON, YAML, TOML), or CLI flags. Each layer overrides the last.
+permissions:
+  rules:
+    - tool: execute_bash
+      command:
+        allow: ["^git ", "^bun "]
+        deny: ["--force", "--hard"]
+```
 
 ```bash
 ra "What is the capital of France?"
@@ -62,9 +71,53 @@ ra --http                                                       # streaming HTTP
 ra --mcp-stdio                                                  # MCP server for Cursor / Claude Desktop
 ```
 
+## Why ra
+
+### Your agent, in your repo
+
+Ra is a config file and a binary. The config lives in your repo. When a new engineer clones the project, they get the same agent behavior everyone else has — same skills, same permissions, same middleware, same model routing. No setup docs. No "make sure you configure your AI tool like this." It's just there, like your test runner.
+
+### The agent you can explain
+
+When someone asks "what is our AI agent actually doing?" — ra has an answer. Here's the config. Here's the middleware. Here's the audit log. Every model call, tool execution, and decision is logged as structured JSON with OpenTelemetry-style traces. In enterprise contexts where AI governance is a real concern, this isn't a nice-to-have — it's the difference between "we use AI" and "here's exactly how we use AI."
+
+### Multi-model as a superpower
+
+Different models are better at different tasks. Sonnet for deep reasoning, Flash for quick lookups, a local Ollama model for code that shouldn't leave your machine. Ra routes different skills to different models based on rules you define:
+
+```yaml
+skills:
+  - name: code-review
+    provider: anthropic
+    model: claude-sonnet-4-6
+  - name: documentation
+    provider: google
+    model: gemini-flash-2.5
+  - name: internal-secrets-audit
+    provider: ollama
+    model: llama3
+```
+
+The sensitive stuff never leaves your machine. The expensive reasoning only runs when needed. One config, three providers, no code changes.
+
+### Composable like Unix tools
+
+`cat error.log | ra "explain this"` — ra reads stdin, talks to the model, writes to stdout. It composes the same way shell commands compose. Pipe it, chain it, cron it. The agent loop is the primitive; what you build with it is up to you.
+
+### The recipe book
+
+Ra ships with ready-to-use recipes — complete agent configurations that solve specific problems:
+
+```bash
+ra --config recipes/coding-agent/ra.config.yaml        # full coding agent with tools, thinking, compaction
+ra --config recipes/code-review-agent/ra.config.yaml    # code reviewer with GitHub MCP, style guide, token budget
+```
+
+Each recipe is a standalone `ra.config.yml` you can fork and customize. Build your own for daily standup prep, dependency upgrades, incident postmortems, or onboarding bots — whatever your team needs, defined as config.
+
 ## The Agent Loop
 
-ra's core loop is simple: send messages to the model, stream the response, execute any tool calls, repeat. Every step fires a middleware hook you can intercept. The loop handles iteration, token tracking, and tool execution — you control everything else through system prompts, skills, and middleware.
+Ra's core loop is simple: send messages to the model, stream the response, execute any tool calls, repeat. Every step fires a middleware hook you can intercept. The loop handles iteration, token tracking, and tool execution — you control everything else through system prompts, skills, and middleware.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -116,7 +169,7 @@ Uses real token counts when available, never splits tool call boundaries, and pi
 
 ### Token tracking & prompt caching
 
-ra tracks input and output tokens across every iteration. Your middleware can read cumulative usage via `ctx.loop.usage` and enforce budgets, log costs, or trigger compaction early. On Anthropic, cache hints are automatically added to system prompts and tool definitions — no config needed.
+Ra tracks input and output tokens across every iteration. Your middleware can read cumulative usage via `ctx.loop.usage` and enforce budgets, log costs, or trigger compaction early. On Anthropic, cache hints are automatically added to system prompts and tool definitions — no config needed.
 
 ### Extended thinking
 
@@ -128,7 +181,7 @@ Three budget levels (`low`, `medium`, `high`) control how much the model reasons
 
 ### Context discovery
 
-ra can discover and inject project context files into the conversation before your prompt. Configure which files to look for via the `context.patterns` config:
+Ra discovers and injects project context files into the conversation before your prompt. Configure which files to look for via the `context.patterns` config:
 
 ```yaml
 context:
@@ -139,7 +192,7 @@ context:
     - "CONVENTIONS.md"
 ```
 
-ra walks the directory tree upward to the git root, finds matching files, and injects them as context.
+Ra walks the directory tree upward to the git root, finds matching files, and injects them as context.
 
 ### Pattern resolution
 
@@ -328,7 +381,7 @@ Scripts and references are loaded on demand — not eagerly at activation. In th
 
 ### Built-in skills
 
-ra ships with ready-to-use skills:
+Ra ships with ready-to-use skills:
 
 | Skill | Purpose |
 |-------|---------|
@@ -346,7 +399,7 @@ ra --skill debugger --file crash.log "Find the root cause"
 
 ## Sessions
 
-ra persists every conversation as JSONL. Resume any session from any interface.
+Ra persists every conversation as JSONL. Resume any session from any interface.
 
 ```bash
 ra --resume <session-id> "Continue with the next step"
@@ -363,7 +416,7 @@ Sessions are auto-saved after each turn. The REPL has `/resume <id>` and the HTT
 
 ## MCP
 
-ra speaks MCP in both directions.
+Ra speaks MCP in both directions.
 
 **As a client** — connect to external MCP servers. Their tools become available to the model.
 
@@ -468,7 +521,7 @@ The agent decides when to save and forget — tool descriptions guide it to capt
 
 ## Recipes
 
-Pre-built agent configurations you can use directly or fork.
+Complete agent configurations you can use directly or fork. Each recipe is a `ra.config.yml` that solves a specific problem — clone it, tweak it, commit it to your repo.
 
 ### [Coding Agent](recipes/coding-agent/)
 
@@ -485,6 +538,24 @@ Reviews diffs for correctness, style, and performance. Connects to GitHub via MC
 ```bash
 ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review this"
 ```
+
+Build your own recipes for standup prep, dependency upgrades, incident postmortems, onboarding bots — any repeatable workflow your team runs, defined as config and committed to your repo.
+
+## GitHub Actions
+
+Use ra directly in your CI/CD workflows. No install step needed — the action downloads the binary automatically.
+
+```yaml
+- uses: chinmaymk/ra@latest
+  with:
+    prompt: "Review this PR for bugs and security issues"
+    provider: anthropic
+    model: claude-sonnet-4-6
+  env:
+    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+The action exposes the same configuration as the CLI — provider, model, skills, thinking, file attachments, and custom config files. See the [GitHub Actions docs](docs/site/modes/github-actions.md) for full usage.
 
 ## Configuration
 
@@ -518,22 +589,6 @@ Use `--exec` to run a TypeScript or JavaScript file that imports ra's internals 
 ra --exec ./scripts/batch-review.ts
 ```
 
-## GitHub Actions
-
-Use ra directly in your CI/CD workflows. No install step needed — the action downloads the binary automatically.
-
-```yaml
-- uses: chinmaymk/ra@latest
-  with:
-    prompt: "Review this PR for bugs and security issues"
-    provider: anthropic
-    model: claude-sonnet-4-6
-  env:
-    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-The action exposes the same configuration as the CLI — provider, model, skills, thinking, file attachments, and custom config files. See the [GitHub Actions docs](docs/site/modes/github-actions.md) for full usage.
-
 ## Building from Source
 
 ```bash
@@ -551,5 +606,5 @@ MIT
 ---
 
 <p align="center">
-  <b>ra</b> — One Loop. Infinite Agents.
+  <b>ra</b> — Your agent config, committed to git.
 </p>
