@@ -48,7 +48,7 @@ Drop a `ra.config.yml` in a repo and that directory becomes a project-specific a
 | [Sessions](/core/sessions) | Persist conversations as JSONL, resume from any interface, auto-prune |
 | [File Attachments](/core/file-attachments) | Images, PDFs, text files — auto-detected and sent in the right format |
 | [Memory](/configuration/#memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
-| [Configuration](/configuration/) | Layered: defaults → file → env → CLI. The config is the agent |
+| [Configuration](/configuration/) | Layered: CLI > env > file. The config is the agent |
 
 ## Use cases
 

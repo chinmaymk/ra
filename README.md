@@ -168,10 +168,10 @@ Ra also speaks [MCP as a client](https://chinmaymk.github.io/ra/modes/mcp/) — 
 
 ## [Configuration](https://chinmaymk.github.io/ra/configuration/)
 
-Layered config — each layer overrides the previous.
+Layered config — each layer overrides the one to its right.
 
 ```
-defaults → ra.config.yml → env vars → CLI flags
+CLI flags > env vars > config file
 ```
 
 Supports YAML, JSON, and TOML config files. Environment variables use the `RA_` prefix. CLI flags override everything.

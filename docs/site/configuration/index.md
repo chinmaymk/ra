@@ -1,9 +1,9 @@
 # Configuration Reference
 
-ra uses a layered config system: **defaults → file → env → CLI**. Each layer overrides the previous.
+ra uses a layered config system: **CLI > env > file**. Each layer overrides the one to its right.
 
 ```
-defaults → config file → env vars → CLI flags
+CLI flags > env vars > config file
 ```
 
 Commit a `ra.config.yml` for a team or project baseline. Use environment variables for secrets and per-environment settings. Use CLI flags for one-off overrides.
