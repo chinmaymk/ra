@@ -14,6 +14,7 @@ import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
 import { McpClient } from './mcp/client'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
+import { SessionMemoryStore, sessionMemoryReadTool, sessionMemoryWriteTool, sessionMemoryDeleteTool, createSessionMemoryMiddleware } from './session-memory'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
 import { createObservabilityMiddleware } from './observability/middleware'
@@ -39,6 +40,7 @@ export interface AppContext {
   sessionId: string
   contextMessages: IMessage[]
   memoryStore: MemoryStore | undefined
+  sessionMemoryStore: SessionMemoryStore | undefined
   mcpClient: McpClient
   logger: Logger
   tracer: Tracer
@@ -148,6 +150,19 @@ export async function bootstrap(
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
 
+  // ── Session Memory ───────────────────────────────────────────────
+  let sessionMemoryStore: SessionMemoryStore | undefined
+  if (config.sessionMemory.enabled) {
+    sessionMemoryStore = new SessionMemoryStore()
+    tools.register(sessionMemoryReadTool(sessionMemoryStore))
+    tools.register(sessionMemoryWriteTool(sessionMemoryStore))
+    tools.register(sessionMemoryDeleteTool(sessionMemoryStore))
+
+    const sessionMemMw = createSessionMemoryMiddleware(sessionMemoryStore)
+    middleware.beforeModelCall = [...(middleware.beforeModelCall ?? []), sessionMemMw]
+    logger.info('session memory initialized')
+  }
+
   // ── Skills ─────────────────────────────────────────────────────────
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
@@ -215,6 +230,7 @@ export async function bootstrap(
     sessionId,
     contextMessages,
     memoryStore,
+    sessionMemoryStore,
     mcpClient,
     logger,
     tracer,

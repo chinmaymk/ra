@@ -99,6 +99,7 @@ const ENV_RULES: Record<string, EnvRule> = {
   RA_LOGS_ENABLED:      { type: 'bool',   path: ['logsEnabled'] },
   RA_LOG_LEVEL:         { type: 'enum',   path: ['logLevel'], values: ['debug', 'info', 'warn', 'error'] },
   RA_TRACES_ENABLED:    { type: 'bool',   path: ['tracesEnabled'] },
+  RA_SESSION_MEMORY_ENABLED: { type: 'bool', path: ['sessionMemory', 'enabled'] },
   RA_MEMORY_ENABLED:      { type: 'bool',   path: ['memory', 'enabled'] },
   RA_MEMORY_MAX_MEMORIES: { type: 'int',    path: ['memory', 'maxMemories'] },
   RA_MEMORY_TTL_DAYS:     { type: 'int',    path: ['memory', 'ttlDays'] },

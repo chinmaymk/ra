@@ -85,6 +85,9 @@ export interface RaConfig {
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
   }
+  sessionMemory: {
+    enabled: boolean     // enable ephemeral in-memory KV store for this session
+  }
   logsEnabled: boolean
   logLevel: LogLevel
   tracesEnabled: boolean

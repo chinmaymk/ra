@@ -66,6 +66,9 @@ export const defaultConfig: RaConfig = {
     ttlDays: 90,
     injectLimit: 5,
   },
+  sessionMemory: {
+    enabled: true,
+  },
   logsEnabled: true,
   logLevel: 'info',
   tracesEnabled: true,
