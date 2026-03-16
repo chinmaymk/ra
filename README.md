@@ -80,7 +80,7 @@ ra --http                                                       # HTTP API
 ra --mcp-stdio                                                  # MCP server
 ```
 
-## The Agent Loop
+## [The Agent Loop](https://chinmaymk.github.io/ra/core/agent-loop/)
 
 Send messages to the model, stream the response, execute any tool calls, repeat. Every step fires a middleware hook you can intercept.
 
@@ -93,7 +93,7 @@ User message → [beforeLoopBegin]
 
 The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. [Context compaction](https://chinmaymk.github.io/ra/core/context-control/) kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context.
 
-## Providers
+## [Providers](https://chinmaymk.github.io/ra/providers/anthropic/)
 
 Switch with a flag or set it in config.
 
@@ -108,7 +108,7 @@ ra --provider azure --azure-deployment my-gpt4o "Analyze this log"
 
 Each provider needs an API key via environment variable (`RA_ANTHROPIC_API_KEY`, `RA_OPENAI_API_KEY`, `RA_GOOGLE_API_KEY`, etc). Bedrock and Azure fall back to their standard credential chains.
 
-## Tools
+## [Tools](https://chinmaymk.github.io/ra/tools/)
 
 Ra ships with built-in tools for filesystem operations (`Read`, `Write`, `Edit`, `Glob`, `Grep`, ...), shell execution (`Bash`/`PowerShell`), web fetching, and agent interaction (`AskUserQuestion`, `TodoWrite`, `Agent`). The `Agent` tool forks parallel copies of the agent to work on independent tasks simultaneously.
 
@@ -126,7 +126,7 @@ permissions:
         deny: ["\\.env"]
 ```
 
-## Skills
+## [Skills](https://chinmaymk.github.io/ra/skills/)
 
 Reusable instruction bundles — roles, behaviors, scripts, and reference docs packaged as directories.
 
@@ -138,7 +138,7 @@ ra --skill debugger --file crash.log "Find the root cause"
 
 Ra ships with built-in skills (`code-review`, `architect`, `planner`, `debugger`, `code-style`, `writer`) and you can install more from GitHub repos, npm packages, or URLs. Each skill is a `SKILL.md` with YAML frontmatter, optional scripts, and reference docs.
 
-## Middleware
+## [Middleware](https://chinmaymk.github.io/ra/middleware/)
 
 Hook into every step of the agent loop with TypeScript files or inline expressions.
 
@@ -166,7 +166,7 @@ Same agent, multiple entry points.
 
 Ra also speaks [MCP as a client](https://chinmaymk.github.io/ra/modes/mcp/) — connect to external MCP servers and their tools become available to the model. [Sessions](https://chinmaymk.github.io/ra/core/sessions/) are persisted as JSONL and can be resumed from any interface with `--resume`.
 
-## Configuration
+## [Configuration](https://chinmaymk.github.io/ra/configuration/)
 
 Layered config — each layer overrides the previous.
 
@@ -176,7 +176,7 @@ defaults → ra.config.yml → env vars → CLI flags
 
 Supports YAML, JSON, and TOML config files. Environment variables use the `RA_` prefix. CLI flags override everything.
 
-## Recipes
+## [Recipes](https://chinmaymk.github.io/ra/recipes/)
 
 Pre-built agent configurations you can fork and commit to your repo.
 
@@ -187,7 +187,7 @@ Pre-built agent configurations you can fork and commit to your repo.
 ra --config recipes/coding-agent/ra.config.yaml
 ```
 
-## GitHub Actions
+## [GitHub Actions](https://chinmaymk.github.io/ra/modes/github-actions/)
 
 ```yaml
 - uses: chinmaymk/ra@latest
