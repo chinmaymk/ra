@@ -4,7 +4,7 @@ import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { errorMessage } from './utils/errors'
 import { HELP } from './interfaces/help'
-import { runExecScript, runSkillCommand, showContext, runMemoryCommand } from './interfaces/commands'
+import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showDryRunConfig } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
@@ -64,6 +64,12 @@ async function handleStandaloneCommands(
 ): Promise<void> {
   if (parsed.meta.showContext) {
     showContext(app.contextMessages)
+    await app.shutdown()
+    process.exit(0)
+  }
+
+  if (parsed.meta.dryRunConfig) {
+    showDryRunConfig(app)
     await app.shutdown()
     process.exit(0)
   }

@@ -196,6 +196,7 @@ See [MCP](/modes/mcp#lazy-schema-loading) for details.
 | — | — | `--resume` | — | Resume a previous session |
 | — | — | `--file` | — | Attach files to the prompt |
 | — | — | `--exec` | — | Run a script file |
+| — | — | `--dry-run-config` | — | Show resolved configuration and exit |
 | — | — | `--config` | — | Path to config file |
 
 ## Environment variables
@@ -248,6 +249,34 @@ Credentials are env-only — never exposed as CLI flags to keep them out of shel
 | Azure | `RA_AZURE_ENDPOINT`, `RA_AZURE_DEPLOYMENT`, `RA_AZURE_API_KEY`, `RA_AZURE_API_VERSION` | [Setup](/providers/azure) |
 | Bedrock | `RA_BEDROCK_API_KEY`, `RA_BEDROCK_REGION` | [Setup](/providers/bedrock) |
 | Ollama | `RA_OLLAMA_HOST` | [Setup](/providers/ollama) |
+
+## Dry run
+
+Use `--dry-run-config` to inspect the fully resolved configuration without starting the agent loop. This is useful for debugging config layering, verifying which context files will be loaded, which middleware hooks are active, and what tools are registered.
+
+```bash
+ra --dry-run-config
+ra --dry-run-config --provider openai --model gpt-4.1
+ra --dry-run-config --config recipes/coding-agent/ra.config.yaml
+```
+
+The output includes:
+
+- **Core** — provider, model, interface, maxIterations, thinking, systemPrompt
+- **Paths** — configDir, dataDir
+- **Context** — patterns, resolvers, discovered context files
+- **Middleware** — hook counts and config file sources
+- **Tools** — all registered tools
+- **Skills** — active skills, skill directories, available skills
+- **Compaction** — threshold, model, settings
+- **Memory** — enabled state, limits, stored count
+- **Storage** — format, session limits
+- **MCP** — client connections, server settings
+- **HTTP** — port, token (masked)
+- **Permissions** — default action, rules
+- **Observability** — logs, log level, traces
+
+Sensitive values (HTTP token, API keys) are masked in the output.
 
 ## See also
 

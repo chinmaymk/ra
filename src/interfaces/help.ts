@@ -52,6 +52,7 @@ PROVIDER OPTIONS
 
   --builtin-tools                     Enable built-in tools (filesystem, shell, network)
   --show-context                      Show discovered context files and exit
+  --dry-run-config                    Show resolved configuration and exit
   --exec <script>                     Execute a JS/TS file and exit
   --version, -v                       Print version and exit
   --help, -h                          Print this help message

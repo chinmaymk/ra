@@ -65,6 +65,17 @@ See [Sessions](/core/sessions) for more on session persistence.
 | `0` | Success |
 | Non-zero | Error (provider failure, config error, etc.) |
 
+## Dry run
+
+Inspect the fully resolved configuration without starting the agent:
+
+```bash
+ra --dry-run-config
+ra --dry-run-config --provider openai --model gpt-4.1
+```
+
+See [Configuration — Dry run](/configuration/#dry-run) for details on the output.
+
 ## See also
 
 - [REPL](/modes/repl) — for interactive sessions
