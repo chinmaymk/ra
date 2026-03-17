@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { join } from 'path'
 import { SessionStorage } from '../../src/storage/sessions'
-import { createLoopMiddleware } from '../../src/storage/middleware'
+import { createHistoryMiddleware } from '../../src/storage/middleware'
+import { createSessionMiddleware } from '../../src/agent/session'
+import { concatMiddleware } from '../../src/agent/middleware'
 import { AgentLoop } from '../../src/agent/loop'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import type { IProvider, IMessage } from '../../src/providers/types'
@@ -43,8 +45,8 @@ function toolCallProvider(toolName: string, text: string): IProvider {
   }
 }
 
-function sessionMiddleware(storage: SessionStorage, sessionId: string) {
-  return createLoopMiddleware(undefined, { storage, sessionId }).middleware
+function historyMiddleware(storage: SessionStorage) {
+  return concatMiddleware(createHistoryMiddleware(storage))
 }
 
 describe('SessionHistoryMiddleware', () => {
@@ -64,7 +66,7 @@ describe('SessionHistoryMiddleware', () => {
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
-      middleware: sessionMiddleware(storage, session.id),
+      middleware: historyMiddleware(storage),
     })
 
     const messages: IMessage[] = [{ role: 'user', content: 'hi' }]
@@ -91,7 +93,7 @@ describe('SessionHistoryMiddleware', () => {
       tools,
       model: 'test',
       sessionId: session.id,
-      middleware: sessionMiddleware(storage, session.id),
+      middleware: historyMiddleware(storage),
     })
 
     const messages: IMessage[] = [{ role: 'user', content: 'run echo' }]
@@ -148,11 +150,10 @@ describe('SessionHistoryMiddleware', () => {
       }
     }
 
-    const baseMw = { beforeModelCall: [fakeCompaction] }
-    const { middleware } = createLoopMiddleware(baseMw, {
-      storage,
-      sessionId: session.id,
-    })
+    const middleware = concatMiddleware(
+      { beforeModelCall: [fakeCompaction] },
+      createHistoryMiddleware(storage),
+    )
 
     const loop = new AgentLoop({
       provider,
@@ -176,7 +177,7 @@ describe('SessionHistoryMiddleware', () => {
     expect(stored[2]?.content).toBe('post-compaction answer')
   })
 
-  it('writes logs and traces to the session directory via createLoopMiddleware', async () => {
+  it('writes logs and traces to the session directory via createSessionMiddleware', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
 
     const obsConfig: ObservabilityConfig = {
@@ -185,7 +186,7 @@ describe('SessionHistoryMiddleware', () => {
       traces: { enabled: true, output: 'session' },
     }
 
-    const { middleware, logger } = createLoopMiddleware(undefined, {
+    const { middleware, logger } = createSessionMiddleware(undefined, {
       storage,
       sessionId: session.id,
       obsConfig,
@@ -236,7 +237,7 @@ describe('SessionHistoryMiddleware', () => {
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
-      middleware: sessionMiddleware(storage, session.id),
+      middleware: historyMiddleware(storage),
     })
 
     // Pass system + context + user messages as initial

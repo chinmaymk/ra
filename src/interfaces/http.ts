@@ -8,7 +8,7 @@ import type { Logger } from '../observability/logger'
 import type { ObservabilityConfig } from '../observability'
 import { mkdir } from 'node:fs/promises'
 import { AgentLoop } from '../agent/loop'
-import { createLoopMiddleware } from '../storage/middleware'
+import { createSessionMiddleware } from '../agent/session'
 import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
@@ -146,7 +146,7 @@ export class HttpServer {
     const userMessages = (body.messages ?? []).filter((m: IMessage) => m.role === 'user')
     await this.options.storage.appendMessages(sessionId, userMessages)
 
-    const session = createLoopMiddleware(this.options.middleware, {
+    const session = createSessionMiddleware(this.options.middleware, {
       storage: this.options.storage,
       sessionId,
       obsConfig: this.options.obsConfig,
@@ -211,7 +211,7 @@ export class HttpServer {
           }
         }
 
-        const session = createLoopMiddleware(opts.middleware, {
+        const session = createSessionMiddleware(opts.middleware, {
           storage: opts.storage,
           sessionId,
           obsConfig: opts.obsConfig,

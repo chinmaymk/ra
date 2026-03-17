@@ -7,7 +7,7 @@ import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolRe
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
 import type { ObservabilityConfig } from '../observability'
-import { createLoopMiddleware } from '../storage/middleware'
+import { createSessionMiddleware } from '../agent/session'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
@@ -185,7 +185,7 @@ export class Repl {
     let streamBuf: tui.StreamBuffer | null = null
     const toolStartTimes = new Map<string, number>()
     tui.startSpinner()
-    const session = createLoopMiddleware(this.options.middleware, {
+    const session = createSessionMiddleware(this.options.middleware, {
       storage: this.options.storage,
       sessionId: this.sessionId!,
       obsConfig: this.options.obsConfig,

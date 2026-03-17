@@ -6,7 +6,7 @@ import type { Skill } from '../skills/types'
 import type { Logger } from '../observability/logger'
 import type { ObservabilityConfig } from '../observability'
 import type { SessionStorage } from '../storage/sessions'
-import { createLoopMiddleware } from '../storage/middleware'
+import { createSessionMiddleware } from '../agent/session'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import { fileToContentPart } from '../utils/files'
@@ -80,7 +80,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   }
 
   const session = storage && sessionId
-    ? createLoopMiddleware(middleware, { storage, sessionId, obsConfig, logger })
+    ? createSessionMiddleware(middleware, { storage, sessionId, obsConfig, logger })
     : { middleware: middleware ?? {}, logger }
   const loop = new AgentLoop({
     provider, tools, model, maxIterations, toolTimeout, thinking, compaction, sessionId,

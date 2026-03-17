@@ -12,7 +12,7 @@ import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { serializeContent } from './providers/utils'
-import { createLoopMiddleware } from './storage/middleware'
+import { createSessionMiddleware } from './agent/session'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ function createMcpHandler(app: AppContext) {
       model: app.config.model,
       interface: 'mcp',
     })
-    const loopSession = createLoopMiddleware(app.middleware, {
+    const loopSession = createSessionMiddleware(app.middleware, {
       storage: app.storage,
       sessionId: session.id,
       obsConfig: app.obsConfig,
