@@ -1,36 +1,6 @@
 import type { ITool } from '../providers/types'
 import type { SessionMemoryStore } from './store'
 
-export function sessionMemoryReadTool(store: SessionMemoryStore): ITool {
-  return {
-    name: 'session_memory_read',
-    description:
-      'Read from session memory — a key-value scratchpad that lasts for the entire conversation. ' +
-      'Unlike your regular context which may be summarized as the conversation grows, entries in session memory ' +
-      'are guaranteed to remain visible to you in every turn. ' +
-      'Provide a key to read a specific entry, or omit the key to list all entries. ' +
-      'Session memory is NOT persisted across sessions — it only exists for this conversation. ' +
-      'For long-term memory that persists across sessions, use memory_save/memory_search instead.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        key: { type: 'string', description: 'The key to look up. If omitted, returns all keys and their values.' },
-      },
-    },
-    async execute(input: unknown) {
-      const { key } = input as { key?: string }
-      if (key) {
-        const value = store.get(key)
-        return value !== undefined ? value : `No entry found for key "${key}".`
-      }
-      const entries = store.entries()
-      const keys = Object.keys(entries)
-      if (keys.length === 0) return 'Session memory is empty.'
-      return keys.map(k => `${k}: ${entries[k]}`).join('\n')
-    },
-  }
-}
-
 export function sessionMemoryWriteTool(store: SessionMemoryStore): ITool {
   return {
     name: 'session_memory_write',

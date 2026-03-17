@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test'
 import { SessionMemoryStore } from '../../src/session-memory/store'
-import { sessionMemoryReadTool, sessionMemoryWriteTool, sessionMemoryDeleteTool } from '../../src/session-memory/tools'
+import { sessionMemoryWriteTool, sessionMemoryDeleteTool } from '../../src/session-memory/tools'
 import { createSessionMemoryMiddleware } from '../../src/session-memory/middleware'
 import type { IMessage } from '../../src/providers/types'
 import type { ModelCallContext } from '../../src/agent/types'
@@ -76,34 +76,19 @@ describe('SessionMemoryStore', () => {
 })
 
 describe('session memory tools', () => {
-  it('write and read by key', async () => {
+  it('write stores value in the store', async () => {
     const write = sessionMemoryWriteTool(store)
-    const read = sessionMemoryReadTool(store)
-
-    await write.execute({ key: 'plan', value: 'build the feature' })
-    const result = await read.execute({ key: 'plan' }) as string
-    expect(result).toBe('build the feature')
+    const result = await write.execute({ key: 'plan', value: 'build the feature' }) as string
+    expect(result).toContain('Stored')
+    expect(store.get('plan')).toBe('build the feature')
   })
 
-  it('read missing key', async () => {
-    const read = sessionMemoryReadTool(store)
-    const result = await read.execute({ key: 'missing' }) as string
-    expect(result).toContain('No entry found')
-  })
-
-  it('read all keys when no key provided', async () => {
-    store.set('a', '1')
-    store.set('b', '2')
-    const read = sessionMemoryReadTool(store)
-    const result = await read.execute({}) as string
-    expect(result).toContain('a: 1')
-    expect(result).toContain('b: 2')
-  })
-
-  it('read returns empty message when store is empty', async () => {
-    const read = sessionMemoryReadTool(store)
-    const result = await read.execute({}) as string
-    expect(result).toBe('Session memory is empty.')
+  it('write overwrites existing key', async () => {
+    const write = sessionMemoryWriteTool(store)
+    await write.execute({ key: 'plan', value: 'v1' })
+    await write.execute({ key: 'plan', value: 'v2' })
+    expect(store.get('plan')).toBe('v2')
+    expect(store.size()).toBe(1)
   })
 
   it('delete existing key', async () => {
