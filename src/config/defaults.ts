@@ -66,9 +66,6 @@ export const defaultConfig: RaConfig = {
     ttlDays: 90,
     injectLimit: 5,
   },
-  logsEnabled: true,
-  logLevel: 'info',
-  tracesEnabled: true,
   observability: {
     enabled: true,
     logs: { enabled: true, level: 'info', output: 'session' },

@@ -96,9 +96,9 @@ const ENV_RULES: Record<string, EnvRule> = {
   RA_STORAGE_TTL_DAYS:     { type: 'int',    path: ['storage', 'ttlDays'] },
   RA_SKILL_DIRS:           { type: 'csv',    path: ['skillDirs'] },
   RA_SKILLS:               { type: 'csv',    path: ['skills'] },
-  RA_LOGS_ENABLED:      { type: 'bool',   path: ['logsEnabled'] },
-  RA_LOG_LEVEL:         { type: 'enum',   path: ['logLevel'], values: ['debug', 'info', 'warn', 'error'] },
-  RA_TRACES_ENABLED:    { type: 'bool',   path: ['tracesEnabled'] },
+  RA_LOGS_ENABLED:      { type: 'bool',   path: ['observability', 'logs', 'enabled'] },
+  RA_LOG_LEVEL:         { type: 'enum',   path: ['observability', 'logs', 'level'], values: ['debug', 'info', 'warn', 'error'] },
+  RA_TRACES_ENABLED:    { type: 'bool',   path: ['observability', 'traces', 'enabled'] },
   RA_MEMORY_ENABLED:      { type: 'bool',   path: ['memory', 'enabled'] },
   RA_MEMORY_MAX_MEMORIES: { type: 'int',    path: ['memory', 'maxMemories'] },
   RA_MEMORY_TTL_DAYS:     { type: 'int',    path: ['memory', 'ttlDays'] },
@@ -161,12 +161,8 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
     if (await f.exists()) config.systemPrompt = await f.text()
   }
 
-  // Derive observability config from primitive fields
-  config.observability = {
-    enabled: config.logsEnabled || config.tracesEnabled,
-    logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
-    traces: { enabled: config.tracesEnabled, output: 'session' },
-  }
+  // Derive top-level enabled from individual toggles
+  config.observability.enabled = (config.observability.logs.enabled ?? true) || (config.observability.traces.enabled ?? true)
 
   return config
 }

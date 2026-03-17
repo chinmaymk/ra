@@ -1,5 +1,4 @@
 import type { ContextConfig } from '../context/types'
-import type { LogLevel } from '../observability/logger'
 import type { ObservabilityConfig } from '../observability'
 import type { AnthropicProviderOptions } from '../providers/anthropic'
 import type { OpenAIProviderOptions } from '../providers/openai'
@@ -86,10 +85,6 @@ export interface RaConfig {
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
   }
-  logsEnabled: boolean
-  logLevel: LogLevel
-  tracesEnabled: boolean
-  /** Derived observability config — computed from logsEnabled, tracesEnabled, logLevel. */
   observability: ObservabilityConfig
 }
 

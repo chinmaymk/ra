@@ -32,9 +32,9 @@ Each layer overrides the previous:
 | `compaction.enabled` | `true` | Auto-summarize old messages |
 | `compaction.threshold` | `0.80` | Trigger compaction at 80% context window |
 | `memory.enabled` | `false` | SQLite-backed persistent memory |
-| `logsEnabled` | `true` | Enable session logs |
-| `logLevel` | `'info'` | Minimum log level |
-| `tracesEnabled` | `true` | Enable session traces |
+| `observability.logs.enabled` | `true` | Enable session logs |
+| `observability.logs.level` | `'info'` | Minimum log level |
+| `observability.traces.enabled` | `true` | Enable session traces |
 | `skills` | `[]` | Active skill names |
 | `skillDirs` | `[]` | Directories to scan for skills |
 
