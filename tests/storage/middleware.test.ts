@@ -3,7 +3,7 @@ import { join } from 'path'
 import { SessionStorage } from '../../src/storage/sessions'
 import { createHistoryMiddleware } from '../../src/storage/middleware'
 import { createSessionMiddleware } from '../../src/agent/session'
-import { concatMiddleware } from '../../src/agent/middleware'
+import { mergeMiddleware } from '../../src/agent/middleware'
 import { AgentLoop } from '../../src/agent/loop'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import type { IProvider, IMessage } from '../../src/providers/types'
@@ -45,10 +45,6 @@ function toolCallProvider(toolName: string, text: string): IProvider {
   }
 }
 
-function historyMiddleware(storage: SessionStorage) {
-  return concatMiddleware(createHistoryMiddleware(storage))
-}
-
 describe('SessionHistoryMiddleware', () => {
   let storage: SessionStorage
 
@@ -66,16 +62,17 @@ describe('SessionHistoryMiddleware', () => {
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
-      middleware: historyMiddleware(storage),
+      middleware: createHistoryMiddleware(storage),
     })
 
     const messages: IMessage[] = [{ role: 'user', content: 'hi' }]
     await loop.run(messages)
 
     const stored = await storage.readMessages(session.id)
-    expect(stored.length).toBeGreaterThan(0)
+    // User message + assistant response
+    expect(stored.length).toBe(2)
+    expect(stored.some(m => m.role === 'user')).toBe(true)
     expect(stored.some(m => m.role === 'assistant')).toBe(true)
-    expect(stored[0]?.content).toBe('hello world')
   })
 
   it('persists tool call results alongside assistant messages', async () => {
@@ -93,18 +90,19 @@ describe('SessionHistoryMiddleware', () => {
       tools,
       model: 'test',
       sessionId: session.id,
-      middleware: historyMiddleware(storage),
+      middleware: createHistoryMiddleware(storage),
     })
 
     const messages: IMessage[] = [{ role: 'user', content: 'run echo' }]
     await loop.run(messages)
 
     const stored = await storage.readMessages(session.id)
-    // Should have: assistant (with tool call), tool result, assistant (final)
-    expect(stored.length).toBe(3)
-    expect(stored[0]?.role).toBe('assistant')
-    expect(stored[1]?.role).toBe('tool')
-    expect(stored[2]?.role).toBe('assistant')
+    // user, assistant (with tool call), tool result, assistant (final)
+    expect(stored.length).toBe(4)
+    expect(stored[0]?.role).toBe('user')
+    expect(stored[1]?.role).toBe('assistant')
+    expect(stored[2]?.role).toBe('tool')
+    expect(stored[3]?.role).toBe('assistant')
   })
 
   it('captures messages after context compaction shrinks the array', async () => {
@@ -150,7 +148,7 @@ describe('SessionHistoryMiddleware', () => {
       }
     }
 
-    const middleware = concatMiddleware(
+    const middleware = mergeMiddleware(
       { beforeModelCall: [fakeCompaction] },
       createHistoryMiddleware(storage),
     )
@@ -167,14 +165,15 @@ describe('SessionHistoryMiddleware', () => {
     await loop.run(messages)
 
     const stored = await storage.readMessages(session.id)
-    // Iteration 1: assistant (tool call) + tool result = 2 messages
-    // Compaction shrinks array
-    // Iteration 2: assistant (final answer) = 1 message
-    expect(stored.length).toBe(3)
-    expect(stored[0]?.role).toBe('assistant')
-    expect(stored[1]?.role).toBe('tool')
-    expect(stored[2]?.role).toBe('assistant')
-    expect(stored[2]?.content).toBe('post-compaction answer')
+    // user, assistant (tool call), tool result, compacted summary, post-compaction assistant
+    expect(stored.length).toBe(5)
+    expect(stored[0]?.role).toBe('user')
+    expect(stored[1]?.role).toBe('assistant')
+    expect(stored[2]?.role).toBe('tool')
+    expect(stored[3]?.role).toBe('system')
+    expect(stored[3]?.content).toBe('[compacted summary]')
+    expect(stored[4]?.role).toBe('assistant')
+    expect(stored[4]?.content).toBe('post-compaction answer')
   })
 
   it('writes logs and traces to the session directory via createSessionMiddleware', async () => {
@@ -226,31 +225,32 @@ describe('SessionHistoryMiddleware', () => {
     // Verify messages.jsonl is also written (session history still works)
     const stored = await storage.readMessages(session.id)
     expect(stored.length).toBeGreaterThan(0)
-    expect(stored[0]?.role).toBe('assistant')
   })
 
-  it('does not persist initial messages (only loop-generated)', async () => {
+  it('skips initial messages with priorCount and saves new ones', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
 
+    // priorCount=2 means first 2 messages are already on disk
     const loop = new AgentLoop({
       provider: mockProvider(['response']),
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
-      middleware: historyMiddleware(storage),
+      middleware: createHistoryMiddleware(storage, 2),
     })
 
-    // Pass system + context + user messages as initial
     const messages: IMessage[] = [
       { role: 'system', content: 'you are helpful' },
       { role: 'user', content: 'context info' },
-      { role: 'user', content: 'hello' },
+      { role: 'user', content: 'hello' },  // new — should be saved
     ]
     await loop.run(messages)
 
     const stored = await storage.readMessages(session.id)
-    // Only the assistant response should be stored, not the initial messages
-    expect(stored).toHaveLength(1)
-    expect(stored[0]?.role).toBe('assistant')
+    // New user message + assistant response
+    expect(stored).toHaveLength(2)
+    expect(stored[0]?.role).toBe('user')
+    expect(stored[0]?.content).toBe('hello')
+    expect(stored[1]?.role).toBe('assistant')
   })
 })

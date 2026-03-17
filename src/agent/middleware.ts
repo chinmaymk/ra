@@ -17,28 +17,14 @@ export async function runMiddlewareChain<T extends StoppableContext>(
   }
 }
 
-const HOOK_KEYS: (keyof MiddlewareConfig)[] = [
-  'beforeLoopBegin', 'beforeModelCall', 'onStreamChunk',
-  'beforeToolExecution', 'afterToolExecution', 'afterModelResponse',
-  'afterLoopIteration', 'afterLoopComplete', 'onError',
-]
-
-/**
- * Concatenates multiple partial middleware configs into a full
- * MiddlewareConfig.  Hooks from later layers run after earlier layers.
- * Missing hooks become empty arrays.
- */
-export function concatMiddleware(
-  ...layers: (Partial<MiddlewareConfig> | undefined)[]
-): MiddlewareConfig {
-  const result: Record<string, unknown[]> = {}
-  for (const key of HOOK_KEYS) result[key] = []
+/** Merge partial middleware layers into a single partial config. Later layers run after earlier ones. */
+export function mergeMiddleware(...layers: (Partial<MiddlewareConfig> | undefined)[]): Partial<MiddlewareConfig> {
+  const out: Record<string, unknown[]> = {}
   for (const layer of layers) {
     if (!layer) continue
-    for (const key of HOOK_KEYS) {
-      const incoming = layer[key] as unknown[] | undefined
-      if (incoming?.length) result[key]!.push(...incoming)
+    for (const [key, hooks] of Object.entries(layer)) {
+      if (hooks?.length) out[key] = [...(out[key] ?? []), ...hooks]
     }
   }
-  return result as unknown as MiddlewareConfig
+  return out as Partial<MiddlewareConfig>
 }

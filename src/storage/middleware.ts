@@ -1,32 +1,39 @@
-import type { LoopContext, ModelCallContext, MiddlewareConfig } from '../agent/types'
+import type { LoopContext, MiddlewareConfig } from '../agent/types'
 import type { SessionStorage } from './sessions'
 
 /**
- * Returns middleware hooks that persist new messages to storage in real
- * time.  Each call returns fresh closure state — safe for concurrent use.
+ * Middleware that persists ALL messages to session storage.
  *
- * `beforeLoopBegin` snapshots the initial message count.
- * `beforeModelCall` re-snapshots after context compaction shrinks the array.
- * `afterLoopIteration` appends only the messages added since the snapshot.
+ * Tracks which messages have already been saved using a WeakSet so it
+ * correctly handles context compaction removing/replacing messages.
+ *
+ * @param storage - Session storage instance
+ * @param priorCount - Number of initial messages already on disk (e.g. from session resume).
+ *                     Messages before this index are marked as already-saved.
+ *                     Messages at and after this index are new and will be saved in beforeLoopBegin.
  */
-export function createHistoryMiddleware(storage: SessionStorage): Partial<MiddlewareConfig> {
-  let lastCount = 0
+export function createHistoryMiddleware(storage: SessionStorage, priorCount = 0): Partial<MiddlewareConfig> {
+  const saved = new WeakSet<object>()
 
   return {
     beforeLoopBegin: [async (ctx: LoopContext) => {
-      lastCount = ctx.messages.length
-    }],
-    beforeModelCall: [async (ctx: ModelCallContext) => {
-      if (ctx.request.messages.length < lastCount) {
-        lastCount = ctx.request.messages.length
+      // Mark prior messages (system, context, session history) as already saved
+      for (let i = 0; i < priorCount && i < ctx.messages.length; i++) {
+        saved.add(ctx.messages[i]!)
+      }
+      // Save any new initial messages (e.g. user message, skill injections)
+      const newInitial = ctx.messages.slice(priorCount).filter(m => !saved.has(m))
+      if (newInitial.length > 0) {
+        await storage.appendMessages(ctx.sessionId, newInitial)
+        for (const msg of newInitial) saved.add(msg)
       }
     }],
     afterLoopIteration: [async (ctx: LoopContext) => {
-      const newMessages = ctx.messages.slice(lastCount)
-      if (newMessages.length > 0) {
-        await storage.appendMessages(ctx.sessionId, newMessages)
+      const unsaved = ctx.messages.filter(m => !saved.has(m))
+      if (unsaved.length > 0) {
+        await storage.appendMessages(ctx.sessionId, unsaved)
+        for (const msg of unsaved) saved.add(msg)
       }
-      lastCount = ctx.messages.length
     }],
   }
 }

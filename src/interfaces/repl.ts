@@ -8,6 +8,7 @@ import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
 import type { ObservabilityConfig } from '../observability'
 import { createSessionMiddleware } from '../agent/session'
+import { mergeMiddleware } from '../agent/middleware'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
@@ -166,7 +167,6 @@ export class Repl {
     const initialMessages: IMessage[] = []
     if (this.options.systemPrompt) initialMessages.push({ role: 'system', content: this.options.systemPrompt })
     if (this.options.contextMessages?.length) initialMessages.push(...this.options.contextMessages)
-    initialMessages.push(...this.messages, userMessage)
 
     // Inject available skills XML as first user message if skills exist
     if (this.options.skillMap && this.options.skillMap.size > 0 && this.messages.length === 0) {
@@ -180,6 +180,10 @@ export class Repl {
       }
     }
 
+    initialMessages.push(...this.messages)
+    const priorCount = initialMessages.length
+    initialMessages.push(userMessage)
+
     let boxOpened = false
     let thinkingOpened = false
     let streamBuf: tui.StreamBuffer | null = null
@@ -188,10 +192,53 @@ export class Repl {
     const session = createSessionMiddleware(this.options.middleware, {
       storage: this.options.storage,
       sessionId: this.sessionId!,
+      priorCount,
       obsConfig: this.options.obsConfig,
       logger: this.options.logger,
     })
-    const mw = session.middleware
+
+    const tuiHooks: Partial<MiddlewareConfig> = {
+      onStreamChunk: [
+        async (ctx: StreamChunkContext) => {
+          if (ctx.chunk.type === 'thinking') {
+            if (!thinkingOpened) {
+              tui.stopSpinner(true)
+              tui.printThinkingStart()
+              thinkingOpened = true
+            }
+            process.stdout.write(ctx.chunk.delta)
+          } else if (ctx.chunk.type === 'text') {
+            if (thinkingOpened) {
+              tui.printThinkingEnd()
+              thinkingOpened = false
+            }
+            if (!boxOpened) {
+              tui.stopSpinner()
+              boxOpened = true
+              const contentWidth = (process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN
+              streamBuf = new tui.StreamBuffer(contentWidth)
+            }
+            process.stdout.write(streamBuf!.write(ctx.chunk.delta))
+          }
+        },
+      ],
+      beforeToolExecution: [
+        async (ctx: ToolExecutionContext) => {
+          // TS narrows streamBuf to null (closure writes aren't tracked); cast back
+          const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
+          tui.stopSpinner(true)
+          boxOpened = false
+          toolStartTimes.set(ctx.toolCall.id, Date.now())
+          tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
+        },
+      ],
+      afterToolExecution: [
+        async (ctx: ToolResultContext) => {
+          tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
+          tui.startSpinner()
+        },
+      ],
+    }
 
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -203,56 +250,10 @@ export class Repl {
       thinking: this.options.thinking,
       compaction: this.options.compaction,
       logger: session.logger,
-      middleware: {
-        ...mw,
-        onStreamChunk: [
-          async (ctx: StreamChunkContext) => {
-            if (ctx.chunk.type === 'thinking') {
-              if (!thinkingOpened) {
-                tui.stopSpinner(true)
-                tui.printThinkingStart()
-                thinkingOpened = true
-              }
-              process.stdout.write(ctx.chunk.delta)
-            } else if (ctx.chunk.type === 'text') {
-              if (thinkingOpened) {
-                tui.printThinkingEnd()
-                thinkingOpened = false
-              }
-              if (!boxOpened) {
-                tui.stopSpinner()
-                boxOpened = true
-                const contentWidth = (process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN
-                streamBuf = new tui.StreamBuffer(contentWidth)
-              }
-              process.stdout.write(streamBuf!.write(ctx.chunk.delta))
-            }
-          },
-        ].concat(mw.onStreamChunk),
-        beforeToolExecution: [
-          async (ctx: ToolExecutionContext) => {
-            // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-            const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-            tui.stopSpinner(true)
-            boxOpened = false
-            toolStartTimes.set(ctx.toolCall.id, Date.now())
-            tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
-          },
-        ].concat(mw.beforeToolExecution),
-        afterToolExecution: [
-          async (ctx: ToolResultContext) => {
-            tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
-            tui.startSpinner()
-          },
-        ].concat(mw.afterToolExecution),
-      },
+      middleware: mergeMiddleware(tuiHooks, session.middleware),
     })
 
     this.activeLoop = loop
-    // Persist the user message immediately (loop-generated messages are
-    // persisted in real time by the session history middleware)
-    await this.options.storage.appendMessage(this.sessionId!, userMessage)
-    const priorCount = initialMessages.length
     try {
       const result = await loop.run(initialMessages)
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
@@ -262,8 +263,7 @@ export class Repl {
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
 
-      const newMessages = result.messages.slice(priorCount)
-      this.messages.push(userMessage, ...newMessages)
+      this.messages.push(...result.messages.slice(priorCount))
     } catch (err) {
       tui.stopSpinner(true)
       // TS narrows streamBuf to null (closure writes aren't tracked); cast back

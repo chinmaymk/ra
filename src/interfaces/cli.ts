@@ -7,6 +7,7 @@ import type { Logger } from '../observability/logger'
 import type { ObservabilityConfig } from '../observability'
 import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
+import { mergeMiddleware } from '../agent/middleware'
 import { AgentLoop } from '../agent/loop'
 import { buildAvailableSkillsXml, buildActiveSkillXml } from '../skills/loader'
 import { fileToContentPart } from '../utils/files'
@@ -71,26 +72,18 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
 
   const parts: ContentPart[] = [{ type: 'text', text: prompt }, ...await Promise.all(files.map(fileToContentPart))]
   const content: string | ContentPart[] = parts.length === 1 ? prompt : parts
-  const userMessage: IMessage = { role: 'user', content }
-  initialMessages.push(userMessage)
-
-  // Persist the user message immediately before starting the loop
-  if (storage && sessionId) {
-    await storage.appendMessage(sessionId, userMessage)
-  }
+  initialMessages.push({ role: 'user', content })
 
   const session = storage && sessionId
-    ? createSessionMiddleware(middleware, { storage, sessionId, obsConfig, logger })
+    ? createSessionMiddleware(middleware, { storage, sessionId, priorCount, obsConfig, logger })
     : { middleware: middleware ?? {}, logger }
+  const streamHook: Partial<MiddlewareConfig> = {
+    onStreamChunk: [async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) }],
+  }
   const loop = new AgentLoop({
     provider, tools, model, maxIterations, toolTimeout, thinking, compaction, sessionId,
     logger: session.logger,
-    middleware: {
-      ...session.middleware,
-      onStreamChunk: [
-        async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) },
-      ].concat(session.middleware.onStreamChunk ?? []),
-    },
+    middleware: mergeMiddleware(streamHook, session.middleware),
   })
 
   const result = await loop.run(initialMessages)

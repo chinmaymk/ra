@@ -91,9 +91,18 @@ function createMcpHandler(app: AppContext) {
       model: app.config.model,
       interface: 'mcp',
     })
+    const messages: IMessage[] = []
+    if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
+    messages.push(...app.contextMessages)
+    const priorCount = messages.length
+
+    const prompt = typeof input === 'string' ? input : JSON.stringify(input)
+    messages.push({ role: 'user', content: prompt })
+
     const loopSession = createSessionMiddleware(app.middleware, {
       storage: app.storage,
       sessionId: session.id,
+      priorCount,
       obsConfig: app.obsConfig,
       logger: app.logger,
     })
@@ -108,13 +117,6 @@ function createMcpHandler(app: AppContext) {
       logger: loopSession.logger,
       sessionId: session.id,
     })
-    const prompt = typeof input === 'string' ? input : JSON.stringify(input)
-    const userMessage: IMessage = { role: 'user', content: prompt }
-    // Persist the user message immediately before starting the loop
-    await app.storage.appendMessage(session.id, userMessage)
-    const messages: IMessage[] = []
-    if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
-    messages.push(...app.contextMessages, userMessage)
     const result = await loop.run(messages)
     const last = result.messages.at(-1)
     return last ? serializeContent(last.content) : ''
