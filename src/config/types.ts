@@ -1,5 +1,6 @@
 import type { ContextConfig } from '../context/types'
 import type { LogLevel } from '../observability/logger'
+import type { ObservabilityConfig } from '../observability'
 import type { AnthropicProviderOptions } from '../providers/anthropic'
 import type { OpenAIProviderOptions } from '../providers/openai'
 import type { GoogleProviderOptions } from '../providers/google'
@@ -88,6 +89,8 @@ export interface RaConfig {
   logsEnabled: boolean
   logLevel: LogLevel
   tracesEnabled: boolean
+  /** Derived observability config — computed from logsEnabled, tracesEnabled, logLevel. */
+  observability: ObservabilityConfig
 }
 
 export interface McpClientConfig {

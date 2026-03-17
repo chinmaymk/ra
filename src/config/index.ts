@@ -161,5 +161,12 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
     if (await f.exists()) config.systemPrompt = await f.text()
   }
 
+  // Derive observability config from primitive fields
+  config.observability = {
+    enabled: config.logsEnabled || config.tracesEnabled,
+    logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
+    traces: { enabled: config.tracesEnabled, output: 'session' },
+  }
+
   return config
 }

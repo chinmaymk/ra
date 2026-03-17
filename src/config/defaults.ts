@@ -69,4 +69,9 @@ export const defaultConfig: RaConfig = {
   logsEnabled: true,
   logLevel: 'info',
   tracesEnabled: true,
+  observability: {
+    enabled: true,
+    logs: { enabled: true, level: 'info', output: 'session' },
+    traces: { enabled: true, output: 'session' },
+  },
 }

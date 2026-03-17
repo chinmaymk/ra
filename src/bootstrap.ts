@@ -24,7 +24,6 @@ import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath } from './utils/paths'
-import { type ObservabilityConfig } from './observability'
 import type { Logger } from './observability/logger'
 import type { Tracer } from './observability/tracer'
 
@@ -39,7 +38,6 @@ export interface AppContext {
   contextMessages: IMessage[]
   memoryStore: MemoryStore | undefined
   mcpClient: McpClient
-  obsConfig: ObservabilityConfig
   logger: Logger
   tracer: Tracer
   shutdown: () => Promise<void>
@@ -67,12 +65,7 @@ export async function bootstrap(
   await mkdir(sessionDir, { recursive: true })
 
   // ── Observability ──────────────────────────────────────────────────
-  const obsConfig: ObservabilityConfig = {
-    enabled: config.logsEnabled || config.tracesEnabled,
-    logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
-    traces: { enabled: config.tracesEnabled, output: 'session' },
-  }
-  const { logger, tracer } = createObservability(obsConfig, { sessionId, sessionDir })
+  const { logger, tracer } = createObservability(config.observability, { sessionId, sessionDir })
 
   // ── Compaction model default ───────────────────────────────────────
   if (!config.compaction.model) {
@@ -209,7 +202,6 @@ export async function bootstrap(
     contextMessages,
     memoryStore,
     mcpClient,
-    obsConfig,
     logger,
     tracer,
     shutdown,

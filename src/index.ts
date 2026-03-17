@@ -103,7 +103,7 @@ function createMcpHandler(app: AppContext) {
       storage: app.storage,
       sessionId: session.id,
       priorCount,
-      obsConfig: app.obsConfig,
+      obsConfig: app.config.observability,
       logger: app.logger,
     })
     const loop = new AgentLoop({
@@ -183,7 +183,7 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     contextMessages: app.contextMessages,
     sessionMessages,
     logger: app.logger,
-    obsConfig: app.obsConfig,
+    obsConfig: app.config.observability,
     storage: app.storage,
     sessionId: app.sessionId,
   })
@@ -210,7 +210,7 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
     compaction: app.config.compaction,
     contextMessages: app.contextMessages,
     logger: app.logger,
-    obsConfig: app.obsConfig,
+    obsConfig: app.config.observability,
   })
   await httpServer.start()
   console.error(`HTTP server listening on port ${httpServer.port}`)
@@ -244,7 +244,7 @@ async function launchRepl(app: AppContext): Promise<void> {
     contextMessages: app.contextMessages,
     memoryStore: app.memoryStore,
     logger: app.logger,
-    obsConfig: app.obsConfig,
+    obsConfig: app.config.observability,
   })
   await repl.start()
   try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }
