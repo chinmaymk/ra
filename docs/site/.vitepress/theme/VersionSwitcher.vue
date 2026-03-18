@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useData } from 'vitepress'
 
-const { site } = useData()
 const versions = ref<string[]>([])
 const open = ref(false)
-const base = site.value.base || '/'
+
+// Always resolve relative to the site root, not the versioned base
+const siteRoot = '/ra/'
 
 onMounted(async () => {
   try {
-    const res = await fetch(`${base}versions.json`)
+    const res = await fetch(`${siteRoot}versions.json`)
     if (res.ok) {
       versions.value = await res.json()
     }
@@ -28,8 +28,8 @@ const currentVersion = (() => {
 const label = currentVersion || 'latest'
 
 function versionUrl(version: string | null) {
-  if (!version) return base
-  return `${base}v/${version}/`
+  if (!version) return siteRoot
+  return `${siteRoot}v/${version}/`
 }
 
 function toggle() {

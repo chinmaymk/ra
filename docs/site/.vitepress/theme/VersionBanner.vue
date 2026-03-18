@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { useData } from 'vitepress'
-
-const { site } = useData()
-const base = site.value.base || '/'
+// Always link to site root, not the versioned base
+const siteRoot = '/ra/'
 
 // Detect versioned page from URL
 const versionInfo = (() => {
@@ -15,7 +13,7 @@ const versionInfo = (() => {
 <template>
   <div v-if="versionInfo" class="version-banner">
     You are viewing docs for <strong>v{{ versionInfo }}</strong>.
-    <a :href="base">Switch to latest</a>
+    <a :href="siteRoot">Switch to latest</a>
   </div>
 </template>
 
