@@ -10,6 +10,7 @@ bun run compile         # build binary → dist/ra
 bun tsc                 # type check (must pass, zero errors)
 bun test                # run all tests
 bun test tests/agent/   # run tests in a directory
+cd docs/site && bun install && bun run build  # build docs (vitepress)
 ```
 
 ## Project Structure
