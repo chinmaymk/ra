@@ -14,6 +14,7 @@ import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
 import { McpClient } from './mcp/client'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
+import { ScratchpadStore, scratchpadWriteTool, scratchpadDeleteTool, createScratchpadMiddleware } from './scratchpad'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
 import type { IMessage, IProvider } from './providers/types'
@@ -37,6 +38,7 @@ export interface AppContext {
   sessionId: string
   contextMessages: IMessage[]
   memoryStore: MemoryStore | undefined
+  scratchpadStore: ScratchpadStore | undefined
   mcpClient: McpClient
   logger: Logger
   tracer: Tracer
@@ -146,6 +148,22 @@ export async function bootstrap(
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
 
+  // ── Scratchpad ───────────────────────────────────────────────────
+  // Enabled by default when builtin tools are on; disable via tools.overrides.scratchpad.enabled: false
+  const scratchpadEnabled =
+    config.tools.overrides.scratchpad?.enabled !== false &&
+    config.tools.builtin
+  let scratchpadStore: ScratchpadStore | undefined
+  if (scratchpadEnabled) {
+    scratchpadStore = new ScratchpadStore()
+    tools.register(scratchpadWriteTool(scratchpadStore))
+    tools.register(scratchpadDeleteTool(scratchpadStore))
+
+    const scratchpadMw = createScratchpadMiddleware(scratchpadStore)
+    middleware.beforeModelCall = [...(middleware.beforeModelCall ?? []), scratchpadMw]
+    logger.info('scratchpad initialized')
+  }
+
   // ── Skills ─────────────────────────────────────────────────────────
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
@@ -212,6 +230,7 @@ export async function bootstrap(
     sessionId,
     contextMessages,
     memoryStore,
+    scratchpadStore,
     mcpClient,
     logger,
     tracer,
