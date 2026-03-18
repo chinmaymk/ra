@@ -26,6 +26,7 @@ export const defaultConfig: RaConfig = {
   providers: {
     anthropic: { apiKey: '' },
     openai: { apiKey: '' },
+    'openai-completions': { apiKey: '' },
     google: { apiKey: '' },
     ollama: { host: 'http://localhost:11434' },
     bedrock: { region: 'us-east-1' },

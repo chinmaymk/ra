@@ -108,6 +108,8 @@ const ENV_RULES: Record<string, EnvRule> = {
   RA_ANTHROPIC_BASE_URL: { type: 'string', path: ['providers', 'anthropic', 'baseURL'] },
   RA_OPENAI_API_KEY:     { type: 'string', path: ['providers', 'openai', 'apiKey'] },
   RA_OPENAI_BASE_URL:    { type: 'string', path: ['providers', 'openai', 'baseURL'] },
+  RA_OPENAI_COMPLETIONS_API_KEY:  { type: 'string', path: ['providers', 'openai-completions', 'apiKey'] },
+  RA_OPENAI_COMPLETIONS_BASE_URL: { type: 'string', path: ['providers', 'openai-completions', 'baseURL'] },
   RA_GOOGLE_API_KEY:     { type: 'string', path: ['providers', 'google', 'apiKey'] },
   RA_GOOGLE_BASE_URL:    { type: 'string', path: ['providers', 'google', 'baseURL'] },
   RA_OLLAMA_HOST:        { type: 'string', path: ['providers', 'ollama', 'host'] },

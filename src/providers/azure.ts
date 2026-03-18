@@ -1,6 +1,6 @@
 import OpenAI, { AzureOpenAI } from 'openai'
 import { DefaultAzureCredential, getBearerTokenProvider } from '@azure/identity'
-import { OpenAIProvider } from './openai'
+import { OpenAICompletionsProvider } from './openai-completions'
 import type { ChatRequest } from './types'
 
 export interface AzureProviderOptions {
@@ -10,7 +10,7 @@ export interface AzureProviderOptions {
   apiVersion?: string
 }
 
-export class AzureProvider extends OpenAIProvider {
+export class AzureProvider extends OpenAICompletionsProvider {
   override name = 'azure'
   private deployment: string
 

@@ -53,7 +53,7 @@ function sseAnthropicToolCall(name: string, args: Record<string, unknown>, input
   return lines.join('\n') + '\n'
 }
 
-function sseOpenAIText(content: string): string {
+function sseOpenAICompletionsText(content: string): string {
   const id = 'chatcmpl-mock'
   const chunks = [
     JSON.stringify({ id, choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: null }] }),
@@ -63,7 +63,7 @@ function sseOpenAIText(content: string): string {
   return chunks.map(c => `data: ${c}\n\n`).join('')
 }
 
-function sseOpenAIToolCall(name: string, args: Record<string, unknown>): string {
+function sseOpenAICompletionsToolCall(name: string, args: Record<string, unknown>): string {
   const id = 'chatcmpl-mock'
   const callId = `call_${name}`
   const chunks = [
@@ -73,6 +73,38 @@ function sseOpenAIToolCall(name: string, args: Record<string, unknown>): string 
     '[DONE]',
   ]
   return chunks.map(c => `data: ${c}\n\n`).join('')
+}
+
+function sseOpenAIResponsesText(content: string): string {
+  const respId = 'resp_mock'
+  const itemId = 'item_0'
+  const events = [
+    { type: 'response.created', response: { id: respId, status: 'in_progress', output: [] }, sequence_number: 0 },
+    { type: 'response.output_item.added', item: { type: 'message', id: itemId, role: 'assistant', content: [] }, output_index: 0, sequence_number: 1 },
+    { type: 'response.content_part.added', item_id: itemId, content_index: 0, part: { type: 'output_text', text: '' }, output_index: 0, sequence_number: 2 },
+    { type: 'response.output_text.delta', item_id: itemId, content_index: 0, output_index: 0, delta: content, sequence_number: 3 },
+    { type: 'response.output_text.done', item_id: itemId, content_index: 0, output_index: 0, text: content, sequence_number: 4 },
+    { type: 'response.content_part.done', item_id: itemId, content_index: 0, output_index: 0, part: { type: 'output_text', text: content }, sequence_number: 5 },
+    { type: 'response.output_item.done', item: { type: 'message', id: itemId, role: 'assistant', content: [{ type: 'output_text', text: content }] }, output_index: 0, sequence_number: 6 },
+    { type: 'response.completed', response: { id: respId, status: 'completed', output: [{ type: 'message', id: itemId, role: 'assistant', content: [{ type: 'output_text', text: content }] }], output_text: content, usage: { input_tokens: 10, output_tokens: 5 } }, sequence_number: 7 },
+  ]
+  return events.map(e => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
+}
+
+function sseOpenAIResponsesToolCall(name: string, args: Record<string, unknown>): string {
+  const respId = 'resp_mock'
+  const itemId = 'item_0'
+  const callId = `call_${name}`
+  const argsStr = JSON.stringify(args)
+  const events = [
+    { type: 'response.created', response: { id: respId, status: 'in_progress', output: [] }, sequence_number: 0 },
+    { type: 'response.output_item.added', item: { type: 'function_call', id: itemId, call_id: callId, name, arguments: '' }, item_id: itemId, output_index: 0, sequence_number: 1 },
+    { type: 'response.function_call_arguments.delta', item_id: itemId, delta: argsStr, output_index: 0, sequence_number: 2 },
+    { type: 'response.function_call_arguments.done', item_id: itemId, name, arguments: argsStr, output_index: 0, sequence_number: 3 },
+    { type: 'response.output_item.done', item: { type: 'function_call', id: itemId, call_id: callId, name, arguments: argsStr }, output_index: 0, sequence_number: 4 },
+    { type: 'response.completed', response: { id: respId, status: 'completed', output: [{ type: 'function_call', id: itemId, call_id: callId, name, arguments: argsStr }], output_text: '', usage: { input_tokens: 10, output_tokens: 20 } }, sequence_number: 5 },
+  ]
+  return events.map(e => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
 }
 
 function sseGoogleText(content: string): string {
@@ -101,8 +133,9 @@ export async function startMockLLMServer(): Promise<MockLLMServer> {
       try { body = await req.json() } catch { /* no body */ }
 
       let provider: RecordedRequest['provider'] = 'unknown'
+      const isResponsesAPI = path.includes('/responses')
       if (path.startsWith('/anthropic')) provider = 'anthropic'
-      else if (path.startsWith('/openai') || path.includes('/chat/completions')) provider = 'openai'
+      else if (path.startsWith('/openai') || path.includes('/chat/completions') || isResponsesAPI) provider = 'openai'
       else if (path.includes('generateContent')) provider = 'google'
 
       recorded.push({ path, body, provider })
@@ -140,10 +173,14 @@ export async function startMockLLMServer(): Promise<MockLLMServer> {
         sseBody = response.type === 'text'
           ? sseAnthropicText(response.content, inputTokens)
           : sseAnthropicToolCall((response as any).name, (response as any).args, inputTokens)
+      } else if (provider === 'openai' && isResponsesAPI) {
+        sseBody = response.type === 'text'
+          ? sseOpenAIResponsesText(response.content)
+          : sseOpenAIResponsesToolCall((response as any).name, (response as any).args)
       } else if (provider === 'openai') {
         sseBody = response.type === 'text'
-          ? sseOpenAIText(response.content)
-          : sseOpenAIToolCall((response as any).name, (response as any).args)
+          ? sseOpenAICompletionsText(response.content)
+          : sseOpenAICompletionsToolCall((response as any).name, (response as any).args)
       } else {
         // Google
         sseBody = response.type === 'text'
