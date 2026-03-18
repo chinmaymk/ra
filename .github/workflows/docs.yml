@@ -3,6 +3,8 @@ name: Deploy docs to GitHub Pages
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
     paths:
       - 'docs/site/**'
       - '.github/workflows/docs.yml'
@@ -16,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -29,35 +33,71 @@ jobs:
         run: bun run build
         working-directory: docs/site
 
-      - name: Build versioned docs
+      - name: Build versioned docs from tags
         working-directory: docs/site
         run: |
-          # Read versions from versions.json and build each one
-          if [ -f versions.json ] && [ "$(cat versions.json)" != "[]" ]; then
-            for version in $(bun -e "console.log(JSON.parse(require('fs').readFileSync('versions.json','utf-8')).join('\n'))"); do
-              if [ -d "versioned/$version" ]; then
-                echo "Building docs for v$version..."
-                # Create a temporary VitePress config for this version
-                mkdir -p "versioned/$version/.vitepress"
-                cat > "versioned/$version/.vitepress/config.ts" << 'VCONF'
-          import baseConfig from '../../../.vitepress/config'
-          import { defineConfig, mergeConfig } from 'vitepress'
-          export default mergeConfig(baseConfig, defineConfig({ base: `/ra/v/${process.env.DOCS_VERSION}/` }))
-          VCONF
-                # Copy theme so versioned builds use the same components
-                cp -r .vitepress/theme "versioned/$version/.vitepress/theme"
-                # Build with the version-specific base path
-                DOCS_VERSION=$version bun vitepress build "versioned/$version"
-                # Move output into the main dist under v/<version>/
-                mkdir -p ".vitepress/dist/v/$version"
-                cp -r "versioned/$version/.vitepress/dist/"* ".vitepress/dist/v/$version/"
-              fi
-            done
-          fi
+          # Collect all release tags (v*) sorted by version descending
+          TAGS=$(git tag -l 'v*' --sort=-version:refname)
+          VERSIONS_JSON="["
+          first=true
 
-      - name: Copy versions.json to dist
-        run: cp versions.json .vitepress/dist/versions.json
-        working-directory: docs/site
+          for tag in $TAGS; do
+            version="${tag#v}"
+            echo "Building docs for $tag..."
+
+            # Check out the docs/site content from this tag into a temp dir
+            TMPDIR=$(mktemp -d)
+            git archive "$tag" -- docs/site/ | tar -x -C "$TMPDIR" 2>/dev/null || {
+              echo "  Skipping $tag — no docs/site/ found at this tag"
+              rm -rf "$TMPDIR"
+              continue
+            }
+
+            # Only build if the tag's docs have content
+            if [ ! -f "$TMPDIR/docs/site/package.json" ]; then
+              echo "  Skipping $tag — no package.json in docs/site/"
+              rm -rf "$TMPDIR"
+              continue
+            fi
+
+            # Copy the current theme into the tagged docs (so version switcher works)
+            rm -rf "$TMPDIR/docs/site/.vitepress/theme"
+            cp -r .vitepress/theme "$TMPDIR/docs/site/.vitepress/theme"
+
+            # Create a versioned VitePress config that overrides the base path
+            cat > "$TMPDIR/docs/site/.vitepress/versioned-config.ts" << VCONF
+import baseConfig from './config'
+import { defineConfig, mergeConfig } from 'vitepress'
+export default mergeConfig(baseConfig, defineConfig({ base: '/ra/v/${version}/' }))
+VCONF
+
+            # Install deps and build
+            (cd "$TMPDIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build --config .vitepress/versioned-config.ts) || {
+              echo "  Warning: build failed for $tag, skipping"
+              rm -rf "$TMPDIR"
+              continue
+            }
+
+            # Copy built output into main dist
+            mkdir -p ".vitepress/dist/v/$version"
+            cp -r "$TMPDIR/docs/site/.vitepress/dist/"* ".vitepress/dist/v/$version/"
+
+            rm -rf "$TMPDIR"
+
+            # Append to versions JSON array
+            if [ "$first" = true ]; then
+              VERSIONS_JSON="${VERSIONS_JSON}\"${version}\""
+              first=false
+            else
+              VERSIONS_JSON="${VERSIONS_JSON},\"${version}\""
+            fi
+
+            echo "  Done: v$version"
+          done
+
+          VERSIONS_JSON="${VERSIONS_JSON}]"
+          echo "$VERSIONS_JSON" > .vitepress/dist/versions.json
+          echo "versions.json: $VERSIONS_JSON"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

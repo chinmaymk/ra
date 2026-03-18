@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
-    "preview": "vitepress preview",
-    "version-snapshot": "bun scripts/snapshot-version.ts"
+    "preview": "vitepress preview"
   },
   "devDependencies": {
     "vitepress": "^1.6.3"
