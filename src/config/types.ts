@@ -49,13 +49,14 @@ export interface ToolsConfig {
 export interface RaConfig {
   provider: ProviderName
   model: string
-  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio'
+  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector'
   systemPrompt: string
   /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
   configDir: string
   /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `.ra`. */
   dataDir: string
   http: { port: number; token: string }
+  inspector: { port: number }
   skillDirs: string[]
   skills: string[]
   mcp: {

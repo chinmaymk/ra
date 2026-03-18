@@ -21,10 +21,14 @@ INTERFACE
   --http                              Start HTTP API server
   --mcp                               Start MCP HTTP server (default port: 3001)
   --mcp-stdio                         Start MCP stdio server (for Claude Desktop/Cursor)
+  --inspector                         Start web inspector for sessions & memory
 
 HTTP SERVER
   --http-port <port>                  HTTP server port (default: 3000)
   --http-token <token>                Bearer token for HTTP auth
+
+INSPECTOR
+  --inspector-port <port>             Inspector server port (default: 3002)
 
 MCP SERVER
   --mcp-server-enabled                Enable MCP HTTP server alongside main interface
