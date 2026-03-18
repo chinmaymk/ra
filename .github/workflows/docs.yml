@@ -3,6 +3,8 @@ name: Deploy docs to GitHub Pages
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
     paths:
       - 'docs/site/**'
       - '.github/workflows/docs.yml'
@@ -16,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -25,9 +29,115 @@ jobs:
         run: bun install
         working-directory: docs/site
 
-      - name: Build docs
+      - name: Build latest docs
         run: bun run build
         working-directory: docs/site
+
+      - name: Compute version cache key
+        id: version-key
+        run: |
+          # Build a stable key from all tag names + their SHAs
+          KEY=$(git tag -l 'v*' --sort=-version:refname | while read tag; do
+            echo "$tag=$(git rev-parse "$tag")"
+          done | sha256sum | cut -d' ' -f1)
+          echo "key=docs-versions-${KEY}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore versioned docs cache
+        id: versioned-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/versioned-docs-dist
+          key: ${{ steps.version-key.outputs.key }}
+          restore-keys: docs-versions-
+
+      - name: Build versioned docs from tags
+        working-directory: docs/site
+        run: |
+          TAGS=$(git tag -l 'v*' --sort=-version:refname)
+          mkdir -p /tmp/versioned-docs-dist
+
+          for tag in $TAGS; do
+            version="${tag#v}"
+
+            # Skip if already cached from a previous build
+            if [ -d "/tmp/versioned-docs-dist/$version" ]; then
+              echo "Cache hit for $tag — skipping build"
+              continue
+            fi
+
+            echo "Building docs for $tag..."
+
+            # Check out the docs/site content from this tag
+            TAG_DIR=$(mktemp -d)
+            git archive "$tag" -- docs/site/ | tar -x -C "$TAG_DIR" 2>/dev/null || {
+              echo "  Skipping $tag — no docs/site/"
+              rm -rf "$TAG_DIR"
+              continue
+            }
+
+            if [ ! -f "$TAG_DIR/docs/site/package.json" ]; then
+              echo "  Skipping $tag — no package.json"
+              rm -rf "$TAG_DIR"
+              continue
+            fi
+
+            # Copy the current theme so version switcher works
+            rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
+            cp -r .vitepress/theme "$TAG_DIR/docs/site/.vitepress/theme"
+
+            # Overwrite the config to set the versioned base path
+            cat > "$TAG_DIR/docs/site/.vitepress/config.ts" << VCONF
+import { defineConfig } from 'vitepress'
+export default defineConfig({
+  title: 'ra',
+  base: '/ra/v/${version}/',
+  appearance: 'dark',
+  themeConfig: {
+    logo: '/logo.svg',
+    search: { provider: 'local' },
+  },
+})
+VCONF
+
+            # Install deps and build
+            (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build) || {
+              echo "  Warning: build failed for $tag, skipping"
+              rm -rf "$TAG_DIR"
+              continue
+            }
+
+            # Save to cache dir
+            mkdir -p "/tmp/versioned-docs-dist/$version"
+            cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* "/tmp/versioned-docs-dist/$version/"
+            rm -rf "$TAG_DIR"
+            echo "  Done: v$version"
+          done
+
+      - name: Assemble versioned docs and versions.json
+        working-directory: docs/site
+        run: |
+          TAGS=$(git tag -l 'v*' --sort=-version:refname)
+          VERSIONS_JSON="["
+          first=true
+
+          for tag in $TAGS; do
+            version="${tag#v}"
+            if [ -d "/tmp/versioned-docs-dist/$version" ]; then
+              mkdir -p ".vitepress/dist/v/$version"
+              cp -r "/tmp/versioned-docs-dist/$version/"* ".vitepress/dist/v/$version/"
+
+              if [ "$first" = true ]; then
+                VERSIONS_JSON="${VERSIONS_JSON}\"${version}\""
+                first=false
+              else
+                VERSIONS_JSON="${VERSIONS_JSON},\"${version}\""
+              fi
+            fi
+          done
+
+          VERSIONS_JSON="${VERSIONS_JSON}]"
+          echo "$VERSIONS_JSON" > .vitepress/dist/versions.json
+          echo "versions.json: $VERSIONS_JSON"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
