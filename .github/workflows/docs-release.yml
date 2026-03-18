@@ -1,0 +1,14 @@
+name: Deploy docs on release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/docs-deploy.yml
+    secrets: inherit
