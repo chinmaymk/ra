@@ -190,3 +190,82 @@ export function printThinkingStart(): void {
 export function printThinkingEnd(): void {
   process.stdout.write(`${c.reset}\n  ${c.dim}╌╌╌╌╌╌╌╌╌╌╌╌╌╌${c.reset}\n`)
 }
+
+// ── TUI middleware for REPL streaming ─────────────────────────────────
+
+import type { StreamChunkContext, ToolExecutionContext, ToolResultContext, MiddlewareConfig } from '../agent/types'
+
+export interface TuiMiddlewareResult {
+  middleware: Pick<MiddlewareConfig, 'onStreamChunk' | 'beforeToolExecution' | 'afterToolExecution'>
+  /** Flush stream buffer and close the assistant box. Call after loop.run() resolves or rejects. */
+  cleanup: () => void
+}
+
+/**
+ * Build TUI middleware hooks for streaming REPL output.
+ * Manages spinner, thinking box, stream buffer, and tool call rendering.
+ * Prepends TUI hooks before any user-provided middleware.
+ */
+export function createTuiMiddleware(userMw: Partial<MiddlewareConfig>): TuiMiddlewareResult {
+  let boxOpened = false
+  let thinkingOpened = false
+  let streamBuf: StreamBuffer | null = null
+  const toolStartTimes = new Map<string, number>()
+
+  const flushStream = () => {
+    const out = streamBuf?.end()
+    if (out) process.stdout.write(out)
+    streamBuf = null
+  }
+
+  const cleanup = () => {
+    if (thinkingOpened) { printThinkingEnd(); thinkingOpened = false }
+    stopSpinner(true)
+    flushStream()
+    if (boxOpened) closeAssistantBox()
+    else process.stdout.write('\n\n')
+    boxOpened = false
+  }
+
+  return {
+    middleware: {
+      onStreamChunk: [
+        async (ctx: StreamChunkContext) => {
+          if (ctx.chunk.type === 'thinking') {
+            if (!thinkingOpened) {
+              stopSpinner(true)
+              printThinkingStart()
+              thinkingOpened = true
+            }
+            process.stdout.write(ctx.chunk.delta)
+          } else if (ctx.chunk.type === 'text') {
+            if (thinkingOpened) { printThinkingEnd(); thinkingOpened = false }
+            if (!boxOpened) {
+              stopSpinner()
+              boxOpened = true
+              const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
+              streamBuf = new StreamBuffer(contentWidth)
+            }
+            process.stdout.write(streamBuf!.write(ctx.chunk.delta))
+          }
+        },
+      ].concat(userMw.onStreamChunk ?? []),
+      beforeToolExecution: [
+        async (ctx: ToolExecutionContext) => {
+          flushStream()
+          stopSpinner(true)
+          boxOpened = false
+          toolStartTimes.set(ctx.toolCall.id, Date.now())
+          printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
+        },
+      ].concat(userMw.beforeToolExecution ?? []),
+      afterToolExecution: [
+        async (ctx: ToolResultContext) => {
+          printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
+          startSpinner()
+        },
+      ].concat(userMw.afterToolExecution ?? []),
+    },
+    cleanup,
+  }
+}

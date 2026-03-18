@@ -52,13 +52,17 @@ async function walkUpForFile(cwd: string, fileNames: string[]): Promise<string |
   return undefined
 }
 
-async function loadConfigFile(cwd: string, configPath?: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
+async function findAndParseFile(
+  cwd: string,
+  fileNames: string[],
+  configPath?: string,
+): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
   if (configPath) {
     const full = isAbsolute(configPath) ? configPath : join(cwd, configPath)
     if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
     return { config: {} }
   }
-  const found = await walkUpForFile(cwd, CONFIG_FILES)
+  const found = await walkUpForFile(cwd, fileNames)
   if (found) return { config: await parseFile(found), filePath: found }
   return { config: {} }
 }
@@ -136,17 +140,12 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   return r
 }
 
-async function loadAgentsFile(cwd: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
-  const found = await walkUpForFile(cwd, AGENTS_FILES)
-  if (found) return { config: await parseFile(found) as Partial<RaConfig>, filePath: found }
-  return { config: {} }
-}
 
 export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaConfig> {
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
 
-  const { config: fileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
+  const { config: fileConfig, filePath: configFilePath } = await findAndParseFile(cwd, CONFIG_FILES, options.configPath)
   const configDir = configFilePath ? dirname(configFilePath) : cwd
   const envConfig = loadEnvVars(env)
   const cliArgs = options.cliArgs ?? {}
@@ -173,7 +172,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   // If no configPath was explicitly provided and no agents key from the config file,
   // check for a standalone ra.agents.* file
   if (!options.configPath && !config.agents) {
-    const { config: agentsConfig, filePath: agentsFilePath } = await loadAgentsFile(cwd)
+    const { config: agentsConfig, filePath: agentsFilePath } = await findAndParseFile(cwd, AGENTS_FILES)
     if (agentsFilePath && (agentsConfig as Record<string, unknown>).agents) {
       const ac = agentsConfig as Record<string, unknown>
       config.agents = ac.agents as Record<string, string>

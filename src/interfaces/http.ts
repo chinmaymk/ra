@@ -1,34 +1,19 @@
-import type { IProvider, IMessage } from '../providers/types'
+import type { IMessage } from '../providers/types'
 import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
-import type { ToolRegistry } from '../agent/tool-registry'
-import type { SessionStorage } from '../storage/sessions'
-import type { Skill } from '../skills/types'
-import type { CompactionConfig } from '../agent/context-compaction'
 import { AgentLoop } from '../agent/loop'
 import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
 import { errorMessage } from '../utils/errors'
 import type { MultiAgentContext } from '../multi-agent'
-import type { AppContext } from '../bootstrap'
+import { toBaseOptions, type AppContext, type BaseOptions } from '../bootstrap'
 
 /** Build HttpOptions from an AppContext. */
 export function toHttpOptions(app: AppContext, overrides?: { agents?: MultiAgentContext }): HttpOptions {
   return {
+    ...toBaseOptions(app),
     port: app.config.http.port,
     token: app.config.http.token || undefined,
-    model: app.config.model,
-    provider: app.provider,
-    tools: app.tools,
-    storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
-    skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    toolTimeout: app.config.toolTimeout,
-    middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
-    contextMessages: app.contextMessages,
     ...overrides,
   }
 }
@@ -37,21 +22,9 @@ function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-export interface HttpOptions {
+export interface HttpOptions extends BaseOptions {
   port: number
   token?: string
-  model: string
-  provider: IProvider
-  tools: ToolRegistry
-  storage: SessionStorage
-  systemPrompt?: string
-  skillMap?: Map<string, Skill>
-  middleware?: Partial<MiddlewareConfig>
-  maxIterations?: number
-  toolTimeout?: number
-  thinking?: 'low' | 'medium' | 'high'
-  compaction?: CompactionConfig
-  contextMessages?: IMessage[]
   /** Multi-agent context — when set, requests can specify an `agent` field to route to a specific agent. */
   agents?: MultiAgentContext
 }
@@ -129,8 +102,21 @@ export class HttpServer {
   private resolveOptions(agentName?: string): HttpOptions | null {
     if (!agentName || !this.options.agents) return this.options
     const app = this.options.agents.agents.get(agentName)
-    if (!app) return null
-    return toHttpOptions(app)
+    return app ? toHttpOptions(app) : null
+  }
+
+  private createLoop(opts: HttpOptions, sessionId?: string, middlewareOverride?: Partial<MiddlewareConfig>): AgentLoop {
+    return new AgentLoop({
+      provider: opts.provider,
+      tools: opts.tools,
+      model: opts.model,
+      middleware: middlewareOverride ?? opts.middleware,
+      maxIterations: opts.maxIterations,
+      toolTimeout: opts.toolTimeout,
+      sessionId,
+      thinking: opts.thinking,
+      compaction: opts.compaction,
+    })
   }
 
   private prependSystemWith(opts: HttpOptions, messages: IMessage[]): IMessage[] {
@@ -153,23 +139,11 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const resolved = this.resolveOptions(body.agent)
-    if (!resolved) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
-    const opts = resolved
+    const opts = this.resolveOptions(body.agent)
+    if (!opts) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
 
     const messages = this.prependSystemWith(opts, body.messages ?? [])
-
-    const loop = new AgentLoop({
-      provider: opts.provider,
-      tools: opts.tools,
-      model: opts.model,
-      middleware: opts.middleware,
-      maxIterations: opts.maxIterations,
-      toolTimeout: opts.toolTimeout,
-      sessionId: body.sessionId,
-      thinking: opts.thinking,
-      compaction: opts.compaction,
-    })
+    const loop = this.createLoop(opts, body.sessionId)
 
     try {
       const result = await loop.run(messages)
@@ -188,10 +162,10 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const resolved = this.resolveOptions(body.agent)
-    if (!resolved) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
-    const opts = resolved
+    const opts = this.resolveOptions(body.agent)
+    if (!opts) return HttpServer.badRequest(`Unknown agent: ${body.agent}`)
     const messages = this.prependSystemWith(opts, body.messages ?? [])
+    const self = this
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()
@@ -218,17 +192,7 @@ export class HttpServer {
           onStreamChunk: (opts.middleware?.onStreamChunk ?? []).concat(onStreamChunk),
         }
 
-        const loop = new AgentLoop({
-          provider: opts.provider,
-          tools: opts.tools,
-          model: opts.model,
-          middleware,
-          maxIterations: opts.maxIterations,
-          toolTimeout: opts.toolTimeout,
-          sessionId: body.sessionId,
-          thinking: opts.thinking,
-          compaction: opts.compaction,
-        })
+        const loop = self.createLoop(opts, body.sessionId, middleware)
 
         try {
           await loop.run(messages)
@@ -251,7 +215,7 @@ export class HttpServer {
   }
 
   private async handleSessions(): Promise<Response> {
-    const sessions = await this.options.storage.list()
+    const sessions = await this.options.storage!.list()
     return jsonResponse({ sessions })
   }
 }

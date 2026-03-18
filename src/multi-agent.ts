@@ -1,5 +1,6 @@
 /**
- * Multi-agent orchestrator — boots multiple agents in a single process,
+ * Agent bootstrapper — single-agent produces a context with one entry
+ * named "default"; multi-agent produces one entry per configured agent,
  * each with its own AppContext and isolated data directory.
  */
 import { join } from 'path'
@@ -13,31 +14,33 @@ export interface MultiAgentContext {
   shutdown: () => Promise<void>
 }
 
-export async function bootstrapMultiAgent(config: RaConfig): Promise<MultiAgentContext> {
-  const agents = new Map<string, AppContext>()
-  const entries = Object.entries(config.agents!)
-  const defaultAgent = config.defaultAgent ?? entries[0]![0]
+export async function bootstrapAgents(config: RaConfig): Promise<MultiAgentContext> {
+  if (config.agents && Object.keys(config.agents).length > 0) {
+    const entries = Object.entries(config.agents)
+    const defaultAgent = config.defaultAgent ?? entries[0]![0]
 
-  for (const [name, configPath] of entries) {
-    // Load the agent's own config file
-    const agentConfig = await loadConfig({ configPath, cwd: config.configDir })
+    const results = await Promise.all(entries.map(async ([name, configPath]) => {
+      const agentConfig = await loadConfig({ configPath, cwd: config.configDir })
+      agentConfig.dataDir = join(config.dataDir, name)
+      delete agentConfig.agents
+      delete agentConfig.defaultAgent
+      const app = await bootstrap(agentConfig, {})
+      return [name, app] as const
+    }))
 
-    // Override dataDir to nest under orchestrator's dataDir
-    agentConfig.dataDir = join(config.dataDir, name)
-
-    // Strip orchestrator-level fields from agent config
-    delete agentConfig.agents
-    delete agentConfig.defaultAgent
-
-    const app = await bootstrap(agentConfig, {})
-    agents.set(name, app)
-  }
-
-  const shutdown = async () => {
-    for (const app of agents.values()) {
-      await app.shutdown()
+    const agents = new Map(results)
+    return {
+      agents,
+      defaultAgent,
+      shutdown: async () => { for (const app of agents.values()) await app.shutdown() },
     }
   }
 
-  return { agents, defaultAgent, shutdown }
+  // Single-agent: wrap as one entry named "default"
+  const app = await bootstrap(config, {})
+  return {
+    agents: new Map([['default', app]]),
+    defaultAgent: 'default',
+    shutdown: app.shutdown,
+  }
 }
