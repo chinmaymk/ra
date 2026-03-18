@@ -2,6 +2,12 @@ import { defineConfig } from 'vitepress'
 import fs from 'node:fs'
 import path from 'node:path'
 
+// Load versions for the version switcher
+const versionsPath = path.resolve(__dirname, '..', 'versions.json')
+const versions: string[] = fs.existsSync(versionsPath)
+  ? JSON.parse(fs.readFileSync(versionsPath, 'utf-8'))
+  : []
+
 export default defineConfig({
   title: 'ra',
   description: 'One Loop. Infinite Agents. A small, hackable agent.',
@@ -20,6 +26,11 @@ export default defineConfig({
     } catch {
       pageData.rawMarkdown = ''
     }
+  },
+  buildEnd(siteConfig) {
+    // Copy versions.json to dist so the VersionSwitcher can fetch it
+    const distVersions = path.resolve(siteConfig.outDir, 'versions.json')
+    fs.writeFileSync(distVersions, JSON.stringify(versions))
   },
   themeConfig: {
     logo: '/logo.svg',
