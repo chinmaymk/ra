@@ -1,33 +1,28 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
-const versions = ref<string[]>([])
-const latestVersion = ref<string | null>(null)
+interface VersionsData {
+  latest: string
+  versions: string[]
+}
+
+const data = ref<VersionsData | null>(null)
 const open = ref(false)
 
-// Always resolve relative to the site root, not the versioned base
 const siteRoot = '/ra/'
 
 onMounted(async () => {
   try {
     const res = await fetch(`${siteRoot}versions.json`)
     if (res.ok) {
-      const data = await res.json()
-      if (Array.isArray(data)) {
-        // Legacy format: string[]
-        versions.value = data
-      } else {
-        // New format: { latest: string, versions: string[] }
-        versions.value = data.versions || []
-        latestVersion.value = data.latest || null
-      }
+      data.value = await res.json()
     }
   } catch {
-    // versions.json not available — no versions to show
+    // versions.json not available
   }
 })
 
-// Detect if we're viewing a versioned or dev page
+// Detect current page context from URL
 const currentView = (() => {
   if (typeof window === 'undefined') return null
   if (window.location.pathname.startsWith('/ra/dev/')) return 'dev'
@@ -35,31 +30,13 @@ const currentView = (() => {
   return match ? match[1] : null
 })()
 
-const label = (() => {
+const displayLabel = computed(() => {
   if (currentView === 'dev') return 'dev'
   if (currentView) return `v${currentView}`
-  // At root — show latest version number if available
-  return latestVersion.value ? `v${latestVersion.value}` : 'latest'
-})()
-
-// Recompute label once versions.json loads (for root page)
-const displayLabel = ref(label)
-onMounted(() => {
-  if (!currentView && latestVersion.value) {
-    displayLabel.value = `v${latestVersion.value}`
-  }
+  return data.value ? `v${data.value.latest}` : ''
 })
 
-// Watch for latestVersion to update after fetch
-import { watch } from 'vue'
-watch(latestVersion, (v) => {
-  if (!currentView && v) {
-    displayLabel.value = `v${v}`
-  }
-})
-
-function versionUrl(version: string | null) {
-  if (!version) return siteRoot
+function versionUrl(version: string) {
   if (version === 'dev') return `${siteRoot}dev/`
   return `${siteRoot}v/${version}/`
 }
@@ -74,7 +51,7 @@ function close() {
 </script>
 
 <template>
-  <div v-if="versions.length > 0" class="version-switcher" @mouseleave="close">
+  <div v-if="data && data.versions.length > 0" class="version-switcher" @mouseleave="close">
     <button class="version-btn" @click="toggle">
       {{ displayLabel }}
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -91,15 +68,15 @@ function close() {
         dev
       </a>
       <a
-        v-for="v in versions"
+        v-for="v in data.versions"
         :key="v"
-        :href="v === latestVersion ? siteRoot : versionUrl(v)"
+        :href="v === data.latest ? siteRoot : versionUrl(v)"
         class="version-item"
-        :class="{ active: currentView === v || (!currentView && v === latestVersion) }"
+        :class="{ active: currentView === v || (!currentView && v === data.latest) }"
         @click="close"
       >
         v{{ v }}
-        <span v-if="v === latestVersion" class="latest-badge">latest</span>
+        <span v-if="v === data.latest" class="latest-badge">latest</span>
       </a>
     </div>
   </div>

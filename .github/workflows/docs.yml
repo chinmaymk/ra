@@ -43,15 +43,14 @@ jobs:
       - name: Build dev docs (from main)
         working-directory: docs/site
         run: |
-          # Override base to /ra/dev/ for the main branch build
           cat > .vitepress/config.dev.ts << 'DEVCONF'
-          import baseConfig from './config'
-          import { defineConfig, mergeConfig } from 'vitepress'
-          export default mergeConfig(baseConfig, defineConfig({ base: '/ra/dev/' }))
+          import config from './config'
+          import { defineConfig } from 'vitepress'
+          export default defineConfig({ ...config, base: '/ra/dev/' })
           DEVCONF
           DOCS_VERSION="dev" bun vitepress build --config .vitepress/config.dev.ts
-          # Save dev build aside
           mv .vitepress/dist /tmp/dev-docs-dist
+          rm .vitepress/config.dev.ts
 
       - name: Build latest tag docs (for site root)
         if: steps.latest-tag.outputs.tag != ''
@@ -68,7 +67,7 @@ jobs:
           cp -r .vitepress/theme "$TAG_DIR/docs/site/.vitepress/theme"
 
           # Build with root base path
-          cat > "$TAG_DIR/docs/site/.vitepress/config.ts" << VCONF
+          cat > "$TAG_DIR/docs/site/.vitepress/config.ts" << 'VCONF'
           import { defineConfig } from 'vitepress'
           export default defineConfig({
             title: 'ra',
@@ -82,7 +81,6 @@ jobs:
           VCONF
 
           (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$LATEST_VERSION" bun vitepress build)
-          # This becomes the root site
           mkdir -p /tmp/root-docs-dist
           cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* /tmp/root-docs-dist/
           rm -rf "$TAG_DIR"
@@ -90,7 +88,6 @@ jobs:
       - name: Compute version cache key
         id: version-key
         run: |
-          # Build a stable key from all tag names + their SHAs
           KEY=$(git tag -l 'v*' --sort=-version:refname | while read tag; do
             echo "$tag=$(git rev-parse "$tag")"
           done | sha256sum | cut -d' ' -f1)
@@ -121,7 +118,6 @@ jobs:
 
             echo "Building docs for $tag..."
 
-            # Check out the docs/site content from this tag
             TAG_DIR=$(mktemp -d)
             git archive "$tag" -- docs/site/ | tar -x -C "$TAG_DIR" 2>/dev/null || {
               echo "  Skipping $tag — no docs/site/"
@@ -153,14 +149,12 @@ export default defineConfig({
 })
 VCONF
 
-            # Install deps and build
             (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build) || {
               echo "  Warning: build failed for $tag, skipping"
               rm -rf "$TAG_DIR"
               continue
             }
 
-            # Save to cache dir
             mkdir -p "/tmp/versioned-docs-dist/$version"
             cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* "/tmp/versioned-docs-dist/$version/"
             rm -rf "$TAG_DIR"
@@ -173,12 +167,13 @@ VCONF
           TAGS=$(git tag -l 'v*' --sort=-version:refname)
           LATEST_VERSION="${{ steps.latest-tag.outputs.version }}"
 
-          # Start with latest tag as root (or dev if no tags)
+          # Root: use latest tag build if available, otherwise build main
+          # with root base as fallback (first deploy before any release)
           mkdir -p .vitepress/dist
           if [ -d /tmp/root-docs-dist ]; then
             cp -r /tmp/root-docs-dist/* .vitepress/dist/
           else
-            cp -r /tmp/dev-docs-dist/* .vitepress/dist/
+            bun run build
           fi
 
           # Add dev docs
@@ -186,8 +181,8 @@ VCONF
           cp -r /tmp/dev-docs-dist/* .vitepress/dist/dev/
 
           # Add versioned docs and build versions.json
-          VERSIONS_JSON="{ \"latest\": \"${LATEST_VERSION}\", \"versions\": ["
           first=true
+          VERSION_LIST=""
 
           for tag in $TAGS; do
             version="${tag#v}"
@@ -196,17 +191,16 @@ VCONF
               cp -r "/tmp/versioned-docs-dist/$version/"* ".vitepress/dist/v/$version/"
 
               if [ "$first" = true ]; then
-                VERSIONS_JSON="${VERSIONS_JSON}\"${version}\""
+                VERSION_LIST="\"${version}\""
                 first=false
               else
-                VERSIONS_JSON="${VERSIONS_JSON},\"${version}\""
+                VERSION_LIST="${VERSION_LIST},\"${version}\""
               fi
             fi
           done
 
-          VERSIONS_JSON="${VERSIONS_JSON}]}"
-          echo "$VERSIONS_JSON" > .vitepress/dist/versions.json
-          echo "versions.json: $VERSIONS_JSON"
+          echo "{\"latest\":\"${LATEST_VERSION}\",\"versions\":[${VERSION_LIST}]}" > .vitepress/dist/versions.json
+          echo "versions.json written (latest: ${LATEST_VERSION})"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
