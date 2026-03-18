@@ -6,6 +6,9 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
+import type { LogLevel } from '../observability/logger'
+import { createSessionMiddleware } from '../agent/session'
+import { mergeMiddleware } from '../agent/middleware'
 import type { Skill } from '../skills/types'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import type { CompactionConfig } from '../agent/context-compaction'
@@ -31,6 +34,9 @@ export interface ReplOptions {
   contextMessages?: IMessage[]
   memoryStore?: MemoryStore
   logger?: Logger
+  logsEnabled?: boolean
+  logLevel?: LogLevel
+  tracesEnabled?: boolean
 }
 
 export class Repl {
@@ -163,7 +169,6 @@ export class Repl {
     const initialMessages: IMessage[] = []
     if (this.options.systemPrompt) initialMessages.push({ role: 'system', content: this.options.systemPrompt })
     if (this.options.contextMessages?.length) initialMessages.push(...this.options.contextMessages)
-    initialMessages.push(...this.messages, userMessage)
 
     // Inject available skills XML as first user message if skills exist
     if (this.options.skillMap && this.options.skillMap.size > 0 && this.messages.length === 0) {
@@ -177,12 +182,67 @@ export class Repl {
       }
     }
 
+    initialMessages.push(...this.messages)
+    const priorCount = initialMessages.length
+    initialMessages.push(userMessage)
+
     let boxOpened = false
     let thinkingOpened = false
     let streamBuf: tui.StreamBuffer | null = null
     const toolStartTimes = new Map<string, number>()
     tui.startSpinner()
-    const userMw = this.options.middleware ?? {}
+    const session = createSessionMiddleware(this.options.middleware, {
+      storage: this.options.storage,
+      sessionId: this.sessionId!,
+      priorCount,
+      logsEnabled: this.options.logsEnabled,
+      logLevel: this.options.logLevel,
+      tracesEnabled: this.options.tracesEnabled,
+      logger: this.options.logger,
+    })
+
+    const tuiHooks: Partial<MiddlewareConfig> = {
+      onStreamChunk: [
+        async (ctx: StreamChunkContext) => {
+          if (ctx.chunk.type === 'thinking') {
+            if (!thinkingOpened) {
+              tui.stopSpinner(true)
+              tui.printThinkingStart()
+              thinkingOpened = true
+            }
+            process.stdout.write(ctx.chunk.delta)
+          } else if (ctx.chunk.type === 'text') {
+            if (thinkingOpened) {
+              tui.printThinkingEnd()
+              thinkingOpened = false
+            }
+            if (!boxOpened) {
+              tui.stopSpinner()
+              boxOpened = true
+              const contentWidth = (process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN
+              streamBuf = new tui.StreamBuffer(contentWidth)
+            }
+            process.stdout.write(streamBuf!.write(ctx.chunk.delta))
+          }
+        },
+      ],
+      beforeToolExecution: [
+        async (ctx: ToolExecutionContext) => {
+          // TS narrows streamBuf to null (closure writes aren't tracked); cast back
+          const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
+          tui.stopSpinner(true)
+          boxOpened = false
+          toolStartTimes.set(ctx.toolCall.id, Date.now())
+          tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
+        },
+      ],
+      afterToolExecution: [
+        async (ctx: ToolResultContext) => {
+          tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
+          tui.startSpinner()
+        },
+      ],
+    }
 
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -193,54 +253,11 @@ export class Repl {
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
-      logger: this.options.logger,
-      middleware: {
-        ...userMw,
-        onStreamChunk: [
-          async (ctx: StreamChunkContext) => {
-            if (ctx.chunk.type === 'thinking') {
-              if (!thinkingOpened) {
-                tui.stopSpinner(true)
-                tui.printThinkingStart()
-                thinkingOpened = true
-              }
-              process.stdout.write(ctx.chunk.delta)
-            } else if (ctx.chunk.type === 'text') {
-              if (thinkingOpened) {
-                tui.printThinkingEnd()
-                thinkingOpened = false
-              }
-              if (!boxOpened) {
-                tui.stopSpinner()
-                boxOpened = true
-                const contentWidth = (process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN
-                streamBuf = new tui.StreamBuffer(contentWidth)
-              }
-              process.stdout.write(streamBuf!.write(ctx.chunk.delta))
-            }
-          },
-        ].concat(userMw.onStreamChunk ?? []),
-        beforeToolExecution: [
-          async (ctx: ToolExecutionContext) => {
-            // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-            const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-            tui.stopSpinner(true)
-            boxOpened = false
-            toolStartTimes.set(ctx.toolCall.id, Date.now())
-            tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
-          },
-        ].concat(userMw.beforeToolExecution ?? []),
-        afterToolExecution: [
-          async (ctx: ToolResultContext) => {
-            tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
-            tui.startSpinner()
-          },
-        ].concat(userMw.afterToolExecution ?? []),
-      },
+      logger: session.logger,
+      middleware: mergeMiddleware(tuiHooks, session.middleware),
     })
 
     this.activeLoop = loop
-    const priorCount = initialMessages.length
     try {
       const result = await loop.run(initialMessages)
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
@@ -250,9 +267,7 @@ export class Repl {
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
 
-      const newMessages = result.messages.slice(priorCount)
-      this.messages.push(userMessage, ...newMessages)
-      await Promise.all([userMessage, ...newMessages].map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
+      this.messages.push(...result.messages.slice(priorCount))
     } catch (err) {
       tui.stopSpinner(true)
       // TS narrows streamBuf to null (closure writes aren't tracked); cast back

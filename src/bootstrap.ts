@@ -16,7 +16,6 @@ import { McpClient } from './mcp/client'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
-import { createObservabilityMiddleware } from './observability/middleware'
 import type { IMessage, IProvider } from './providers/types'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { loadBuiltinSkills } from './skills/builtin'
@@ -25,7 +24,6 @@ import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath } from './utils/paths'
-import type { ObservabilityConfig } from './observability'
 import type { Logger } from './observability/logger'
 import type { Tracer } from './observability/tracer'
 
@@ -67,13 +65,11 @@ export async function bootstrap(
   await mkdir(sessionDir, { recursive: true })
 
   // ── Observability ──────────────────────────────────────────────────
-  const obsConfig: ObservabilityConfig = {
+  const { logger, tracer } = createObservability({
     enabled: config.logsEnabled || config.tracesEnabled,
     logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
     traces: { enabled: config.tracesEnabled, output: 'session' },
-  }
-  const { logger, tracer } = createObservability(obsConfig, { sessionId, sessionDir })
-  const obsMw = createObservabilityMiddleware(logger, tracer)
+  }, { sessionId, sessionDir })
 
   // ── Compaction model default ───────────────────────────────────────
   if (!config.compaction.model) {
@@ -173,12 +169,6 @@ export async function bootstrap(
     const permMw = createPermissionsMiddleware(config.permissions)
     middleware.beforeToolExecution = [permMw, ...(middleware.beforeToolExecution ?? [])]
     logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
-  }
-
-  // ── Prepend observability hooks (obs runs first) ───────────────────
-  for (const key of Object.keys(obsMw)) {
-    const k = key as keyof MiddlewareConfig
-    ;(middleware as any)[k] = ((obsMw as any)[k] ?? []).concat((middleware as any)[k] ?? [])
   }
 
   // ── Subagent tool (registered last — child registry built lazily) ──
