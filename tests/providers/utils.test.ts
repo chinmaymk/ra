@@ -62,7 +62,7 @@ describe('mergeConsecutiveRoles', () => {
     // But the original array must be completely unchanged
     expect(original).toHaveLength(originalLength)
     original.forEach((msg, i) => {
-      expect(msg.content).toBe(originalContents[i])
+      expect(msg.content).toBe(originalContents[i]!)
     })
   })
 })
