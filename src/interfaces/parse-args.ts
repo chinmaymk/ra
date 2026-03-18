@@ -45,6 +45,7 @@ const FLAG_RULES: Record<string, FlagRule> = {
   'tools-builtin':               { type: 'bool',   path: ['tools', 'builtin'], value: true },
   'http-port':                   { type: 'int',    path: ['http', 'port'] },
   'http-token':                  { type: 'string', path: ['http', 'token'] },
+  'inspector-port':              { type: 'int',    path: ['inspector', 'port'] },
   'mcp-server-enabled':          { type: 'bool',   path: ['mcp', 'server', 'enabled'], value: true },
   'mcp-server-port':             { type: 'int',    path: ['mcp', 'server', 'port'] },
   'mcp-server-tool-name':        { type: 'string', path: ['mcp', 'server', 'tool', 'name'] },
@@ -105,6 +106,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       repl:                          { type: 'boolean' },
       mcp:                           { type: 'boolean' },
       'mcp-stdio':                   { type: 'boolean' },
+      inspector:                     { type: 'boolean' },
       // Top-level config
       provider:                      { type: 'string' },
       model:                         { type: 'string' },
@@ -116,6 +118,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       // HTTP server
       'http-port':                   { type: 'string' },
       'http-token':                  { type: 'string' },
+      // Inspector
+      'inspector-port':              { type: 'string' },
       // MCP server
       'mcp-server-enabled':          { type: 'boolean' },
       'mcp-server-port':             { type: 'string' },
@@ -150,6 +154,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (values['mcp-stdio'])    setPath(r, ['interface'], 'mcp-stdio')
   else if (values.mcp)       setPath(r, ['interface'], 'mcp')
   else if (values.http) setPath(r, ['interface'], 'http')
+  else if (values.inspector) setPath(r, ['interface'], 'inspector')
   else if (values.repl) setPath(r, ['interface'], 'repl')
   else if (values.cli)  setPath(r, ['interface'], 'cli')
 

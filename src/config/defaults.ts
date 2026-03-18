@@ -8,6 +8,7 @@ export const defaultConfig: RaConfig = {
   configDir: process.cwd(),
   dataDir: '.ra',
   http: { port: 3000, token: '' },
+  inspector: { port: 3002 },
   skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
   skills: [],
   mcp: {

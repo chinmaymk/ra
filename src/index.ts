@@ -8,6 +8,7 @@ import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showConf
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
+import { InspectorServer } from './interfaces/inspector'
 import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
@@ -253,6 +254,18 @@ async function launchRepl(app: AppContext): Promise<void> {
   await app.shutdown()
 }
 
+async function launchInspector(app: AppContext): Promise<void> {
+  const inspector = new InspectorServer({
+    port: app.config.inspector.port,
+    storage: app.storage,
+    memoryStore: app.memoryStore,
+    dataDir: app.config.dataDir,
+  })
+  await inspector.start()
+  console.error(`Inspector running at http://localhost:${inspector.port}`)
+  await new Promise(() => {}) // keep alive
+}
+
 // ── Main ─────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -305,6 +318,7 @@ async function main(): Promise<void> {
     case 'mcp':       return launchMcpHttp(app)
     case 'mcp-stdio': return launchMcpStdio(app)
     case 'http':      return launchHttp(app, signals)
+    case 'inspector': return launchInspector(app)
     case 'cli':
       return launchCli(parsed, app)
     default: {
