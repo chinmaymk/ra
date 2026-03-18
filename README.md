@@ -264,6 +264,7 @@ Same agent, multiple entry points.
 | **REPL** | default without a prompt | Interactive sessions with slash commands |
 | **HTTP** | `--http` | Streaming SSE or sync JSON |
 | **MCP** | `--mcp-stdio` / `--mcp` | Expose ra as a tool for Cursor, Claude Desktop, other agents |
+| **Inspector** | `--inspector` | Web dashboard for debugging sessions |
 
 Ra also speaks [MCP as a client](https://chinmaymk.github.io/ra/modes/mcp/) — connect to external MCP servers and their tools become available to the model. [Sessions](https://chinmaymk.github.io/ra/core/sessions/) are persisted as JSONL and can be resumed from any interface with `--resume`.
 
@@ -326,7 +327,10 @@ ra --provider openai --model gpt-4.1 --thinking high --max-iterations 10 "Review
 ra --show-config                                    # print resolved config as JSON
 ra --show-config --provider openai --model gpt-4.1  # see how overrides merge
 ra --show-context                                   # print discovered context files
+ra --inspector                                      # web dashboard at localhost:3002
 ```
+
+The [inspector](https://chinmaymk.github.io/ra/modes/inspector/) is a built-in web UI for debugging sessions. It shows an overview dashboard with token usage and tool stats, a timeline of every model call and tool execution, the full message history, structured logs, and trace spans. Runs alongside any interface — add `--inspector` to any command.
 
 ## Scripting
 
