@@ -330,7 +330,7 @@ ra --show-context                                   # print discovered context f
 ra --inspector                                      # web dashboard at localhost:3002
 ```
 
-The [inspector](https://chinmaymk.github.io/ra/modes/inspector/) is a built-in web UI for debugging sessions. It shows an overview dashboard with token usage and tool stats, a timeline of every model call and tool execution, the full message history, structured logs, and trace spans. Runs alongside any interface — add `--inspector` to any command.
+The [inspector](https://chinmaymk.github.io/ra/modes/inspector/) is a standalone web UI for debugging sessions. It shows an overview dashboard with token usage and tool stats, a timeline of every model call and tool execution, the full message history, structured logs, and trace spans. Launch it with `ra --inspector`.
 
 ## Scripting
 
