@@ -58,8 +58,8 @@ export async function bootstrap(
   const storage = new SessionStorage(storagePath)
   await storage.init()
 
-  // Inspector is read-only — skip session creation
-  const sessionId = config.interface === 'inspector'
+  const isReadOnly = config.interface === 'inspector'
+  const sessionId = isReadOnly
     ? 'inspector'
     : opts.sessionId ?? (await storage.create({
         provider: config.provider,
@@ -67,13 +67,13 @@ export async function bootstrap(
         interface: config.interface,
       })).id
   const sessionDir = storage.sessionDir(sessionId)
-  if (config.interface !== 'inspector') {
+  if (!isReadOnly) {
     await mkdir(sessionDir, { recursive: true })
   }
 
   // ── Observability ──────────────────────────────────────────────────
   const { logger, tracer } = createObservability({
-    enabled: config.logsEnabled || config.tracesEnabled,
+    enabled: !isReadOnly && (config.logsEnabled || config.tracesEnabled),
     logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
     traces: { enabled: config.tracesEnabled, output: 'session' },
   }, { sessionId, sessionDir })
