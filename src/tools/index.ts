@@ -61,7 +61,7 @@ export function registerBuiltinTools(registry: ToolRegistry, config?: ToolsConfi
 
   for (const name of fsNames) {
     const settings = settingsFor(name, cfg)
-    maybeRegister(registry, fsFactories[name](rootDirFrom(settings)), cfg)
+    maybeRegister(registry, fsFactories[name]!(rootDirFrom(settings)), cfg)
   }
 
   // Shell — platform-specific
