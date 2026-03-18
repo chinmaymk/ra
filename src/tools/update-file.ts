@@ -1,7 +1,13 @@
 import type { ITool } from '../providers/types'
 import { readFile, writeFile } from 'fs/promises'
+import { assertWithinRoot } from './root-dir'
 
-export function updateFileTool(): ITool {
+export interface EditToolOptions {
+  rootDir?: string
+}
+
+export function updateFileTool(options?: EditToolOptions): ITool {
+  const rootDir = options?.rootDir
   return {
     name: 'Edit',
     description:
@@ -20,6 +26,7 @@ export function updateFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, old_string, new_string } = input as { path: string; old_string: string; new_string: string }
+      if (rootDir) assertWithinRoot(path, rootDir)
       const content = await readFile(path, 'utf-8')
       if (!content.includes(old_string)) {
         throw new Error(`old_string not found in ${path}. Make sure the string matches exactly, including whitespace and indentation.`)

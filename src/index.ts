@@ -120,7 +120,7 @@ function createMcpHandler(app: AppContext) {
 }
 
 function mcpToolsFor(app: AppContext) {
-  return app.config.builtinTools ? app.tools : undefined
+  return app.config.tools.builtin ? app.tools : undefined
 }
 
 async function startSidecarMcp(app: AppContext): Promise<(() => Promise<void>) | null> {

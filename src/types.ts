@@ -43,6 +43,8 @@ export type {
   McpClientConfig,
   McpServerConfig,
   LoadConfigOptions,
+  ToolsConfig,
+  ToolSettings,
 } from './config/types.ts'
 
 // Skill types

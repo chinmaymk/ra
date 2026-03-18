@@ -120,7 +120,9 @@ export async function bootstrap(
 
   // ── Tools ──────────────────────────────────────────────────────────
   const tools = new ToolRegistry()
-  if (config.builtinTools) registerBuiltinTools(tools)
+  if (config.tools.builtin || Object.keys(config.tools.overrides).length > 0) {
+    registerBuiltinTools(tools, config.tools)
+  }
 
   const toolNames = tools.all().map(t => t.name)
   if (toolNames.length > 0) {
@@ -172,19 +174,24 @@ export async function bootstrap(
   }
 
   // ── Subagent tool (registered last — child registry built lazily) ──
-  tools.register(subagentTool({
-    provider,
-    tools,
-    model: config.model,
-    systemPrompt: config.systemPrompt,
-    middleware,
-    thinking: config.thinking,
-    compaction: config.compaction,
-    toolTimeout: config.toolTimeout,
-    maxIterations: config.maxIterations,
-    maxConcurrency: config.maxConcurrency,
-    logger,
-  }))
+  const agentSettings = config.tools.overrides.Agent ?? {}
+  const agentEnabled = agentSettings.enabled !== false && config.tools.builtin
+  if (agentEnabled) {
+    const agentMaxConcurrency = (agentSettings.maxConcurrency as number | undefined) ?? config.maxConcurrency
+    tools.register(subagentTool({
+      provider,
+      tools,
+      model: config.model,
+      systemPrompt: config.systemPrompt,
+      middleware,
+      thinking: config.thinking,
+      compaction: config.compaction,
+      toolTimeout: config.toolTimeout,
+      maxIterations: config.maxIterations,
+      maxConcurrency: agentMaxConcurrency,
+      logger,
+    }))
+  }
 
   // ── Shutdown ───────────────────────────────────────────────────────
   const shutdown = async () => {

@@ -1,7 +1,13 @@
 import type { ITool } from '../providers/types'
 import { readFile } from 'fs/promises'
+import { assertWithinRoot } from './root-dir'
 
-export function readFileTool(): ITool {
+export interface ReadToolOptions {
+  rootDir?: string
+}
+
+export function readFileTool(options?: ReadToolOptions): ITool {
+  const rootDir = options?.rootDir
   return {
     name: 'Read',
     description:
@@ -18,6 +24,7 @@ export function readFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, offset, limit } = input as { path: string; offset?: number; limit?: number }
+      if (rootDir) assertWithinRoot(path, rootDir)
       const content = await readFile(path, 'utf-8')
       const allLines = content.split('\n')
       if (allLines.at(-1) === '') allLines.pop()

@@ -42,7 +42,9 @@ middleware:
     - ./middleware/validate-output.ts
 
 maxIterations: 50
-builtinTools: true
+
+tools:
+  builtin: true
 ```
 
 ### Config Fields
@@ -56,7 +58,9 @@ builtinTools: true
 | `skills` | string[] | Skills to always activate (must be found in skillDirs) |
 | `middleware` | object | Hook name to file path arrays (see write-middleware skill) |
 | `maxIterations` | number | Maximum agent loop iterations before stopping |
-| `builtinTools` | boolean | Whether to enable built-in tools (file read/write, bash, etc.) |
+| `tools.builtin` | boolean | Whether to enable built-in tools (file read/write, bash, etc.) |
+| `tools.<Name>.enabled` | boolean | Enable/disable a specific tool |
+| `tools.<Name>.rootDir` | string | Constrain file tools to a directory |
 | `toolTimeout` | number | Timeout in ms for tool execution |
 | `thinking` | string | Thinking mode: `low`, `medium`, or `high` |
 

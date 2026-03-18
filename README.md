@@ -142,6 +142,21 @@ Each provider needs an API key via environment variable (`RA_ANTHROPIC_API_KEY`,
 
 Ra ships with built-in tools for filesystem operations (`Read`, `Write`, `Edit`, `Glob`, `Grep`, ...), shell execution (`Bash`/`PowerShell`), web fetching, and agent interaction (`AskUserQuestion`, `TodoWrite`, `Agent`). The `Agent` tool forks parallel copies of the agent to work on independent tasks simultaneously.
 
+Each tool can be independently configured, constrained, or disabled:
+
+```yaml
+tools:
+  builtin: true
+  Read:
+    rootDir: "./src"      # restrict reads to src/
+  Write:
+    rootDir: "./src"      # restrict writes to src/
+  WebFetch:
+    enabled: false        # disable web access
+  Agent:
+    maxConcurrency: 2     # limit parallel agents
+```
+
 Control what tools can do with regex-based [allow/deny rules](https://chinmaymk.github.io/ra/permissions/):
 
 ```yaml
@@ -201,7 +216,8 @@ The built-in `Agent` tool spawns parallel copies of the agent loop to work on in
 ```yaml
 # allow the model to spawn up to 4 parallel agents
 tools:
-  agent:
+  builtin: true
+  Agent:
     maxConcurrency: 4
 ```
 

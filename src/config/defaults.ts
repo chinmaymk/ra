@@ -37,7 +37,10 @@ export const defaultConfig: RaConfig = {
   },
   maxIterations: 50,
   toolTimeout: 30000,
-  builtinTools: true,
+  tools: {
+    builtin: true,
+    overrides: {},
+  },
   builtinSkills: {},
   permissions: {},
   middleware: {},

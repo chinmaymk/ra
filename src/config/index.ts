@@ -4,10 +4,10 @@ import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
 import { setPath, safeParseInt } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
-import type { RaConfig, LoadConfigOptions } from './types'
+import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
 export { defaultConfig } from './defaults'
-export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule } from './types'
+export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings } from './types'
 
 const CONFIG_FILES = [
   'ra.config.json',
@@ -84,7 +84,7 @@ const ENV_RULES: Record<string, EnvRule> = {
   RA_MAX_ITERATIONS: { type: 'int',    path: ['maxIterations'] },
   RA_THINKING:       { type: 'enum',   path: ['thinking'], values: ['low', 'medium', 'high'] },
   RA_TOOL_TIMEOUT:   { type: 'int',    path: ['toolTimeout'] },
-  RA_BUILTIN_TOOLS:  { type: 'bool',   path: ['builtinTools'] },
+  RA_TOOLS_BUILTIN:  { type: 'bool',   path: ['tools', 'builtin'] },
   RA_HTTP_PORT:      { type: 'int',    path: ['http', 'port'] },
   RA_HTTP_TOKEN:     { type: 'string', path: ['http', 'token'] },
   RA_MCP_SERVER_ENABLED:          { type: 'bool',   path: ['mcp', 'server', 'enabled'] },
@@ -133,6 +133,46 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   return r
 }
 
+/**
+ * Normalize the `tools` config section. Supports three shapes:
+ *   1. `builtinTools: true/false` (legacy boolean flag)
+ *   2. Flat YAML: `tools: { builtin: true, Read: { rootDir: "." }, WebFetch: { enabled: false } }`
+ *   3. Canonical: `tools: { builtin: true, overrides: { ... } }`
+ * Converts everything into the canonical `{ builtin, overrides }` form.
+ */
+function normalizeToolsConfig(raw: Record<string, unknown>): void {
+  // Legacy: builtinTools boolean → tools.builtin
+  if ('builtinTools' in raw && !('tools' in raw)) {
+    raw.tools = { builtin: !!raw.builtinTools, overrides: {} }
+    delete raw.builtinTools
+    return
+  }
+  if ('builtinTools' in raw && 'tools' in raw) {
+    // tools section wins, drop legacy key
+    delete raw.builtinTools
+  }
+
+  const tools = raw.tools
+  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) return
+
+  const t = tools as Record<string, unknown>
+  // Already canonical
+  if ('overrides' in t && typeof t.overrides === 'object') return
+
+  // Flat form: extract builtin, treat all other keys as tool overrides
+  const builtin = t.builtin !== undefined ? !!t.builtin : true
+  const overrides: Record<string, ToolSettings> = {}
+  for (const [key, val] of Object.entries(t)) {
+    if (key === 'builtin' || key === 'overrides') continue
+    if (val === false) {
+      overrides[key] = { enabled: false }
+    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+      overrides[key] = val as ToolSettings
+    }
+  }
+  raw.tools = { builtin, overrides }
+}
+
 export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaConfig> {
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
@@ -142,9 +182,13 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   const envConfig = loadEnvVars(env)
   const cliArgs = options.cliArgs ?? {}
 
+  // Normalize tools config on each layer before merging
+  const layers = [fileConfig, envConfig, cliArgs] as Record<string, unknown>[]
+  for (const layer of layers) normalizeToolsConfig(layer)
+
   // defaults < file < env < CLI
-  const merged = [fileConfig, envConfig, cliArgs].reduce(
-    (acc, layer) => deepMerge(acc, layer as Record<string, unknown>),
+  const merged = layers.reduce(
+    (acc, layer) => deepMerge(acc, layer),
     defaultConfig as unknown as Record<string, unknown>,
   )
 
