@@ -13,17 +13,22 @@
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
 
   /* Layout */
   .app { display: grid; grid-template-columns: 300px 1fr; grid-template-rows: 48px 1fr; height: 100vh; }
+  .app.global-view { grid-template-columns: 1fr; }
+  .app.global-view .sidebar { display: none; }
+
   header { grid-column: 1 / -1; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 16px; }
-  header h1 { font-size: 15px; font-weight: 600; color: var(--accent); }
-  header .tabs { display: flex; gap: 2px; }
-  header .tab { padding: 6px 14px; border-radius: 6px; cursor: pointer; color: var(--text2); transition: all 0.15s; font-size: 12px; }
-  header .tab:hover { background: var(--bg3); color: var(--text); }
-  header .tab.active { background: var(--accent); color: #fff; }
+  header h1 { font-size: 15px; font-weight: 600; color: var(--accent); flex-shrink: 0; }
+  .tab-groups { display: flex; gap: 20px; align-items: center; }
+  .tab-group { display: flex; align-items: center; gap: 2px; }
+  .tab-group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2); margin-right: 6px; opacity: 0.6; }
+  .tab-divider { width: 1px; height: 24px; background: var(--border); margin: 0 8px; }
+  .tab { padding: 6px 14px; border-radius: 6px; cursor: pointer; color: var(--text2); transition: all 0.15s; font-size: 12px; }
+  .tab:hover { background: var(--bg3); color: var(--text); }
+  .tab.active { background: var(--accent); color: #fff; }
+
   .sidebar { background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto; }
   .main { overflow-y: auto; padding: 16px; }
 
@@ -116,17 +121,24 @@
 </style>
 </head>
 <body>
-<div class="app">
+<div class="app" id="app">
   <header>
     <h1>ra inspector</h1>
-    <div class="tabs">
-      <div class="tab active" data-view="messages">Messages</div>
-      <div class="tab" data-view="logs">Logs</div>
-      <div class="tab" data-view="traces">Traces</div>
-      <div class="tab" data-view="memory">Memory</div>
-      <div class="tab" data-view="config">Config</div>
-      <div class="tab" data-view="context">Context</div>
-      <div class="tab" data-view="middleware">Middleware</div>
+    <div class="tab-groups">
+      <div class="tab-group">
+        <span class="tab-group-label">Session</span>
+        <div class="tab active" data-view="messages" data-scope="session">Messages</div>
+        <div class="tab" data-view="logs" data-scope="session">Logs</div>
+        <div class="tab" data-view="traces" data-scope="session">Traces</div>
+      </div>
+      <div class="tab-divider"></div>
+      <div class="tab-group">
+        <span class="tab-group-label">Global</span>
+        <div class="tab" data-view="config" data-scope="global">Config</div>
+        <div class="tab" data-view="context" data-scope="global">Context</div>
+        <div class="tab" data-view="middleware" data-scope="global">Middleware</div>
+        <div class="tab" data-view="memory" data-scope="global">Memory</div>
+      </div>
     </div>
   </header>
   <div class="sidebar" id="sidebar">
@@ -139,11 +151,22 @@
 </div>
 <script>
 (function() {
-  const $ = (s, el) => (el || document).querySelector(s);
   const $$ = (s, el) => [...(el || document).querySelectorAll(s)];
+  const app = document.getElementById('app');
   const main = document.getElementById('main');
+  const SESSION_VIEWS = ['messages', 'logs', 'traces'];
   let currentSession = null;
   let currentView = 'messages';
+
+  function isGlobal(view) { return !SESSION_VIEWS.includes(view); }
+
+  function updateLayout() {
+    if (isGlobal(currentView)) {
+      app.classList.add('global-view');
+    } else {
+      app.classList.remove('global-view');
+    }
+  }
 
   // ── Tabs ──
   $$('.tab').forEach(tab => {
@@ -151,10 +174,11 @@
       $$('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentView = tab.dataset.view;
-      if (['config', 'context', 'middleware'].includes(currentView)) {
-        loadGlobalView(currentView);
-      } else if (currentView === 'memory') {
-        loadMemory();
+      updateLayout();
+
+      if (isGlobal(currentView)) {
+        if (currentView === 'memory') loadMemory();
+        else loadGlobalView(currentView);
       } else if (currentSession) {
         loadSessionView(currentSession, currentView);
       } else {
@@ -180,9 +204,14 @@
         $$('.session-item').forEach(e => e.classList.remove('active'));
         el.classList.add('active');
         currentSession = el.dataset.id;
-        if (!['config', 'context', 'middleware', 'memory'].includes(currentView)) {
-          loadSessionView(currentSession, currentView);
+        // Auto-switch to session scope if on a global tab
+        if (isGlobal(currentView)) {
+          currentView = 'messages';
+          $$('.tab').forEach(t => t.classList.remove('active'));
+          $$('.tab').forEach(t => { if (t.dataset.view === 'messages') t.classList.add('active'); });
+          updateLayout();
         }
+        loadSessionView(currentSession, currentView);
       });
     });
   }
@@ -199,7 +228,7 @@
     } catch(e) { main.innerHTML = '<div class="empty">Error: ' + esc(e.message) + '</div>'; }
   }
 
-  // ── Load global views (config, context, middleware) ──
+  // ── Load global views ──
   async function loadGlobalView(view) {
     main.innerHTML = '<div class="loading">Loading…</div>';
     try {
@@ -339,16 +368,8 @@
 
   // ── Config ──
   function renderConfig(config) {
-    // Redact sensitive fields
-    const sanitized = JSON.parse(JSON.stringify(config));
-    if (sanitized.providers) {
-      for (const p of Object.values(sanitized.providers)) {
-        if (p && typeof p === 'object' && 'apiKey' in p && p.apiKey) p.apiKey = '***';
-      }
-    }
-    if (sanitized.http && sanitized.http.token) sanitized.http.token = '***';
     main.innerHTML = '<div class="config-section"><h2>Resolved Configuration</h2>' +
-      '<div class="config-block">' + esc(JSON.stringify(sanitized, null, 2)) + '</div></div>';
+      '<div class="config-block">' + esc(JSON.stringify(config, null, 2)) + '</div></div>';
   }
 
   // ── Context ──
@@ -375,19 +396,21 @@
   function renderMiddleware(data) {
     const hooks = data.hooks || {};
     const hookNames = Object.keys(hooks);
-    if (!hookNames.length) {
-      main.innerHTML = '<div class="config-section"><h2>Middleware Hooks</h2>' +
-        '<div class="empty">No middleware configured</div></div>';
-      return;
+    let html = '';
+    if (hookNames.length) {
+      html += '<div class="config-section"><h2>Active Hooks</h2>' +
+        hookNames.map(name => {
+          const fns = hooks[name] || [];
+          return '<div class="mw-hook"><div class="mw-hook-name">' + esc(name) + ' <span class="badge">' + fns.length + '</span></div>' +
+            fns.map(fn => '<div class="mw-hook-entry">' + esc(fn) + '</div>').join('') + '</div>';
+        }).join('') + '</div>';
+    } else {
+      html += '<div class="config-section"><h2>Active Hooks</h2>' +
+        '<div class="empty">No middleware hooks active</div></div>';
     }
-    main.innerHTML = '<div class="config-section"><h2>Middleware Hooks</h2>' +
-      hookNames.map(name => {
-        const fns = hooks[name] || [];
-        return '<div class="mw-hook"><div class="mw-hook-name">' + esc(name) + ' <span class="badge">' + fns.length + '</span></div>' +
-          fns.map(fn => '<div class="mw-hook-entry">' + esc(fn) + '</div>').join('') + '</div>';
-      }).join('') + '</div>' +
-      '<div class="config-section"><h2>Middleware Config (from config file)</h2>' +
+    html += '<div class="config-section"><h2>Middleware Config (from config file)</h2>' +
       '<div class="config-block">' + esc(JSON.stringify(data.configMiddleware || {}, null, 2)) + '</div></div>';
+    main.innerHTML = html;
   }
 
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
