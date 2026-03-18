@@ -25,10 +25,11 @@ mcp:
         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
 ```
 
-To use only MCP tools (without built-in tools), disable built-in tools:
+To use only MCP tools (without built-in tools), disable them via the `tools` section:
 
 ```yaml
-builtinTools: false
+tools:
+  builtin: false
 mcp:
   client:
     - name: my-tools
