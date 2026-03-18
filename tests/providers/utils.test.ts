@@ -38,6 +38,33 @@ describe('mergeConsecutiveRoles', () => {
     mergeConsecutiveRoles(messages)
     expect((messages[0]!.content as any[]).length).toBe(1)
   })
+
+  it('preserves original array length (middleware sees unmerged messages)', () => {
+    // This verifies that provider-level merging doesn't affect middleware's view.
+    // Middleware injects user messages (memory, scratchpad) that create consecutive
+    // user messages. The provider merges these for the API call, but the original
+    // IMessage[] array used by middleware must remain untouched.
+    const original = [
+      { role: 'user', content: 'First user message' },
+      { role: 'user', content: '<recalled-memories>\nSome memory\n</recalled-memories>' },
+      { role: 'assistant', content: 'Response' },
+      { role: 'user', content: '<scratchpad>\n### plan\ndo stuff\n</scratchpad>' },
+      { role: 'user', content: 'Latest user message' },
+    ]
+    const originalLength = original.length
+    const originalContents = original.map(m => m.content)
+
+    const merged = mergeConsecutiveRoles(original)
+
+    // Merged result should combine consecutive user messages
+    expect(merged.length).toBeLessThan(originalLength)
+
+    // But the original array must be completely unchanged
+    expect(original).toHaveLength(originalLength)
+    original.forEach((msg, i) => {
+      expect(msg.content).toBe(originalContents[i])
+    })
+  })
 })
 
 describe('extractSystemMessages', () => {

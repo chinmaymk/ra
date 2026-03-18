@@ -18,15 +18,28 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
 
     const messages = ctx.request.messages
 
-    // Remove any previously injected scratchpad message
+    // Remove any previously injected scratchpad message.
+    // Check for both standalone scratchpad messages and scratchpad content
+    // embedded inside another message (e.g. after context compaction merges
+    // consecutive user messages together).
     for (let i = messages.length - 1; i >= 0; i--) {
       const content = messages[i]!.content
-      if (
-        typeof content === 'string' &&
-        content.startsWith(SCRATCHPAD_MARKER)
-      ) {
-        messages.splice(i, 1)
-        break
+      if (typeof content === 'string') {
+        if (content.startsWith(SCRATCHPAD_MARKER)) {
+          messages.splice(i, 1)
+          break
+        }
+        // Handle scratchpad embedded inside a larger message (e.g. after compaction merge)
+        const markerIdx = content.indexOf(SCRATCHPAD_MARKER)
+        if (markerIdx >= 0) {
+          const endIdx = content.indexOf(SCRATCHPAD_MARKER_END, markerIdx)
+          if (endIdx >= 0) {
+            const before = content.slice(0, markerIdx).trimEnd()
+            const after = content.slice(endIdx + SCRATCHPAD_MARKER_END.length).trimStart()
+            messages[i] = { ...messages[i]!, content: before + (after ? '\n\n' + after : '') }
+            break
+          }
+        }
       }
     }
 

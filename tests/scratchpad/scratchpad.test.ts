@@ -200,4 +200,61 @@ describe('scratchpad middleware', () => {
     expect(messages[1]!.role).toBe('user')
     expect((messages[1]!.content as string)).toContain('### note')
   })
+
+  it('removes scratchpad embedded inside a merged message (compaction scenario)', async () => {
+    store.set('plan', 'v1')
+
+    const mw = createScratchpadMiddleware(store)
+
+    // Simulate what happens after compaction merges the scratchpad user message
+    // into the pinned user message (consecutive user messages get absorbed)
+    const embeddedScratchpad =
+      'First user message\n\n[Context Summary]\nSome summary\n\n' +
+      '<scratchpad>\nBelow are entries you previously saved to the scratchpad during this conversation. ' +
+      'These entries are guaranteed to remain visible to you even as older messages are summarized. ' +
+      'You can update entries with scratchpad_write or remove them with scratchpad_delete.\n\n' +
+      '### plan\nold plan\n</scratchpad>'
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: embeddedScratchpad },
+      { role: 'assistant', content: 'I see.' },
+      { role: 'user', content: 'Continue' },
+    ]
+    await mw(makeCtx(messages))
+
+    // Old embedded scratchpad should be stripped from the merged message
+    const pinnedUser = messages[1]!.content as string
+    expect(pinnedUser).not.toContain('<scratchpad>')
+    expect(pinnedUser).toContain('First user message')
+    expect(pinnedUser).toContain('[Context Summary]')
+
+    // New scratchpad should be injected as a separate message
+    const scratchpadMsg = messages.find(
+      m => typeof m.content === 'string' && (m.content as string).startsWith('<scratchpad>')
+    )
+    expect(scratchpadMsg).toBeDefined()
+    expect((scratchpadMsg!.content as string)).toContain('v1')
+  })
+
+  it('removes embedded scratchpad preserving content after end marker', async () => {
+    store.set('task', 'current task')
+
+    const mw = createScratchpadMiddleware(store)
+
+    const embeddedContent =
+      'Before scratchpad\n\n<scratchpad>\n### old\nold data\n</scratchpad>\n\nAfter scratchpad'
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: embeddedContent },
+      { role: 'assistant', content: 'ok' },
+    ]
+    await mw(makeCtx(messages))
+
+    const cleaned = messages[1]!.content as string
+    expect(cleaned).not.toContain('<scratchpad>')
+    expect(cleaned).toContain('Before scratchpad')
+    expect(cleaned).toContain('After scratchpad')
+  })
 })
