@@ -133,17 +133,17 @@ jobs:
 
             # Overwrite the config to set the versioned base path
             cat > "$TAG_DIR/docs/site/.vitepress/config.ts" << VCONF
-import { defineConfig } from 'vitepress'
-export default defineConfig({
-  title: 'ra',
-  base: '/ra/v/${version}/',
-  appearance: 'dark',
-  themeConfig: {
-    logo: '/logo.svg',
-    search: { provider: 'local' },
-  },
-})
-VCONF
+          import { defineConfig } from 'vitepress'
+          export default defineConfig({
+            title: 'ra',
+            base: '/ra/v/${version}/',
+            appearance: 'dark',
+            themeConfig: {
+              logo: '/logo.svg',
+              search: { provider: 'local' },
+            },
+          })
+          VCONF
 
             (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build) || {
               echo "  Warning: build failed for $tag, skipping"
