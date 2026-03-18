@@ -10,7 +10,7 @@ import type { ToolRegistry } from '../agent/tool-registry'
 
 export type McpToolHandler = (input: unknown) => Promise<string>
 
-function buildServer(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): McpServer {
+export function buildMcpServer(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): McpServer {
   const server = new McpServer({ name: config.tool.name, version: '1.0.0' })
   server.tool(
     config.tool.name,
@@ -40,7 +40,7 @@ function buildServer(config: McpServerConfig, handler: McpToolHandler, builtinTo
 }
 
 export async function startMcpStdio(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): Promise<void> {
-  const server = buildServer(config, handler, builtinTools)
+  const server = buildMcpServer(config, handler, builtinTools)
   await server.connect(new StdioServerTransport())
 }
 
@@ -117,6 +117,6 @@ export async function serveMcpHttp(server: McpServer, port: number): Promise<() 
 }
 
 export async function startMcpHttp(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): Promise<() => Promise<void>> {
-  const server = buildServer(config, handler, builtinTools)
+  const server = buildMcpServer(config, handler, builtinTools)
   return serveMcpHttp(server, config.port)
 }

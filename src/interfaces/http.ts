@@ -215,7 +215,7 @@ export class HttpServer {
   }
 
   private async handleSessions(): Promise<Response> {
-    const sessions = await this.options.storage.list()
+    const sessions = await this.options.storage!.list()
     return jsonResponse({ sessions })
   }
 }

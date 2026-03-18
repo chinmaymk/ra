@@ -2,8 +2,8 @@ import readline from 'readline'
 import { AgentLoop } from '../agent/loop'
 import { fileToContentPart } from '../utils/files'
 import { errorMessage } from '../utils/errors'
-import type { StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
 import type { IMessage, ContentPart } from '../providers/types'
+import type { Skill } from '../skills/types'
 import type { MemoryStore } from '../memory/store'
 import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
@@ -49,7 +49,7 @@ export class Repl {
   }
 
   private async newSession(): Promise<string> {
-    const s = await this.options.storage.create({ provider: this.options.provider.name, model: this.options.model, interface: 'repl' })
+    const s = await this.options.storage!.create({ provider: this.options.provider.name, model: this.options.model, interface: 'repl' })
     return s.id
   }
 
@@ -113,7 +113,7 @@ export class Repl {
 
   async start(): Promise<void> {
     if (this.sessionId) {
-      this.messages = await this.options.storage.readMessages(this.sessionId)
+      this.messages = await this.options.storage!.readMessages(this.sessionId)
     } else {
       this.sessionId = await this.newSession()
     }
@@ -218,12 +218,8 @@ export class Repl {
       }
     }
 
-    let boxOpened = false
-    let thinkingOpened = false
-    let streamBuf: tui.StreamBuffer | null = null
-    const toolStartTimes = new Map<string, number>()
+    const { middleware: tuiMw, cleanup } = tui.createTuiMiddleware(this.options.middleware ?? {})
     tui.startSpinner()
-    const userMw = this.options.middleware ?? {}
 
     const loop = new AgentLoop({
       provider: this.options.provider,
@@ -234,72 +230,20 @@ export class Repl {
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
-      middleware: {
-        ...userMw,
-        onStreamChunk: [
-          async (ctx: StreamChunkContext) => {
-            if (ctx.chunk.type === 'thinking') {
-              if (!thinkingOpened) {
-                tui.stopSpinner(true)
-                tui.printThinkingStart()
-                thinkingOpened = true
-              }
-              process.stdout.write(ctx.chunk.delta)
-            } else if (ctx.chunk.type === 'text') {
-              if (thinkingOpened) {
-                tui.printThinkingEnd()
-                thinkingOpened = false
-              }
-              if (!boxOpened) {
-                tui.stopSpinner()
-                boxOpened = true
-                const contentWidth = (process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN
-                streamBuf = new tui.StreamBuffer(contentWidth)
-              }
-              process.stdout.write(streamBuf!.write(ctx.chunk.delta))
-            }
-          },
-        ].concat(userMw.onStreamChunk ?? []),
-        beforeToolExecution: [
-          async (ctx: ToolExecutionContext) => {
-            // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-            const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-            tui.stopSpinner(true)
-            boxOpened = false
-            toolStartTimes.set(ctx.toolCall.id, Date.now())
-            tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
-          },
-        ].concat(userMw.beforeToolExecution ?? []),
-        afterToolExecution: [
-          async (ctx: ToolResultContext) => {
-            tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
-            tui.startSpinner()
-          },
-        ].concat(userMw.afterToolExecution ?? []),
-      },
+      middleware: { ...(this.options.middleware ?? {}), ...tuiMw },
     })
 
     this.activeLoop = loop
     const priorCount = initialMessages.length
     try {
       const result = await loop.run(initialMessages)
-      if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
-      tui.stopSpinner(true)
-      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-      if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n\n')
+      cleanup()
 
       const newMessages = result.messages.slice(priorCount)
       this.messages.push(userMessage, ...newMessages)
-      await Promise.all([userMessage, ...newMessages].map(msg => this.options.storage.appendMessage(this.sessionId!, msg)))
+      await Promise.all([userMessage, ...newMessages].map(msg => this.options.storage!.appendMessage(this.sessionId!, msg)))
     } catch (err) {
-      tui.stopSpinner(true)
-      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-      if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n\n')
-      // AbortError from Ctrl+C is not a real error — just notify the user
+      cleanup()
       if (err instanceof DOMException && err.name === 'AbortError') {
         tui.printInterrupt('Request cancelled.')
       } else {
@@ -325,9 +269,9 @@ export class Repl {
       case '/resume': {
         const id = parts[1]
         if (!id) return 'Usage: /resume <session-id>'
-        const messages = await this.options.storage.readMessages(id)
+        const messages = await this.options.storage!.readMessages(id)
         if (messages.length === 0) {
-          const sessions = await this.options.storage.list()
+          const sessions = await this.options.storage!.list()
           if (!sessions.some(s => s.id === id)) {
             return `Session not found: ${id}`
           }

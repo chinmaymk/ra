@@ -9,7 +9,7 @@ import { runCli } from './interfaces/cli'
 import { HttpServer, toHttpOptions } from './interfaces/http'
 import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
-import { startMcpStdio, startMcpHttp, serveMcpHttp } from './mcp/server'
+import { buildMcpServer, startMcpHttp, serveMcpHttp } from './mcp/server'
 import { serializeContent } from './providers/utils'
 import type { RaConfig } from './config/types'
 import { bootstrapAgents, type MultiAgentContext } from './multi-agent'
@@ -92,34 +92,23 @@ async function handleStandaloneCommands(
 // ── MCP helpers ──────────────────────────────────────────────────────
 
 function createMcpHandler(app: AppContext) {
+  const base = toBaseOptions(app)
   return async (input: unknown) => {
-    const loop = new AgentLoop({
-      provider: app.provider,
-      tools: app.tools,
-      model: app.config.model,
-      maxIterations: app.config.maxIterations,
-      toolTimeout: app.config.toolTimeout,
-      middleware: app.middleware,
-      compaction: app.config.compaction,
-    })
+    const loop = new AgentLoop(base)
     const prompt = typeof input === 'string' ? input : JSON.stringify(input)
     const messages: IMessage[] = []
-    if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
-    messages.push(...app.contextMessages, { role: 'user', content: prompt })
+    if (base.systemPrompt) messages.push({ role: 'system', content: base.systemPrompt })
+    messages.push(...(base.contextMessages ?? []), { role: 'user', content: prompt })
     const result = await loop.run(messages)
     const last = result.messages.at(-1)
     return last ? serializeContent(last.content) : ''
   }
 }
 
-function mcpToolsFor(app: AppContext) {
-  return app.config.builtinTools ? app.tools : undefined
-}
-
 async function startSidecarMcp(app: AppContext): Promise<(() => Promise<void>) | null> {
   if (!app.config.mcp.server?.enabled) return null
   const handler = createMcpHandler(app)
-  const stop = await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
+  const stop = await startMcpHttp(app.config.mcp.server, handler, app.config.builtinTools ? app.tools : undefined)
   console.error(`MCP server (http) listening on port ${app.config.mcp.server.port}`)
   return stop
 }
@@ -189,12 +178,35 @@ async function launchRepl(ctx: MultiAgentContext): Promise<void> {
 }
 
 async function launchMcp(ctx: MultiAgentContext, config: RaConfig): Promise<void> {
-  // Single-agent: use the standard MCP server with configurable tool name
-  if (ctx.agents.size === 1) {
-    const app = ctx.agents.values().next().value!
-    const handler = createMcpHandler(app)
+  const firstApp = ctx.agents.values().next().value!
+  const isSingle = ctx.agents.size === 1
 
-    if (config.interface === 'mcp-stdio') {
+  // Build MCP server — single-agent uses config tool name, multi-agent uses agent names
+  let server
+  if (isSingle) {
+    const builtinTools = firstApp.config.builtinTools ? firstApp.tools : undefined
+    server = buildMcpServer(firstApp.config.mcp.server, createMcpHandler(firstApp), builtinTools)
+  } else {
+    const [{ z }, { McpServer }] = await Promise.all([
+      import('zod'),
+      import('@modelcontextprotocol/sdk/server/mcp.js'),
+    ])
+    server = new McpServer({ name: 'ra-multi-agent', version: '1.0.0' })
+    for (const [name, app] of ctx.agents) {
+      const handler = createMcpHandler(app)
+      server.tool(
+        name,
+        `Agent: ${name} (${app.config.provider}/${app.config.model})`,
+        { prompt: z.string().describe('The prompt to send to the agent') },
+        async ({ prompt }) => ({ content: [{ type: 'text' as const, text: await handler(prompt) }] }),
+      )
+    }
+  }
+
+  // Connect transport
+  const port = firstApp.config.mcp.server?.port ?? 3100
+  if (config.interface === 'mcp-stdio') {
+    if (isSingle) {
       const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
       const mcpCommand = isDevMode ? 'bun' : process.argv[0]!
       const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp-stdio'] : ['--mcp-stdio']
@@ -204,48 +216,13 @@ async function launchMcp(ctx: MultiAgentContext, config: RaConfig): Promise<void
         `Cursor — .cursor/mcp.json:\n${mcpConfig}\n\n` +
         `Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n${mcpConfig}\n\n`
       )
-      await startMcpStdio(app.config.mcp.server, handler, mcpToolsFor(app))
-      await ctx.shutdown()
     } else {
-      await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
-      console.error(`MCP server (http) listening on port ${app.config.mcp.server.port}`)
-      await new Promise(() => {}) // keep alive
+      process.stderr.write(`MCP stdio server starting with agents: ${[...ctx.agents.keys()].join(', ')}\n`)
     }
-    return
-  }
-
-  // Multi-agent: expose each agent as a separate MCP tool
-  const [{ z }, { McpServer }] = await Promise.all([
-    import('zod'),
-    import('@modelcontextprotocol/sdk/server/mcp.js'),
-  ])
-
-  const server = new McpServer({ name: 'ra-multi-agent', version: '1.0.0' })
-
-  const handlers = new Map<string, ReturnType<typeof createMcpHandler>>()
-  for (const [name, app] of ctx.agents) handlers.set(name, createMcpHandler(app))
-
-  for (const [name, app] of ctx.agents) {
-    const handler = handlers.get(name)!
-    server.tool(
-      name,
-      `Agent: ${name} (${app.config.provider}/${app.config.model})`,
-      { prompt: z.string().describe('The prompt to send to the agent') },
-      async ({ prompt }) => {
-        const text = await handler(prompt)
-        return { content: [{ type: 'text' as const, text }] }
-      },
-    )
-  }
-
-  if (config.interface === 'mcp-stdio') {
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
-    process.stderr.write(`MCP stdio server starting with agents: ${[...ctx.agents.keys()].join(', ')}\n`)
     await server.connect(new StdioServerTransport())
     await ctx.shutdown()
   } else {
-    const firstApp = ctx.agents.values().next().value!
-    const port = firstApp.config.mcp.server?.port ?? 3100
     await serveMcpHttp(server, port)
     console.error(`MCP server (http) listening on port ${port}`)
     await new Promise(() => {}) // keep alive

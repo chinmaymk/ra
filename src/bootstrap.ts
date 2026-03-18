@@ -8,6 +8,7 @@ import { getDefaultCompactionModel } from './agent/model-registry'
 import { createPermissionsMiddleware } from './agent/permissions'
 import { ToolRegistry } from './agent/tool-registry'
 import type { MiddlewareConfig } from './agent/types'
+import type { CompactionConfig } from './agent/context-compaction'
 import type { RaConfig } from './config/types'
 import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
@@ -45,7 +46,23 @@ export interface AppContext {
   shutdown: () => Promise<void>
 }
 
-/** Common fields shared by all interface option builders (CLI, REPL, HTTP). */
+/** Base option fields common to CLI, REPL, and HTTP interfaces. */
+export interface BaseOptions {
+  model: string
+  provider: IProvider
+  tools: ToolRegistry
+  storage?: SessionStorage
+  systemPrompt?: string
+  skillMap?: Map<string, Skill>
+  middleware?: Partial<MiddlewareConfig>
+  maxIterations?: number
+  toolTimeout?: number
+  thinking?: 'low' | 'medium' | 'high'
+  compaction?: CompactionConfig
+  contextMessages?: IMessage[]
+}
+
+/** Build BaseOptions from an AppContext. All fields are populated (no return type annotation to preserve concrete types). */
 export function toBaseOptions(app: AppContext) {
   return {
     model: app.config.model,
@@ -62,9 +79,6 @@ export function toBaseOptions(app: AppContext) {
     contextMessages: app.contextMessages,
   }
 }
-
-/** Base option fields common to CLI, REPL, and HTTP interfaces. */
-export type BaseOptions = ReturnType<typeof toBaseOptions>
 
 export async function bootstrap(
   config: RaConfig,
