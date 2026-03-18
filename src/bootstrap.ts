@@ -58,13 +58,18 @@ export async function bootstrap(
   const storage = new SessionStorage(storagePath)
   await storage.init()
 
-  const sessionId = opts.sessionId ?? (await storage.create({
-    provider: config.provider,
-    model: config.model,
-    interface: config.interface,
-  })).id
+  // Inspector is read-only — skip session creation
+  const sessionId = config.interface === 'inspector'
+    ? 'inspector'
+    : opts.sessionId ?? (await storage.create({
+        provider: config.provider,
+        model: config.model,
+        interface: config.interface,
+      })).id
   const sessionDir = storage.sessionDir(sessionId)
-  await mkdir(sessionDir, { recursive: true })
+  if (config.interface !== 'inspector') {
+    await mkdir(sessionDir, { recursive: true })
+  }
 
   // ── Observability ──────────────────────────────────────────────────
   const { logger, tracer } = createObservability({

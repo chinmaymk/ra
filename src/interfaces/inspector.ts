@@ -2,7 +2,7 @@ import { join } from 'path'
 import type { AppContext } from '../bootstrap'
 import { discoverContextFiles } from '../context'
 import inspectorHtml from './inspector.html' with { type: 'text' }
-import faviconSvg from '../../docs/site/public/favicon.svg' with { type: 'text' }
+import faviconSvg from './favicon.svg' with { type: 'text' }
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -272,7 +272,7 @@ export class InspectorServer {
 
         // ── SPA ──
         if (path === '/' || path === '/index.html') {
-          return new Response(inspectorHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+          return new Response(inspectorHtml.toString(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
         }
 
         return json({ error: 'Not Found' }, 404)
