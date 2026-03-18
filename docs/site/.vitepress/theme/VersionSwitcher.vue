@@ -1,34 +1,43 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
-const versions = ref<string[]>([])
+interface VersionsData {
+  latest: string
+  versions: string[]
+}
+
+const data = ref<VersionsData | null>(null)
 const open = ref(false)
 
-// Always resolve relative to the site root, not the versioned base
 const siteRoot = '/ra/'
 
 onMounted(async () => {
   try {
     const res = await fetch(`${siteRoot}versions.json`)
     if (res.ok) {
-      versions.value = await res.json()
+      data.value = await res.json()
     }
   } catch {
-    // versions.json not available — no versions to show
+    // versions.json not available
   }
 })
 
-// Detect if we're viewing a versioned page
-const currentVersion = (() => {
+// Detect current page context from URL
+const currentView = (() => {
   if (typeof window === 'undefined') return null
+  if (window.location.pathname.startsWith('/ra/dev/')) return 'dev'
   const match = window.location.pathname.match(/\/v\/(\d+\.\d+\.\d+[^/]*)\//)
   return match ? match[1] : null
 })()
 
-const label = currentVersion || 'latest'
+const displayLabel = computed(() => {
+  if (currentView === 'dev') return 'dev'
+  if (currentView) return `v${currentView}`
+  return data.value ? `v${data.value.latest}` : ''
+})
 
-function versionUrl(version: string | null) {
-  if (!version) return siteRoot
+function versionUrl(version: string) {
+  if (version === 'dev') return `${siteRoot}dev/`
   return `${siteRoot}v/${version}/`
 }
 
@@ -42,31 +51,32 @@ function close() {
 </script>
 
 <template>
-  <div v-if="versions.length > 0" class="version-switcher" @mouseleave="close">
+  <div v-if="data && data.versions.length > 0" class="version-switcher" @mouseleave="close">
     <button class="version-btn" @click="toggle">
-      {{ label }}
+      {{ displayLabel }}
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
     </button>
     <div v-show="open" class="version-dropdown">
       <a
-        :href="versionUrl(null)"
+        :href="versionUrl('dev')"
         class="version-item"
-        :class="{ active: !currentVersion }"
+        :class="{ active: currentView === 'dev' }"
         @click="close"
       >
-        latest
+        dev
       </a>
       <a
-        v-for="v in versions"
+        v-for="v in data.versions"
         :key="v"
-        :href="versionUrl(v)"
+        :href="v === data.latest ? siteRoot : versionUrl(v)"
         class="version-item"
-        :class="{ active: currentVersion === v }"
+        :class="{ active: currentView === v || (!currentView && v === data.latest) }"
         @click="close"
       >
         v{{ v }}
+        <span v-if="v === data.latest" class="latest-badge">latest</span>
       </a>
     </div>
   </div>
@@ -108,7 +118,7 @@ function close() {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 120px;
+  min-width: 140px;
   padding: 4px;
   background: var(--vp-c-bg-elv);
   border: 1px solid var(--vp-c-border);
@@ -118,7 +128,9 @@ function close() {
 }
 
 .version-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   font-size: 13px;
   font-family: var(--vp-font-family-mono);
@@ -136,5 +148,14 @@ function close() {
 .version-item.active {
   color: var(--vp-c-brand-1);
   font-weight: 600;
+}
+
+.latest-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
 }
 </style>
