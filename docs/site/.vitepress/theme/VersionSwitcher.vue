@@ -75,15 +75,19 @@ function close() {
 <style scoped>
 .version-switcher {
   position: relative;
+  display: flex;
+  align-items: center;
   margin-left: 8px;
+  height: 100%;
 }
 
 .version-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  font-size: 13px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1;
   font-family: var(--vp-font-family-mono);
   font-weight: 500;
   color: var(--vp-c-text-2);
@@ -92,6 +96,7 @@ function close() {
   border-radius: 6px;
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap;
 }
 
 .version-btn:hover {
