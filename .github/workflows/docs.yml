@@ -26,9 +26,66 @@ jobs:
         run: bun install
         working-directory: docs/site
 
-      - name: Build latest docs
-        run: bun run build
+      - name: Determine latest tag
+        id: latest-tag
+        run: |
+          LATEST=$(git tag -l 'v*' --sort=-version:refname | head -n1)
+          if [ -n "$LATEST" ]; then
+            echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+            echo "version=${LATEST#v}" >> "$GITHUB_OUTPUT"
+            echo "Latest tag: $LATEST"
+          else
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "No tags found"
+          fi
+
+      - name: Build dev docs (from main)
         working-directory: docs/site
+        run: |
+          # Override base to /ra/dev/ for the main branch build
+          cat > .vitepress/config.dev.ts << 'DEVCONF'
+          import baseConfig from './config'
+          import { defineConfig, mergeConfig } from 'vitepress'
+          export default mergeConfig(baseConfig, defineConfig({ base: '/ra/dev/' }))
+          DEVCONF
+          DOCS_VERSION="dev" bun vitepress build --config .vitepress/config.dev.ts
+          # Save dev build aside
+          mv .vitepress/dist /tmp/dev-docs-dist
+
+      - name: Build latest tag docs (for site root)
+        if: steps.latest-tag.outputs.tag != ''
+        working-directory: docs/site
+        run: |
+          LATEST_TAG="${{ steps.latest-tag.outputs.tag }}"
+          LATEST_VERSION="${{ steps.latest-tag.outputs.version }}"
+
+          TAG_DIR=$(mktemp -d)
+          git archive "$LATEST_TAG" -- docs/site/ | tar -x -C "$TAG_DIR"
+
+          # Use current theme
+          rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
+          cp -r .vitepress/theme "$TAG_DIR/docs/site/.vitepress/theme"
+
+          # Build with root base path
+          cat > "$TAG_DIR/docs/site/.vitepress/config.ts" << VCONF
+          import { defineConfig } from 'vitepress'
+          export default defineConfig({
+            title: 'ra',
+            base: '/ra/',
+            appearance: 'dark',
+            themeConfig: {
+              logo: '/logo.svg',
+              search: { provider: 'local' },
+            },
+          })
+          VCONF
+
+          (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$LATEST_VERSION" bun vitepress build)
+          # This becomes the root site
+          mkdir -p /tmp/root-docs-dist
+          cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* /tmp/root-docs-dist/
+          rm -rf "$TAG_DIR"
 
       - name: Compute version cache key
         id: version-key
@@ -110,11 +167,26 @@ VCONF
             echo "  Done: v$version"
           done
 
-      - name: Assemble versioned docs and versions.json
+      - name: Assemble site
         working-directory: docs/site
         run: |
           TAGS=$(git tag -l 'v*' --sort=-version:refname)
-          VERSIONS_JSON="["
+          LATEST_VERSION="${{ steps.latest-tag.outputs.version }}"
+
+          # Start with latest tag as root (or dev if no tags)
+          mkdir -p .vitepress/dist
+          if [ -d /tmp/root-docs-dist ]; then
+            cp -r /tmp/root-docs-dist/* .vitepress/dist/
+          else
+            cp -r /tmp/dev-docs-dist/* .vitepress/dist/
+          fi
+
+          # Add dev docs
+          mkdir -p .vitepress/dist/dev
+          cp -r /tmp/dev-docs-dist/* .vitepress/dist/dev/
+
+          # Add versioned docs and build versions.json
+          VERSIONS_JSON="{ \"latest\": \"${LATEST_VERSION}\", \"versions\": ["
           first=true
 
           for tag in $TAGS; do
@@ -132,7 +204,7 @@ VCONF
             fi
           done
 
-          VERSIONS_JSON="${VERSIONS_JSON}]"
+          VERSIONS_JSON="${VERSIONS_JSON}]}"
           echo "$VERSIONS_JSON" > .vitepress/dist/versions.json
           echo "versions.json: $VERSIONS_JSON"
 

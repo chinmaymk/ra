@@ -2,18 +2,23 @@
 // Always link to site root, not the versioned base
 const siteRoot = '/ra/'
 
-// Detect versioned page from URL
-const versionInfo = (() => {
+// Detect versioned or dev page from URL
+const pageInfo = (() => {
   if (typeof window === 'undefined') return null
+  if (window.location.pathname.startsWith('/ra/dev/')) return { type: 'dev' as const }
   const match = window.location.pathname.match(/\/v\/(\d+\.\d+\.\d+[^/]*)\//)
-  return match ? match[1] : null
+  return match ? { type: 'version' as const, version: match[1] } : null
 })()
 </script>
 
 <template>
-  <div v-if="versionInfo" class="version-banner">
-    You are viewing docs for <strong>v{{ versionInfo }}</strong>.
-    <a :href="siteRoot">Switch to latest</a>
+  <div v-if="pageInfo?.type === 'dev'" class="version-banner dev-banner">
+    You are viewing <strong>development</strong> docs from the main branch.
+    <a :href="siteRoot">Switch to latest release</a>
+  </div>
+  <div v-else-if="pageInfo?.type === 'version'" class="version-banner">
+    You are viewing docs for <strong>v{{ pageInfo.version }}</strong>.
+    <a :href="siteRoot">Switch to latest release</a>
   </div>
 </template>
 
