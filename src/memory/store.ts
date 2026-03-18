@@ -65,6 +65,11 @@ export class MemoryStore {
     ).all(limit) as Memory[]
   }
 
+  deleteById(id: number): boolean {
+    const result = this.db.prepare('DELETE FROM memories WHERE id = ?').run(id)
+    return result.changes > 0
+  }
+
   forget(query: string, limit = 10): number {
     if (!query) return 0
     let ids: { id: number }[]

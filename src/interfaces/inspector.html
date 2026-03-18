@@ -85,14 +85,25 @@
   .attr-val { color: var(--text2); word-break: break-all; }
 
   /* Memory */
-  .memory-search { display: flex; gap: 8px; margin-bottom: 16px; }
-  .memory-search input { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-family: var(--font); font-size: 13px; outline: none; }
-  .memory-search input:focus { border-color: var(--accent); }
-  .memory-search button { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-family: var(--font); font-size: 12px; font-weight: 600; }
+  .memory-toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: stretch; }
+  .memory-toolbar input { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-family: var(--font); font-size: 13px; outline: none; }
+  .memory-toolbar input:focus { border-color: var(--accent); }
+  .memory-toolbar button { border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-family: var(--font); font-size: 12px; font-weight: 600; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-success { background: var(--accent2); color: #fff; }
+  .btn-danger { background: var(--red); color: #fff; font-size: 11px; padding: 4px 10px; }
+  .btn-danger:hover { opacity: 0.85; }
+  .memory-form { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  .memory-form textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-family: var(--font); font-size: 13px; outline: none; resize: vertical; min-height: 60px; }
+  .memory-form textarea:focus { border-color: var(--accent); }
+  .memory-form .form-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .memory-form .form-row input { flex: 1; }
+  .memory-form label { font-size: 11px; color: var(--text2); margin-bottom: 4px; display: block; }
   .memory-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; }
   .memory-item .memory-content { white-space: pre-wrap; word-break: break-word; }
-  .memory-item .memory-meta { font-size: 11px; color: var(--text2); margin-top: 6px; display: flex; gap: 12px; }
+  .memory-item .memory-meta { font-size: 11px; color: var(--text2); margin-top: 6px; display: flex; gap: 12px; align-items: center; }
   .memory-item .memory-tags { color: var(--purple); }
+  .memory-item .memory-actions { margin-left: auto; }
 
   /* Config / Context / Middleware panels */
   .config-section { margin-bottom: 24px; }
@@ -343,25 +354,76 @@
     main.innerHTML = html;
   }
 
-  // ── Memory ──
+  // ── Memory CRUD ──
+  let memoryQuery = '';
+
   async function loadMemory(query) {
-    main.innerHTML = '<div class="memory-search"><input type="text" placeholder="Search memories…" id="mem-q" value="' + esc(query || '') + '"><button onclick="searchMem()">Search</button></div><div id="mem-list"><div class="loading">Loading…</div></div>';
-    const url = query ? '/api/memory?q=' + encodeURIComponent(query) : '/api/memory';
+    memoryQuery = query || '';
+    main.innerHTML =
+      '<div class="memory-toolbar">' +
+        '<input type="text" placeholder="Search memories…" id="mem-q" value="' + esc(memoryQuery) + '">' +
+        '<button class="btn-primary" onclick="searchMem()">Search</button>' +
+        '<button class="btn-success" onclick="toggleAddForm()">+ Add</button>' +
+      '</div>' +
+      '<div id="mem-form-container"></div>' +
+      '<div id="mem-list"><div class="loading">Loading…</div></div>';
+    const url = memoryQuery ? '/api/memory?q=' + encodeURIComponent(memoryQuery) : '/api/memory';
     const res = await fetch(url);
-    const memories = await res.json();
+    const data = await res.json();
+    const memories = Array.isArray(data) ? data : [];
     const list = document.getElementById('mem-list');
     if (!memories.length) { list.innerHTML = '<div class="empty">No memories</div>'; return; }
     list.innerHTML = memories.map(m =>
-      '<div class="memory-item"><div class="memory-content">' + esc(m.content) + '</div>' +
-      '<div class="memory-meta"><span>' + esc(m.createdAt || '') + '</span>' +
-      (m.tags ? '<span class="memory-tags">' + esc(m.tags) + '</span>' : '') +
-      '<span class="badge">id:' + m.id + '</span></div></div>'
+      '<div class="memory-item" data-id="' + m.id + '">' +
+        '<div class="memory-content">' + esc(m.content) + '</div>' +
+        '<div class="memory-meta">' +
+          '<span>' + esc(m.createdAt || '') + '</span>' +
+          (m.tags ? '<span class="memory-tags">' + esc(m.tags) + '</span>' : '') +
+          '<span class="badge">id:' + m.id + '</span>' +
+          '<span class="memory-actions"><button class="btn-danger" onclick="deleteMem(' + m.id + ')">Delete</button></span>' +
+        '</div>' +
+      '</div>'
     ).join('');
   }
+
   window.searchMem = () => {
     const q = document.getElementById('mem-q');
     loadMemory(q ? q.value : '');
   };
+
+  window.toggleAddForm = () => {
+    const container = document.getElementById('mem-form-container');
+    if (container.innerHTML) { container.innerHTML = ''; return; }
+    container.innerHTML =
+      '<div class="memory-form">' +
+        '<label>Content</label>' +
+        '<textarea id="mem-content" placeholder="Memory content…"></textarea>' +
+        '<div class="form-row">' +
+          '<input type="text" id="mem-tags" placeholder="Tags (optional, comma-separated)">' +
+          '<button class="btn-success" onclick="saveMem()">Save</button>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('mem-content').focus();
+  };
+
+  window.saveMem = async () => {
+    const content = document.getElementById('mem-content').value.trim();
+    if (!content) return;
+    const tags = document.getElementById('mem-tags').value.trim();
+    await fetch('/api/memory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, tags }),
+    });
+    loadMemory(memoryQuery);
+  };
+
+  window.deleteMem = async (id) => {
+    if (!confirm('Delete memory #' + id + '?')) return;
+    await fetch('/api/memory/' + id, { method: 'DELETE' });
+    loadMemory(memoryQuery);
+  };
+
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target && e.target.id === 'mem-q') window.searchMem();
   });

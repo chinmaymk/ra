@@ -67,12 +67,29 @@ export class InspectorServer {
           return json({ error: 'Unknown view' }, 404)
         }
 
-        // ── Global API ──
+        // ── Memory CRUD ──
         if (path === '/api/memory') {
-          if (!memoryStore) return json([])
-          const q = url.searchParams.get('q') || undefined
-          return json(q ? memoryStore.search(q, 100) : memoryStore.list(100))
+          if (!memoryStore) return json({ error: 'Memory not enabled' }, 400)
+          if (req.method === 'GET') {
+            const q = url.searchParams.get('q') || undefined
+            return json(q ? memoryStore.search(q, 100) : memoryStore.list(100))
+          }
+          if (req.method === 'POST') {
+            const body = await req.json() as { content?: string; tags?: string }
+            if (!body.content) return json({ error: 'content is required' }, 400)
+            return json(memoryStore.save(body.content, body.tags ?? ''))
+          }
         }
+
+        const memoryIdMatch = path.match(/^\/api\/memory\/(\d+)$/)
+        if (memoryIdMatch && req.method === 'DELETE') {
+          if (!memoryStore) return json({ error: 'Memory not enabled' }, 400)
+          const id = parseInt(memoryIdMatch[1]!, 10)
+          const deleted = memoryStore.deleteById(id)
+          return deleted ? json({ ok: true }) : json({ error: 'Not found' }, 404)
+        }
+
+        // ── Global API ──
 
         if (path === '/api/config') {
           return json(sanitizeConfig(config))
