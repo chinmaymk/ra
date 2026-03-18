@@ -1,8 +1,8 @@
-import { join, dirname } from 'path'
+import { join } from 'path'
 import type { AppContext } from '../bootstrap'
 import { discoverContextFiles } from '../context'
-
-const HTML_PATH = join(dirname(new URL(import.meta.url).pathname), 'inspector.html')
+import inspectorHtml from './inspector.html' with { type: 'text' }
+import faviconSvg from '../../docs/site/public/favicon.svg' with { type: 'text' }
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -39,7 +39,6 @@ export class InspectorServer {
 
   async start(): Promise<void> {
     const { config, storage, memoryStore } = this.app
-    const htmlFile = Bun.file(HTML_PATH)
 
     this.server = Bun.serve({
       port: config.inspector.port,
@@ -112,9 +111,14 @@ export class InspectorServer {
           return json({ hooks, configMiddleware: config.middleware })
         }
 
+        // ── Static assets ──
+        if (path === '/favicon.svg') {
+          return new Response(faviconSvg, { headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' } })
+        }
+
         // ── SPA ──
         if (path === '/' || path === '/index.html') {
-          return new Response(htmlFile, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+          return new Response(inspectorHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
         }
 
         return json({ error: 'Not Found' }, 404)
