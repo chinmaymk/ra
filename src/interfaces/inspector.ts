@@ -68,12 +68,13 @@ export class InspectorServer {
 
         // ── Memory CRUD ──
         if (path === '/api/memory') {
-          if (!memoryStore) return json({ error: 'Memory not enabled' }, 400)
           if (req.method === 'GET') {
+            if (!memoryStore) return json({ enabled: false, memories: [] })
             const q = url.searchParams.get('q') || undefined
-            return json(q ? memoryStore.search(q, 100) : memoryStore.list(100))
+            return json({ enabled: true, memories: q ? memoryStore.search(q, 100) : memoryStore.list(100) })
           }
           if (req.method === 'POST') {
+            if (!memoryStore) return json({ error: 'Memory is not enabled. Add --memory or set memory.enabled in config.' }, 400)
             const body = await req.json() as { content?: string; tags?: string }
             if (!body.content) return json({ error: 'content is required' }, 400)
             return json(memoryStore.save(body.content, body.tags ?? ''))
@@ -82,7 +83,7 @@ export class InspectorServer {
 
         const memoryIdMatch = path.match(/^\/api\/memory\/(\d+)$/)
         if (memoryIdMatch && req.method === 'DELETE') {
-          if (!memoryStore) return json({ error: 'Memory not enabled' }, 400)
+          if (!memoryStore) return json({ error: 'Memory is not enabled.' }, 400)
           const id = parseInt(memoryIdMatch[1]!, 10)
           const deleted = memoryStore.deleteById(id)
           return deleted ? json({ ok: true }) : json({ error: 'Not found' }, 404)

@@ -208,9 +208,10 @@
 
   // ── Sessions ──
   async function loadSessions() {
-    const res = await fetch('/api/sessions');
-    const sessions = await res.json();
+    const result = await apiFetch('/api/sessions');
     const list = document.getElementById('session-list');
+    if (result.error) { list.innerHTML = '<div class="empty" style="color:var(--red)">' + esc(result.error) + '</div>'; return; }
+    const sessions = result.data;
     if (!sessions.length) { list.innerHTML = '<div class="empty">No sessions</div>'; return; }
     sessionsMap = {};
     sessions.forEach(s => { sessionsMap[s.id] = s.meta; });
@@ -250,30 +251,42 @@
       '</div>';
   }
 
+  // ── API helper ──
+  async function apiFetch(url, opts) {
+    try {
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'Request failed (' + res.status + ')' };
+      return { data };
+    } catch(e) {
+      return { error: e.message || 'Network error' };
+    }
+  }
+
+  function showError(msg) {
+    main.innerHTML = '<div class="empty" style="color:var(--red)">' + esc(msg) + '</div>';
+  }
+
   // ── Load session-scoped view ──
   async function loadSessionView(id, view) {
     main.innerHTML = '<div class="loading">Loading…</div>';
-    try {
-      const res = await fetch('/api/sessions/' + id + '/' + view);
-      const data = await res.json();
-      if (view === 'messages') renderMessages(data);
-      else if (view === 'logs') renderLogs(data);
-      else if (view === 'traces') renderTraces(data);
-      // Prepend session banner
-      main.innerHTML = sessionBannerHtml(id) + main.innerHTML;
-    } catch(e) { main.innerHTML = '<div class="empty">Error: ' + esc(e.message) + '</div>'; }
+    const result = await apiFetch('/api/sessions/' + id + '/' + view);
+    if (result.error) { showError(result.error); return; }
+    const data = result.data;
+    if (view === 'messages') renderMessages(data);
+    else if (view === 'logs') renderLogs(data);
+    else if (view === 'traces') renderTraces(data);
+    main.innerHTML = sessionBannerHtml(id) + main.innerHTML;
   }
 
   // ── Load global views ──
   async function loadGlobalView(view) {
     main.innerHTML = '<div class="loading">Loading…</div>';
-    try {
-      const res = await fetch('/api/' + view);
-      const data = await res.json();
-      if (view === 'config') renderConfig(data);
-      else if (view === 'context') renderContext(data);
-      else if (view === 'middleware') renderMiddleware(data);
-    } catch(e) { main.innerHTML = '<div class="empty">Error: ' + esc(e.message) + '</div>'; }
+    const result = await apiFetch('/api/' + view);
+    if (result.error) { showError(result.error); return; }
+    if (view === 'config') renderConfig(result.data);
+    else if (view === 'context') renderContext(result.data);
+    else if (view === 'middleware') renderMiddleware(result.data);
   }
 
   // ── Render Messages ──
@@ -382,21 +395,29 @@
   // ── Memory CRUD ──
   let memoryQuery = '';
 
+  function memoryToolbarHtml() {
+    return '<div class="memory-toolbar">' +
+      '<input type="text" placeholder="Search memories…" id="mem-q" value="' + esc(memoryQuery) + '">' +
+      '<button class="btn-primary" onclick="searchMem()">Search</button>' +
+      '<button class="btn-success" onclick="toggleAddForm()">+ Add</button>' +
+    '</div>' +
+    '<div id="mem-form-container"></div>' +
+    '<div id="mem-list"><div class="loading">Loading…</div></div>';
+  }
+
   async function loadMemory(query) {
     memoryQuery = query || '';
-    main.innerHTML =
-      '<div class="memory-toolbar">' +
-        '<input type="text" placeholder="Search memories…" id="mem-q" value="' + esc(memoryQuery) + '">' +
-        '<button class="btn-primary" onclick="searchMem()">Search</button>' +
-        '<button class="btn-success" onclick="toggleAddForm()">+ Add</button>' +
-      '</div>' +
-      '<div id="mem-form-container"></div>' +
-      '<div id="mem-list"><div class="loading">Loading…</div></div>';
+    main.innerHTML = memoryToolbarHtml();
     const url = memoryQuery ? '/api/memory?q=' + encodeURIComponent(memoryQuery) : '/api/memory';
-    const res = await fetch(url);
-    const data = await res.json();
-    const memories = Array.isArray(data) ? data : [];
+    const result = await apiFetch(url);
     const list = document.getElementById('mem-list');
+    if (result.error) { list.innerHTML = '<div class="empty" style="color:var(--red)">' + esc(result.error) + '</div>'; return; }
+    const body = result.data;
+    if (body && body.enabled === false) {
+      list.innerHTML = '<div class="empty">Memory is not enabled.<br><span style="font-size:11px;color:var(--text2)">Start ra with <code style="color:var(--accent)">--memory</code> or set <code style="color:var(--accent)">memory.enabled: true</code> in config.</span></div>';
+      return;
+    }
+    const memories = body.memories || [];
     if (!memories.length) { list.innerHTML = '<div class="empty">No memories</div>'; return; }
     list.innerHTML = memories.map(m =>
       '<div class="memory-item" data-id="' + m.id + '">' +
@@ -427,6 +448,7 @@
           '<input type="text" id="mem-tags" placeholder="Tags (optional, comma-separated)">' +
           '<button class="btn-success" onclick="saveMem()">Save</button>' +
         '</div>' +
+        '<div id="mem-save-error"></div>' +
       '</div>';
     document.getElementById('mem-content').focus();
   };
@@ -435,17 +457,23 @@
     const content = document.getElementById('mem-content').value.trim();
     if (!content) return;
     const tags = document.getElementById('mem-tags').value.trim();
-    await fetch('/api/memory', {
+    const result = await apiFetch('/api/memory', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, tags }),
     });
+    if (result.error) {
+      const el = document.getElementById('mem-save-error');
+      if (el) el.innerHTML = '<div style="color:var(--red);font-size:12px;margin-top:8px">' + esc(result.error) + '</div>';
+      return;
+    }
     loadMemory(memoryQuery);
   };
 
   window.deleteMem = async (id) => {
     if (!confirm('Delete memory #' + id + '?')) return;
-    await fetch('/api/memory/' + id, { method: 'DELETE' });
+    const result = await apiFetch('/api/memory/' + id, { method: 'DELETE' });
+    if (result.error) { alert('Delete failed: ' + result.error); return; }
     loadMemory(memoryQuery);
   };
 
