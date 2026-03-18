@@ -4,7 +4,7 @@ import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { errorMessage } from './utils/errors'
 import { HELP } from './interfaces/help'
-import { runExecScript, runSkillCommand, showContext, runMemoryCommand } from './interfaces/commands'
+import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showConfig } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
@@ -63,12 +63,6 @@ async function handleStandaloneCommands(
   parsed: ReturnType<typeof parseArgs>,
   app: AppContext,
 ): Promise<void> {
-  if (parsed.meta.showContext) {
-    showContext(app.contextMessages)
-    await app.shutdown()
-    process.exit(0)
-  }
-
   if (parsed.meta.listMemories || parsed.meta.memories !== undefined) {
     runMemoryCommand(app.memoryStore, { list: parsed.meta.listMemories, search: parsed.meta.memories })
     await app.shutdown()
@@ -284,6 +278,21 @@ async function main(): Promise<void> {
     cliArgs: parsed.config,
     env: process.env as Record<string, string | undefined>,
   })
+
+  if (parsed.meta.showConfig || parsed.meta.showContext) {
+    const { discoverContextFiles, buildContextMessages } = await import('./context')
+    const contextFiles = config.context.enabled
+      ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
+      : []
+
+    if (parsed.meta.showConfig) {
+      showConfig(config, contextFiles.map(f => f.relativePath))
+    }
+    if (parsed.meta.showContext) {
+      showContext(buildContextMessages(contextFiles))
+    }
+    process.exit(0)
+  }
 
   const app = await bootstrap(config, { sessionId: parsed.meta.resume })
 

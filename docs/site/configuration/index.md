@@ -196,6 +196,7 @@ See [MCP](/modes/mcp#lazy-schema-loading) for details.
 | — | — | `--resume` | — | Resume a previous session |
 | — | — | `--file` | — | Attach files to the prompt |
 | — | — | `--exec` | — | Run a script file |
+| — | — | `--show-config` | — | Show resolved configuration and exit |
 | — | — | `--config` | — | Path to config file |
 
 ## Environment variables
@@ -248,6 +249,16 @@ Credentials are env-only — never exposed as CLI flags to keep them out of shel
 | Azure | `RA_AZURE_ENDPOINT`, `RA_AZURE_DEPLOYMENT`, `RA_AZURE_API_KEY`, `RA_AZURE_API_VERSION` | [Setup](/providers/azure) |
 | Bedrock | `RA_BEDROCK_API_KEY`, `RA_BEDROCK_REGION` | [Setup](/providers/bedrock) |
 | Ollama | `RA_OLLAMA_HOST` | [Setup](/providers/ollama) |
+
+## Inspect
+
+Use `--show-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, config file, env vars, and CLI flags. Sensitive values (tokens, API keys) are redacted.
+
+```bash
+ra --show-config
+ra --show-config --provider openai --model gpt-4.1
+ra --show-context   # print discovered context files
+```
 
 ## See also
 

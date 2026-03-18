@@ -3,6 +3,7 @@ import { resolve } from 'path'
 import type { SkillCommand } from './parse-args'
 import type { IMessage } from '../providers/types'
 import type { MemoryStore } from '../memory'
+import type { RaConfig } from '../config/types'
 
 /** Run --exec <script> */
 export async function runExecScript(scriptPath: string): Promise<void> {
@@ -115,4 +116,18 @@ export function runMemoryCommand(
       console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
     }
   }
+}
+
+const REDACT_KEYS = new Set(['token', 'apiKey', 'api_key', 'secret', 'password'])
+
+/** Handle --show-config: print resolved config as JSON with secrets redacted. */
+export function showConfig(config: RaConfig, contextFiles: string[] = []): void {
+  const redacted = JSON.parse(JSON.stringify(config, (_key, value) => {
+    if (typeof value === 'string' && REDACT_KEYS.has(_key) && value) return '***'
+    return value
+  }))
+  // Drop non-serializable fields (callbacks)
+  delete redacted.compaction?.onCompact
+  if (contextFiles.length > 0) redacted.context.files = contextFiles
+  console.log(JSON.stringify(redacted, null, 2))
 }

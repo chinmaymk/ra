@@ -65,6 +65,18 @@ See [Sessions](/core/sessions) for more on session persistence.
 | `0` | Success |
 | Non-zero | Error (provider failure, config error, etc.) |
 
+## Inspect configuration
+
+Show the resolved configuration or discovered context files without starting the agent:
+
+```bash
+ra --show-config
+ra --show-config --provider openai --model gpt-4.1
+ra --show-context
+```
+
+See [Configuration](/configuration/#show-config) for details.
+
 ## See also
 
 - [REPL](/modes/repl) — for interactive sessions

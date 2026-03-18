@@ -272,7 +272,57 @@ Pre-built agent configurations you can fork and commit to your repo.
 ra --config recipes/coding-agent/ra.config.yaml
 ```
 
+### [Code Review Agent](recipes/code-review-agent/)
+
+Reviews diffs for correctness, style, and performance. Connects to GitHub via MCP, includes a diff-gathering script and style guide, and enforces a token budget via middleware.
+
+```bash
+ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review this"
+```
+
+## Configuration
+
+Layered config. Each layer overrides the previous.
+
+```
+defaults → config file → env vars → CLI flags
+```
+
+```yaml
+# ra.config.yml — all sections are optional
+provider: anthropic
+model: claude-sonnet-4-6
+systemPrompt: You are a helpful coding assistant.
+maxIterations: 50
+thinking: medium
+skills: [code-review]
+```
+
+Every option shown in the sections above (`compaction`, `permissions`, `memory`, `mcp`, `middleware`, etc.) goes in this file. Environment variables use the `RA_` prefix (`RA_PROVIDER`, `RA_MODEL`, `RA_ANTHROPIC_API_KEY`), and CLI flags override everything:
+
+```bash
+ra --provider openai --model gpt-4.1 --thinking high --max-iterations 10 "Review this"
+```
+
+### Inspect
+
+```bash
+ra --show-config                                    # print resolved config as JSON
+ra --show-config --provider openai --model gpt-4.1  # see how overrides merge
+ra --show-context                                   # print discovered context files
+```
+
+## Scripting
+
+Use `--exec` to run a TypeScript or JavaScript file that imports ra's internals programmatically.
+
+```bash
+ra --exec ./scripts/batch-review.ts
+```
+
 ## [GitHub Actions](https://chinmaymk.github.io/ra/modes/github-actions/)
+
+Use ra directly in your CI/CD workflows. No install step needed — the action downloads the binary automatically.
 
 ```yaml
 - uses: chinmaymk/ra@latest
