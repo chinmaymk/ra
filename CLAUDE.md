@@ -1,6 +1,6 @@
 # ra
 
-ra is an agentic loop framework. One binary, multiple interfaces (CLI/REPL/HTTP/MCP), provider-portable across 6 LLM backends. Deployed as a single self-contained binary compiled via `bun build --compile` — no runtime dependencies needed.
+ra is an agentic loop framework. One binary, multiple interfaces (CLI/REPL/HTTP/MCP), provider-portable across 6 LLM backends. Works as an npm package on any Node.js runtime, or compiled to a single self-contained binary via `bun build --compile`.
 
 ## Quick Reference
 
@@ -65,14 +65,20 @@ User message → [beforeLoopBegin]
 
 ## Development Rules
 
-- Use Bun everywhere — never Node.js, npm, npx, jest, vitest, vite, express, or dotenv
+- Use general-purpose Node.js APIs — code must work on both Bun and Node.js runtimes
+- **Never use Bun-specific APIs** (`Bun.file`, `Bun.write`, `Bun.serve`, `Bun.spawn`, `Bun.Glob`, `Bun.$`, `Bun.which`) — use their cross-platform equivalents instead:
+  - File I/O: `node:fs/promises` (`readFile`, `writeFile`, `access`) or helpers in `src/utils/fs.ts`
+  - Glob: `fast-glob`
+  - Shell/spawn: `node:child_process` (`spawn`, `spawnSync`)
+  - HTTP server: `node:http` (`createServer`)
+  - SQLite: conditional import — `bun:sqlite` when running under Bun, `node:sqlite` (`DatabaseSync`) otherwise
+  - Transpiler: conditional — `Bun.Transpiler` if available, else `esbuild`, else plain `eval`
 - `bun tsc` must pass before committing — don't use `as any` to silence errors
 - Tests go in `tests/` mirroring `src/` structure
 - Cast tool input narrowly: `input as { param: string }` not `input as any`
 - Use optional spread for conditional fields: `...(x && { key: x })`
 - Every `stream()` must yield a `{ type: 'done' }` chunk at the end
 - Tool call IDs must be preserved exactly — they match results back to calls
-- Prefer `Bun.file` over `node:fs`, `Bun.$` over `execa`, `bun:sqlite` over `better-sqlite3`
 
 ## Testing
 
@@ -87,3 +93,4 @@ test("description", () => {
 - Provider tests mock the SDK client
 - Loop tests use a `mockProvider()` that yields `StreamChunk[][]`
 - Integration tests in `tests/integration/` test full end-to-end flows
+- Node.js compatibility tests in `tests/node/` run via `vitest` to verify cross-runtime behavior
