@@ -65,7 +65,11 @@ export async function bootstrap(
   await mkdir(sessionDir, { recursive: true })
 
   // ── Observability ──────────────────────────────────────────────────
-  const { logger, tracer } = createObservability(config.observability, { sessionId, sessionDir })
+  const { logger, tracer } = createObservability({
+    enabled: config.logsEnabled || config.tracesEnabled,
+    logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
+    traces: { enabled: config.tracesEnabled, output: 'session' },
+  }, { sessionId, sessionDir })
 
   // ── Compaction model default ───────────────────────────────────────
   if (!config.compaction.model) {

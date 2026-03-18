@@ -1,7 +1,7 @@
 import type { MiddlewareConfig } from './types'
 import type { SessionStorage } from '../storage/sessions'
-import type { ObservabilityConfig } from '../observability'
 import type { Logger } from '../observability/logger'
+import type { LogLevel } from '../observability/logger'
 import { NoopLogger } from '../observability/logger'
 import { createObservability, createObservabilityMiddleware } from '../observability'
 import { createHistoryMiddleware } from '../storage/middleware'
@@ -10,9 +10,6 @@ import { mergeMiddleware } from './middleware'
 /**
  * Composes all per-session middleware for an AgentLoop:
  *   observability → base (user/config) → history persistence → flush
- *
- * Sessions are always created. Observability always writes to the session
- * directory when an obsConfig is provided.
  */
 export function createSessionMiddleware(
   baseMiddleware: Partial<MiddlewareConfig> | undefined,
@@ -20,13 +17,22 @@ export function createSessionMiddleware(
     storage: SessionStorage
     sessionId: string
     priorCount?: number
-    obsConfig?: ObservabilityConfig
+    logsEnabled?: boolean
+    logLevel?: LogLevel
+    tracesEnabled?: boolean
     logger?: Logger
   },
 ): { middleware: Partial<MiddlewareConfig>; logger: Logger } {
   const sessionDir = options.storage.sessionDir(options.sessionId)
-  const { logger, tracer } = options.obsConfig
-    ? createObservability(options.obsConfig, { sessionId: options.sessionId, sessionDir })
+  const logsEnabled = options.logsEnabled ?? false
+  const tracesEnabled = options.tracesEnabled ?? false
+
+  const { logger, tracer } = (logsEnabled || tracesEnabled)
+    ? createObservability({
+        enabled: true,
+        logs: { enabled: logsEnabled, level: options.logLevel ?? 'info', output: 'session' },
+        traces: { enabled: tracesEnabled, output: 'session' },
+      }, { sessionId: options.sessionId, sessionDir })
     : { logger: undefined, tracer: undefined }
 
   const obsHooks = logger && tracer ? createObservabilityMiddleware(logger, tracer) : undefined

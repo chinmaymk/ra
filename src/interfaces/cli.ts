@@ -3,8 +3,7 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext } from '../agent/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { Skill } from '../skills/types'
-import type { Logger } from '../observability/logger'
-import type { ObservabilityConfig } from '../observability'
+import type { Logger, LogLevel } from '../observability/logger'
 import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
 import { mergeMiddleware } from '../agent/middleware'
@@ -30,7 +29,9 @@ export interface CliOptions {
   contextMessages?: IMessage[]
   sessionMessages?: IMessage[]
   logger?: Logger
-  obsConfig?: ObservabilityConfig
+  logsEnabled?: boolean
+  logLevel?: LogLevel
+  tracesEnabled?: boolean
   storage?: SessionStorage
   sessionId?: string
 }
@@ -41,7 +42,7 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, obsConfig, storage, sessionId } = options
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -75,7 +76,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   initialMessages.push({ role: 'user', content })
 
   const session = storage && sessionId
-    ? createSessionMiddleware(middleware, { storage, sessionId, priorCount, obsConfig, logger })
+    ? createSessionMiddleware(middleware, { storage, sessionId, priorCount, logsEnabled, logLevel, tracesEnabled, logger })
     : { middleware: middleware ?? {}, logger }
   const streamHook: Partial<MiddlewareConfig> = {
     onStreamChunk: [async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) }],

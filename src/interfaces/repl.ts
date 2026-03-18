@@ -6,7 +6,7 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { MiddlewareConfig, StreamChunkContext, ToolExecutionContext, ToolResultContext } from '../agent/types'
 import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { SessionStorage } from '../storage/sessions'
-import type { ObservabilityConfig } from '../observability'
+import type { LogLevel } from '../observability/logger'
 import { createSessionMiddleware } from '../agent/session'
 import { mergeMiddleware } from '../agent/middleware'
 import type { Skill } from '../skills/types'
@@ -34,7 +34,9 @@ export interface ReplOptions {
   contextMessages?: IMessage[]
   memoryStore?: MemoryStore
   logger?: Logger
-  obsConfig?: ObservabilityConfig
+  logsEnabled?: boolean
+  logLevel?: LogLevel
+  tracesEnabled?: boolean
 }
 
 export class Repl {
@@ -193,7 +195,9 @@ export class Repl {
       storage: this.options.storage,
       sessionId: this.sessionId!,
       priorCount,
-      obsConfig: this.options.obsConfig,
+      logsEnabled: this.options.logsEnabled,
+      logLevel: this.options.logLevel,
+      tracesEnabled: this.options.tracesEnabled,
       logger: this.options.logger,
     })
 

@@ -7,7 +7,6 @@ import { mergeMiddleware } from '../../src/agent/middleware'
 import { AgentLoop } from '../../src/agent/loop'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 import type { IProvider, IMessage } from '../../src/providers/types'
-import type { ObservabilityConfig } from '../../src/observability'
 import { tmpdir } from '../tmpdir'
 
 const TEST_PATH = tmpdir('ra-test-history-mw')
@@ -179,16 +178,12 @@ describe('SessionHistoryMiddleware', () => {
   it('writes logs and traces to the session directory via createSessionMiddleware', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
 
-    const obsConfig: ObservabilityConfig = {
-      enabled: true,
-      logs: { enabled: true, level: 'info', output: 'session' },
-      traces: { enabled: true, output: 'session' },
-    }
-
     const { middleware, logger } = createSessionMiddleware(undefined, {
       storage,
       sessionId: session.id,
-      obsConfig,
+      logsEnabled: true,
+      logLevel: 'info',
+      tracesEnabled: true,
     })
 
     const loop = new AgentLoop({

@@ -5,7 +5,7 @@ import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
 import type { Logger } from '../observability/logger'
-import type { ObservabilityConfig } from '../observability'
+import type { LogLevel } from '../observability/logger'
 import { AgentLoop } from '../agent/loop'
 import { mergeMiddleware } from '../agent/middleware'
 import { createSessionMiddleware } from '../agent/session'
@@ -34,7 +34,9 @@ export interface HttpOptions {
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
   logger?: Logger
-  obsConfig?: ObservabilityConfig
+  logsEnabled?: boolean
+  logLevel?: LogLevel
+  tracesEnabled?: boolean
 }
 
 export class HttpServer {
@@ -144,7 +146,9 @@ export class HttpServer {
       storage: this.options.storage,
       sessionId,
       priorCount,
-      obsConfig: this.options.obsConfig,
+      logsEnabled: this.options.logsEnabled,
+      logLevel: this.options.logLevel,
+      tracesEnabled: this.options.tracesEnabled,
       logger: this.options.logger,
     })
     return new AgentLoop({
