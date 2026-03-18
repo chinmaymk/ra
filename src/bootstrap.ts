@@ -149,10 +149,9 @@ export async function bootstrap(
   }
 
   // ── Session Memory ───────────────────────────────────────────────
-  // Enabled by default when builtin tools are on; disable via tools.overrides.session_memory_write.enabled: false
+  // Enabled by default when builtin tools are on; disable via tools.overrides.session_memory.enabled: false
   const sessionMemoryEnabled =
-    config.tools.overrides.session_memory_write?.enabled !== false &&
-    config.tools.overrides.session_memory_delete?.enabled !== false &&
+    config.tools.overrides.session_memory?.enabled !== false &&
     config.tools.builtin
   let sessionMemoryStore: SessionMemoryStore | undefined
   if (sessionMemoryEnabled) {
