@@ -1,8 +1,20 @@
 import type { ModelCallContext } from '../agent/types'
+import type { ContentPart } from '../providers/types'
 import type { ScratchpadStore } from './store'
 
 const SCRATCHPAD_MARKER = '<scratchpad>'
 const SCRATCHPAD_MARKER_END = '</scratchpad>'
+
+/** Strip a `<scratchpad>…</scratchpad>` block from a string. Returns null if not found. */
+function stripBlock(text: string): string | null {
+  const start = text.indexOf(SCRATCHPAD_MARKER)
+  if (start < 0) return null
+  const end = text.indexOf(SCRATCHPAD_MARKER_END, start)
+  if (end < 0) return null
+  const before = text.slice(0, start).trimEnd()
+  const after = text.slice(end + SCRATCHPAD_MARKER_END.length).trimStart()
+  return before + (after ? '\n\n' + after : '')
+}
 
 /**
  * Creates a beforeModelCall middleware that injects the current scratchpad
@@ -18,16 +30,34 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
 
     const messages = ctx.request.messages
 
-    // Remove any previously injected scratchpad message
+    // Remove any previously injected scratchpad message.
+    // It may be a standalone message or embedded inside another (after compaction
+    // merges consecutive user messages). Content may be string or ContentPart[].
     for (let i = messages.length - 1; i >= 0; i--) {
       const content = messages[i]!.content
-      if (
-        typeof content === 'string' &&
-        content.startsWith(SCRATCHPAD_MARKER)
-      ) {
-        messages.splice(i, 1)
+
+      if (typeof content === 'string') {
+        const stripped = stripBlock(content)
+        if (stripped === null) continue
+        // Standalone scratchpad message (nothing left after stripping)
+        if (!stripped) { messages.splice(i, 1); break }
+        messages[i] = { ...messages[i]!, content: stripped }
         break
       }
+
+      if (!Array.isArray(content)) continue
+      const partIdx = (content as ContentPart[]).findIndex(
+        p => p.type === 'text' && (p as { type: 'text'; text: string }).text.includes(SCRATCHPAD_MARKER),
+      )
+      if (partIdx < 0) continue
+      const part = content[partIdx] as { type: 'text'; text: string }
+      const stripped = stripBlock(part.text)
+      if (stripped === null) continue
+      const newParts = !stripped
+        ? content.filter((_, idx) => idx !== partIdx)
+        : content.map((p, idx) => idx === partIdx ? { type: 'text' as const, text: stripped } : p)
+      messages[i] = { ...messages[i]!, content: newParts }
+      break
     }
 
     // Build the scratchpad block

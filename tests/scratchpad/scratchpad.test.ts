@@ -200,4 +200,122 @@ describe('scratchpad middleware', () => {
     expect(messages[1]!.role).toBe('user')
     expect((messages[1]!.content as string)).toContain('### note')
   })
+
+  it('removes scratchpad embedded inside a merged message (compaction scenario)', async () => {
+    store.set('plan', 'v1')
+
+    const mw = createScratchpadMiddleware(store)
+
+    // Simulate what happens after compaction merges the scratchpad user message
+    // into the pinned user message (consecutive user messages get absorbed)
+    const embeddedScratchpad =
+      'First user message\n\n[Context Summary]\nSome summary\n\n' +
+      '<scratchpad>\nBelow are entries you previously saved to the scratchpad during this conversation. ' +
+      'These entries are guaranteed to remain visible to you even as older messages are summarized. ' +
+      'You can update entries with scratchpad_write or remove them with scratchpad_delete.\n\n' +
+      '### plan\nold plan\n</scratchpad>'
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: embeddedScratchpad },
+      { role: 'assistant', content: 'I see.' },
+      { role: 'user', content: 'Continue' },
+    ]
+    await mw(makeCtx(messages))
+
+    // Old embedded scratchpad should be stripped from the merged message
+    const pinnedUser = messages[1]!.content as string
+    expect(pinnedUser).not.toContain('<scratchpad>')
+    expect(pinnedUser).toContain('First user message')
+    expect(pinnedUser).toContain('[Context Summary]')
+
+    // New scratchpad should be injected as a separate message
+    const scratchpadMsg = messages.find(
+      m => typeof m.content === 'string' && (m.content as string).startsWith('<scratchpad>')
+    )
+    expect(scratchpadMsg).toBeDefined()
+    expect((scratchpadMsg!.content as string)).toContain('v1')
+  })
+
+  it('removes embedded scratchpad preserving content after end marker', async () => {
+    store.set('task', 'current task')
+
+    const mw = createScratchpadMiddleware(store)
+
+    const embeddedContent =
+      'Before scratchpad\n\n<scratchpad>\n### old\nold data\n</scratchpad>\n\nAfter scratchpad'
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: embeddedContent },
+      { role: 'assistant', content: 'ok' },
+    ]
+    await mw(makeCtx(messages))
+
+    const cleaned = messages[1]!.content as string
+    expect(cleaned).not.toContain('<scratchpad>')
+    expect(cleaned).toContain('Before scratchpad')
+    expect(cleaned).toContain('After scratchpad')
+  })
+
+  it('removes scratchpad from ContentPart[] when entire text part is scratchpad', async () => {
+    store.set('plan', 'new plan')
+
+    const mw = createScratchpadMiddleware(store)
+
+    // Simulate compaction's appendToMessage merging scratchpad into a ContentPart[] message
+    // (e.g. pinned user message had an image, scratchpad was appended as a text part)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      {
+        role: 'user',
+        content: [
+          { type: 'text' as const, text: 'look at this image' },
+          { type: 'image' as const, source: { type: 'base64' as const, mediaType: 'image/png', data: 'abc' } },
+          { type: 'text' as const, text: '\n\n<scratchpad>\n### old\nold data\n</scratchpad>' },
+        ],
+      },
+      { role: 'assistant', content: 'ok' },
+    ]
+    await mw(makeCtx(messages))
+
+    // Scratchpad text part should be removed, image and original text preserved
+    const parts = messages[1]!.content as any[]
+    expect(parts.some((p: any) => p.type === 'text' && p.text.includes('<scratchpad>'))).toBe(false)
+    expect(parts.some((p: any) => p.type === 'image')).toBe(true)
+    expect(parts.some((p: any) => p.type === 'text' && p.text === 'look at this image')).toBe(true)
+
+    // New scratchpad should be injected
+    const scratchpadMsg = messages.find(
+      m => typeof m.content === 'string' && (m.content as string).startsWith('<scratchpad>')
+    )
+    expect(scratchpadMsg).toBeDefined()
+    expect((scratchpadMsg!.content as string)).toContain('new plan')
+  })
+
+  it('strips scratchpad from ContentPart[] text part that has other text around it', async () => {
+    store.set('task', 'latest')
+
+    const mw = createScratchpadMiddleware(store)
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      {
+        role: 'user',
+        content: [
+          { type: 'text' as const, text: 'original text' },
+          { type: 'text' as const, text: 'before pad\n\n<scratchpad>\n### old\nstale\n</scratchpad>\n\nafter pad' },
+        ],
+      },
+      { role: 'assistant', content: 'ok' },
+    ]
+    await mw(makeCtx(messages))
+
+    const parts = messages[1]!.content as any[]
+    const textParts = parts.filter((p: any) => p.type === 'text')
+    const allText = textParts.map((p: any) => p.text).join(' ')
+    expect(allText).not.toContain('<scratchpad>')
+    expect(allText).toContain('before pad')
+    expect(allText).toContain('after pad')
+  })
 })
