@@ -1,8 +1,14 @@
 import type { ITool } from '../providers/types'
 import { writeFile } from 'fs/promises'
 import { ensureDir } from './ensure-dir'
+import { assertWithinRoot } from './root-dir'
 
-export function writeFileTool(): ITool {
+export interface WriteToolOptions {
+  rootDir?: string
+}
+
+export function writeFileTool(options?: WriteToolOptions): ITool {
+  const rootDir = options?.rootDir
   return {
     name: 'Write',
     description:
@@ -18,6 +24,7 @@ export function writeFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, content } = input as { path: string; content: string }
+      if (rootDir) assertWithinRoot(path, rootDir)
       await ensureDir(path)
       await writeFile(path, content, 'utf-8')
       return `File written: ${path}`

@@ -1,8 +1,14 @@
 import type { ITool } from '../providers/types'
 import { readFile } from 'fs/promises'
 import { join, relative } from 'path'
+import { assertWithinRoot } from './root-dir'
 
-export function searchFilesTool(): ITool {
+export interface GrepToolOptions {
+  rootDir?: string
+}
+
+export function searchFilesTool(options?: GrepToolOptions): ITool {
+  const rootDir = options?.rootDir
   return {
     name: 'Grep',
     description:
@@ -20,6 +26,7 @@ export function searchFilesTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, pattern, include } = input as { path: string; pattern: string; include?: string }
+      if (rootDir) assertWithinRoot(path, rootDir)
       const glob = new Bun.Glob(include ? `**/${include}` : '**/*')
       const results: string[] = []
       for await (const rel of glob.scan({ cwd: path, onlyFiles: true })) {

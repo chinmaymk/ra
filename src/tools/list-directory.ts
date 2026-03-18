@@ -1,6 +1,7 @@
 import type { ITool } from '../providers/types'
 import { readdir } from 'fs/promises'
 import { join } from 'path'
+import { assertWithinRoot } from './root-dir'
 
 async function listRecursive(dir: string, currentDepth: number, maxDepth: number, prefix: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
@@ -19,7 +20,12 @@ async function listRecursive(dir: string, currentDepth: number, maxDepth: number
   return lines
 }
 
-export function listDirectoryTool(): ITool {
+export interface LSToolOptions {
+  rootDir?: string
+}
+
+export function listDirectoryTool(options?: LSToolOptions): ITool {
+  const rootDir = options?.rootDir
   return {
     name: 'LS',
     description:
@@ -37,6 +43,7 @@ export function listDirectoryTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, recursive, depth } = input as { path: string; recursive?: boolean; depth?: number }
+      if (rootDir) assertWithinRoot(path, rootDir)
       const maxDepth = recursive ? Math.min(Math.max(depth ?? 3, 1), 5) : 1
       const lines = await listRecursive(path, 1, maxDepth, '')
       return lines.join('\n')

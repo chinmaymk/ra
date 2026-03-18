@@ -249,15 +249,60 @@ describe('dataDir', () => {
   })
 })
 
-describe('builtinTools config', () => {
-  it('loads builtinTools from env var', async () => {
-    const config = await loadConfig({ env: { RA_BUILTIN_TOOLS: 'true' } })
-    expect(config.builtinTools).toBe(true)
+describe('tools config', () => {
+  it('loads tools.builtin from env var', async () => {
+    const config = await loadConfig({ env: { RA_TOOLS_BUILTIN: 'true' } })
+    expect(config.tools.builtin).toBe(true)
   })
 
-  it('defaults builtinTools to true', async () => {
+  it('defaults tools.builtin to true', async () => {
     const config = await loadConfig({ env: {} })
-    expect(config.builtinTools).toBe(true)
+    expect(config.tools.builtin).toBe(true)
+  })
+
+  it('loads legacy builtinTools boolean as tools.builtin', async () => {
+    const dir = join(tmpdir(), `ra-tools-compat-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      writeFileSync(join(dir, 'ra.config.json'), JSON.stringify({ builtinTools: false }))
+      const config = await loadConfig({ cwd: dir, env: {} })
+      expect(config.tools.builtin).toBe(false)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('loads flat tools config with per-tool overrides', async () => {
+    const dir = join(tmpdir(), `ra-tools-flat-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      writeFileSync(join(dir, 'ra.config.yaml'), [
+        'tools:',
+        '  builtin: true',
+        '  Read:',
+        '    rootDir: "./src"',
+        '  WebFetch:',
+        '    enabled: false',
+        '  Agent:',
+        '    maxConcurrency: 2',
+      ].join('\n'))
+      const config = await loadConfig({ cwd: dir, env: {} })
+      expect(config.tools.builtin).toBe(true)
+      expect(config.tools.overrides.Read).toEqual({ rootDir: './src' })
+      expect(config.tools.overrides.WebFetch).toEqual({ enabled: false })
+      expect(config.tools.overrides.Agent).toEqual({ maxConcurrency: 2 })
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('disables individual tools while keeping builtin on', async () => {
+    const dir = join(tmpdir(), `ra-tools-disable-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      writeFileSync(join(dir, 'ra.config.json'), JSON.stringify({
+        tools: { builtin: true, DeleteFile: { enabled: false } },
+      }))
+      const config = await loadConfig({ cwd: dir, env: {} })
+      expect(config.tools.builtin).toBe(true)
+      expect(config.tools.overrides.DeleteFile?.enabled).toBe(false)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
 

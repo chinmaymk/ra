@@ -42,7 +42,7 @@ const FLAG_RULES: Record<string, FlagRule> = {
   'max-iterations':              { type: 'int',    path: ['maxIterations'] },
   thinking:                      { type: 'string', path: ['thinking'] },
   'tool-timeout':                { type: 'int',    path: ['toolTimeout'] },
-  'builtin-tools':               { type: 'bool',   path: ['builtinTools'], value: true },
+  'tools-builtin':               { type: 'bool',   path: ['tools', 'builtin'], value: true },
   'http-port':                   { type: 'int',    path: ['http', 'port'] },
   'http-token':                  { type: 'string', path: ['http', 'token'] },
   'mcp-server-enabled':          { type: 'bool',   path: ['mcp', 'server', 'enabled'], value: true },
@@ -112,7 +112,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'max-iterations':              { type: 'string' },
       'thinking':                    { type: 'string' },
       'tool-timeout':                { type: 'string' },
-      'builtin-tools':               { type: 'boolean' },
+      'tools-builtin':               { type: 'boolean' },
       // HTTP server
       'http-port':                   { type: 'string' },
       'http-token':                  { type: 'string' },

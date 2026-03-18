@@ -1,7 +1,13 @@
 import type { ITool } from '../providers/types'
 import { Glob } from 'bun'
+import { assertWithinRoot } from './root-dir'
 
-export function globFilesTool(): ITool {
+export interface GlobToolOptions {
+  rootDir?: string
+}
+
+export function globFilesTool(options?: GlobToolOptions): ITool {
+  const rootDir = options?.rootDir
   return {
     name: 'Glob',
     description:
@@ -18,6 +24,7 @@ export function globFilesTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, pattern } = input as { path: string; pattern: string }
+      if (rootDir) assertWithinRoot(path, rootDir)
       const glob = new Glob(pattern)
       const results: string[] = []
       for await (const file of glob.scan({ cwd: path, dot: false })) {

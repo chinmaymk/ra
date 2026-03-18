@@ -1,8 +1,14 @@
 import type { ITool } from '../providers/types'
 import { cp } from 'fs/promises'
 import { ensureDir } from './ensure-dir'
+import { assertWithinRoot } from './root-dir'
 
-export function copyFileTool(): ITool {
+export interface CopyFileToolOptions {
+  rootDir?: string
+}
+
+export function copyFileTool(options?: CopyFileToolOptions): ITool {
+  const rootDir = options?.rootDir
   return {
     name: 'CopyFile',
     description:
@@ -18,6 +24,10 @@ export function copyFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { source, destination } = input as { source: string; destination: string }
+      if (rootDir) {
+        assertWithinRoot(source, rootDir)
+        assertWithinRoot(destination, rootDir)
+      }
       await ensureDir(destination)
       await cp(source, destination, { recursive: true })
       return `Copied: ${source} → ${destination}`
