@@ -1,12 +1,13 @@
 # Built-in Tools
 
-ra ships with built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. When [memory](/configuration/#memory) is enabled, additional memory tools are registered. All tools are registered automatically when `builtinTools` is enabled (the default).
+ra ships with built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. When [memory](/configuration/#memory) is enabled, additional memory tools are registered. All built-in tools are registered by default and can be individually configured or disabled via the [`tools`](/configuration/#tools) config section.
 
 Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 
 ```yaml
-# ra.config.yml
-builtinTools: true   # default
+# ra.config.yml — tools are enabled by default
+tools:
+  builtin: true
 ```
 
 When ra runs as an [MCP server](/modes/mcp), all built-in tools (except `AskUserQuestion`) are automatically exposed as MCP tools.
@@ -280,17 +281,61 @@ Delete memories matching a search query. Used when the user corrects previous in
 | `query` | string | yes | Search keywords to match memories to delete |
 | `limit` | number | no | Max memories to delete (default: 10) |
 
-## Disabling built-in tools
+## Configuring tools
 
-To run ra without built-in tools (e.g., when using only [MCP tools](/modes/mcp)):
+The `tools` section lets you independently enable/disable tools and set per-tool constraints.
+
+### Disable specific tools
 
 ```yaml
-builtinTools: false
+tools:
+  builtin: true
+  WebFetch:
+    enabled: false
+  DeleteFile:
+    enabled: false
+```
+
+### Constrain file tools with rootDir
+
+Restrict filesystem tools to a specific directory. Paths outside this root are rejected at execution time.
+
+```yaml
+tools:
+  builtin: true
+  Read:
+    rootDir: "./src"
+  Write:
+    rootDir: "./src"
+  Edit:
+    rootDir: "./src"
+```
+
+### Limit Agent concurrency
+
+```yaml
+tools:
+  builtin: true
+  Agent:
+    maxConcurrency: 2
+```
+
+### Disable all built-in tools
+
+To run ra without any built-in tools (e.g., when using only [MCP tools](/modes/mcp)):
+
+```yaml
+tools:
+  builtin: false
 ```
 
 ```bash
-ra --no-builtin-tools
+ra --tools-builtin   # enable from CLI (enabled by default)
 ```
+
+::: tip Legacy compatibility
+The old `builtinTools: true/false` flag still works and is automatically converted to `tools.builtin`.
+:::
 
 ## See also
 

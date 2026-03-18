@@ -17,6 +17,7 @@ export interface ParsedArgsMeta {
   configPath?: string
   exec?: string
   showContext: boolean
+  showConfig: boolean
   listMemories: boolean
   memories?: string
   forget?: string
@@ -41,7 +42,7 @@ const FLAG_RULES: Record<string, FlagRule> = {
   'max-iterations':              { type: 'int',    path: ['maxIterations'] },
   thinking:                      { type: 'string', path: ['thinking'] },
   'tool-timeout':                { type: 'int',    path: ['toolTimeout'] },
-  'builtin-tools':               { type: 'bool',   path: ['builtinTools'], value: true },
+  'tools-builtin':               { type: 'bool',   path: ['tools', 'builtin'], value: true },
   'http-port':                   { type: 'int',    path: ['http', 'port'] },
   'http-token':                  { type: 'string', path: ['http', 'token'] },
   'mcp-server-enabled':          { type: 'bool',   path: ['mcp', 'server', 'enabled'], value: true },
@@ -76,6 +77,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         help: false,
         version: false,
         showContext: false,
+        showConfig: false,
         listMemories: false,
         files: [],
         skills: [],
@@ -96,6 +98,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       help:                          { type: 'boolean', short: 'h' },
       version:                       { type: 'boolean', short: 'v' },
       'show-context':                { type: 'boolean' },
+      'show-config':              { type: 'boolean' },
       // Interface selection → config.interface
       http:                          { type: 'boolean' },
       cli:                           { type: 'boolean' },
@@ -109,7 +112,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'max-iterations':              { type: 'string' },
       'thinking':                    { type: 'string' },
       'tool-timeout':                { type: 'string' },
-      'builtin-tools':               { type: 'boolean' },
+      'tools-builtin':               { type: 'boolean' },
       // HTTP server
       'http-port':                   { type: 'string' },
       'http-token':                  { type: 'string' },
@@ -168,6 +171,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       help:         (values.help as boolean | undefined) ?? false,
       version:      (values.version as boolean | undefined) ?? false,
       showContext:   (values['show-context'] as boolean | undefined) ?? false,
+      showConfig:  (values['show-config'] as boolean | undefined) ?? false,
       listMemories:  (values['list-memories'] as boolean | undefined) ?? false,
       memories:      values.memories as string | undefined,
       forget:        values.forget as string | undefined,

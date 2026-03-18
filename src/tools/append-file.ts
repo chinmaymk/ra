@@ -1,8 +1,14 @@
 import type { ITool } from '../providers/types'
 import { appendFile } from 'fs/promises'
 import { ensureDir } from './ensure-dir'
+import { assertWithinRoot } from './root-dir'
 
-export function appendFileTool(): ITool {
+export interface AppendFileToolOptions {
+  rootDir?: string
+}
+
+export function appendFileTool(options?: AppendFileToolOptions): ITool {
+  const rootDir = options?.rootDir
   return {
     name: 'AppendFile',
     description:
@@ -18,6 +24,7 @@ export function appendFileTool(): ITool {
     },
     async execute(input: unknown) {
       const { path, content } = input as { path: string; content: string }
+      if (rootDir) assertWithinRoot(path, rootDir)
       await ensureDir(path)
       await appendFile(path, content, 'utf-8')
       return `Content appended to: ${path}`

@@ -270,7 +270,9 @@ describe('Repl', () => {
 
   it('stores messages to session after processing', async () => {
     const storage = await makeStorage()
-    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
+    const repl = new Repl({
+      model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage,
+    })
 
     await repl.processInput('hi')
 

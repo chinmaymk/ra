@@ -57,6 +57,13 @@ export class SessionStorage {
     await appendFile(join(this.sessionDir(id), 'messages.jsonl'), JSON.stringify(message) + '\n')
   }
 
+  /** Append multiple messages in a single filesystem write. */
+  async appendMessages(id: string, messages: IMessage[]): Promise<void> {
+    if (messages.length === 0) return
+    const data = messages.map(m => JSON.stringify(m)).join('\n') + '\n'
+    await appendFile(join(this.sessionDir(id), 'messages.jsonl'), data)
+  }
+
   async readMessages(id: string): Promise<IMessage[]> {
     const f = Bun.file(join(this.sessionDir(id), 'messages.jsonl'))
     if (!(await f.exists())) return []
@@ -75,6 +82,18 @@ export class SessionStorage {
       sessions.push({ id: meta.id, meta })
     }
     return sessions
+  }
+
+  /** Ensure a session directory exists for a given ID (creates it if needed). */
+  async ensureSession(id: string, options: CreateSessionOptions): Promise<string> {
+    const dir = this.sessionDir(id)
+    await mkdir(dir, { recursive: true })
+    const metaPath = join(dir, 'meta.json')
+    if (!(await Bun.file(metaPath).exists())) {
+      const meta: SessionMeta = { id, created: new Date().toISOString(), ...options }
+      await Bun.write(metaPath, JSON.stringify(meta, null, 2))
+    }
+    return id
   }
 
   async prune(options: PruneOptions): Promise<void> {

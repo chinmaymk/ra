@@ -49,9 +49,9 @@ describe('parseArgs', () => {
     it('--system-prompt', () => expect(parseArgs(dev('--system-prompt', 'Be helpful')).config.systemPrompt).toBe('Be helpful'))
     it('--max-iterations', () => expect(parseArgs(dev('--max-iterations', '20')).config.maxIterations).toBe(20))
     it('--tool-timeout', () => expect(parseArgs(dev('--tool-timeout', '15000')).config.toolTimeout).toBe(15000))
-    it('parses --builtin-tools flag', () => {
-      const result = parseArgs(['node', 'ra.ts', '--builtin-tools'])
-      expect(result.config.builtinTools).toBe(true)
+    it('parses --tools-builtin flag', () => {
+      const result = parseArgs(['node', 'ra.ts', '--tools-builtin'])
+      expect(result.config.tools?.builtin).toBe(true)
     })
     it('parses --thinking flag', () => {
       const result = parseArgs(['node', 'ra.ts', '--thinking', 'high'])
@@ -153,6 +153,13 @@ describe('parseArgs', () => {
     it('parses --show-context flag', () => {
       const result = parseArgs(['bun', 'src/index.ts', '--show-context'])
       expect(result.meta.showContext).toBe(true)
+    })
+    it('parses --show-config flag', () => {
+      const result = parseArgs(['bun', 'src/index.ts', '--show-config'])
+      expect(result.meta.showConfig).toBe(true)
+    })
+    it('defaults showConfig to false', () => {
+      expect(parseArgs(dev()).meta.showConfig).toBe(false)
     })
     it('multiple --skill flags', () => {
       expect(parseArgs(dev('--skill', 'code', '--skill', 'search')).meta.skills).toEqual(['code', 'search'])

@@ -49,7 +49,11 @@ storage:
   maxSessions: 100
   ttlDays: 30
 
-maxConcurrency: 4
+tools:
+  builtin: true
+  # Per-tool overrides (optional)
+  # Agent:
+  #   maxConcurrency: 2
 
 middleware:
   beforeModelCall:
@@ -83,7 +87,7 @@ mcp:
 | `maxIterations` | `RA_MAX_ITERATIONS` | `--max-iterations` | `50` | Max agent loop iterations |
 | `thinking` | `RA_THINKING` | `--thinking` | — | Extended thinking: `low`, `medium`, `high` |
 | `toolTimeout` | — | — | `30000` | Per-tool and middleware timeout (ms) |
-| `builtinTools` | `RA_BUILTIN_TOOLS` | `--no-builtin-tools` | `true` | Enable/disable [built-in tools](/tools/) |
+| `tools.builtin` | `RA_TOOLS_BUILTIN` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
 
 ### Permissions
 
@@ -130,13 +134,37 @@ permissions:
 | `context.patterns` | — | — | `[]` | Glob patterns for context files |
 | `context.resolvers` | — | — | built-in | Pattern resolvers for `@file` and `url:` |
 
+### Tools
+
+The `tools` section controls which built-in tools are registered and their per-tool settings. See [Built-in Tools](/tools/#configuring-tools) for full details.
+
+```yaml
+tools:
+  builtin: true            # master switch (default: true)
+  Read:
+    rootDir: "./src"        # constrain reads to this directory
+  Write:
+    rootDir: "./src"
+  WebFetch:
+    enabled: false          # disable a specific tool
+  Agent:
+    maxConcurrency: 2       # limit parallel subagent tasks
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `tools.builtin` | boolean | `true` | Master switch: register all built-in tools unless individually disabled |
+| `tools.<ToolName>.enabled` | boolean | `true` | Enable or disable a specific tool |
+| `tools.<ToolName>.rootDir` | string | — | Restrict filesystem tools to this directory |
+| `tools.<ToolName>.maxConcurrency` | number | `4` | Max parallel tasks (Agent tool) |
+
 ### Subagent
 
-The `Agent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`.
+The `Agent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`. Concurrency can be set via `tools.Agent.maxConcurrency` (see above) or the top-level `maxConcurrency` as a fallback.
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `maxConcurrency` | — | — | `4` | Max parallel subagent tasks per invocation |
+| `maxConcurrency` | — | — | `4` | Fallback max parallel subagent tasks (overridden by `tools.Agent.maxConcurrency`) |
 
 ### Data directory
 
@@ -196,6 +224,7 @@ See [MCP](/modes/mcp#lazy-schema-loading) for details.
 | — | — | `--resume` | — | Resume a previous session |
 | — | — | `--file` | — | Attach files to the prompt |
 | — | — | `--exec` | — | Run a script file |
+| — | — | `--show-config` | — | Show resolved configuration and exit |
 | — | — | `--config` | — | Path to config file |
 
 ## Environment variables
@@ -248,6 +277,16 @@ Credentials are env-only — never exposed as CLI flags to keep them out of shel
 | Azure | `RA_AZURE_ENDPOINT`, `RA_AZURE_DEPLOYMENT`, `RA_AZURE_API_KEY`, `RA_AZURE_API_VERSION` | [Setup](/providers/azure) |
 | Bedrock | `RA_BEDROCK_API_KEY`, `RA_BEDROCK_REGION` | [Setup](/providers/bedrock) |
 | Ollama | `RA_OLLAMA_HOST` | [Setup](/providers/ollama) |
+
+## Inspect
+
+Use `--show-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, config file, env vars, and CLI flags. Sensitive values (tokens, API keys) are redacted.
+
+```bash
+ra --show-config
+ra --show-config --provider openai --model gpt-4.1
+ra --show-context   # print discovered context files
+```
 
 ## See also
 

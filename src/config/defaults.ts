@@ -37,7 +37,10 @@ export const defaultConfig: RaConfig = {
   },
   maxIterations: 50,
   toolTimeout: 30000,
-  builtinTools: true,
+  tools: {
+    builtin: true,
+    overrides: {},
+  },
   builtinSkills: {},
   permissions: {},
   middleware: {},
@@ -65,9 +68,6 @@ export const defaultConfig: RaConfig = {
     maxMemories: 1000,
     ttlDays: 90,
     injectLimit: 5,
-  },
-  sessionMemory: {
-    enabled: true,
   },
   logsEnabled: true,
   logLevel: 'info',

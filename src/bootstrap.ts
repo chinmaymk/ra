@@ -17,7 +17,6 @@ import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, create
 import { SessionMemoryStore, sessionMemoryWriteTool, sessionMemoryDeleteTool, createSessionMemoryMiddleware } from './session-memory'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
-import { createObservabilityMiddleware } from './observability/middleware'
 import type { IMessage, IProvider } from './providers/types'
 import { createProvider, buildProviderConfig } from './providers/registry'
 import { loadBuiltinSkills } from './skills/builtin'
@@ -26,7 +25,6 @@ import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath } from './utils/paths'
-import type { ObservabilityConfig } from './observability'
 import type { Logger } from './observability/logger'
 import type { Tracer } from './observability/tracer'
 
@@ -69,13 +67,11 @@ export async function bootstrap(
   await mkdir(sessionDir, { recursive: true })
 
   // ── Observability ──────────────────────────────────────────────────
-  const obsConfig: ObservabilityConfig = {
+  const { logger, tracer } = createObservability({
     enabled: config.logsEnabled || config.tracesEnabled,
     logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
     traces: { enabled: config.tracesEnabled, output: 'session' },
-  }
-  const { logger, tracer } = createObservability(obsConfig, { sessionId, sessionDir })
-  const obsMw = createObservabilityMiddleware(logger, tracer)
+  }, { sessionId, sessionDir })
 
   // ── Compaction model default ───────────────────────────────────────
   if (!config.compaction.model) {
@@ -126,7 +122,9 @@ export async function bootstrap(
 
   // ── Tools ──────────────────────────────────────────────────────────
   const tools = new ToolRegistry()
-  if (config.builtinTools) registerBuiltinTools(tools)
+  if (config.tools.builtin || Object.keys(config.tools.overrides).length > 0) {
+    registerBuiltinTools(tools, config.tools)
+  }
 
   const toolNames = tools.all().map(t => t.name)
   if (toolNames.length > 0) {
@@ -151,8 +149,13 @@ export async function bootstrap(
   }
 
   // ── Session Memory ───────────────────────────────────────────────
+  // Enabled by default when builtin tools are on; disable via tools.overrides.session_memory_write.enabled: false
+  const sessionMemoryEnabled =
+    config.tools.overrides.session_memory_write?.enabled !== false &&
+    config.tools.overrides.session_memory_delete?.enabled !== false &&
+    config.tools.builtin
   let sessionMemoryStore: SessionMemoryStore | undefined
-  if (config.sessionMemory.enabled) {
+  if (sessionMemoryEnabled) {
     sessionMemoryStore = new SessionMemoryStore()
     tools.register(sessionMemoryWriteTool(sessionMemoryStore))
     tools.register(sessionMemoryDeleteTool(sessionMemoryStore))
@@ -189,26 +192,25 @@ export async function bootstrap(
     logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
   }
 
-  // ── Prepend observability hooks (obs runs first) ───────────────────
-  for (const key of Object.keys(obsMw)) {
-    const k = key as keyof MiddlewareConfig
-    ;(middleware as any)[k] = ((obsMw as any)[k] ?? []).concat((middleware as any)[k] ?? [])
-  }
-
   // ── Subagent tool (registered last — child registry built lazily) ──
-  tools.register(subagentTool({
-    provider,
-    tools,
-    model: config.model,
-    systemPrompt: config.systemPrompt,
-    middleware,
-    thinking: config.thinking,
-    compaction: config.compaction,
-    toolTimeout: config.toolTimeout,
-    maxIterations: config.maxIterations,
-    maxConcurrency: config.maxConcurrency,
-    logger,
-  }))
+  const agentSettings = config.tools.overrides.Agent ?? {}
+  const agentEnabled = agentSettings.enabled !== false && config.tools.builtin
+  if (agentEnabled) {
+    const agentMaxConcurrency = (agentSettings.maxConcurrency as number | undefined) ?? config.maxConcurrency
+    tools.register(subagentTool({
+      provider,
+      tools,
+      model: config.model,
+      systemPrompt: config.systemPrompt,
+      middleware,
+      thinking: config.thinking,
+      compaction: config.compaction,
+      toolTimeout: config.toolTimeout,
+      maxIterations: config.maxIterations,
+      maxConcurrency: agentMaxConcurrency,
+      logger,
+    }))
+  }
 
   // ── Shutdown ───────────────────────────────────────────────────────
   const shutdown = async () => {

@@ -27,8 +27,9 @@ Each layer overrides the previous:
 | `dataDir` | `'.ra'` | Root directory for all runtime data (sessions, memory) |
 | `maxIterations` | `50` | Loop iteration limit |
 | `toolTimeout` | `30000` | Tool execution timeout (ms) |
-| `builtinTools` | `true` | Register built-in tools |
-| `maxConcurrency` | `4` | Parallel tool execution limit |
+| `tools.builtin` | `true` | Register built-in tools (master switch) |
+| `tools.overrides` | `{}` | Per-tool settings (enabled, rootDir, maxConcurrency) |
+| `maxConcurrency` | `4` | Parallel tool execution limit (fallback for Agent) |
 | `compaction.enabled` | `true` | Auto-summarize old messages |
 | `compaction.threshold` | `0.80` | Trigger compaction at 80% context window |
 | `memory.enabled` | `false` | SQLite-backed persistent memory |

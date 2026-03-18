@@ -30,6 +30,22 @@ export interface PermissionsConfig {
   rules?: PermissionRule[]
 }
 
+/** Per-tool configuration. `enabled` is universal; other keys are tool-specific and validated by each tool. */
+export interface ToolSettings {
+  /** Whether this tool is registered. Defaults to true when `tools.builtin` is true. */
+  enabled?: boolean
+  /** Arbitrary tool-specific settings (rootDir, maxConcurrency, etc.). */
+  [key: string]: unknown
+}
+
+/** Tools configuration section. Replaces the old `builtinTools` boolean. */
+export interface ToolsConfig {
+  /** Master switch: when true, all builtin tools are registered unless individually disabled. Default: true. */
+  builtin: boolean
+  /** Per-tool overrides keyed by tool name (e.g. Read, Write, Bash, Agent). */
+  overrides: Record<string, ToolSettings>
+}
+
 export interface RaConfig {
   provider: ProviderName
   model: string
@@ -64,7 +80,7 @@ export interface RaConfig {
   }
   maxIterations: number
   toolTimeout: number
-  builtinTools: boolean
+  tools: ToolsConfig
   builtinSkills: Record<string, boolean>
   permissions: PermissionsConfig
   middleware: Record<string, string[]>
@@ -84,9 +100,6 @@ export interface RaConfig {
     maxMemories: number  // max stored memories (oldest trimmed first)
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
-  }
-  sessionMemory: {
-    enabled: boolean     // enable ephemeral in-memory KV store for this session
   }
   logsEnabled: boolean
   logLevel: LogLevel

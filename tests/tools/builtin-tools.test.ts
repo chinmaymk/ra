@@ -279,4 +279,39 @@ describe('registerBuiltinTools', () => {
     expect(names).toContain('WebFetch')
     expect(names).toContain(process.platform === 'win32' ? 'PowerShell' : 'Bash')
   })
+
+  it('disables individual tools via overrides', () => {
+    const registry = new ToolRegistry()
+    registerBuiltinTools(registry, {
+      builtin: true,
+      overrides: { WebFetch: { enabled: false }, DeleteFile: { enabled: false } },
+    })
+    const names = registry.all().map(t => t.name)
+    expect(names).not.toContain('WebFetch')
+    expect(names).not.toContain('DeleteFile')
+    expect(names).toContain('Read')
+    expect(names).toContain('Write')
+    expect(names).toHaveLength(10)
+  })
+
+  it('registers no tools when builtin is false', () => {
+    const registry = new ToolRegistry()
+    registerBuiltinTools(registry, { builtin: false, overrides: {} })
+    expect(registry.all()).toHaveLength(0)
+  })
+
+  it('enforces rootDir on file tools', async () => {
+    const registry = new ToolRegistry()
+    registerBuiltinTools(registry, {
+      builtin: true,
+      overrides: { Read: { rootDir: TMP } },
+    })
+    const read = registry.get('Read')!
+    // Reading within rootDir should work
+    const result = await read.execute({ path: join(TMP, 'hello.txt') })
+    expect(result).toContain('line1')
+
+    // Reading outside rootDir should throw
+    expect(read.execute({ path: '/etc/passwd' })).rejects.toThrow('outside the allowed root directory')
+  })
 })
