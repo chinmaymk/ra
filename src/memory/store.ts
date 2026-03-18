@@ -5,10 +5,13 @@ import { dirname } from 'path'
 // Both share the same API surface (exec, prepare, get, all, run, close).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let Database: new (path: string) => any
-if ('Bun' in globalThis) {
+if ((globalThis as any).Bun) {
+  // Bun runtime — use built-in bun:sqlite
   Database = require('bun:sqlite').Database
 } else {
-  Database = require('node:sqlite').DatabaseSync
+  // Node.js runtime — use built-in node:sqlite (available in Node 22+)
+  const { DatabaseSync } = await import('node:sqlite')
+  Database = DatabaseSync as any
 }
 
 export interface Memory {

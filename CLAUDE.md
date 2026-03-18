@@ -93,4 +93,4 @@ test("description", () => {
 - Provider tests mock the SDK client
 - Loop tests use a `mockProvider()` that yields `StreamChunk[][]`
 - Integration tests in `tests/integration/` test full end-to-end flows
-- Node.js compatibility tests in `tests/node/` run via `vitest` to verify cross-runtime behavior
+- Node.js compatibility tests in `tests/node/` use `node:test` + `node:assert` — run via `bun test` or `npx tsx --test`

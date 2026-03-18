@@ -1,9 +1,10 @@
 // Node.js compatibility tests — verifies that modules work without Bun APIs.
-// Run via: npx vitest run tests/node/node-compat.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+// Compatible with both `node --test` and `bun test` via node:test.
+import { describe, it, beforeEach, afterEach } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 function makeTmp(): string {
   const dir = join(tmpdir(), `ra-node-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
@@ -17,13 +18,13 @@ describe('utils/fs', () => {
     const tmp = makeTmp()
     const p = join(tmp, 'test.txt')
     writeFileSync(p, 'hello')
-    expect(await fileExists(p)).toBe(true)
+    assert.equal(await fileExists(p), true)
     rmSync(tmp, { recursive: true, force: true })
   })
 
   it('fileExists returns false for missing file', async () => {
     const { fileExists } = await import('../../src/utils/fs')
-    expect(await fileExists('/tmp/does-not-exist-' + Date.now())).toBe(false)
+    assert.equal(await fileExists('/tmp/does-not-exist-' + Date.now()), false)
   })
 
   it('readText reads file content', async () => {
@@ -31,7 +32,7 @@ describe('utils/fs', () => {
     const tmp = makeTmp()
     const p = join(tmp, 'test.txt')
     writeFileSync(p, 'hello world')
-    expect(await readText(p)).toBe('hello world')
+    assert.equal(await readText(p), 'hello world')
     rmSync(tmp, { recursive: true, force: true })
   })
 })
@@ -51,15 +52,15 @@ describe('memory/store', () => {
     const { MemoryStore } = await import('../../src/memory/store')
     const store = new MemoryStore({ path: join(tmp, 'mem.db'), maxMemories: 100, ttlDays: 90 })
     const saved = store.save('test memory', 'tag1')
-    expect(saved.content).toBe('test memory')
-    expect(saved.tags).toBe('tag1')
-    expect(saved.id).toBeGreaterThan(0)
+    assert.equal(saved.content, 'test memory')
+    assert.equal(saved.tags, 'tag1')
+    assert.ok(saved.id > 0)
 
     const list = store.list()
-    expect(list.length).toBe(1)
-    expect(list[0].content).toBe('test memory')
+    assert.equal(list.length, 1)
+    assert.equal(list[0].content, 'test memory')
 
-    expect(store.count()).toBe(1)
+    assert.equal(store.count(), 1)
     store.close()
   })
 
@@ -71,8 +72,8 @@ describe('memory/store', () => {
     store.save('typescript is great', 'programming')
 
     const results = store.search('fox')
-    expect(results.length).toBe(1)
-    expect(results[0].content).toBe('the quick brown fox')
+    assert.equal(results.length, 1)
+    assert.equal(results[0].content, 'the quick brown fox')
     store.close()
   })
 
@@ -80,11 +81,11 @@ describe('memory/store', () => {
     const { MemoryStore } = await import('../../src/memory/store')
     const store = new MemoryStore({ path: join(tmp, 'mem.db'), maxMemories: 100, ttlDays: 90 })
     store.save('remember this', 'important')
-    expect(store.count()).toBe(1)
+    assert.equal(store.count(), 1)
 
     const forgotten = store.forget('remember')
-    expect(forgotten).toBe(1)
-    expect(store.count()).toBe(0)
+    assert.equal(forgotten, 1)
+    assert.equal(store.count(), 0)
     store.close()
   })
 
@@ -94,13 +95,13 @@ describe('memory/store', () => {
     store.save('first', '')
     store.save('second', '')
     store.save('third', '')
-    expect(store.count()).toBe(3)
+    assert.equal(store.count(), 3)
 
     store.trim()
-    expect(store.count()).toBe(2)
+    assert.equal(store.count(), 2)
 
     const list = store.list()
-    expect(list.map(m => m.content).sort()).toEqual(['second', 'third'])
+    assert.deepEqual(list.map(m => m.content).sort(), ['second', 'third'])
     store.close()
   })
 })
@@ -122,12 +123,13 @@ describe('observability/writer', () => {
     const writer = new JsonlWriter('file', filePath)
     writer.write({ event: 'test', value: 42 })
     writer.write({ event: 'another' })
+    await writer.flush()
 
     const content = readFileSync(filePath, 'utf-8')
     const lines = content.trim().split('\n')
-    expect(lines.length).toBe(2)
-    expect(JSON.parse(lines[0])).toEqual({ event: 'test', value: 42 })
-    expect(JSON.parse(lines[1])).toEqual({ event: 'another' })
+    assert.equal(lines.length, 2)
+    assert.deepEqual(JSON.parse(lines[0]), { event: 'test', value: 42 })
+    assert.deepEqual(JSON.parse(lines[1]), { event: 'another' })
   })
 })
 
@@ -151,8 +153,8 @@ describe('storage/sessions', () => {
     await storage.appendMessage(session.id, { role: 'assistant', content: 'hi' })
 
     const messages = await storage.readMessages(session.id)
-    expect(messages.length).toBe(2)
-    expect(messages[0].content).toBe('hello')
+    assert.equal(messages.length, 2)
+    assert.equal(messages[0].content, 'hello')
   })
 
   it('lists sessions', async () => {
@@ -163,7 +165,7 @@ describe('storage/sessions', () => {
     await storage.create({ provider: 'test', model: 'test' })
 
     const sessions = await storage.list()
-    expect(sessions.length).toBe(2)
+    assert.equal(sessions.length, 2)
   })
 })
 
@@ -197,7 +199,7 @@ describe('interfaces/http', () => {
     })
 
     await server.start()
-    expect(server.port).toBeGreaterThan(0)
+    assert.ok(server.port > 0)
     await server.stop()
   })
 })
@@ -208,8 +210,8 @@ describe('config', () => {
     const configDir = makeTmp()
     writeFileSync(join(configDir, 'ra.config.yml'), 'model: gpt-4\nprovider: openai\n')
     const config = await loadConfig({ cwd: configDir })
-    expect(config.model).toBe('gpt-4')
-    expect(config.provider).toBe('openai')
+    assert.equal(config.model, 'gpt-4')
+    assert.equal(config.provider, 'openai')
     rmSync(configDir, { recursive: true, force: true })
   })
 })

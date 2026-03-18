@@ -1,4 +1,4 @@
 [test]
 
-# Exclude Node.js-specific tests (run via vitest instead)
+# Exclude Node.js-specific tests (run via tsx --test on Node.js)
 exclude = ["tests/node/**"]

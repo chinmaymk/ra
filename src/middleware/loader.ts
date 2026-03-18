@@ -12,7 +12,7 @@ const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
 /** Detect whether Bun's transpiler is available at runtime. */
 function hasBunTranspiler(): boolean {
   try {
-    return 'Bun' in globalThis && typeof (globalThis.Bun).Transpiler === 'function'
+    return typeof (globalThis as any).Bun?.Transpiler === 'function'
   } catch {
     return false
   }

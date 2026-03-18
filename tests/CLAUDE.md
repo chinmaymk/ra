@@ -1,6 +1,6 @@
 # tests/
 
-Test suite using Bun's built-in test runner. Mirrors the `src/` directory structure. Node.js compatibility tests in `tests/node/` use vitest.
+Test suite using Bun's built-in test runner. Mirrors the `src/` directory structure. Node.js compatibility tests in `tests/node/` use `node:test` + `node:assert`.
 
 ## Running Tests
 
@@ -8,7 +8,7 @@ Test suite using Bun's built-in test runner. Mirrors the `src/` directory struct
 bun test                    # all Bun tests
 bun test tests/agent/       # tests in a directory
 bun test tests/agent/loop   # tests matching a pattern
-bunx vitest run             # Node.js compatibility tests
+npx tsx --test tests/node/  # Node.js compatibility tests
 ```
 
 ## Test Patterns
@@ -39,9 +39,10 @@ expect(result).toBe("expected")
 Located in `tests/integration/`. Test full flows from config to output.
 
 ### Node.js Compatibility Tests
-Located in `tests/node/`. Run via vitest to verify cross-runtime behavior:
+Located in `tests/node/`. Use `node:test` and `node:assert` so they run on both Bun and Node.js:
 ```ts
-import { describe, it, expect } from "vitest"
+import { describe, it } from "node:test"
+import assert from "node:assert/strict"
 // Test that Node.js equivalents of Bun APIs work correctly
 ```
 
@@ -51,4 +52,4 @@ import { describe, it, expect } from "vitest"
 - One `test()` per behavior, descriptive names
 - Mock external dependencies, never make real API calls
 - Bun tests: `import { test, expect } from "bun:test"`
-- Node.js compat tests: `import { describe, it, expect } from "vitest"`
+- Node.js compat tests: `import { describe, it } from "node:test"` + `import assert from "node:assert/strict"`

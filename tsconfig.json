@@ -31,7 +31,6 @@
   },
   "exclude": [
     "docs",
-    "tests/node",
-    "vitest.config.ts"
+    "tests/node"
   ]
 }
