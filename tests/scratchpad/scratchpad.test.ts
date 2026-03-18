@@ -257,4 +257,65 @@ describe('scratchpad middleware', () => {
     expect(cleaned).toContain('Before scratchpad')
     expect(cleaned).toContain('After scratchpad')
   })
+
+  it('removes scratchpad from ContentPart[] when entire text part is scratchpad', async () => {
+    store.set('plan', 'new plan')
+
+    const mw = createScratchpadMiddleware(store)
+
+    // Simulate compaction's appendToMessage merging scratchpad into a ContentPart[] message
+    // (e.g. pinned user message had an image, scratchpad was appended as a text part)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      {
+        role: 'user',
+        content: [
+          { type: 'text' as const, text: 'look at this image' },
+          { type: 'image' as const, source: { type: 'base64' as const, mediaType: 'image/png', data: 'abc' } },
+          { type: 'text' as const, text: '\n\n<scratchpad>\n### old\nold data\n</scratchpad>' },
+        ],
+      },
+      { role: 'assistant', content: 'ok' },
+    ]
+    await mw(makeCtx(messages))
+
+    // Scratchpad text part should be removed, image and original text preserved
+    const parts = messages[1]!.content as any[]
+    expect(parts.some((p: any) => p.type === 'text' && p.text.includes('<scratchpad>'))).toBe(false)
+    expect(parts.some((p: any) => p.type === 'image')).toBe(true)
+    expect(parts.some((p: any) => p.type === 'text' && p.text === 'look at this image')).toBe(true)
+
+    // New scratchpad should be injected
+    const scratchpadMsg = messages.find(
+      m => typeof m.content === 'string' && (m.content as string).startsWith('<scratchpad>')
+    )
+    expect(scratchpadMsg).toBeDefined()
+    expect((scratchpadMsg!.content as string)).toContain('new plan')
+  })
+
+  it('strips scratchpad from ContentPart[] text part that has other text around it', async () => {
+    store.set('task', 'latest')
+
+    const mw = createScratchpadMiddleware(store)
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      {
+        role: 'user',
+        content: [
+          { type: 'text' as const, text: 'original text' },
+          { type: 'text' as const, text: 'before pad\n\n<scratchpad>\n### old\nstale\n</scratchpad>\n\nafter pad' },
+        ],
+      },
+      { role: 'assistant', content: 'ok' },
+    ]
+    await mw(makeCtx(messages))
+
+    const parts = messages[1]!.content as any[]
+    const textParts = parts.filter((p: any) => p.type === 'text')
+    const allText = textParts.map((p: any) => p.text).join(' ')
+    expect(allText).not.toContain('<scratchpad>')
+    expect(allText).toContain('before pad')
+    expect(allText).toContain('after pad')
+  })
 })
