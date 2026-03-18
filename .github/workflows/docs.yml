@@ -68,41 +68,48 @@ jobs:
             echo "Building docs for $tag..."
 
             # Check out the docs/site content from this tag
-            TMPDIR=$(mktemp -d)
-            git archive "$tag" -- docs/site/ | tar -x -C "$TMPDIR" 2>/dev/null || {
+            TAG_DIR=$(mktemp -d)
+            git archive "$tag" -- docs/site/ | tar -x -C "$TAG_DIR" 2>/dev/null || {
               echo "  Skipping $tag — no docs/site/"
-              rm -rf "$TMPDIR"
+              rm -rf "$TAG_DIR"
               continue
             }
 
-            if [ ! -f "$TMPDIR/docs/site/package.json" ]; then
+            if [ ! -f "$TAG_DIR/docs/site/package.json" ]; then
               echo "  Skipping $tag — no package.json"
-              rm -rf "$TMPDIR"
+              rm -rf "$TAG_DIR"
               continue
             fi
 
             # Copy the current theme so version switcher works
-            rm -rf "$TMPDIR/docs/site/.vitepress/theme"
-            cp -r .vitepress/theme "$TMPDIR/docs/site/.vitepress/theme"
+            rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
+            cp -r .vitepress/theme "$TAG_DIR/docs/site/.vitepress/theme"
 
-            # Create versioned VitePress config
-            cat > "$TMPDIR/docs/site/.vitepress/versioned-config.ts" << VCONF
-import baseConfig from './config'
-import { defineConfig, mergeConfig } from 'vitepress'
-export default mergeConfig(baseConfig, defineConfig({ base: '/ra/v/${version}/' }))
+            # Overwrite the config to set the versioned base path
+            cat > "$TAG_DIR/docs/site/.vitepress/config.ts" << VCONF
+import { defineConfig } from 'vitepress'
+export default defineConfig({
+  title: 'ra',
+  base: '/ra/v/${version}/',
+  appearance: 'dark',
+  themeConfig: {
+    logo: '/logo.svg',
+    search: { provider: 'local' },
+  },
+})
 VCONF
 
             # Install deps and build
-            (cd "$TMPDIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build --config .vitepress/versioned-config.ts) || {
+            (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build) || {
               echo "  Warning: build failed for $tag, skipping"
-              rm -rf "$TMPDIR"
+              rm -rf "$TAG_DIR"
               continue
             }
 
             # Save to cache dir
             mkdir -p "/tmp/versioned-docs-dist/$version"
-            cp -r "$TMPDIR/docs/site/.vitepress/dist/"* "/tmp/versioned-docs-dist/$version/"
-            rm -rf "$TMPDIR"
+            cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* "/tmp/versioned-docs-dist/$version/"
+            rm -rf "$TAG_DIR"
             echo "  Done: v$version"
           done
 
