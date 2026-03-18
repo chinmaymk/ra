@@ -47,7 +47,7 @@ export interface AppContext {
 
 export async function bootstrap(
   config: RaConfig,
-  opts: { sessionId?: string },
+  opts: { sessionId?: string; skipSession?: boolean },
 ): Promise<AppContext> {
   // ── Paths derived from dataDir ───────────────────────────────────
   const { join } = await import('path')
@@ -58,22 +58,23 @@ export async function bootstrap(
   const storage = new SessionStorage(storagePath)
   await storage.init()
 
-  const isReadOnly = config.interface === 'inspector'
-  const sessionId = isReadOnly
-    ? 'inspector'
-    : opts.sessionId ?? (await storage.create({
-        provider: config.provider,
-        model: config.model,
-        interface: config.interface,
-      })).id
-  const sessionDir = storage.sessionDir(sessionId)
-  if (!isReadOnly) {
+  let sessionId: string
+  let sessionDir: string | undefined
+  if (opts.skipSession) {
+    sessionId = 'none'
+  } else {
+    sessionId = opts.sessionId ?? (await storage.create({
+      provider: config.provider,
+      model: config.model,
+      interface: config.interface,
+    })).id
+    sessionDir = storage.sessionDir(sessionId)
     await mkdir(sessionDir, { recursive: true })
   }
 
   // ── Observability ──────────────────────────────────────────────────
   const { logger, tracer } = createObservability({
-    enabled: !isReadOnly && (config.logsEnabled || config.tracesEnabled),
+    enabled: !opts.skipSession && (config.logsEnabled || config.tracesEnabled),
     logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
     traces: { enabled: config.tracesEnabled, output: 'session' },
   }, { sessionId, sessionDir })

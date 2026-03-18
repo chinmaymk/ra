@@ -301,10 +301,11 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  const app = await bootstrap(config, { sessionId: parsed.meta.resume })
+  const isInspector = config.interface === 'inspector'
+  const app = await bootstrap(config, { sessionId: parsed.meta.resume, skipSession: isInspector })
 
   const signals = onSignals(app.shutdown)
-  await handleStandaloneCommands(parsed, app)
+  if (!isInspector) await handleStandaloneCommands(parsed, app)
 
   app.logger.info('starting interface', { interface: config.interface })
 
