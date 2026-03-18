@@ -131,6 +131,65 @@
   .badge { font-size: 10px; background: var(--bg3); color: var(--text2); padding: 2px 8px; border-radius: 10px; }
   .loading { text-align: center; padding: 32px; color: var(--text2); }
 
+  /* Overview */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .stat-card .stat-value { font-size: 22px; font-weight: 700; color: var(--text); }
+  .stat-card .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2); margin-top: 2px; }
+  .stat-card.error .stat-value { color: var(--red); }
+  .stat-card.accent .stat-value { color: var(--accent); }
+  .stat-card.green .stat-value { color: var(--accent2); }
+  .stat-card.orange .stat-value { color: var(--orange); }
+
+  .tool-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .tool-table th { text-align: left; padding: 8px 12px; color: var(--text2); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
+  .tool-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .tool-table tr:hover td { background: var(--bg2); }
+  .tool-table .tool-name { color: var(--orange); font-weight: 600; }
+  .tool-table .tool-errors { color: var(--red); }
+
+  .iter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px; }
+  .iter-bar .iter-label { min-width: 28px; color: var(--text2); text-align: right; }
+  .iter-bar .iter-track { flex: 1; height: 20px; background: var(--bg3); border-radius: 4px; overflow: hidden; display: flex; position: relative; }
+  .iter-bar .iter-segment { height: 100%; transition: width 0.3s; }
+  .iter-bar .seg-input { background: var(--accent); opacity: 0.7; }
+  .iter-bar .seg-output { background: var(--accent2); opacity: 0.7; }
+  .iter-bar .seg-thinking { background: var(--purple); opacity: 0.7; }
+  .iter-bar .iter-info { min-width: 100px; color: var(--text2); font-size: 10px; }
+  .token-legend { display: flex; gap: 16px; margin-bottom: 12px; font-size: 11px; color: var(--text2); }
+  .token-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .token-legend .leg-input::before { background: var(--accent); opacity: 0.7; }
+  .token-legend .leg-output::before { background: var(--accent2); opacity: 0.7; }
+  .token-legend .leg-thinking::before { background: var(--purple); opacity: 0.7; }
+
+  /* Timeline */
+  .tl-event { display: grid; grid-template-columns: 120px 90px 1fr; gap: 8px; padding: 8px 12px; border-left: 3px solid var(--border); margin-left: 8px; font-size: 12px; }
+  .tl-event:hover { background: var(--bg2); }
+  .tl-event.tl-model_call { border-left-color: var(--accent); }
+  .tl-event.tl-tool { border-left-color: var(--orange); }
+  .tl-event.tl-iteration { border-left-color: var(--accent2); }
+  .tl-event.tl-loop { border-left-color: var(--purple); }
+  .tl-event.tl-log_error { border-left-color: var(--red); background: rgba(248,81,73,0.05); }
+  .tl-event.tl-log_warn { border-left-color: var(--orange); background: rgba(210,153,34,0.05); }
+  .tl-ts { color: var(--text2); font-size: 11px; }
+  .tl-type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .tl-type.tl-t-model_call { color: var(--accent); }
+  .tl-type.tl-t-tool { color: var(--orange); }
+  .tl-type.tl-t-iteration { color: var(--accent2); }
+  .tl-type.tl-t-loop { color: var(--purple); }
+  .tl-type.tl-t-log_error { color: var(--red); }
+  .tl-type.tl-t-log_warn { color: var(--orange); }
+  .tl-label { color: var(--text); }
+  .tl-detail { color: var(--text2); font-size: 11px; margin-top: 2px; }
+  .tl-dur { color: var(--text2); font-size: 10px; }
+
+  /* Thinking blocks */
+  .thinking-toggle { cursor: pointer; user-select: none; }
+  .thinking-toggle::before { content: '\25B6 '; font-size: 10px; color: var(--purple); }
+  .thinking-toggle.open::before { content: '\25BC '; }
+  .thinking-content { display: none; margin-top: 4px; padding: 8px 12px; background: var(--bg); border-radius: 6px; border: 1px solid #2d3555; color: var(--text2); font-size: 12px; }
+  .thinking-toggle.open + .thinking-content { display: block; }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -145,7 +204,9 @@
     <div class="tab-groups">
       <div class="tab-group">
         <span class="tab-group-label">Session</span>
-        <div class="tab active" data-view="messages" data-scope="session">Messages</div>
+        <div class="tab active" data-view="overview" data-scope="session">Overview</div>
+        <div class="tab" data-view="timeline" data-scope="session">Timeline</div>
+        <div class="tab" data-view="messages" data-scope="session">Messages</div>
         <div class="tab" data-view="logs" data-scope="session">Logs</div>
         <div class="tab" data-view="traces" data-scope="session">Traces</div>
       </div>
@@ -172,9 +233,9 @@
   const $$ = (s, el) => [...(el || document).querySelectorAll(s)];
   const app = document.getElementById('app');
   const main = document.getElementById('main');
-  const SESSION_VIEWS = ['messages', 'logs', 'traces'];
+  const SESSION_VIEWS = ['overview', 'timeline', 'messages', 'logs', 'traces'];
   let currentSession = null;
-  let currentView = 'messages';
+  let currentView = 'overview';
   let sessionsMap = {};
 
   function isGlobal(view) { return !SESSION_VIEWS.includes(view); }
@@ -228,9 +289,9 @@
         currentSession = el.dataset.id;
         // Auto-switch to session scope if on a global tab
         if (isGlobal(currentView)) {
-          currentView = 'messages';
+          currentView = 'overview';
           $$('.tab').forEach(t => t.classList.remove('active'));
-          $$('.tab').forEach(t => { if (t.dataset.view === 'messages') t.classList.add('active'); });
+          $$('.tab').forEach(t => { if (t.dataset.view === 'overview') t.classList.add('active'); });
           updateLayout();
         }
         loadSessionView(currentSession, currentView);
@@ -273,7 +334,9 @@
     const result = await apiFetch('/api/sessions/' + id + '/' + view);
     if (result.error) { showError(result.error); return; }
     const data = result.data;
-    if (view === 'messages') renderMessages(data);
+    if (view === 'overview') renderOverview(data);
+    else if (view === 'timeline') renderTimeline(data);
+    else if (view === 'messages') renderMessages(data);
     else if (view === 'logs') renderLogs(data);
     else if (view === 'traces') renderTraces(data);
     main.innerHTML = sessionBannerHtml(id) + main.innerHTML;
@@ -289,6 +352,101 @@
     else if (view === 'middleware') renderMiddleware(result.data);
   }
 
+  // ── Render Overview ──
+  function fmtDuration(ms) {
+    if (ms == null) return '-';
+    if (ms < 1000) return ms.toFixed(0) + 'ms';
+    if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+    return (ms / 60000).toFixed(1) + 'm';
+  }
+  function fmtTokens(n) {
+    if (n == null || n === 0) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+  }
+
+  function renderOverview(stats) {
+    if (!stats || !stats.iterations) {
+      main.innerHTML = '<div class="empty">No trace data available for this session.<br><span style="font-size:11px;color:var(--text2)">Enable observability with <code style="color:var(--accent)">observability.traces.output: session</code> in config.</span></div>';
+      return;
+    }
+
+    let html = '';
+
+    // Stats cards
+    html += '<div class="stats-grid">' +
+      '<div class="stat-card accent"><div class="stat-value">' + fmtDuration(stats.totalDurationMs) + '</div><div class="stat-label">Duration</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + stats.iterations + '</div><div class="stat-label">Iterations</div></div>' +
+      '<div class="stat-card green"><div class="stat-value">' + fmtTokens(stats.totalTokens) + '</div><div class="stat-label">Total Tokens</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.inputTokens) + '</div><div class="stat-label">Input Tokens</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.outputTokens) + '</div><div class="stat-label">Output Tokens</div></div>' +
+      (stats.thinkingTokens ? '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.thinkingTokens) + '</div><div class="stat-label">Thinking Tokens</div></div>' : '') +
+      '<div class="stat-card orange"><div class="stat-value">' + stats.totalToolCalls + '</div><div class="stat-label">Tool Calls</div></div>' +
+      (stats.totalToolErrors ? '<div class="stat-card error"><div class="stat-value">' + stats.totalToolErrors + '</div><div class="stat-label">Tool Errors</div></div>' : '') +
+      '<div class="stat-card"><div class="stat-value">' + stats.totalMessages + '</div><div class="stat-label">Messages</div></div>' +
+      (stats.status === 'error' ? '<div class="stat-card error"><div class="stat-value">ERROR</div><div class="stat-label">Status</div></div>' : '<div class="stat-card green"><div class="stat-value">OK</div><div class="stat-label">Status</div></div>') +
+      '</div>';
+
+    // Token usage per iteration
+    if (stats.iterationStats && stats.iterationStats.length) {
+      html += '<div class="config-section"><h2>Tokens per Iteration</h2>';
+      html += '<div class="token-legend"><span class="leg-input">Input</span><span class="leg-output">Output</span><span class="leg-thinking">Thinking</span></div>';
+      var maxTok = Math.max(1, ...stats.iterationStats.map(function(i) { return i.inputTokens + i.outputTokens + i.thinkingTokens; }));
+      html += stats.iterationStats.map(function(it) {
+        var inPct = (it.inputTokens / maxTok * 100).toFixed(1);
+        var outPct = (it.outputTokens / maxTok * 100).toFixed(1);
+        var thinkPct = (it.thinkingTokens / maxTok * 100).toFixed(1);
+        var toolStr = it.toolNames && it.toolNames.length ? it.toolNames.join(', ') : 'no tools';
+        return '<div class="iter-bar">' +
+          '<span class="iter-label">#' + it.iteration + '</span>' +
+          '<div class="iter-track">' +
+            '<div class="iter-segment seg-input" style="width:' + inPct + '%"></div>' +
+            '<div class="iter-segment seg-output" style="width:' + outPct + '%"></div>' +
+            '<div class="iter-segment seg-thinking" style="width:' + thinkPct + '%"></div>' +
+          '</div>' +
+          '<span class="iter-info">' + fmtDuration(it.durationMs) + ' · ' + fmtTokens(it.inputTokens + it.outputTokens + it.thinkingTokens) + ' tok · ' + it.toolCalls + ' tools</span>' +
+        '</div>';
+      }).join('');
+      html += '</div>';
+    }
+
+    // Tool summary table
+    if (stats.tools && stats.tools.length) {
+      html += '<div class="config-section"><h2>Tool Usage</h2>' +
+        '<table class="tool-table"><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Total Time</th><th>Avg Time</th></tr></thead><tbody>' +
+        stats.tools.map(function(t) {
+          return '<tr>' +
+            '<td class="tool-name">' + esc(t.name) + '</td>' +
+            '<td>' + t.calls + '</td>' +
+            '<td' + (t.errors ? ' class="tool-errors"' : '') + '>' + t.errors + '</td>' +
+            '<td>' + fmtDuration(t.totalMs) + '</td>' +
+            '<td>' + fmtDuration(t.calls ? t.totalMs / t.calls : 0) + '</td></tr>';
+        }).join('') +
+        '</tbody></table></div>';
+    }
+
+    main.innerHTML = html;
+  }
+
+  // ── Render Timeline ──
+  function renderTimeline(events) {
+    if (!events || !events.length) {
+      main.innerHTML = '<div class="empty">No timeline events. Enable observability to see the timeline.</div>';
+      return;
+    }
+    main.innerHTML = events.map(function(ev) {
+      var ts = ev.ts ? new Date(ev.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:3}) : '';
+      var dur = ev.durationMs != null ? fmtDuration(ev.durationMs) : '';
+      return '<div class="tl-event tl-' + esc(ev.type) + '">' +
+        '<span class="tl-ts">' + esc(ts) + (dur ? ' <span class="tl-dur">(' + esc(dur) + ')</span>' : '') + '</span>' +
+        '<span class="tl-type tl-t-' + esc(ev.type) + '">' + esc(ev.type.replace('log_','').replace('_',' ')) + '</span>' +
+        '<span><span class="tl-label">' + esc(ev.label) + '</span>' +
+        (ev.detail ? '<div class="tl-detail">' + esc(ev.detail) + '</div>' : '') +
+        '</span></div>';
+    }).join('');
+  }
+
   // ── Render Messages ──
   function renderMessages(messages) {
     if (!messages.length) { main.innerHTML = '<div class="empty">No messages</div>'; return; }
@@ -302,7 +460,10 @@
         content = m.content.map(block => {
           if (typeof block === 'string') return esc(block);
           if (block.type === 'text') return esc(block.text || '');
-          if (block.type === 'thinking') return '<span style="color:var(--purple)">[thinking] </span>' + esc(block.thinking || '');
+          if (block.type === 'thinking') {
+            return '<span class="thinking-toggle" onclick="this.classList.toggle(\'open\')">[thinking] ' + esc((block.thinking || '').slice(0, 80)) + (block.thinking && block.thinking.length > 80 ? '…' : '') + '</span>' +
+              '<div class="thinking-content">' + esc(block.thinking || '') + '</div>';
+          }
           if (block.type === 'tool_use') return '<span style="color:var(--orange)">[tool_use: ' + esc(block.name || '') + ']</span>\n' + esc(JSON.stringify(block.input, null, 2));
           if (block.type === 'tool_result') return '<span style="color:var(--accent2)">[tool_result]</span>\n' + esc(typeof block.content === 'string' ? block.content : JSON.stringify(block.content, null, 2));
           return esc(JSON.stringify(block, null, 2));
