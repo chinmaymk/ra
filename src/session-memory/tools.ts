@@ -8,20 +8,20 @@ export function sessionMemoryWriteTool(store: SessionMemoryStore): ITool {
       'Store a key-value pair in session memory — a scratchpad that lasts for the entire conversation. ' +
       'Entries written here are guaranteed to remain visible to you in every turn, even as older messages ' +
       'are summarized to save space. Use this to remember:\n' +
+      '- Task checklists and progress tracking (e.g. "- [x] step 1\\n- [ ] step 2\\n- [ ] step 3")\n' +
       '- Plans and multi-step strategies you are executing\n' +
       '- Important decisions and their rationale\n' +
-      '- Task progress and status tracking\n' +
       '- Intermediate results you will need later\n' +
       '- Key facts extracted from earlier in the conversation\n' +
-      'Writing to an existing key overwrites the previous value. ' +
-      'Keep keys short and descriptive. Values can be any text (plain text, markdown, JSON, etc.). ' +
+      'Writing to an existing key overwrites the previous value — use this to update checklists ' +
+      'as you complete steps. Keep keys short and descriptive. Values can be any text (plain text, markdown, JSON, etc.). ' +
       'Session memory is NOT persisted across sessions — for long-term memory use memory_save instead.',
     inputSchema: {
       type: 'object',
       properties: {
         key: {
           type: 'string',
-          description: 'A short descriptive identifier for this entry. Examples: "plan", "task_progress", "architecture_decisions", "user_preferences".',
+          description: 'A short descriptive identifier for this entry. Examples: "checklist", "plan", "task_progress", "architecture_decisions", "user_preferences".',
         },
         value: {
           type: 'string',

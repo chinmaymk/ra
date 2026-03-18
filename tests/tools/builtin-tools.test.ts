@@ -14,7 +14,6 @@ import { deleteFileTool } from '../../src/tools/delete-file'
 import { executeBashTool } from '../../src/tools/shell-exec'
 import { webFetchTool } from '../../src/tools/web-fetch'
 import { askUserTool } from '../../src/tools/ask-user'
-import { checklistTool } from '../../src/tools/checklist'
 import { registerBuiltinTools } from '../../src/tools'
 import { ToolRegistry } from '../../src/agent/tool-registry'
 
@@ -260,43 +259,13 @@ describe('AskUserQuestion', () => {
   })
 })
 
-describe('TodoWrite', () => {
-  it('tracks items through full lifecycle with dynamic description showing remaining', async () => {
-    const tool = checklistTool()
-
-    // Description starts without count when empty
-    expect(tool.description).not.toContain('remaining')
-
-    await tool.execute({ action: 'add', item: 'Write tests' })
-    await tool.execute({ action: 'add', item: 'Fix bug' })
-    const r = await tool.execute({ action: 'add', item: 'Deploy' }) as string
-    expect(r).toContain('3 remaining')
-
-    // Description dynamically shows remaining items with indices
-    expect(tool.description).toContain('Remaining (3/3): 0: Write tests, 1: Fix bug, 2: Deploy')
-
-    await tool.execute({ action: 'check', index: 0 })
-    expect(tool.description).toContain('Remaining (2/3): 1: Fix bug, 2: Deploy')
-
-    const list = await tool.execute({ action: 'list' }) as string
-    expect(list).toContain('[x] Write tests')
-    expect(list).toContain('[ ] Fix bug')
-    expect(list).toContain('2 of 3 remaining')
-
-    await tool.execute({ action: 'remove', index: 1 })
-    const list2 = await tool.execute({ action: 'list' }) as string
-    expect(list2).not.toContain('Fix bug')
-    expect(list2).toContain('1 of 2 remaining')
-  })
-})
-
 describe('registerBuiltinTools', () => {
-  it('registers all 13 tools with platform-specific shell', () => {
+  it('registers all 12 tools with platform-specific shell', () => {
     const registry = new ToolRegistry()
     registerBuiltinTools(registry)
     const names = registry.all().map(t => t.name)
 
-    expect(names).toHaveLength(13)
+    expect(names).toHaveLength(12)
     expect(names).toContain('Read')
     expect(names).toContain('Write')
     expect(names).toContain('Edit')
@@ -308,7 +277,6 @@ describe('registerBuiltinTools', () => {
     expect(names).toContain('CopyFile')
     expect(names).toContain('DeleteFile')
     expect(names).toContain('WebFetch')
-    expect(names).toContain('TodoWrite')
     expect(names).toContain(process.platform === 'win32' ? 'PowerShell' : 'Bash')
   })
 })
