@@ -255,15 +255,9 @@ async function launchRepl(app: AppContext): Promise<void> {
 }
 
 async function launchInspector(app: AppContext): Promise<void> {
-  const inspector = new InspectorServer({
-    port: app.config.inspector.port,
-    storage: app.storage,
-    memoryStore: app.memoryStore,
-    dataDir: app.config.dataDir,
-  })
+  const inspector = new InspectorServer(app)
   await inspector.start()
   console.error(`Inspector running at http://localhost:${inspector.port}`)
-  await new Promise(() => {}) // keep alive
 }
 
 // ── Main ─────────────────────────────────────────────────────────────
