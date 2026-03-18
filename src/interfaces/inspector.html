@@ -369,7 +369,7 @@
 
   function renderOverview(stats) {
     if (!stats || !stats.iterations) {
-      main.innerHTML = '<div class="empty">No trace data available for this session.<br><span style="font-size:11px;color:var(--text2)">Enable observability with <code style="color:var(--accent)">observability.traces.output: session</code> in config.</span></div>';
+      main.innerHTML = '<div class="empty">No trace data available for this session.<br><span style="font-size:11px;color:var(--text2)">Traces are enabled by default. Check that <code style="color:var(--accent)">tracesEnabled: true</code> in config.</span></div>';
       return;
     }
 

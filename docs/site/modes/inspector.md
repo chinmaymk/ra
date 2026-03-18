@@ -12,6 +12,8 @@ Open `http://localhost:3002` in your browser.
 
 ## Views
 
+![Inspector Overview](/inspector-overview.png)
+
 ### Session views
 
 Select a session from the sidebar to see its data across five tabs:
@@ -35,21 +37,24 @@ Select a session from the sidebar to see its data across five tabs:
 
 ## Overview dashboard
 
+![Overview dashboard](/inspector-overview.png)
+
 The Overview tab aggregates trace data into an at-a-glance summary:
 
 - **Stats cards** — total duration, iteration count, input/output/thinking tokens, tool calls, tool errors, message count, and loop status (ok/error)
 - **Token chart** — horizontal bar per iteration showing input (blue), output (green), and thinking (purple) token usage relative to the most expensive iteration
 - **Tool table** — every tool used in the session, sorted by call count, with error count and total/average execution time
 
-> The Overview tab requires observability traces. If you see "No trace data available", enable tracing:
+> The Overview tab requires observability traces. Traces are enabled by default — if you see "No trace data available", check that tracing hasn't been disabled:
 >
 > ```yaml
-> observability:
->   traces:
->     output: session
+> tracesEnabled: true   # default: true
+> logsEnabled: true     # default: true
 > ```
 
 ## Timeline
+
+![Timeline view](/inspector-timeline.png)
 
 The Timeline tab merges two data sources into one chronological view:
 
