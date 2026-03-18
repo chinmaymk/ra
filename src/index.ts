@@ -272,6 +272,11 @@ async function main(): Promise<void> {
     }
   }
 
+  // Infer CLI mode when a prompt is given without an explicit interface flag
+  if (parsed.meta.prompt && !parsed.config.interface) {
+    parsed.config.interface = 'cli' as const
+  }
+
   const config = await loadConfig({
     cwd: process.cwd(),
     configPath: parsed.meta.configPath,
