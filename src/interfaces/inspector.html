@@ -331,7 +331,8 @@
   // ── Load session-scoped view ──
   async function loadSessionView(id, view) {
     main.innerHTML = '<div class="loading">Loading…</div>';
-    const result = await apiFetch('/api/sessions/' + id + '/' + view);
+    const apiView = view === 'overview' ? 'stats' : view;
+    const result = await apiFetch('/api/sessions/' + id + '/' + apiView);
     if (result.error) { showError(result.error); return; }
     const data = result.data;
     if (view === 'overview') renderOverview(data);
