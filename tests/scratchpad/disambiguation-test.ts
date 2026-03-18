@@ -2,7 +2,7 @@
  * Disambiguation test — checks whether a model correctly chooses
  * session-scoped vs persistent tools when both are available.
  *
- * Run:  ANTHROPIC_API_KEY=sk-... bun run tests/session-memory/disambiguation-test.ts
+ * Run:  ANTHROPIC_API_KEY=sk-... bun run tests/scratchpad/disambiguation-test.ts
  *
  * Compares two naming schemes:
  *   A) session_memory_write / session_memory_delete   (current)

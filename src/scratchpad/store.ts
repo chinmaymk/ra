@@ -1,9 +1,9 @@
 /**
- * SessionMemoryStore — ephemeral in-memory key-value store scoped to a single session.
+ * ScratchpadStore — ephemeral in-memory key-value store scoped to a single session.
  * Survives context compaction (re-injected each turn via middleware).
  * Useful as a scratchpad, plan tracker, or state that outlives compaction.
  */
-export class SessionMemoryStore {
+export class ScratchpadStore {
   private data = new Map<string, string>()
 
   get(key: string): string | undefined {

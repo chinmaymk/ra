@@ -14,7 +14,7 @@ import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
 import { McpClient } from './mcp/client'
 import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, createMemoryMiddleware } from './memory'
-import { SessionMemoryStore, sessionMemoryWriteTool, sessionMemoryDeleteTool, createSessionMemoryMiddleware } from './session-memory'
+import { ScratchpadStore, scratchpadWriteTool, scratchpadDeleteTool, createScratchpadMiddleware } from './scratchpad'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
 import type { IMessage, IProvider } from './providers/types'
@@ -38,7 +38,7 @@ export interface AppContext {
   sessionId: string
   contextMessages: IMessage[]
   memoryStore: MemoryStore | undefined
-  sessionMemoryStore: SessionMemoryStore | undefined
+  scratchpadStore: ScratchpadStore | undefined
   mcpClient: McpClient
   logger: Logger
   tracer: Tracer
@@ -148,20 +148,20 @@ export async function bootstrap(
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
 
-  // ── Session Memory ───────────────────────────────────────────────
-  // Enabled by default when builtin tools are on; disable via tools.overrides.session_memory.enabled: false
-  const sessionMemoryEnabled =
-    config.tools.overrides.session_memory?.enabled !== false &&
+  // ── Scratchpad ───────────────────────────────────────────────────
+  // Enabled by default when builtin tools are on; disable via tools.overrides.scratchpad.enabled: false
+  const scratchpadEnabled =
+    config.tools.overrides.scratchpad?.enabled !== false &&
     config.tools.builtin
-  let sessionMemoryStore: SessionMemoryStore | undefined
-  if (sessionMemoryEnabled) {
-    sessionMemoryStore = new SessionMemoryStore()
-    tools.register(sessionMemoryWriteTool(sessionMemoryStore))
-    tools.register(sessionMemoryDeleteTool(sessionMemoryStore))
+  let scratchpadStore: ScratchpadStore | undefined
+  if (scratchpadEnabled) {
+    scratchpadStore = new ScratchpadStore()
+    tools.register(scratchpadWriteTool(scratchpadStore))
+    tools.register(scratchpadDeleteTool(scratchpadStore))
 
-    const sessionMemMw = createSessionMemoryMiddleware(sessionMemoryStore)
-    middleware.beforeModelCall = [...(middleware.beforeModelCall ?? []), sessionMemMw]
-    logger.info('session memory initialized')
+    const scratchpadMw = createScratchpadMiddleware(scratchpadStore)
+    middleware.beforeModelCall = [...(middleware.beforeModelCall ?? []), scratchpadMw]
+    logger.info('scratchpad initialized')
   }
 
   // ── Skills ─────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ export async function bootstrap(
     sessionId,
     contextMessages,
     memoryStore,
-    sessionMemoryStore,
+    scratchpadStore,
     mcpClient,
     logger,
     tracer,

@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach } from 'bun:test'
-import { SessionMemoryStore } from '../../src/session-memory/store'
-import { sessionMemoryWriteTool, sessionMemoryDeleteTool } from '../../src/session-memory/tools'
-import { createSessionMemoryMiddleware } from '../../src/session-memory/middleware'
+import { ScratchpadStore } from '../../src/scratchpad/store'
+import { scratchpadWriteTool, scratchpadDeleteTool } from '../../src/scratchpad/tools'
+import { createScratchpadMiddleware } from '../../src/scratchpad/middleware'
 import type { IMessage } from '../../src/providers/types'
 import type { ModelCallContext } from '../../src/agent/types'
 
-let store: SessionMemoryStore
+let store: ScratchpadStore
 
 beforeEach(() => {
-  store = new SessionMemoryStore()
+  store = new ScratchpadStore()
 })
 
-describe('SessionMemoryStore', () => {
+describe('ScratchpadStore', () => {
   it('set and get', () => {
     store.set('plan', 'step 1: do the thing')
     expect(store.get('plan')).toBe('step 1: do the thing')
@@ -75,16 +75,16 @@ describe('SessionMemoryStore', () => {
   })
 })
 
-describe('session memory tools', () => {
+describe('scratchpad tools', () => {
   it('write stores value in the store', async () => {
-    const write = sessionMemoryWriteTool(store)
+    const write = scratchpadWriteTool(store)
     const result = await write.execute({ key: 'plan', value: 'build the feature' }) as string
     expect(result).toContain('Stored')
     expect(store.get('plan')).toBe('build the feature')
   })
 
   it('write overwrites existing key', async () => {
-    const write = sessionMemoryWriteTool(store)
+    const write = scratchpadWriteTool(store)
     await write.execute({ key: 'plan', value: 'v1' })
     await write.execute({ key: 'plan', value: 'v2' })
     expect(store.get('plan')).toBe('v2')
@@ -93,20 +93,20 @@ describe('session memory tools', () => {
 
   it('delete existing key', async () => {
     store.set('task', 'do stuff')
-    const del = sessionMemoryDeleteTool(store)
+    const del = scratchpadDeleteTool(store)
     const result = await del.execute({ key: 'task' }) as string
     expect(result).toContain('Removed')
     expect(store.has('task')).toBe(false)
   })
 
   it('delete missing key', async () => {
-    const del = sessionMemoryDeleteTool(store)
+    const del = scratchpadDeleteTool(store)
     const result = await del.execute({ key: 'nope' }) as string
     expect(result).toContain('not found')
   })
 })
 
-describe('session memory middleware', () => {
+describe('scratchpad middleware', () => {
   function makeCtx(messages: IMessage[]): ModelCallContext {
     return {
       request: {
@@ -131,11 +131,11 @@ describe('session memory middleware', () => {
     }
   }
 
-  it('injects session memory into messages', async () => {
+  it('injects scratchpad into messages', async () => {
     store.set('plan', 'step 1: research')
     store.set('decisions', 'use bun')
 
-    const mw = createSessionMemoryMiddleware(store)
+    const mw = createScratchpadMiddleware(store)
     const messages: IMessage[] = [
       { role: 'system', content: 'You are helpful.' },
       { role: 'user', content: 'Hello' },
@@ -147,16 +147,16 @@ describe('session memory middleware', () => {
     const injected = messages[2]!
     expect(injected.role).toBe('user')
     const content = injected.content as string
-    expect(content).toContain('<session-memory>')
+    expect(content).toContain('<scratchpad>')
     expect(content).toContain('### plan')
     expect(content).toContain('step 1: research')
     expect(content).toContain('### decisions')
     expect(content).toContain('use bun')
-    expect(content).toContain('</session-memory>')
+    expect(content).toContain('</scratchpad>')
   })
 
   it('skips injection when store is empty', async () => {
-    const mw = createSessionMemoryMiddleware(store)
+    const mw = createScratchpadMiddleware(store)
     const messages: IMessage[] = [
       { role: 'system', content: 'You are helpful.' },
       { role: 'user', content: 'Hello' },
@@ -168,7 +168,7 @@ describe('session memory middleware', () => {
   it('removes stale injection and re-injects fresh state', async () => {
     store.set('plan', 'v1')
 
-    const mw = createSessionMemoryMiddleware(store)
+    const mw = createScratchpadMiddleware(store)
     const messages: IMessage[] = [
       { role: 'system', content: 'You are helpful.' },
       { role: 'user', content: 'Hello' },
@@ -190,7 +190,7 @@ describe('session memory middleware', () => {
   it('works with messages that have no system prefix', async () => {
     store.set('note', 'important')
 
-    const mw = createSessionMemoryMiddleware(store)
+    const mw = createScratchpadMiddleware(store)
     const messages: IMessage[] = [
       { role: 'user', content: 'Hi there' },
     ]
