@@ -2,14 +2,17 @@ import { describe, it, expect } from 'bun:test'
 import { createPermissionsMiddleware } from '../../src/agent/permissions'
 import type { PermissionsConfig } from '../../src/config/types'
 import type { ToolExecutionContext } from '../../src/agent/types'
+import { NoopLogger } from '../../src/observability/logger'
+
+const logger = new NoopLogger()
 
 function makeCtx(toolName: string, args: Record<string, unknown>): ToolExecutionContext & { denied?: string } {
   let denied: string | undefined
   const ac = new AbortController()
   return {
     toolCall: { id: 'tc1', name: toolName, arguments: JSON.stringify(args) },
-    loop: { messages: [], iteration: 0, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, stop: () => {}, signal: ac.signal },
-    stop: () => {}, signal: ac.signal,
+    loop: { messages: [], iteration: 0, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, stop: () => {}, signal: ac.signal, logger },
+    stop: () => {}, signal: ac.signal, logger,
     deny: (r: string) => { denied = r },
     get denied() { return denied },
   }

@@ -12,6 +12,7 @@ import { AgentLoop } from './agent/loop'
 import type { IMessage } from './providers/types'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { serializeContent } from './providers/utils'
+import { createSessionMiddleware } from './agent/session'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -79,19 +80,39 @@ async function handleStandaloneCommands(
 
 function createMcpHandler(app: AppContext) {
   return async (input: unknown) => {
+    const session = await app.storage.create({
+      provider: app.provider.name,
+      model: app.config.model,
+      interface: 'mcp',
+    })
+    const messages: IMessage[] = []
+    if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
+    messages.push(...app.contextMessages)
+    const priorCount = messages.length
+
+    const prompt = typeof input === 'string' ? input : JSON.stringify(input)
+    messages.push({ role: 'user', content: prompt })
+
+    const loopSession = createSessionMiddleware(app.middleware, {
+      storage: app.storage,
+      sessionId: session.id,
+      priorCount,
+      logsEnabled: app.config.logsEnabled,
+      logLevel: app.config.logLevel,
+      tracesEnabled: app.config.tracesEnabled,
+      logger: app.logger,
+    })
     const loop = new AgentLoop({
       provider: app.provider,
       tools: app.tools,
       model: app.config.model,
       maxIterations: app.config.maxIterations,
       toolTimeout: app.config.toolTimeout,
-      middleware: app.middleware,
+      middleware: loopSession.middleware,
       compaction: app.config.compaction,
+      logger: loopSession.logger,
+      sessionId: session.id,
     })
-    const prompt = typeof input === 'string' ? input : JSON.stringify(input)
-    const messages: IMessage[] = []
-    if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
-    messages.push(...app.contextMessages, { role: 'user', content: prompt })
     const result = await loop.run(messages)
     const last = result.messages.at(-1)
     return last ? serializeContent(last.content) : ''
@@ -142,7 +163,7 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
   const activeSkills = app.config.skills.concat(parsed.meta.skills)
-  const result = await runCli({
+  await runCli({
     prompt: parsed.meta.prompt!,
     files: parsed.meta.files,
     skills: activeSkills,
@@ -157,10 +178,13 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     compaction: app.config.compaction,
     contextMessages: app.contextMessages,
     sessionMessages,
+    logger: app.logger,
+    logsEnabled: app.config.logsEnabled,
+    logLevel: app.config.logLevel,
+    tracesEnabled: app.config.tracesEnabled,
+    storage: app.storage,
+    sessionId: app.sessionId,
   })
-  for (const msg of result.messages.slice(result.priorCount)) {
-    await app.storage.appendMessage(app.sessionId, msg)
-  }
   process.stdout.write('\n')
   await app.shutdown()
 }
@@ -183,6 +207,10 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
     thinking: app.config.thinking,
     compaction: app.config.compaction,
     contextMessages: app.contextMessages,
+    logger: app.logger,
+    logsEnabled: app.config.logsEnabled,
+    logLevel: app.config.logLevel,
+    tracesEnabled: app.config.tracesEnabled,
   })
   await httpServer.start()
   console.error(`HTTP server listening on port ${httpServer.port}`)
@@ -215,6 +243,10 @@ async function launchRepl(app: AppContext): Promise<void> {
     compaction: app.config.compaction,
     contextMessages: app.contextMessages,
     memoryStore: app.memoryStore,
+    logger: app.logger,
+    logsEnabled: app.config.logsEnabled,
+    logLevel: app.config.logLevel,
+    tracesEnabled: app.config.tracesEnabled,
   })
   await repl.start()
   try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }

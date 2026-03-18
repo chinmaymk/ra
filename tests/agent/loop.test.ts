@@ -2,6 +2,8 @@ import { describe, it, expect } from 'bun:test'
 import { AgentLoop } from '../../src/agent/loop'
 import type { IProvider, StreamChunk, ChatRequest, ChatResponse } from '../../src/providers/types'
 import { ToolRegistry } from '../../src/agent/tool-registry'
+import { Logger } from '../../src/observability/logger'
+import { NoopLogger } from '../../src/observability/logger'
 
 function mockProvider(responses: StreamChunk[][]): IProvider {
   let callIndex = 0
@@ -595,5 +597,33 @@ describe('AgentLoop', () => {
     expect(result.iterations).toBe(2)
     expect(result.messages.at(-1)?.content).toBe('The color is blue')
     expect(result.stopReason).toBeUndefined()
+  })
+
+  it('exposes logger to middleware via ctx', async () => {
+    const customLogger = new NoopLogger()
+    let seenLogger: Logger | undefined
+    const provider = mockProvider([[{ type: 'text', delta: 'hi' }, { type: 'done' }]])
+    const loop = new AgentLoop({
+      provider, tools: new ToolRegistry(),
+      logger: customLogger,
+      middleware: {
+        beforeModelCall: [async (ctx) => { seenLogger = ctx.logger }],
+      },
+    })
+    await loop.run([{ role: 'user', content: 'hi' }])
+    expect(seenLogger).toBe(customLogger)
+  })
+
+  it('provides NoopLogger by default when no logger is passed', async () => {
+    let seenLogger: Logger | undefined
+    const provider = mockProvider([[{ type: 'text', delta: 'hi' }, { type: 'done' }]])
+    const loop = new AgentLoop({
+      provider, tools: new ToolRegistry(),
+      middleware: {
+        beforeModelCall: [async (ctx) => { seenLogger = ctx.logger }],
+      },
+    })
+    await loop.run([{ role: 'user', content: 'hi' }])
+    expect(seenLogger).toBeInstanceOf(NoopLogger)
   })
 })

@@ -146,7 +146,7 @@ features:
   - title: Four Modes
     details: One-shot CLI, interactive REPL, HTTP server, MCP server. Same binary, different flags.
   - title: Layered Config
-    details: defaults → file → env → CLI. Commit a baseline, override per-run. No surprises.
+    details: CLI > env > file. Commit a baseline, override per-run. No surprises.
   - title: Skills & Middleware
     details: Reusable instruction bundles and composable middleware. Build any agent from config.
 ---
@@ -390,7 +390,7 @@ You get a `›` prompt. Type. It streams back, runs tools, saves the conversatio
 
 - [Configure a provider](/providers/anthropic) — set your API key
 - [Learn the modes](/modes/cli) — CLI, REPL, HTTP, MCP
-- [Explore layered config](/concepts/config) — file → env → CLI
+- [Explore layered config](/concepts/config) — CLI > env > file
 ```
 
 **Step 3: Commit**
@@ -448,7 +448,7 @@ That's what makes ra powerful for **agentic loops**. Drop a config file alongsid
 | **Skills** | Reusable instruction bundles — roles, behaviors, and assets |
 | **File attachments** | Attach files in CLI and REPL |
 | **Session storage** | Persist conversations, resume later, auto-prune old ones |
-| **Layered config** | File → env → CLI override order; commit a baseline, tweak per-run |
+| **Layered config** | CLI > env > file precedence; commit a baseline, override per-run |
 ```
 
 **Step 2: Create `docs/site/concepts/config.md`**
@@ -458,7 +458,7 @@ Migrate from README `### Layered config` section:
 ```md
 # Layered Config
 
-**defaults → file → env → CLI.** Each layer overrides the previous. No surprise precedence.
+**CLI > env > file.** Each layer overrides the one to its right. No surprise precedence.
 
 Commit a `ra.config.yml` for a team or project baseline. Use environment variables for secrets and per-environment behavior. Use CLI flags when you need a one-off override.
 
@@ -729,7 +729,7 @@ git commit -m "docs: add modes pages (CLI, REPL, HTTP server, MCP server)"
 ```md
 # Configuration Reference
 
-ra uses a layered config system: **defaults → file → env → CLI**. See [Layered Config](/concepts/config) for how it works.
+ra uses a layered config system: **CLI > env > file**. See [Layered Config](/concepts/config) for how it works.
 
 ## Config file
 

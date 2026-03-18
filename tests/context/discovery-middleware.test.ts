@@ -5,15 +5,18 @@ import type { IMessage } from '../../src/providers/types'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { NoopLogger } from '../../src/observability/logger'
+
+const logger = new NoopLogger()
 
 function makeCtx(messages: IMessage[], filePath: string): ToolResultContext {
   const controller = new AbortController()
   const toolCall = { id: 'tc1', name: 'ReadFile', arguments: JSON.stringify({ file_path: filePath }) }
   return {
-    stop: () => controller.abort(), signal: controller.signal,
+    stop: () => controller.abort(), signal: controller.signal, logger,
     toolCall,
     result: { toolCallId: 'tc1', content: 'file content', isError: false },
-    loop: { stop: () => controller.abort(), signal: controller.signal, messages, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
   }
 }
 
@@ -66,10 +69,10 @@ describe('createDiscoveryMiddleware', () => {
     const msgs: IMessage[] = [{ role: 'user', content: 'hello' }]
     const controller = new AbortController()
     await mw({
-      stop: () => controller.abort(), signal: controller.signal,
+      stop: () => controller.abort(), signal: controller.signal, logger,
       toolCall: { id: 'tc1', name: 'Bash', arguments: JSON.stringify({ command: 'echo hi' }) },
       result: { toolCallId: 'tc1', content: 'hi', isError: false },
-      loop: { stop: () => controller.abort(), signal: controller.signal, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
     })
     expect(msgs).toHaveLength(1)
   })

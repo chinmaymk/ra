@@ -2,6 +2,9 @@ import { describe, it, expect } from 'bun:test'
 import { splitMessageZones, createCompactionMiddleware } from '../../src/agent/context-compaction'
 import type { IMessage, IProvider, ChatRequest } from '../../src/providers/types'
 import type { ModelCallContext } from '../../src/agent/types'
+import { NoopLogger } from '../../src/observability/logger'
+
+const logger = new NoopLogger()
 
 describe('splitMessageZones', () => {
   const sys: IMessage = { role: 'system', content: 'You are helpful.' }
@@ -183,10 +186,12 @@ function makeCtx(messages: IMessage[], model = 'claude-sonnet-4-6'): ModelCallCo
   return {
     stop: () => controller.abort(),
     signal: controller.signal,
+    logger,
     request,
     loop: {
       stop: () => controller.abort(),
       signal: controller.signal,
+      logger,
       messages,
       iteration: 1,
       maxIterations: 10,

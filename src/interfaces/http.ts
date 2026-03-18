@@ -4,7 +4,11 @@ import type { ToolRegistry } from '../agent/tool-registry'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import type { CompactionConfig } from '../agent/context-compaction'
+import type { Logger } from '../observability/logger'
+import type { LogLevel } from '../observability/logger'
 import { AgentLoop } from '../agent/loop'
+import { mergeMiddleware } from '../agent/middleware'
+import { createSessionMiddleware } from '../agent/session'
 import { extractTextContent } from '../providers/utils'
 import { buildAvailableSkillsXml } from '../skills/loader'
 import { askUserTool } from '../tools/ask-user'
@@ -29,6 +33,10 @@ export interface HttpOptions {
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
+  logger?: Logger
+  logsEnabled?: boolean
+  logLevel?: LogLevel
+  tracesEnabled?: boolean
 }
 
 export class HttpServer {
@@ -99,7 +107,7 @@ export class HttpServer {
     return jsonResponse({ error: 'Invalid JSON' }, 400)
   }
 
-  private prependSystem(messages: IMessage[]): IMessage[] {
+  private prependSystem(messages: IMessage[]): { messages: IMessage[]; priorCount: number } {
     const prefix: IMessage[] = []
     if (this.options.systemPrompt) {
       prefix.push({ role: 'system', content: this.options.systemPrompt })
@@ -111,27 +119,59 @@ export class HttpServer {
     if (this.options.contextMessages?.length) {
       prefix.push(...this.options.contextMessages)
     }
+    const priorCount = prefix.length
     prefix.push(...messages)
-    return prefix
+    return { messages: prefix, priorCount }
+  }
+
+  private async ensureSession(clientSessionId?: string): Promise<string> {
+    if (clientSessionId) {
+      return this.options.storage.ensureSession(clientSessionId, {
+        provider: this.options.provider.name,
+        model: this.options.model,
+        interface: 'http',
+      })
+    }
+    const session = await this.options.storage.create({
+      provider: this.options.provider.name,
+      model: this.options.model,
+      interface: 'http',
+    })
+    return session.id
+  }
+
+  /** Create a session-scoped AgentLoop. */
+  private createLoop(sessionId: string, priorCount: number, extraMiddleware?: Partial<MiddlewareConfig>): AgentLoop {
+    const session = createSessionMiddleware(this.options.middleware, {
+      storage: this.options.storage,
+      sessionId,
+      priorCount,
+      logsEnabled: this.options.logsEnabled,
+      logLevel: this.options.logLevel,
+      tracesEnabled: this.options.tracesEnabled,
+      logger: this.options.logger,
+    })
+    return new AgentLoop({
+      provider: this.options.provider,
+      tools: this.options.tools,
+      model: this.options.model,
+      middleware: mergeMiddleware(extraMiddleware, session.middleware),
+      maxIterations: this.options.maxIterations,
+      toolTimeout: this.options.toolTimeout,
+      sessionId,
+      thinking: this.options.thinking,
+      compaction: this.options.compaction,
+      logger: session.logger,
+    })
   }
 
   private async handleChatSync(req: Request): Promise<Response> {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const messages = this.prependSystem(body.messages ?? [])
-
-    const loop = new AgentLoop({
-      provider: this.options.provider,
-      tools: this.options.tools,
-      model: this.options.model,
-      middleware: this.options.middleware,
-      maxIterations: this.options.maxIterations,
-      toolTimeout: this.options.toolTimeout,
-      sessionId: body.sessionId,
-      thinking: this.options.thinking,
-      compaction: this.options.compaction,
-    })
+    const { messages, priorCount } = this.prependSystem(body.messages ?? [])
+    const sessionId = await this.ensureSession(body.sessionId)
+    const loop = this.createLoop(sessionId, priorCount)
 
     try {
       const result = await loop.run(messages)
@@ -140,7 +180,7 @@ export class HttpServer {
       const last = assistantMessages[assistantMessages.length - 1]
       const responseText = last ? extractTextContent(last.content) : ''
 
-      return jsonResponse({ response: responseText })
+      return jsonResponse({ response: responseText, sessionId })
     } catch (err) {
       return jsonResponse({ error: errorMessage(err) }, 500)
     }
@@ -150,12 +190,13 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const messages = this.prependSystem(body.messages ?? [])
-    const opts = this.options
+    const { messages, priorCount } = this.prependSystem(body.messages ?? [])
+    const sessionId = await this.ensureSession(body.sessionId)
+
+    const self = this
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()
-
         const send = (data: unknown) => {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
         }
@@ -173,26 +214,11 @@ export class HttpServer {
           }
         }
 
-        const middleware: Partial<MiddlewareConfig> = {
-          ...(opts.middleware ?? {}),
-          onStreamChunk: (opts.middleware?.onStreamChunk ?? []).concat(onStreamChunk),
-        }
-
-        const loop = new AgentLoop({
-          provider: opts.provider,
-          tools: opts.tools,
-          model: opts.model,
-          middleware,
-          maxIterations: opts.maxIterations,
-          toolTimeout: opts.toolTimeout,
-          sessionId: body.sessionId,
-          thinking: opts.thinking,
-          compaction: opts.compaction,
-        })
+        const loop = self.createLoop(sessionId, priorCount, { onStreamChunk: [onStreamChunk] })
 
         try {
           await loop.run(messages)
-          send({ type: 'done' })
+          send({ type: 'done', sessionId })
         } catch (err) {
           send({ type: 'error', error: errorMessage(err) })
         } finally {
