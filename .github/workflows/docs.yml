@@ -33,38 +33,59 @@ jobs:
         run: bun run build
         working-directory: docs/site
 
+      - name: Compute version cache key
+        id: version-key
+        run: |
+          # Build a stable key from all tag names + their SHAs
+          KEY=$(git tag -l 'v*' --sort=-version:refname | while read tag; do
+            echo "$tag=$(git rev-parse "$tag")"
+          done | sha256sum | cut -d' ' -f1)
+          echo "key=docs-versions-${KEY}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore versioned docs cache
+        id: versioned-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/versioned-docs-dist
+          key: ${{ steps.version-key.outputs.key }}
+          restore-keys: docs-versions-
+
       - name: Build versioned docs from tags
         working-directory: docs/site
         run: |
-          # Collect all release tags (v*) sorted by version descending
           TAGS=$(git tag -l 'v*' --sort=-version:refname)
-          VERSIONS_JSON="["
-          first=true
+          mkdir -p /tmp/versioned-docs-dist
 
           for tag in $TAGS; do
             version="${tag#v}"
+
+            # Skip if already cached from a previous build
+            if [ -d "/tmp/versioned-docs-dist/$version" ]; then
+              echo "Cache hit for $tag — skipping build"
+              continue
+            fi
+
             echo "Building docs for $tag..."
 
-            # Check out the docs/site content from this tag into a temp dir
+            # Check out the docs/site content from this tag
             TMPDIR=$(mktemp -d)
             git archive "$tag" -- docs/site/ | tar -x -C "$TMPDIR" 2>/dev/null || {
-              echo "  Skipping $tag — no docs/site/ found at this tag"
+              echo "  Skipping $tag — no docs/site/"
               rm -rf "$TMPDIR"
               continue
             }
 
-            # Only build if the tag's docs have content
             if [ ! -f "$TMPDIR/docs/site/package.json" ]; then
-              echo "  Skipping $tag — no package.json in docs/site/"
+              echo "  Skipping $tag — no package.json"
               rm -rf "$TMPDIR"
               continue
             fi
 
-            # Copy the current theme into the tagged docs (so version switcher works)
+            # Copy the current theme so version switcher works
             rm -rf "$TMPDIR/docs/site/.vitepress/theme"
             cp -r .vitepress/theme "$TMPDIR/docs/site/.vitepress/theme"
 
-            # Create a versioned VitePress config that overrides the base path
+            # Create versioned VitePress config
             cat > "$TMPDIR/docs/site/.vitepress/versioned-config.ts" << VCONF
 import baseConfig from './config'
 import { defineConfig, mergeConfig } from 'vitepress'
@@ -78,21 +99,33 @@ VCONF
               continue
             }
 
-            # Copy built output into main dist
-            mkdir -p ".vitepress/dist/v/$version"
-            cp -r "$TMPDIR/docs/site/.vitepress/dist/"* ".vitepress/dist/v/$version/"
-
+            # Save to cache dir
+            mkdir -p "/tmp/versioned-docs-dist/$version"
+            cp -r "$TMPDIR/docs/site/.vitepress/dist/"* "/tmp/versioned-docs-dist/$version/"
             rm -rf "$TMPDIR"
-
-            # Append to versions JSON array
-            if [ "$first" = true ]; then
-              VERSIONS_JSON="${VERSIONS_JSON}\"${version}\""
-              first=false
-            else
-              VERSIONS_JSON="${VERSIONS_JSON},\"${version}\""
-            fi
-
             echo "  Done: v$version"
+          done
+
+      - name: Assemble versioned docs and versions.json
+        working-directory: docs/site
+        run: |
+          TAGS=$(git tag -l 'v*' --sort=-version:refname)
+          VERSIONS_JSON="["
+          first=true
+
+          for tag in $TAGS; do
+            version="${tag#v}"
+            if [ -d "/tmp/versioned-docs-dist/$version" ]; then
+              mkdir -p ".vitepress/dist/v/$version"
+              cp -r "/tmp/versioned-docs-dist/$version/"* ".vitepress/dist/v/$version/"
+
+              if [ "$first" = true ]; then
+                VERSIONS_JSON="${VERSIONS_JSON}\"${version}\""
+                first=false
+              else
+                VERSIONS_JSON="${VERSIONS_JSON},\"${version}\""
+              fi
+            fi
           done
 
           VERSIONS_JSON="${VERSIONS_JSON}]"
