@@ -119,6 +119,12 @@
   .mw-hook-name { color: var(--orange); font-weight: 600; font-size: 12px; margin-bottom: 4px; }
   .mw-hook-entry { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; margin-bottom: 4px; font-size: 12px; color: var(--text2); }
 
+  /* Session detail banner */
+  .session-banner { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 12px; }
+  .session-banner .sb-field { display: flex; flex-direction: column; gap: 1px; }
+  .session-banner .sb-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2); }
+  .session-banner .sb-value { color: var(--text); font-weight: 600; }
+
   /* States */
   .empty { text-align: center; padding: 48px 16px; color: var(--text2); }
   .badge { font-size: 10px; background: var(--bg3); color: var(--text2); padding: 2px 8px; border-radius: 10px; }
@@ -168,6 +174,7 @@
   const SESSION_VIEWS = ['messages', 'logs', 'traces'];
   let currentSession = null;
   let currentView = 'messages';
+  let sessionsMap = {};
 
   function isGlobal(view) { return !SESSION_VIEWS.includes(view); }
 
@@ -204,6 +211,8 @@
     const sessions = await res.json();
     const list = document.getElementById('session-list');
     if (!sessions.length) { list.innerHTML = '<div class="empty">No sessions</div>'; return; }
+    sessionsMap = {};
+    sessions.forEach(s => { sessionsMap[s.id] = s.meta; });
     list.innerHTML = sessions.map(s => {
       const time = new Date(s.meta.created).toLocaleString();
       return '<div class="session-item" data-id="' + esc(s.id) + '">' +
@@ -227,6 +236,19 @@
     });
   }
 
+  // ── Session banner ──
+  function sessionBannerHtml(id) {
+    const meta = sessionsMap[id];
+    if (!meta) return '';
+    return '<div class="session-banner">' +
+      '<div class="sb-field"><span class="sb-label">Session</span><span class="sb-value">' + esc(meta.id) + '</span></div>' +
+      '<div class="sb-field"><span class="sb-label">Provider</span><span class="sb-value">' + esc(meta.provider) + '</span></div>' +
+      '<div class="sb-field"><span class="sb-label">Model</span><span class="sb-value">' + esc(meta.model) + '</span></div>' +
+      '<div class="sb-field"><span class="sb-label">Interface</span><span class="sb-value">' + esc(meta.interface) + '</span></div>' +
+      '<div class="sb-field"><span class="sb-label">Created</span><span class="sb-value">' + esc(new Date(meta.created).toLocaleString()) + '</span></div>' +
+      '</div>';
+  }
+
   // ── Load session-scoped view ──
   async function loadSessionView(id, view) {
     main.innerHTML = '<div class="loading">Loading…</div>';
@@ -236,6 +258,8 @@
       if (view === 'messages') renderMessages(data);
       else if (view === 'logs') renderLogs(data);
       else if (view === 'traces') renderTraces(data);
+      // Prepend session banner
+      main.innerHTML = sessionBannerHtml(id) + main.innerHTML;
     } catch(e) { main.innerHTML = '<div class="empty">Error: ' + esc(e.message) + '</div>'; }
   }
 
