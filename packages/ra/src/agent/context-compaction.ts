@@ -109,18 +109,28 @@ Be concise but complete. This summary will replace the original messages in the 
 
 Conversation to summarize:`
 
-// Patterns matched against err.message from each provider's SDK:
-//   Anthropic SDK:  "400 request too large" / "400 prompt is too long: ..."
-//   OpenAI SDK:     "400 This model's maximum context length is N tokens..."
-//   Azure OpenAI:   same as OpenAI (uses openai SDK)
-//   Google Gemini:  "[400 Bad Request] ... token limit ..." or "... exceeds the maximum ..."
-//   Ollama:         "prompt too long; exceeded max context length by N tokens"
-//   Bedrock:        "ValidationException: ... prompt too long ..." or "... too many ... tokens"
+// Patterns matched against err.message from each provider's SDK.
+// Both Anthropic and OpenAI SDKs prefix messages with the HTTP status:
+//   Anthropic → "400 prompt is too long: 208310 tokens > 200000 maximum"
+//   OpenAI    → "400 This model's maximum context length is 128000 tokens..."
+//
+// Real error messages per provider:
+//   Anthropic:  "prompt is too long: N tokens > M maximum"
+//               "input length and max_tokens exceed context limit: N + M > L ..."
+//               "request too large" / "Request too large"
+//               "Request size exceeds model context window"
+//   OpenAI:     "This model's maximum context length is N tokens..."
+//   Azure:      same as OpenAI (uses openai SDK)
+//   Ollama:     "prompt too long; exceeded max context length by N tokens"
+//   Google:     "[400 Bad Request] ... exceeds the maximum number of tokens"
+//   Bedrock:    "ValidationException: ... prompt too long ..." / "... too many tokens ..."
 const CONTEXT_LENGTH_PATTERNS = [
   /maximum context length/i,        // OpenAI / Azure: "This model's maximum context length is..."
   /context.length.exceed/i,         // generic: "context length exceeded"
-  /request too large/i,             // Anthropic: "400 request too large"
-  /prompt is too long/i,            // Anthropic: "400 prompt is too long: ..."
+  /exceed.{0,20}context.limit/i,    // Anthropic: "...exceed context limit: ..."
+  /exceeds?.{0,20}context.window/i, // Anthropic: "...exceeds model context window"
+  /request too large/i,             // Anthropic 413: "request too large" / "Request too large"
+  /prompt is too long/i,            // Anthropic 400: "prompt is too long: N tokens > M maximum"
   /prompt too long/i,               // Ollama: "prompt too long; exceeded max context length..."
   /too many tokens/i,               // generic / Bedrock
   /exceeds? the maximum/i,          // Google: "... exceeds the maximum number of tokens"

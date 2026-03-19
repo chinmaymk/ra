@@ -9,6 +9,9 @@ describe('isContextLengthError', () => {
   it('matches Anthropic SDK errors', () => {
     expect(isContextLengthError(new Error('400 request too large'))).toBe(true)
     expect(isContextLengthError(new Error('400 prompt is too long: 250000 tokens > 200000 maximum'))).toBe(true)
+    expect(isContextLengthError(new Error('400 input length and max_tokens exceed context limit: 188240 + 21333 > 200000, decrease input length or max_tokens and try again'))).toBe(true)
+    expect(isContextLengthError(new Error('413 Request too large'))).toBe(true)
+    expect(isContextLengthError(new Error('413 Request size exceeds model context window'))).toBe(true)
   })
 
   it('matches OpenAI / Azure SDK errors', () => {
