@@ -1,4 +1,4 @@
-import { errorMessage, ProviderError, withRetry } from '../utils/errors'
+import { errorMessage, withRetry } from '../utils/errors'
 import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
@@ -31,10 +31,12 @@ export interface LoopResult {
   stopReason?: string
 }
 
-const EMPTY_MW: MiddlewareConfig = {
-  beforeLoopBegin: [], beforeModelCall: [], onStreamChunk: [],
-  beforeToolExecution: [], afterToolExecution: [], afterModelResponse: [],
-  afterLoopIteration: [], afterLoopComplete: [], onError: [],
+function emptyMiddleware(): MiddlewareConfig {
+  return {
+    beforeLoopBegin: [], beforeModelCall: [], onStreamChunk: [],
+    beforeToolExecution: [], afterToolExecution: [], afterModelResponse: [],
+    afterLoopIteration: [], afterLoopComplete: [], onError: [],
+  }
 }
 
 export class AgentLoop {
@@ -56,7 +58,7 @@ export class AgentLoop {
     this.maxIterations = options.maxIterations ?? 10
     this.model = options.model ?? 'default'
     this.sessionId = options.sessionId ?? randomUUID()
-    this.middleware = { ...EMPTY_MW, ...options.middleware }
+    this.middleware = { ...emptyMiddleware(), ...options.middleware }
     this.thinking = options.thinking
     this.toolTimeout = options.toolTimeout ?? 0
     this.logger = options.logger ?? new NoopLogger()

@@ -231,4 +231,5 @@ describe('AgentLoop provider error handling', () => {
     // Should only have "complete", not "partialcomplete"
     expect(result.messages.at(-1)?.content).toBe('complete')
   })
+
 })
