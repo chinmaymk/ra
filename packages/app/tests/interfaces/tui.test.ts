@@ -5,21 +5,7 @@ import {
   printCommandResponse, printError, printThinkingStart, printThinkingEnd,
   StreamBuffer, RESPONSE_PREFIX,
 } from '../../src/interfaces/tui'
-
-function captureStdout(fn: () => void): string {
-  const chunks: string[] = []
-  const origWrite = process.stdout.write.bind(process.stdout)
-  process.stdout.write = (chunk: string | Uint8Array, ...args: unknown[]) => {
-    chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString())
-    return true
-  }
-  try {
-    fn()
-  } finally {
-    process.stdout.write = origWrite
-  }
-  return chunks.join('')
-}
+import { captureStdout } from '../fixtures'
 
 describe('printHeader', () => {
   it('outputs model and session info', () => {

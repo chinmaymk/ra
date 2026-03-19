@@ -3,19 +3,8 @@ import { createObservabilityMiddleware } from '../../src/observability/middlewar
 import { Logger } from '../../src/observability/logger'
 import { Tracer } from '../../src/observability/tracer'
 import { AgentLoop, ToolRegistry } from '@chinmaymk/ra'
-import type { IProvider, StreamChunk } from '@chinmaymk/ra'
-
-function mockProvider(responses: StreamChunk[][]): IProvider {
-  let callIndex = 0
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error('use stream') },
-    async *stream() {
-      const chunks = responses[callIndex++] ?? [{ type: 'text' as const, delta: 'done' }, { type: 'done' as const }]
-      for (const chunk of chunks) yield chunk
-    },
-  }
-}
+import type { IProvider } from '@chinmaymk/ra'
+import { mockSequenceProvider, captureStderr } from '../fixtures'
 
 function throwingProvider(error: Error): IProvider {
   return {
@@ -37,19 +26,14 @@ function parseOutput(captured: string[]) {
 
 describe('observability middleware', () => {
   let captured: string[]
-  let originalWrite: typeof process.stderr.write
+  let restore: () => void
 
   beforeEach(() => {
-    captured = []
-    originalWrite = process.stderr.write
-    process.stderr.write = ((data: string) => {
-      captured.push(data)
-      return true
-    }) as typeof process.stderr.write
+    ({ captured, restore } = captureStderr())
   })
 
   afterEach(() => {
-    process.stderr.write = originalWrite
+    restore()
   })
 
   it('emits logs and traces for a simple loop via middleware hooks', async () => {
@@ -57,7 +41,7 @@ describe('observability middleware', () => {
     const tracer = new Tracer({ output: 'stderr' })
     const obsMw = createObservabilityMiddleware(logger, tracer)
 
-    const provider = mockProvider([
+    const provider = mockSequenceProvider([
       [
         { type: 'text', delta: 'hello' },
         { type: 'done', usage: { inputTokens: 10, outputTokens: 5 } },
@@ -93,7 +77,7 @@ describe('observability middleware', () => {
     const tracer = new Tracer({ output: 'stderr' })
     const obsMw = createObservabilityMiddleware(logger, tracer)
 
-    const provider = mockProvider([
+    const provider = mockSequenceProvider([
       [
         { type: 'tool_call_start', id: 'tc1', name: 'echo' },
         { type: 'tool_call_delta', id: 'tc1', argsDelta: '{"text":"hi"}' },
@@ -134,7 +118,7 @@ describe('observability middleware', () => {
     const tracer = new Tracer({ output: 'stderr' })
     const obsMw = createObservabilityMiddleware(logger, tracer)
 
-    const provider = mockProvider([
+    const provider = mockSequenceProvider([
       [
         { type: 'tool_call_start', id: 'tc1', name: 'fail_tool' },
         { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
@@ -172,7 +156,7 @@ describe('observability middleware', () => {
     const { NoopTracer } = await import('../../src/observability/tracer')
     const obsMw = createObservabilityMiddleware(new NoopLogger(), new NoopTracer())
 
-    const provider = mockProvider([[{ type: 'text', delta: 'ok' }, { type: 'done' }]])
+    const provider = mockSequenceProvider([[{ type: 'text', delta: 'ok' }, { type: 'done' }]])
     const loop = new AgentLoop({
       provider,
       tools: new ToolRegistry(),
@@ -233,7 +217,7 @@ describe('observability middleware', () => {
     const obsMw = createObservabilityMiddleware(logger, tracer)
 
     // Run 1: succeeds
-    const provider1 = mockProvider([
+    const provider1 = mockSequenceProvider([
       [{ type: 'text', delta: 'ok' }, { type: 'done', usage: { inputTokens: 5, outputTokens: 3 } }],
     ])
     const loop1 = new AgentLoop({ provider: provider1, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
@@ -242,7 +226,7 @@ describe('observability middleware', () => {
     captured.length = 0
 
     // Run 2: succeeds with same middleware
-    const provider2 = mockProvider([
+    const provider2 = mockSequenceProvider([
       [{ type: 'text', delta: 'ok' }, { type: 'done', usage: { inputTokens: 5, outputTokens: 3 } }],
     ])
     const loop2 = new AgentLoop({ provider: provider2, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
@@ -272,7 +256,7 @@ describe('observability middleware', () => {
     captured.length = 0
 
     // Run 2: succeeds with same middleware
-    const goodProvider = mockProvider([
+    const goodProvider = mockSequenceProvider([
       [{ type: 'text', delta: 'ok' }, { type: 'done', usage: { inputTokens: 5, outputTokens: 3 } }],
     ])
     const loop2 = new AgentLoop({ provider: goodProvider, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })

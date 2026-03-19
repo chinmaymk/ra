@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'bun:test'
 import { createObservability, type ObservabilityConfig } from '../../src/observability'
 import { NoopLogger } from '@chinmaymk/ra'
 import { NoopTracer } from '../../src/observability/tracer'
+import { captureStderr } from '../fixtures'
 import { tmpdir } from '../tmpdir'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'path'
@@ -30,15 +31,13 @@ describe('createObservability', () => {
       ...defaultConfig,
       logs: { level: 'error', output: 'stderr' },
     }, { sessionId: 'test-session' })
-    const captured: string[] = []
-    const orig = process.stderr.write
-    process.stderr.write = ((data: string) => { captured.push(data); return true }) as typeof process.stderr.write
+    const stderr = captureStderr()
     try {
       logger.error('test')
-      const entry = JSON.parse(captured[0]!.trim())
+      const entry = JSON.parse(stderr.captured[0]!.trim())
       expect(entry.sessionId).toBe('test-session')
     } finally {
-      process.stderr.write = orig
+      stderr.restore()
     }
   })
 

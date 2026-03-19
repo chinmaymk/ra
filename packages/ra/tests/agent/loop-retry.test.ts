@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'bun:test'
-import { AgentLoop, ToolRegistry, ProviderError } from '@chinmaymk/ra'
-import type { IProvider } from '@chinmaymk/ra'
+import { AgentLoop } from '../../src/agent/loop'
+import { ToolRegistry } from '../../src/agent/tool-registry'
+import { ProviderError } from '../../src/utils/errors'
+import type { IProvider } from '../../src/providers/types'
 
 describe('AgentLoop stream retry', () => {
   it('retries transient errors and succeeds', async () => {

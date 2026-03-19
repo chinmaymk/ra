@@ -5,22 +5,10 @@ import { createHistoryMiddleware } from '../../src/storage/middleware'
 import { createSessionMiddleware } from '../../src/agent/session'
 import { mergeMiddleware, AgentLoop, ToolRegistry } from '@chinmaymk/ra'
 import type { IProvider, IMessage } from '@chinmaymk/ra'
+import { mockProvider, mockSequenceProvider } from '../fixtures'
 import { tmpdir } from '../tmpdir'
 
 const TEST_PATH = tmpdir('ra-test-history-mw')
-
-function mockProvider(responses: string[]): IProvider {
-  let call = 0
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error('not implemented') },
-    async *stream() {
-      const text = responses[call++] ?? 'done'
-      yield { type: 'text' as const, delta: text }
-      yield { type: 'done' as const }
-    },
-  }
-}
 
 function toolCallProvider(toolName: string, text: string): IProvider {
   let iteration = 0
@@ -55,7 +43,7 @@ describe('SessionHistoryMiddleware', () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
 
     const loop = new AgentLoop({
-      provider: mockProvider(['hello world']),
+      provider: mockProvider('hello world'),
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
@@ -185,7 +173,7 @@ describe('SessionHistoryMiddleware', () => {
     })
 
     const loop = new AgentLoop({
-      provider: mockProvider(['hello']),
+      provider: mockProvider('hello'),
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
@@ -225,7 +213,7 @@ describe('SessionHistoryMiddleware', () => {
 
     // priorCount=2 means first 2 messages are already on disk
     const loop = new AgentLoop({
-      provider: mockProvider(['response']),
+      provider: mockProvider('response'),
       tools: new ToolRegistry(),
       model: 'test',
       sessionId: session.id,
