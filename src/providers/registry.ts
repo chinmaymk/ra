@@ -1,7 +1,7 @@
 import type { IProvider } from './types'
 import type { ProviderName } from '../config/types'
 import { AnthropicProvider, type AnthropicProviderOptions } from './anthropic'
-import { OpenAIProvider, type OpenAIProviderOptions } from './openai'
+import { OpenAIProvider, OpenAICompletionsProvider, type OpenAIProviderOptions } from './openai'
 import { GoogleProvider, type GoogleProviderOptions } from './google'
 import { OllamaProvider, type OllamaProviderOptions } from './ollama'
 import { BedrockProvider, type BedrockProviderOptions } from './bedrock'
@@ -10,6 +10,7 @@ import { AzureProvider, type AzureProviderOptions } from './azure'
 type ProviderOptionsMap = {
   anthropic: AnthropicProviderOptions
   openai: OpenAIProviderOptions
+  'openai-completions': OpenAIProviderOptions
   google: GoogleProviderOptions
   ollama: OllamaProviderOptions
   bedrock: BedrockProviderOptions
@@ -30,6 +31,7 @@ export function buildProviderConfig<N extends ProviderName>(
 const constructors = {
   anthropic: AnthropicProvider,
   openai: OpenAIProvider,
+  'openai-completions': OpenAICompletionsProvider,
   google: GoogleProvider,
   ollama: OllamaProvider,
   bedrock: BedrockProvider,

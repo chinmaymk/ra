@@ -9,7 +9,9 @@ LLM provider adapters. Each maps ra's unified types to a specific SDK.
 | `types.ts` | Core interfaces: `IProvider`, `IMessage`, `ITool`, `StreamChunk`, `ChatRequest`, `ChatResponse` |
 | `registry.ts` | `createProvider(name, options)` factory — switch on provider name, return `IProvider` |
 | `anthropic.ts` | Anthropic (Claude) — supports extended thinking, cache control hints |
-| `openai.ts` | OpenAI (GPT) |
+| `openai.ts` | Barrel re-export — `OpenAIProvider` (Responses API, default) + `OpenAICompletionsProvider` |
+| `openai-responses.ts` | OpenAI Responses API (`POST /responses`) — default for `openai` provider |
+| `openai-completions.ts` | OpenAI Chat Completions API (`POST /chat/completions`) — legacy, available as `openai-completions` |
 | `google.ts` | Google (Gemini) |
 | `ollama.ts` | Ollama (local models) |
 | `bedrock.ts` | AWS Bedrock |

@@ -7,7 +7,7 @@ import type { OllamaProviderOptions } from '../providers/ollama'
 import type { BedrockProviderOptions } from '../providers/bedrock'
 import type { AzureProviderOptions } from '../providers/azure'
 
-export type ProviderName = 'anthropic' | 'openai' | 'google' | 'ollama' | 'bedrock' | 'azure'
+export type ProviderName = 'anthropic' | 'openai' | 'openai-completions' | 'google' | 'ollama' | 'bedrock' | 'azure'
 
 /** Regex-based allow/deny rules for a specific field of a tool's input. */
 export interface PermissionFieldRule {
@@ -69,6 +69,7 @@ export interface RaConfig {
   providers: {
     anthropic: AnthropicProviderOptions
     openai: OpenAIProviderOptions
+    'openai-completions': OpenAIProviderOptions
     google: GoogleProviderOptions
     ollama: OllamaProviderOptions
     bedrock: BedrockProviderOptions

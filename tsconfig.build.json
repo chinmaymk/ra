@@ -19,6 +19,8 @@
     "src/skills/types.ts",
     "src/providers/anthropic.ts",
     "src/providers/openai.ts",
+    "src/providers/openai-responses.ts",
+    "src/providers/openai-completions.ts",
     "src/providers/google.ts",
     "src/providers/ollama.ts",
     "src/providers/bedrock.ts",

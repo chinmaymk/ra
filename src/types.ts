@@ -66,7 +66,7 @@ export type { Logger, LogLevel, LogEntry } from './observability/logger.ts'
 
 // Provider option types
 export type { AnthropicProviderOptions } from './providers/anthropic.ts'
-export type { OpenAIProviderOptions } from './providers/openai.ts'
+export type { OpenAIProviderOptions, OpenAICompletionsProviderOptions } from './providers/openai.ts'
 export type { GoogleProviderOptions } from './providers/google.ts'
 export type { OllamaProviderOptions } from './providers/ollama.ts'
 export type { BedrockProviderOptions } from './providers/bedrock.ts'
