@@ -56,16 +56,7 @@ async function handleEarlyExits(parsed: ReturnType<typeof parseArgs>): Promise<v
     await runPackageCommand(parsed.meta.packageCommand)
     return
   }
-  // Resolve --recipe to a config path
-  if (parsed.meta.recipe) {
-    const { resolveRecipeConfigPath } = await import('./skills/registry')
-    const configPath = await resolveRecipeConfigPath(parsed.meta.recipe)
-    if (!configPath) {
-      console.error(`Recipe not found: ${parsed.meta.recipe}`)
-      process.exit(1)
-    }
-    parsed.meta.configPath = configPath
-  }
+  // --recipe flag is handled after loadConfig (merged, not replaced)
 }
 
 // ── Standalone commands (need bootstrap but no interface) ────────────
@@ -344,16 +335,18 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
   })
 
-  // Resolve recipe from config file (--recipe CLI flag already handled in handleEarlyExits)
-  if (config.recipe && !parsed.meta.recipe) {
+  // Resolve recipe: --recipe CLI flag takes precedence, then config file recipe field.
+  // Recipe config is loaded as a base, then the user's config is merged on top.
+  const recipeName = parsed.meta.recipe ?? config.recipe
+  if (recipeName) {
     const { resolveRecipeConfigPath } = await import('./skills/registry')
-    const recipePath = await resolveRecipeConfigPath(config.recipe)
+    const recipePath = await resolveRecipeConfigPath(recipeName)
     if (!recipePath) {
-      console.error(`Recipe not found: ${config.recipe}`)
+      console.error(`Recipe not found: ${recipeName}`)
       process.exit(1)
     }
     const recipeBase = await loadConfig({ configPath: recipePath })
-    config = deepMerge(recipeBase as Record<string, unknown>, config as unknown as Record<string, unknown>) as unknown as typeof config
+    config = deepMerge(recipeBase as unknown as Record<string, unknown>, config as unknown as Record<string, unknown>) as unknown as typeof config
   }
 
   if (parsed.meta.showConfig || parsed.meta.showContext) {
