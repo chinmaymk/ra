@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 
 interface VersionsData {
   latest: string
@@ -10,12 +10,20 @@ const data = ref<VersionsData | null>(null)
 const open = ref(false)
 const currentView = ref<string | null>(null)
 const btnRef = ref<HTMLElement | null>(null)
+const dropdownRef = ref<HTMLElement | null>(null)
 const dropdownStyle = ref<Record<string, string>>({})
 
 const siteRoot = '/ra/'
 
+function onClickOutside(e: MouseEvent) {
+  const target = e.target as Node
+  if (btnRef.value?.contains(target) || dropdownRef.value?.contains(target)) return
+  open.value = false
+}
+
 onMounted(async () => {
-  // Detect current page context from URL (must run client-side to avoid hydration mismatch)
+  document.addEventListener('click', onClickOutside)
+
   if (window.location.pathname.startsWith('/ra/dev/')) {
     currentView.value = 'dev'
   } else {
@@ -31,6 +39,10 @@ onMounted(async () => {
   } catch {
     // versions.json not available
   }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onClickOutside)
 })
 
 const displayLabel = computed(() => {
@@ -65,14 +77,10 @@ function positionDropdown() {
     right: `${window.innerWidth - rect.right}px`,
   }
 }
-
-function close() {
-  open.value = false
-}
 </script>
 
 <template>
-  <div v-if="data && data.versions.length > 0" class="version-switcher" @mouseleave="close">
+  <div v-if="data && data.versions.length > 0" class="version-switcher">
     <button ref="btnRef" class="version-btn" @click="toggle">
       {{ displayLabel }}
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -80,12 +88,11 @@ function close() {
       </svg>
     </button>
     <Teleport to="body">
-      <div v-show="open" class="version-dropdown" :style="dropdownStyle" @mouseleave="close">
+      <div v-show="open" ref="dropdownRef" class="version-dropdown" :style="dropdownStyle">
         <a
           :href="versionUrl('dev')"
           class="version-item"
           :class="{ active: currentView === 'dev' }"
-          @click="close"
         >
           dev
         </a>
@@ -95,7 +102,6 @@ function close() {
           :href="v === data.latest ? siteRoot : versionUrl(v)"
           class="version-item"
           :class="{ active: isActive(v) }"
-          @click="close"
         >
           v{{ v }}
           <span v-if="v === data.latest" class="latest-badge">latest</span>
