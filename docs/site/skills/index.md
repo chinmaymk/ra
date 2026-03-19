@@ -127,7 +127,7 @@ Skills are installed project-locally into `.ra/skills/`:
 ra install skill code-review                  # npm package "code-review"
 ra install skill npm:ra-skill-lint            # explicit npm prefix
 ra install skill npm:ra-skill-lint@1.2.3      # specific version
-ra install skill github:user/ra-skill-review  # GitHub repository
+ra install skill user/ra-skill-review         # GitHub repository
 ra install skill https://example.com/s.tgz    # URL tarball
 ```
 

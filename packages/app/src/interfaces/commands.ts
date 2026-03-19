@@ -4,6 +4,10 @@ import type { PackageCommand } from './parse-args'
 import type { PackageSource } from '../skills/types'
 import type { MemoryStore } from '../memory'
 import type { RaConfig } from '../config/types'
+import {
+  installRecipe, removeRecipe, listInstalledRecipes, defaultRecipeInstallDir,
+  installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir,
+} from '../skills/registry'
 
 /** Run --exec <script> */
 export async function runExecScript(scriptPath: string): Promise<void> {
@@ -24,35 +28,43 @@ function formatSource(source: PackageSource): string {
   return ` (${parts.join('')})`
 }
 
+/** Print installed recipes. */
+async function printRecipes(): Promise<number> {
+  const recipes = await listInstalledRecipes()
+  if (recipes.length > 0) {
+    console.log('Recipes:')
+    for (const r of recipes) {
+      const src = r.source ? formatSource(r.source) : ''
+      console.log(`  ${r.name}${src}`)
+    }
+  }
+  return recipes.length
+}
+
+/** Print installed skills. */
+async function printSkills(): Promise<number> {
+  const skills = await listInstalledSkills()
+  if (skills.length > 0) {
+    console.log('Skills:')
+    for (const s of skills) {
+      const src = s.source ? formatSource(s.source) : ''
+      console.log(`  ${s.name}${src}`)
+    }
+  }
+  return skills.length
+}
+
 /** Handle `ra install|remove|list` subcommands. Exits the process. */
 export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
-  const reg = await import('../skills/registry')
   const { kind, action, args } = cmd
 
-  // `ra list` lists both recipes and skills
   if (action === 'list') {
-    const recipes = await reg.listInstalledRecipes()
-    const skills = await reg.listInstalledSkills()
-
-    if (recipes.length === 0 && skills.length === 0) {
-      console.log(`No recipes installed in ${reg.defaultRecipeInstallDir()}`)
-      console.log(`No skills installed in ${reg.defaultSkillInstallDir()}`)
-    } else {
-      if (recipes.length > 0) {
-        console.log('Recipes:')
-        for (const r of recipes) {
-          const src = r.source ? formatSource(r.source) : ''
-          console.log(`  ${r.name}${src}`)
-        }
-      }
-      if (skills.length > 0) {
-        if (recipes.length > 0) console.log()
-        console.log('Skills:')
-        for (const s of skills) {
-          const src = s.source ? formatSource(s.source) : ''
-          console.log(`  ${s.name}${src}`)
-        }
-      }
+    const recipeCount = await printRecipes()
+    if (recipeCount > 0) console.log()
+    const skillCount = await printSkills()
+    if (recipeCount === 0 && skillCount === 0) {
+      console.log(`No recipes installed in ${defaultRecipeInstallDir()}`)
+      console.log(`No skills installed in ${defaultSkillInstallDir()}`)
     }
     process.exit(0)
   }
@@ -66,9 +78,9 @@ export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
         }
         for (const source of args) {
           try {
-            const installed = await reg.installRecipe(source)
+            const installed = await installRecipe(source)
             for (const name of installed) {
-              console.log(`Installed recipe: ${name} → ${reg.defaultRecipeInstallDir()}/${name}`)
+              console.log(`Installed recipe: ${name} → ${defaultRecipeInstallDir()}/${name}`)
             }
           } catch (err) {
             console.error(`Failed to install recipe "${source}": ${errorMessage(err)}`)
@@ -84,7 +96,7 @@ export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
         }
         for (const name of args) {
           try {
-            await reg.removeRecipe(name)
+            await removeRecipe(name)
             console.log(`Removed recipe: ${name}`)
           } catch (err) {
             console.error(`Failed to remove recipe "${name}": ${errorMessage(err)}`)
@@ -105,8 +117,8 @@ export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
         }
         for (const source of args) {
           try {
-            const installed = await reg.installSkill(source)
-            console.log(`Installed skills: ${installed.join(', ')} → ${reg.defaultSkillInstallDir()}`)
+            const installed = await installSkill(source)
+            console.log(`Installed skills: ${installed.join(', ')} → ${defaultSkillInstallDir()}`)
           } catch (err) {
             console.error(`Failed to install skill "${source}": ${errorMessage(err)}`)
             process.exit(1)
@@ -121,7 +133,7 @@ export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
         }
         for (const name of args) {
           try {
-            await reg.removeSkill(name)
+            await removeSkill(name)
             console.log(`Removed skill: ${name}`)
           } catch (err) {
             console.error(`Failed to remove skill "${name}": ${errorMessage(err)}`)

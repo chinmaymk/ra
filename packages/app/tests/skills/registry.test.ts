@@ -35,6 +35,11 @@ describe('parseSkillSource', () => {
     expect(result).toEqual({ registry: 'url', identifier: 'https://example.com/skill.tgz' })
   })
 
+  it('parses bare owner/repo as github', () => {
+    const result = parseSkillSource('user/repo')
+    expect(result).toEqual({ registry: 'github', identifier: 'user/repo' })
+  })
+
   it('defaults bare name to npm', () => {
     const result = parseSkillSource('code-review')
     expect(result).toEqual({ registry: 'npm', identifier: 'code-review' })
@@ -49,6 +54,11 @@ describe('parseSkillSource', () => {
 describe('parseRecipeSource', () => {
   it('parses github: prefix', () => {
     const result = parseRecipeSource('github:user/repo')
+    expect(result).toEqual({ registry: 'github', identifier: 'user/repo' })
+  })
+
+  it('parses bare owner/repo as github', () => {
+    const result = parseRecipeSource('user/repo')
     expect(result).toEqual({ registry: 'github', identifier: 'user/repo' })
   })
 

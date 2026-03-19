@@ -56,7 +56,7 @@ PROVIDER OPTIONS
   --openai-base-url <url>             OpenAI API base URL
   --ollama-host <url>                 Ollama host URL
 
-  --tools-builtin                     Enable built-in tools (filesystem, shell, network)
+  --builtin-tools                     Enable built-in tools (filesystem, shell, network)
   --show-context                      Show discovered context files and exit
   --show-config                       Show resolved configuration and exit
   --exec <script>                     Execute a JS/TS file and exit
@@ -71,13 +71,13 @@ PACKAGE MANAGEMENT
   ra list                             List installed recipes and skills
 
   Recipe sources:
-    ra install recipe github:user/repo          GitHub repo (recipes/ folder)
+    ra install recipe user/repo                 GitHub repo (recipes/ folder)
     ra install recipe https://example.com/r.tgz URL tarball
 
   Skill sources:
     ra install skill code-review                npm package "code-review"
     ra install skill npm:ra-skill-lint@1.0      npm with version
-    ra install skill github:user/repo           GitHub repository
+    ra install skill user/repo                  GitHub repository
     ra install skill https://example.com/s.tgz  URL tarball
 
 ENV VARS

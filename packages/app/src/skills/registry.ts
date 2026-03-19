@@ -1,5 +1,5 @@
 import { join, basename } from 'path'
-import { mkdirSync, cpSync, rmSync, writeFileSync, existsSync } from 'fs'
+import { mkdir, cp, rm, writeFile } from 'fs/promises'
 import { globalRaDir, localRaDir, firstSegment } from '../utils/paths'
 import type { PackageSource } from './types'
 
@@ -37,12 +37,17 @@ export function parseSkillSource(source: string): { registry: 'npm' | 'github' |
   if (source.startsWith('https://') || source.startsWith('http://')) {
     return { registry: 'url', identifier: source }
   }
+  // Bare owner/repo format → GitHub
+  if (/^[^@/\s]+\/[^/\s]+$/.test(source)) {
+    return { registry: 'github', identifier: source }
+  }
   // Default: treat as npm package
   return splitNpmVersion(source)
 }
 
 /**
  * Parse a recipe source string. Only GitHub repos and URLs are supported.
+ * Accepts: owner/repo, github:owner/repo, or https://... URLs.
  */
 export function parseRecipeSource(source: string): { registry: 'github' | 'url'; identifier: string } {
   if (source.startsWith('github:')) {
@@ -51,7 +56,11 @@ export function parseRecipeSource(source: string): { registry: 'github' | 'url';
   if (source.startsWith('https://') || source.startsWith('http://')) {
     return { registry: 'url', identifier: source }
   }
-  throw new Error(`Unsupported recipe source: "${source}". Use github:<owner>/<repo> or a URL.`)
+  // Bare owner/repo format → GitHub
+  if (/^[^/\s]+\/[^/\s]+$/.test(source)) {
+    return { registry: 'github', identifier: source }
+  }
+  throw new Error(`Unsupported recipe source: "${source}". Use owner/repo or a URL.`)
 }
 
 function splitNpmVersion(pkg: string): { registry: 'npm'; identifier: string; version?: string } {
@@ -76,7 +85,7 @@ async function withTempExtract<T>(
   fn: (extractedDir: string) => Promise<T>,
 ): Promise<T> {
   const tmpDir = join(installDir, '.tmp-install-' + Date.now())
-  mkdirSync(tmpDir, { recursive: true })
+  await mkdir(tmpDir, { recursive: true })
 
   try {
     const resp = await fetch(url)
@@ -90,7 +99,7 @@ async function withTempExtract<T>(
 
     return await fn(tmpDir)
   } finally {
-    rmSync(tmpDir, { recursive: true, force: true })
+    await rm(tmpDir, { recursive: true, force: true })
   }
 }
 
@@ -132,8 +141,8 @@ async function installSkillDirs(
   for (const skillDir of skillDirs) {
     const skillName = basename(skillDir)
     const targetDir = join(installDir, skillName)
-    cpSync(skillDir, targetDir, { recursive: true })
-    writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
+    await cp(skillDir, targetDir, { recursive: true })
+    await writeFile(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
     installed.push(skillName)
   }
 
@@ -142,8 +151,8 @@ async function installSkillDirs(
     const rootSkill = Bun.file(join(extractedRoot, 'SKILL.md'))
     if (await rootSkill.exists()) {
       const targetDir = join(installDir, rootFallbackName)
-      cpSync(extractedRoot, targetDir, { recursive: true })
-      writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
+      await cp(extractedRoot, targetDir, { recursive: true })
+      await writeFile(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
       installed.push(rootFallbackName)
     }
   }
@@ -177,12 +186,10 @@ async function installRecipeDirs(
   for (const recipeDir of recipeDirs) {
     const recipeName = basename(recipeDir)
     const targetDir = join(installDir, recipeName)
-    if (existsSync(targetDir)) {
-      console.log(`Replacing existing ${recipeName}`)
-      rmSync(targetDir, { recursive: true, force: true })
-    }
-    cpSync(recipeDir, targetDir, { recursive: true })
-    writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
+    // Overwrite existing recipe if present
+    await rm(targetDir, { recursive: true, force: true })
+    await cp(recipeDir, targetDir, { recursive: true })
+    await writeFile(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
     installed.push(recipeName)
   }
 
@@ -288,7 +295,7 @@ async function installRecipeFromUrl(url: string, installDir: string): Promise<st
  */
 export async function installSkill(source: string, installDir?: string): Promise<string[]> {
   const dir = installDir ?? defaultSkillInstallDir()
-  mkdirSync(dir, { recursive: true })
+  await mkdir(dir, { recursive: true })
 
   const parsed = parseSkillSource(source)
   switch (parsed.registry) {
@@ -308,7 +315,7 @@ export async function removeSkill(skillName: string, installDir?: string): Promi
   const dir = installDir ?? defaultSkillInstallDir()
   const skillDir = join(dir, skillName)
   try {
-    rmSync(skillDir, { recursive: true })
+    await rm(skillDir, { recursive: true })
   } catch {
     throw new Error(`Skill not found: ${skillName} in ${dir}`)
   }
@@ -346,7 +353,7 @@ export async function listInstalledSkills(installDir?: string): Promise<Array<{ 
  */
 export async function installRecipe(source: string, installDir?: string): Promise<string[]> {
   const dir = installDir ?? defaultRecipeInstallDir()
-  mkdirSync(dir, { recursive: true })
+  await mkdir(dir, { recursive: true })
 
   const parsed = parseRecipeSource(source)
   switch (parsed.registry) {
@@ -363,10 +370,11 @@ export async function installRecipe(source: string, installDir?: string): Promis
 export async function removeRecipe(recipeName: string, installDir?: string): Promise<void> {
   const dir = installDir ?? defaultRecipeInstallDir()
   const recipeDir = join(dir, recipeName)
-  if (!existsSync(recipeDir)) {
+  try {
+    await rm(recipeDir, { recursive: true })
+  } catch {
     throw new Error(`Recipe not found: ${recipeName} in ${dir}`)
   }
-  rmSync(recipeDir, { recursive: true })
 }
 
 /**

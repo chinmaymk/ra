@@ -7,7 +7,7 @@ Common patterns and pre-built agent configurations.
 Recipes are installed globally to `~/.ra/recipes/` and can be used from any project:
 
 ```bash
-ra install recipe github:chinmaymk/ra    # install all recipes from the ra repo
+ra install recipe chinmaymk/ra           # install all recipes from the ra repo
 ra list                                   # see installed recipes and skills
 ```
 
@@ -38,7 +38,7 @@ When `recipe` is set in a config file, the recipe config is loaded as a base lay
 Recipes can be installed from GitHub repos or URL tarballs. The repo must have a `recipes/` directory at the top level:
 
 ```bash
-ra install recipe github:user/repo                # GitHub repo
+ra install recipe user/repo                       # GitHub repo
 ra install recipe https://example.com/recipes.tgz # URL tarball
 ```
 
