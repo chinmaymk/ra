@@ -15,7 +15,7 @@ export class OpenAIResponsesProvider implements IProvider {
     this.client = new OpenAI({ apiKey: options.apiKey, baseURL: options.baseURL })
   }
 
-  buildParams(request: ChatRequest): OpenAI.Responses.ResponseCreateParamsBase {
+  buildParams(request: ChatRequest): OpenAI.Responses.ResponseCreateParams {
     const { instructions, input } = this.mapMessages(request.messages)
     const params: Record<string, unknown> = {
       model: request.model,
@@ -25,7 +25,7 @@ export class OpenAIResponsesProvider implements IProvider {
     if (request.tools?.length) params.tools = this.mapTools(request.tools)
     if (request.providerOptions) Object.assign(params, request.providerOptions)
     if (request.thinking) params.reasoning = { effort: request.thinking }
-    return params as OpenAI.Responses.ResponseCreateParamsBase
+    return params as OpenAI.Responses.ResponseCreateParams
   }
 
   toUsage(u: { input_tokens: number; output_tokens: number; output_tokens_details?: { reasoning_tokens?: number } }): TokenUsage {
@@ -51,7 +51,7 @@ export class OpenAIResponsesProvider implements IProvider {
       { ...params, stream: true } as OpenAI.Responses.ResponseCreateParamsStreaming,
       ...(request.signal ? [{ signal: request.signal }] : []),
     )
-    const activeToolCalls = new Map<string, string>() // item_id → call_id
+    const activeToolCalls = new Map<number, string>() // output_index → call_id
     let usage: TokenUsage | undefined
 
     for await (const event of stream as AsyncIterable<OpenAI.Responses.ResponseStreamEvent>) {
@@ -67,18 +67,18 @@ export class OpenAIResponsesProvider implements IProvider {
         case 'response.output_item.added': {
           const item = event.item
           if (item.type === 'function_call') {
-            activeToolCalls.set(item.id ?? event.item_id, item.call_id)
+            activeToolCalls.set(event.output_index, item.call_id)
             yield { type: 'tool_call_start', id: item.call_id, name: item.name }
           }
           break
         }
 
         case 'response.function_call_arguments.delta':
-          yield { type: 'tool_call_delta', id: activeToolCalls.get(event.item_id) ?? event.item_id, argsDelta: event.delta }
+          yield { type: 'tool_call_delta', id: activeToolCalls.get(event.output_index) ?? event.item_id, argsDelta: event.delta }
           break
 
         case 'response.function_call_arguments.done': {
-          const callId = activeToolCalls.get(event.item_id) ?? event.item_id
+          const callId = activeToolCalls.get(event.output_index) ?? event.item_id
           yield { type: 'tool_call_end', id: callId }
           break
         }

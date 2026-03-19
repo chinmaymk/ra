@@ -294,9 +294,9 @@ describe('OpenAIResponsesProvider - stream()', () => {
 
   it('yields tool_call_start, tool_call_delta, and tool_call_end', async () => {
     mockResponsesCreate.mockResolvedValue((async function* () {
-      yield { type: 'response.output_item.added', item_id: 'item_0', item: { type: 'function_call', id: 'item_0', call_id: 'tc_1', name: 'Read' } }
-      yield { type: 'response.function_call_arguments.delta', item_id: 'item_0', delta: '{"path":"x"}' }
-      yield { type: 'response.function_call_arguments.done', item_id: 'item_0', name: 'Read', arguments: '{"path":"x"}' }
+      yield { type: 'response.output_item.added', output_index: 0, item: { type: 'function_call', id: 'item_0', call_id: 'tc_1', name: 'Read' } }
+      yield { type: 'response.function_call_arguments.delta', item_id: 'item_0', output_index: 0, delta: '{"path":"x"}' }
+      yield { type: 'response.function_call_arguments.done', item_id: 'item_0', output_index: 0, name: 'Read', arguments: '{"path":"x"}' }
       yield { type: 'response.completed', response: {} }
     })())
     const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
