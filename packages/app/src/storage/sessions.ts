@@ -1,6 +1,10 @@
 import { join } from 'path'
 import { appendFile, mkdir, rm } from 'node:fs/promises'
 import type { IMessage } from '@chinmaymk/ra'
+import { parseJsonlFile } from '../utils/files'
+
+const MS_PER_DAY = 86_400_000
+const UNSAFE_SESSION_ID_CHARS = /[^a-zA-Z0-9_-]/g
 
 export interface SessionMeta {
   id: string
@@ -38,7 +42,7 @@ export class SessionStorage {
   }
 
   sessionDir(id: string): string {
-    const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '')
+    const sanitized = id.replace(UNSAFE_SESSION_ID_CHARS, '')
     if (!sanitized) throw new Error('Invalid session ID')
     return join(this.storagePath, sanitized)
   }
@@ -65,13 +69,7 @@ export class SessionStorage {
   }
 
   async readMessages(id: string): Promise<IMessage[]> {
-    const f = Bun.file(join(this.sessionDir(id), 'messages.jsonl'))
-    if (!(await f.exists())) return []
-    return (await f.text())
-      .split('\n')
-      .filter(line => line.trim().length > 0)
-      .map(line => { try { return JSON.parse(line) as IMessage } catch { return null } })
-      .filter((msg): msg is IMessage => msg !== null)
+    return parseJsonlFile<IMessage>(join(this.sessionDir(id), 'messages.jsonl'))
   }
 
   async list(): Promise<Session[]> {
@@ -101,7 +99,7 @@ export class SessionStorage {
     const toDelete = new Set<string>()
 
     if (options.ttlDays !== undefined) {
-      const cutoff = Date.now() - options.ttlDays * 86_400_000
+      const cutoff = Date.now() - options.ttlDays * MS_PER_DAY
       for (const s of sessions) if (new Date(s.meta.created).getTime() < cutoff) toDelete.add(s.id)
     }
     if (options.maxSessions !== undefined) {

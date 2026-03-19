@@ -61,17 +61,16 @@ async function handleStandaloneCommands(
   parsed: ReturnType<typeof parseArgs>,
   app: AppContext,
 ): Promise<void> {
-  if (parsed.meta.listMemories || parsed.meta.memories !== undefined) {
-    runMemoryCommand(app.memoryStore, { list: parsed.meta.listMemories, search: parsed.meta.memories })
-    await app.shutdown()
-    process.exit(0)
+  const { listMemories, memories, forget } = parsed.meta
+  if (listMemories || memories !== undefined) {
+    runMemoryCommand(app.memoryStore, { list: listMemories, search: memories })
+  } else if (forget !== undefined) {
+    runMemoryCommand(app.memoryStore, { forget })
+  } else {
+    return
   }
-
-  if (parsed.meta.forget !== undefined) {
-    runMemoryCommand(app.memoryStore, { forget: parsed.meta.forget })
-    await app.shutdown()
-    process.exit(0)
-  }
+  await app.shutdown()
+  process.exit(0)
 }
 
 // ── Interface launchers ──────────────────────────────────────────────
@@ -320,15 +319,8 @@ async function main(): Promise<void> {
     case 'mcp-stdio': return launchMcpStdio(app)
     case 'http':      return launchHttp(app, signals)
     case 'inspector': return launchInspector(app)
-    case 'cli':
-      return launchCli(parsed, app)
-    default: {
-      // CLI mode when prompt given without --cli flag
-      if (parsed.meta.prompt && !parsed.config.interface) {
-        return launchCli(parsed, app)
-      }
-      return launchRepl(app)
-    }
+    case 'cli':       return launchCli(parsed, app)
+    default:          return launchRepl(app)
   }
 }
 

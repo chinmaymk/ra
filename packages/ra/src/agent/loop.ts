@@ -39,6 +39,10 @@ function emptyMiddleware(): MiddlewareConfig {
   }
 }
 
+const DEFAULT_MAX_ITERATIONS = 10
+const DEFAULT_MAX_RETRIES = 3
+const MAX_COMPACTION_RETRIES = 3
+
 export class AgentLoop {
   private provider: IProvider
   private tools: ToolRegistry
@@ -56,7 +60,7 @@ export class AgentLoop {
   constructor(options: AgentLoopOptions) {
     this.provider = options.provider
     this.tools = options.tools
-    this.maxIterations = options.maxIterations ?? 10
+    this.maxIterations = options.maxIterations ?? DEFAULT_MAX_ITERATIONS
     this.model = options.model ?? 'default'
     this.sessionId = options.sessionId ?? randomUUID()
     this.middleware = { ...emptyMiddleware(), ...options.middleware }
@@ -64,7 +68,7 @@ export class AgentLoop {
     this.toolTimeout = options.toolTimeout ?? 0
     this.logger = options.logger ?? new NoopLogger()
     this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
-    this.maxRetries = options.maxRetries ?? 3
+    this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
@@ -86,7 +90,7 @@ export class AgentLoop {
     const stop = (reason?: string) => {
       stoppedInternally = true
       stopReason = reason
-      if (reason) console.log(`[ra] loop stopped: ${reason}`)
+      if (reason) this.logger.info(`loop stopped: ${reason}`)
       controller.abort()
     }
     const { signal } = controller
@@ -182,12 +186,11 @@ export class AgentLoop {
                 const childUsage = (value as { usage: TokenUsage }).usage
                 if (childUsage) accumulateUsage(usage, childUsage)
               }
-              await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             } catch (err) {
               isError = true
               content = errorMessage(err)
-              await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: true }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             }
+            await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             messages.push({ role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) })
           }
           currentPhase = 'model_call'
@@ -208,8 +211,6 @@ export class AgentLoop {
         return { messages, iterations, usage, stopReason: stopReason ?? 'aborted' }
       }
       // Attempt recovery via compaction when a provider rejects due to context length.
-      // Guard against infinite retry: allow at most 3 compaction retries per run.
-      const MAX_COMPACTION_RETRIES = 3
       if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err) && _compactionRetries < MAX_COMPACTION_RETRIES) {
         const modelCallCtx: ModelCallContext = {
           ...stoppable,

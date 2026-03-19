@@ -2,7 +2,7 @@ import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
-import { setPath, safeParseInt } from '../utils/config-helpers'
+import { applyRule, type CoercionRule } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
@@ -16,27 +16,19 @@ const CONFIG_FILES = [
   'ra.config.toml',
 ]
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v)
+}
+
 function deepMerge(
   target: Record<string, unknown>,
   source: Record<string, unknown>,
 ): Record<string, unknown> {
   const result = { ...target }
   for (const key of Object.keys(source)) {
-    if (
-      source[key] !== null &&
-      typeof source[key] === 'object' &&
-      !Array.isArray(source[key]) &&
-      target[key] !== null &&
-      typeof target[key] === 'object' &&
-      !Array.isArray(target[key])
-    ) {
-      result[key] = deepMerge(
-        target[key] as Record<string, unknown>,
-        source[key] as Record<string, unknown>,
-      )
-    } else {
-      result[key] = source[key]
-    }
+    result[key] = isPlainObject(source[key]) && isPlainObject(target[key])
+      ? deepMerge(target[key], source[key])
+      : source[key]
   }
   return result
 }
@@ -68,14 +60,7 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
   return {}
 }
 
-type EnvRule =
-  | { type: 'string'; path: string[] }
-  | { type: 'int'; path: string[] }
-  | { type: 'bool'; path: string[] }
-  | { type: 'csv'; path: string[] }
-  | { type: 'enum'; path: string[]; values: string[] }
-
-const ENV_RULES: Record<string, EnvRule> = {
+const ENV_RULES: Record<string, CoercionRule> = {
   RA_DATA_DIR:       { type: 'string', path: ['dataDir'] },
   RA_PROVIDER:       { type: 'string', path: ['provider'] },
   RA_MODEL:          { type: 'string', path: ['model'] },
@@ -126,12 +111,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   const r: Record<string, unknown> = {}
   for (const [key, rule] of Object.entries(ENV_RULES)) {
     const val = env[key]
-    if (val === undefined) continue
-    if (rule.type === 'string') setPath(r, rule.path, val)
-    else if (rule.type === 'int') { const n = safeParseInt(val); if (n !== undefined) setPath(r, rule.path, n) }
-    else if (rule.type === 'bool') setPath(r, rule.path, val === 'true')
-    else if (rule.type === 'csv') setPath(r, rule.path, val.split(',').filter(Boolean))
-    else if (rule.type === 'enum' && rule.values.includes(val)) setPath(r, rule.path, val)
+    if (val !== undefined) applyRule(r, rule, val)
   }
   return r
 }
@@ -145,33 +125,25 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
  */
 function normalizeToolsConfig(raw: Record<string, unknown>): void {
   // Legacy: builtinTools boolean → tools.builtin
-  if ('builtinTools' in raw && !('tools' in raw)) {
-    raw.tools = { builtin: !!raw.builtinTools, overrides: {} }
-    delete raw.builtinTools
-    return
-  }
-  if ('builtinTools' in raw && 'tools' in raw) {
-    // tools section wins, drop legacy key
+  if ('builtinTools' in raw) {
+    if (!('tools' in raw)) {
+      raw.tools = { builtin: !!raw.builtinTools, overrides: {} }
+    }
     delete raw.builtinTools
   }
 
-  const tools = raw.tools
-  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) return
+  if (!isPlainObject(raw.tools)) return
+  const t = raw.tools
+  // Already canonical form
+  if (isPlainObject(t.overrides)) return
 
-  const t = tools as Record<string, unknown>
-  // Already canonical
-  if ('overrides' in t && typeof t.overrides === 'object') return
-
-  // Flat form: extract builtin, treat all other keys as tool overrides
+  // Flat form: extract builtin, treat other keys as per-tool overrides
   const builtin = t.builtin !== undefined ? !!t.builtin : true
   const overrides: Record<string, ToolSettings> = {}
   for (const [key, val] of Object.entries(t)) {
     if (key === 'builtin' || key === 'overrides') continue
-    if (val === false) {
-      overrides[key] = { enabled: false }
-    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
-      overrides[key] = val as ToolSettings
-    }
+    if (val === false) overrides[key] = { enabled: false }
+    else if (isPlainObject(val)) overrides[key] = val as ToolSettings
   }
   raw.tools = { builtin, overrides }
 }

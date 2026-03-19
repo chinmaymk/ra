@@ -1,9 +1,25 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { Content, Part, Tool as GeminiTool, GenerateContentResponse } from '@google/generative-ai'
+import { GoogleGenerativeAI, type Content, type Part, type Tool as GeminiTool, type GenerateContentResponse } from '@google/generative-ai'
 import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
+
+/** Check if a Gemini part is a thinking/thought block (not in official types yet). */
+function isThoughtPart(part: Record<string, unknown>): boolean {
+  return 'thought' in part && !!part.thought
+}
+
+/** Separator for synthetic tool call IDs: `counter::name`. Using `::` avoids collisions with tool names that contain `_` or `-`. */
+const TOOL_ID_SEP = '::'
+
+function makeToolCallId(counter: number, name: string): string {
+  return `${counter}${TOOL_ID_SEP}${name}`
+}
+
+function parseToolCallId(id: string): string {
+  const sepIdx = id.indexOf(TOOL_ID_SEP)
+  return sepIdx >= 0 ? id.slice(sepIdx + TOOL_ID_SEP.length) : id
+}
 
 export interface GoogleProviderOptions {
   apiKey: string
@@ -34,15 +50,14 @@ export class GoogleProvider implements IProvider {
     return { inputTokens: meta.promptTokenCount ?? 0, outputTokens: meta.candidatesTokenCount ?? 0 }
   }
 
-  buildThinkingConfig(thinking?: 'low' | 'medium' | 'high') {
+  private buildGenerationConfig(thinking?: 'low' | 'medium' | 'high'): Record<string, unknown> | undefined {
     if (!thinking) return undefined
-    return { thinkingBudget: THINKING_BUDGETS_GOOGLE[thinking] }
+    return { thinkingConfig: { thinkingBudget: THINKING_BUDGETS_GOOGLE[thinking] } }
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const { model, contents, tools } = this.buildModel(request)
-    const thinkingConfig = this.buildThinkingConfig(request.thinking)
-    const generationConfig = thinkingConfig ? { thinkingConfig } as any : undefined
+    const generationConfig = this.buildGenerationConfig(request.thinking)
     const result = await model.generateContent({
       contents,
       ...(tools && { tools }),
@@ -56,8 +71,7 @@ export class GoogleProvider implements IProvider {
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
     const { model, contents, tools } = this.buildModel(request)
-    const thinkingConfig = this.buildThinkingConfig(request.thinking)
-    const generationConfig = thinkingConfig ? { thinkingConfig } as any : undefined
+    const generationConfig = this.buildGenerationConfig(request.thinking)
     const result = await model.generateContentStream(
       {
         contents,
@@ -71,13 +85,13 @@ export class GoogleProvider implements IProvider {
 
     for await (const chunk of result.stream) {
       for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
-        if ('thought' in part && (part as any).thought && 'text' in part && part.text) {
+        if (isThoughtPart(part as unknown as Record<string, unknown>) && 'text' in part && part.text) {
           yield { type: 'thinking', delta: part.text }
         } else if ('text' in part && part.text) {
           yield { type: 'text', delta: part.text }
         } else if ('functionCall' in part && part.functionCall) {
           const { name, args } = part.functionCall
-          const id = `${name}_${toolCallCounter++}`
+          const id = makeToolCallId(toolCallCounter++, name)
           yield { type: 'tool_call_start', id, name }
           yield { type: 'tool_call_delta', id, argsDelta: JSON.stringify(args ?? {}) }
           yield { type: 'tool_call_end', id }
@@ -92,8 +106,7 @@ export class GoogleProvider implements IProvider {
   mapMessages(messages: IMessage[]): Content[] {
     const mapped = messages.map((msg): Content => {
       if (msg.role === 'tool') {
-        // toolCallId is formatted as "functionName_counter" — extract the function name for Gemini
-        const toolName = msg.toolCallId!.substring(0, msg.toolCallId!.lastIndexOf('_'))
+        const toolName = parseToolCallId(msg.toolCallId!)
         return {
           role: 'user',
           parts: [{ functionResponse: { name: toolName, response: { content: serializeContent(msg.content) } } }],
@@ -127,18 +140,13 @@ export class GoogleProvider implements IProvider {
       if (part.type === 'text') return { text: part.text }
       if (part.type === 'image') {
         const src = part.source
-        return src.type === 'base64' ? { inlineData: { mimeType: src.mediaType, data: src.data } } : { fileData: { mimeType: this.inferMimeType(src.url), fileUri: src.url } }
+        if (src.type === 'base64') return { inlineData: { mimeType: src.mediaType, data: src.data } }
+        const ext = src.url.match(/\.(png|gif|webp|svg)$/)?.[1]
+        const mimeType = ext === 'svg' ? 'image/svg+xml' : ext ? `image/${ext}` : 'image/jpeg'
+        return { fileData: { mimeType, fileUri: src.url } }
       }
       return { inlineData: { mimeType: part.mimeType, data: typeof part.data === 'string' ? part.data : Buffer.from(part.data).toString('base64') } }
     })
-  }
-
-  private inferMimeType(url: string): string {
-    if (url.endsWith('.png')) return 'image/png'
-    if (url.endsWith('.gif')) return 'image/gif'
-    if (url.endsWith('.webp')) return 'image/webp'
-    if (url.endsWith('.svg')) return 'image/svg+xml'
-    return 'image/jpeg'
   }
 
   mapResponseToMessage(response: GenerateContentResponse): IMessage {
@@ -146,11 +154,11 @@ export class GoogleProvider implements IProvider {
     let textContent = ''
     let counter = 0
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-      if ('thought' in part && (part as any).thought) continue
+      if (isThoughtPart(part as unknown as Record<string, unknown>)) continue
       if ('text' in part && part.text) textContent += part.text
       else if ('functionCall' in part && part.functionCall) {
         const { name, args } = part.functionCall
-        toolCalls.push({ id: `${name}_${counter++}`, name, arguments: JSON.stringify(args ?? {}) })
+        toolCalls.push({ id: makeToolCallId(counter++, name), name, arguments: JSON.stringify(args ?? {}) })
       }
     }
     return { role: 'assistant', content: textContent, ...(toolCalls.length && { toolCalls }) }

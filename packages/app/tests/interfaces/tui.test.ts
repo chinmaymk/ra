@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'bun:test'
 import {
-  c, printHeader, printResumeHeader, startSpinner, stopSpinner,
+  ansi, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
   printCommandResponse, printError, printThinkingStart, printThinkingEnd,
   StreamBuffer, RESPONSE_PREFIX,
@@ -107,7 +107,7 @@ describe('printStatus', () => {
   it('outputs dimmed status message', () => {
     const output = captureStdout(() => printStatus('Processing...'))
     expect(output).toContain('Processing...')
-    expect(output).toContain(c.dim)
+    expect(output).toContain(ansi.dim)
   })
 })
 
@@ -123,7 +123,7 @@ describe('printError', () => {
     const output = captureStdout(() => printError('something went wrong'))
     expect(output).toContain('Error:')
     expect(output).toContain('something went wrong')
-    expect(output).toContain(c.red)
+    expect(output).toContain(ansi.red)
   })
 })
 
@@ -131,14 +131,14 @@ describe('printThinkingStart', () => {
   it('outputs thinking header with dim styling', () => {
     const output = captureStdout(() => printThinkingStart())
     expect(output).toContain('thinking')
-    expect(output).toContain(c.dim)
+    expect(output).toContain(ansi.dim)
   })
 })
 
 describe('printThinkingEnd', () => {
   it('outputs thinking footer with reset', () => {
     const output = captureStdout(() => printThinkingEnd())
-    expect(output).toContain(c.reset)
+    expect(output).toContain(ansi.reset)
     expect(output).toContain('╌')
   })
 })

@@ -20,20 +20,18 @@ export function createSessionMiddleware(
     logger?: Logger
   },
 ): { middleware: Partial<MiddlewareConfig>; logger: Logger } {
-  const sessionDir = options.storage.sessionDir(options.sessionId)
   const logsEnabled = options.logsEnabled ?? false
   const tracesEnabled = options.tracesEnabled ?? false
 
-  const { logger, tracer } = (logsEnabled || tracesEnabled)
-    ? createObservability({
-        enabled: true,
-        logs: { enabled: logsEnabled, level: options.logLevel ?? 'info', output: 'session' },
-        traces: { enabled: tracesEnabled, output: 'session' },
-      }, { sessionId: options.sessionId, sessionDir })
-    : { logger: undefined, tracer: undefined }
+  const { logger, tracer } = createObservability({
+    enabled: logsEnabled || tracesEnabled,
+    logs: { enabled: logsEnabled, level: options.logLevel ?? 'info', output: 'session' },
+    traces: { enabled: tracesEnabled, output: 'session' },
+  }, { sessionId: options.sessionId, sessionDir: options.storage.sessionDir(options.sessionId) })
 
-  const obsHooks = logger && tracer ? createObservabilityMiddleware(logger, tracer) : undefined
-  const flushHooks = logger && tracer ? {
+  const hasObs = logsEnabled || tracesEnabled
+  const obsHooks = hasObs ? createObservabilityMiddleware(logger, tracer) : undefined
+  const flushHooks = hasObs ? {
     afterLoopComplete: [async () => { await logger.flush(); await tracer.flush() }],
     onError: [async () => { await logger.flush(); await tracer.flush() }],
   } as Partial<MiddlewareConfig> : undefined
@@ -41,5 +39,5 @@ export function createSessionMiddleware(
   const historyHooks = createHistoryMiddleware(options.storage, options.priorCount)
   const middleware = mergeMiddleware(obsHooks, baseMiddleware, historyHooks, flushHooks)
 
-  return { middleware, logger: logger ?? options.logger ?? new NoopLogger() }
+  return { middleware, logger: hasObs ? logger : (options.logger ?? new NoopLogger()) }
 }

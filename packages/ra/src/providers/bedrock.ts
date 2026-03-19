@@ -7,7 +7,7 @@ import {
   type Tool as BedrockTool,
   type ToolInputSchema,
 } from '@aws-sdk/client-bedrock-runtime'
-import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS } from './utils'
+import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, DEFAULT_MAX_TOKENS } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 
@@ -34,7 +34,7 @@ export class BedrockProvider implements IProvider {
       messages: this.mapMessages(filtered),
       ...(system && { system: [{ text: system }] }),
       ...(request.tools?.length && { toolConfig: { tools: this.mapTools(request.tools) } }),
-      inferenceConfig: { maxTokens: (request.providerOptions?.maxTokens as number) ?? 4096 },
+      inferenceConfig: { maxTokens: (request.providerOptions?.maxTokens as number) ?? DEFAULT_MAX_TOKENS },
       ...(request.thinking && {
         additionalModelRequestFields: {
           thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[request.thinking] }
@@ -95,12 +95,15 @@ export class BedrockProvider implements IProvider {
         if (typeof msg.content === 'string' && msg.content) content.push({ text: msg.content })
         else if (Array.isArray(msg.content)) content.push(...this.mapContentParts(msg.content))
         for (const tc of msg.toolCalls) {
-          content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: parseToolArguments(tc.arguments) as any } })
+          content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: parseToolArguments(tc.arguments) as unknown as Record<string, never> } })
         }
         return { role: 'assistant', content }
       }
-      if (typeof msg.content === 'string') return { role: msg.role as 'user' | 'assistant', content: [{ text: msg.content }] }
-      return { role: msg.role as 'user' | 'assistant', content: this.mapContentParts(msg.content) }
+      // user or assistant without tool calls
+      const role = msg.role as 'user' | 'assistant'
+      return typeof msg.content === 'string'
+        ? { role, content: [{ text: msg.content }] }
+        : { role, content: this.mapContentParts(msg.content) }
     })
     // Merge consecutive same-role messages (required for alternating-turn APIs)
     return mergeConsecutive(mapped, (a, b) => { a.content = (a.content ?? []).concat(b.content ?? []) })
@@ -116,6 +119,11 @@ export class BedrockProvider implements IProvider {
     }))
   }
 
+  private static toBedrockImageFormat(mediaType: string): 'jpeg' | 'png' | 'gif' | 'webp' {
+    const sub = mediaType.split('/')[1] ?? 'jpeg'
+    return (sub === 'jpg' ? 'jpeg' : sub) as 'jpeg' | 'png' | 'gif' | 'webp'
+  }
+
   mapContentParts(parts: ContentPart[]): ContentBlock[] {
     return parts.map((part): ContentBlock => {
       if (part.type === 'text') return { text: part.text }
@@ -124,15 +132,13 @@ export class BedrockProvider implements IProvider {
         if (src.type === 'base64') {
           return {
             image: {
-              format: (src.mediaType.split('/')[1] === 'jpg' ? 'jpeg' : src.mediaType.split('/')[1]) as 'jpeg' | 'png' | 'gif' | 'webp',
+              format: BedrockProvider.toBedrockImageFormat(src.mediaType),
               source: { bytes: Buffer.from(src.data, 'base64') },
             },
           }
         }
-        // URL images not natively supported by Bedrock — fall back to text
         return { text: `[Image: ${src.url}]` }
       }
-      // file/document
       return { text: `[File: ${part.mimeType}]` }
     })
   }

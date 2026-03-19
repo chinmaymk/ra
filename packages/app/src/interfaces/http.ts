@@ -15,7 +15,7 @@ import {
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill } from '../skills/types'
 import { createSessionMiddleware } from '../agent/session'
-import { buildAvailableSkillsXml } from '../skills/loader'
+import { buildMessagePrefix } from './messages'
 import { askUserTool } from '../tools/ask-user'
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -113,17 +113,11 @@ export class HttpServer {
   }
 
   private prependSystem(messages: IMessage[]): { messages: IMessage[]; priorCount: number } {
-    const prefix: IMessage[] = []
-    if (this.options.systemPrompt) {
-      prefix.push({ role: 'system', content: this.options.systemPrompt })
-    }
-    if (this.options.skillMap && this.options.skillMap.size > 0) {
-      const xml = buildAvailableSkillsXml(this.options.skillMap)
-      if (xml) prefix.push({ role: 'user', content: xml })
-    }
-    if (this.options.contextMessages?.length) {
-      prefix.push(...this.options.contextMessages)
-    }
+    const prefix = buildMessagePrefix({
+      systemPrompt: this.options.systemPrompt,
+      skillMap: this.options.skillMap,
+      contextMessages: this.options.contextMessages,
+    })
     const priorCount = prefix.length
     prefix.push(...messages)
     return { messages: prefix, priorCount }

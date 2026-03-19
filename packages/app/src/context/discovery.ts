@@ -22,16 +22,16 @@ export async function discoverContextFiles(options: DiscoverOptions): Promise<Co
   const cwd = realpathSync(options.cwd)
   const root = (await findGitRoot(cwd)) ?? cwd
 
+  // Walk from cwd up to git root, collecting each directory
   const dirs: string[] = []
   let current = cwd
-  while (true) {
+  while (current !== root) {
     dirs.push(current)
-    if (current === root) break
     const parent = resolve(current, '..')
     if (parent === current) break
     current = parent
   }
-  if (dirs[dirs.length - 1] !== root) dirs.push(root)
+  dirs.push(root)
 
   return scanDirs(dirs, patterns, root)
 }

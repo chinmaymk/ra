@@ -5,9 +5,12 @@ export interface McpToolEntry {
   serverName: string
 }
 
+/** Pattern for characters not allowed in tool/session names. */
+const UNSAFE_NAME_CHARS = /[^a-zA-Z0-9_]/g
+
 /** Sanitize server name to produce valid tool name characters: [a-zA-Z0-9_] */
 function sanitize(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_]/g, '_')
+  return name.replace(UNSAFE_NAME_CHARS, '_')
 }
 
 /** Build prefixed tool name: `serverName__toolName` */

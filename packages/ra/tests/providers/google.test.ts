@@ -125,7 +125,7 @@ describe('GoogleProvider', () => {
   it('maps tool result messages to functionResponse parts', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
-      { role: 'tool' as const, content: 'result text', toolCallId: 'Read_0' },
+      { role: 'tool' as const, content: 'result text', toolCallId: '0::Read' },
     ]
     const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].role).toBe('user')
@@ -173,26 +173,24 @@ describe('GoogleProvider', () => {
   })
 
   describe('thinking', () => {
-    it('builds thinkingConfig for medium', () => {
-      const provider = new GoogleProvider({ apiKey: 'test' })
-      const genConfig = provider.buildThinkingConfig('medium')
-      expect(genConfig).toEqual({ thinkingBudget: 4096 })
+    // buildGenerationConfig is private — test via the accessor for coverage
+    const buildConfig = (thinking?: 'low' | 'medium' | 'high') =>
+      (new GoogleProvider({ apiKey: 'test' }) as any).buildGenerationConfig(thinking)
+
+    it('builds generationConfig for medium', () => {
+      expect(buildConfig('medium')).toEqual({ thinkingConfig: { thinkingBudget: 4096 } })
     })
 
     it('returns undefined when thinking not set', () => {
-      const provider = new GoogleProvider({ apiKey: 'test' })
-      const genConfig = provider.buildThinkingConfig(undefined)
-      expect(genConfig).toBeUndefined()
+      expect(buildConfig(undefined)).toBeUndefined()
     })
 
     it('maps low to 512', () => {
-      const provider = new GoogleProvider({ apiKey: 'test' })
-      expect(provider.buildThinkingConfig('low')).toEqual({ thinkingBudget: 512 })
+      expect(buildConfig('low')).toEqual({ thinkingConfig: { thinkingBudget: 512 } })
     })
 
     it('maps high to 16384', () => {
-      const provider = new GoogleProvider({ apiKey: 'test' })
-      expect(provider.buildThinkingConfig('high')).toEqual({ thinkingBudget: 16384 })
+      expect(buildConfig('high')).toEqual({ thinkingConfig: { thinkingBudget: 16384 } })
     })
   })
 
@@ -365,9 +363,9 @@ describe('GoogleProvider - stream()', () => {
     for await (const chunk of provider.stream({ model: 'gemini-pro', messages: [{ role: 'user', content: 'hi' }] })) {
       chunks.push(chunk)
     }
-    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'Read_0', name: 'Read' })
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: '0::Read', name: 'Read' })
     expect(chunks[1].type).toBe('tool_call_delta')
-    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'Read_0' })
+    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: '0::Read' })
   })
 
   it('assigns unique IDs when same tool is called multiple times', async () => {
@@ -386,8 +384,8 @@ describe('GoogleProvider - stream()', () => {
     }
     const starts = chunks.filter(c => c.type === 'tool_call_start')
     expect(starts).toHaveLength(2)
-    expect(starts[0].id).toBe('Read_0')
-    expect(starts[1].id).toBe('Read_1')
+    expect(starts[0].id).toBe('0::Read')
+    expect(starts[1].id).toBe('1::Read')
     expect(starts[0].id).not.toBe(starts[1].id)
   })
 })
@@ -417,7 +415,7 @@ describe('GoogleProvider - additional bug fixes', () => {
   it('extracts tool name correctly when name contains digits', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
-      { role: 'tool' as const, content: 'result', toolCallId: 'get_result_3_0' },
+      { role: 'tool' as const, content: 'result', toolCallId: '0::get_result_3' },
     ]
     const mapped = provider.mapMessages(messages) as any[]
     expect(mapped[0].parts[0].functionResponse.name).toBe('get_result_3')
@@ -450,8 +448,8 @@ describe('GoogleProvider - tool result ID mapping', () => {
   it('strips counter suffix from toolCallId for functionResponse name', () => {
     const provider = new GoogleProvider({ apiKey: 'test' })
     const messages = [
-      { role: 'tool' as const, content: 'file contents', toolCallId: 'Read_0' },
-      { role: 'tool' as const, content: 'more contents', toolCallId: 'Read_1' },
+      { role: 'tool' as const, content: 'file contents', toolCallId: '0::Read' },
+      { role: 'tool' as const, content: 'more contents', toolCallId: '1::Read' },
     ]
     const mapped = provider.mapMessages(messages) as any[]
     // Consecutive tool results (both user role) get merged into one message
@@ -475,8 +473,8 @@ describe('GoogleProvider - tool result ID mapping', () => {
     }
     const result = provider.mapResponseToMessage(response as any)
     expect(result.toolCalls).toHaveLength(2)
-    expect(result.toolCalls![0]!.id).toBe('search_0')
-    expect(result.toolCalls![1]!.id).toBe('search_1')
+    expect(result.toolCalls![0]!.id).toBe('0::search')
+    expect(result.toolCalls![1]!.id).toBe('1::search')
     expect(result.toolCalls![0]!.id).not.toBe(result.toolCalls![1]!.id)
   })
 })

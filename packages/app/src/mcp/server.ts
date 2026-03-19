@@ -28,7 +28,7 @@ function buildServer(config: McpServerConfig, handler: McpToolHandler, builtinTo
       server.tool(
         tool.name,
         tool.description,
-        tool.inputSchema as any,
+        tool.inputSchema as Record<string, unknown>,
         async (args: Record<string, unknown>) => ({
           content: [{ type: 'text' as const, text: String(await tool.execute(args)) }],
         })

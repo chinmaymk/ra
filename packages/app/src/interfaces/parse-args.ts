@@ -1,5 +1,5 @@
 import { parseArgs as utilParseArgs } from 'util'
-import { setPath, safeParseInt } from '../utils/config-helpers'
+import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
 export interface SkillCommand {
@@ -29,13 +29,8 @@ export interface ParsedArgs {
   meta: ParsedArgsMeta
 }
 
-type FlagRule =
-  | { type: 'string'; path: string[] }
-  | { type: 'int'; path: string[] }
-  | { type: 'bool'; path: string[]; value: unknown }
-
 // Maps CLI flag names to config paths with type coercion
-const FLAG_RULES: Record<string, FlagRule> = {
+const FLAG_RULES: Record<string, CoercionRule> = {
   provider:                      { type: 'string', path: ['provider'] },
   model:                         { type: 'string', path: ['model'] },
   'system-prompt':               { type: 'string', path: ['systemPrompt'] },
@@ -150,21 +145,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   const r: Record<string, unknown> = {}
 
-  // Interface selection
-  if (values['mcp-stdio'])    setPath(r, ['interface'], 'mcp-stdio')
-  else if (values.mcp)       setPath(r, ['interface'], 'mcp')
-  else if (values.http) setPath(r, ['interface'], 'http')
-  else if (values.inspector) setPath(r, ['interface'], 'inspector')
-  else if (values.repl) setPath(r, ['interface'], 'repl')
-  else if (values.cli)  setPath(r, ['interface'], 'cli')
+  // Interface selection (first match wins, order matters: mcp-stdio before mcp)
+  const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'repl', 'cli'] as const
+  for (const flag of interfaceFlags) {
+    if (values[flag]) { setPath(r, ['interface'], flag); break }
+  }
 
   // Apply declarative flag rules
   for (const [flag, rule] of Object.entries(FLAG_RULES)) {
     const val = values[flag]
-    if (val === undefined) continue
-    if (rule.type === 'string') setPath(r, rule.path, val)
-    else if (rule.type === 'int') { const n = safeParseInt(val as string); if (n !== undefined) setPath(r, rule.path, n) }
-    else if (rule.type === 'bool') setPath(r, rule.path, rule.value)
+    if (val !== undefined) applyRule(r, rule, val as string | boolean)
   }
 
   // Memory — --memories, --list-memories, and --forget imply --memory

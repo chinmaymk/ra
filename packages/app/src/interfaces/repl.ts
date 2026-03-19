@@ -20,7 +20,8 @@ import { fileToContentPart } from '../utils/files'
 import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
 import type { Skill } from '../skills/types'
-import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
+import { buildActiveSkillXml, readSkillReference } from '../skills/loader'
+import { buildMessagePrefix } from './messages'
 import type { MemoryStore } from '../memory/store'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
@@ -48,6 +49,8 @@ export interface ReplOptions {
   logLevel?: LogLevel
   tracesEnabled?: boolean
 }
+
+const DOUBLE_PRESS_TIMEOUT_MS = 1000
 
 export class Repl {
   private options: ReplOptions
@@ -114,7 +117,7 @@ export class Repl {
         return
       }
       const now = Date.now()
-      if (now - this.lastInterruptTime < 1000) {
+      if (now - this.lastInterruptTime < DOUBLE_PRESS_TIMEOUT_MS) {
         tui.printInterrupt('Goodbye!')
         rl.close()
         return
@@ -176,30 +179,18 @@ export class Repl {
 
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
 
-    const initialMessages: IMessage[] = []
-    if (this.options.systemPrompt) initialMessages.push({ role: 'system', content: this.options.systemPrompt })
-    if (this.options.contextMessages?.length) initialMessages.push(...this.options.contextMessages)
-
-    // Inject available skills XML as first user message if skills exist
-    if (this.options.skillMap && this.options.skillMap.size > 0 && this.messages.length === 0) {
-      const xml = buildAvailableSkillsXml(this.options.skillMap)
-      if (xml) {
-        initialMessages.splice(
-          this.options.systemPrompt ? 1 : 0,
-          0,
-          { role: 'user', content: xml }
-        )
-      }
-    }
-
+    // Include skills XML only on first turn (avoids repetition in ongoing sessions)
+    const isFirstTurn = this.messages.length === 0
+    const initialMessages = buildMessagePrefix({
+      systemPrompt: this.options.systemPrompt,
+      skillMap: isFirstTurn ? this.options.skillMap : undefined,
+      contextMessages: this.options.contextMessages,
+    })
     initialMessages.push(...this.messages)
     const priorCount = initialMessages.length
     initialMessages.push(userMessage)
 
-    let boxOpened = false
-    let thinkingOpened = false
-    let streamBuf: tui.StreamBuffer | null = null
-    const toolStartTimes = new Map<string, number>()
+    const tuiState = tui.createStreamState()
     tui.startSpinner()
     const session = createSessionMiddleware(this.options.middleware, {
       storage: this.options.storage,
@@ -214,41 +205,21 @@ export class Repl {
     const tuiHooks: Partial<MiddlewareConfig> = {
       onStreamChunk: [
         async (ctx: StreamChunkContext) => {
-          if (ctx.chunk.type === 'thinking') {
-            if (!thinkingOpened) {
-              tui.stopSpinner(true)
-              tui.printThinkingStart()
-              thinkingOpened = true
-            }
-            process.stdout.write(ctx.chunk.delta)
-          } else if (ctx.chunk.type === 'text') {
-            if (thinkingOpened) {
-              tui.printThinkingEnd()
-              thinkingOpened = false
-            }
-            if (!boxOpened) {
-              tui.stopSpinner()
-              boxOpened = true
-              const contentWidth = (process.stdout.columns || 80) - tui.RESPONSE_PREFIX_LEN
-              streamBuf = new tui.StreamBuffer(contentWidth)
-            }
-            process.stdout.write(streamBuf!.write(ctx.chunk.delta))
-          }
+          tui.handleStreamChunk(tuiState, ctx.chunk.type, 'delta' in ctx.chunk ? ctx.chunk.delta : undefined)
         },
       ],
       beforeToolExecution: [
         async (ctx: ToolExecutionContext) => {
-          // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-          const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
+          const out = tuiState.streamBuf?.end(); if (out) process.stdout.write(out)
           tui.stopSpinner(true)
-          boxOpened = false
-          toolStartTimes.set(ctx.toolCall.id, Date.now())
+          tuiState.boxOpened = false
+          tuiState.toolStartTimes.set(ctx.toolCall.id, Date.now())
           tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
         },
       ],
       afterToolExecution: [
         async (ctx: ToolResultContext) => {
-          tui.printToolResult(ctx.toolCall.name, Date.now() - (toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
+          tui.printToolResult(ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
           tui.startSpinner()
         },
       ],
@@ -271,21 +242,10 @@ export class Repl {
     this.activeLoop = loop
     try {
       const result = await loop.run(initialMessages)
-      if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
-      tui.stopSpinner(true)
-      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-      if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n\n')
-
+      tui.flushStreamState(tuiState)
       this.messages.push(...result.messages.slice(priorCount))
     } catch (err) {
-      tui.stopSpinner(true)
-      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-      if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n\n')
-      // AbortError from Ctrl+C is not a real error — just notify the user
+      tui.flushStreamState(tuiState)
       if (err instanceof DOMException && err.name === 'AbortError') {
         tui.printInterrupt('Request cancelled.')
       } else {
@@ -332,31 +292,23 @@ export class Repl {
         this.pendingSkill = skill
         return `Skill "${name}" will be injected with your next message.`
       }
-      case '/skill-run': {
-        const skillName = parts[1]
-        const scriptName = parts[2]
-        if (!skillName || !scriptName) return 'Usage: /skill-run <skill> <script>'
-        const skill = this.options.skillMap?.get(skillName)
-        if (!skill) return `Skill not found: ${skillName}`
-        const output = await runSkillScriptByName(skill, scriptName, {})
-        if (output.trim()) {
-          this.pendingAttachments.push({ type: 'text', text: `<skill-script name="${scriptName}">\n${output.trim()}\n</skill-script>` })
-          return `Script output from "${scriptName}" will be attached to your next message.`
-        }
-        return `Script "${scriptName}" produced no output.`
-      }
+      case '/skill-run':
       case '/skill-ref': {
+        const isRun = cmd === '/skill-run'
         const skillName = parts[1]
-        const refName = parts[2]
-        if (!skillName || !refName) return 'Usage: /skill-ref <skill> <reference>'
+        const targetName = parts[2]
+        if (!skillName || !targetName) return `Usage: ${cmd} <skill> <${isRun ? 'script' : 'reference'}>`
         const skill = this.options.skillMap?.get(skillName)
         if (!skill) return `Skill not found: ${skillName}`
-        const content = await readSkillReference(skill, refName)
-        if (content.trim()) {
-          this.pendingAttachments.push({ type: 'text', text: `<skill-reference name="${refName}">\n${content.trim()}\n</skill-reference>` })
-          return `Reference "${refName}" will be attached to your next message.`
+        const output = isRun
+          ? await runSkillScriptByName(skill, targetName, {})
+          : await readSkillReference(skill, targetName)
+        if (output.trim()) {
+          const tag = isRun ? 'skill-script' : 'skill-reference'
+          this.pendingAttachments.push({ type: 'text', text: `<${tag} name="${targetName}">\n${output.trim()}\n</${tag}>` })
+          return `${isRun ? 'Script output from' : 'Reference'} "${targetName}" will be attached to your next message.`
         }
-        return `Reference "${refName}" is empty.`
+        return `${isRun ? 'Script' : 'Reference'} "${targetName}" ${isRun ? 'produced no output' : 'is empty'}.`
       }
       case '/attach': {
         const filePath = parts.slice(1).join(' ')
