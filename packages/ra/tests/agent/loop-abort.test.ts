@@ -1,28 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { AgentLoop, ToolRegistry } from '@chinmaymk/ra'
 import type { IProvider, ChatRequest } from '@chinmaymk/ra'
-
-/** Helper that waits but resolves early if the signal fires */
-function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms)
-    signal?.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true })
-  })
-}
-
-function slowProvider(delayMs: number): IProvider {
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error('use stream') },
-    async *stream(req: ChatRequest) {
-      yield { type: 'text', delta: 'start ' }
-      await abortableDelay(delayMs, req.signal)
-      if (req.signal?.aborted) return
-      yield { type: 'text', delta: 'end' }
-      yield { type: 'done' }
-    },
-  }
-}
+import { abortableDelay, slowProvider } from './test-utils'
 
 describe('AgentLoop.abort()', () => {
   it('stops a running loop and returns partial results with stopReason', async () => {

@@ -4,20 +4,10 @@ import { ToolRegistry } from '@chinmaymk/ra'
 import { SessionStorage } from '../../src/storage/sessions'
 import type { IProvider } from '@chinmaymk/ra'
 import { tmpdir } from '../tmpdir'
+import { mockProvider } from '../fixtures'
 
 const TEST_STORAGE = tmpdir('ra-http-test')
 const TEST_PORT = 13579
-
-function mockProvider(text: string): IProvider {
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error() },
-    async *stream() {
-      yield { type: 'text', delta: text }
-      yield { type: 'done' }
-    },
-  }
-}
 
 async function makeStorage(): Promise<SessionStorage> {
   const storage = new SessionStorage(TEST_STORAGE)

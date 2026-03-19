@@ -1,18 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { AgentLoop, ToolRegistry, NoopLogger } from '@chinmaymk/ra'
-import type { IProvider, StreamChunk, ChatRequest, ChatResponse, Logger } from '@chinmaymk/ra'
-
-function mockProvider(responses: StreamChunk[][]): IProvider {
-  let callIndex = 0
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error('use stream') },
-    async *stream() {
-      const chunks = responses[callIndex++] ?? [{ type: 'text', delta: 'done' }, { type: 'done' }]
-      for (const chunk of chunks) yield chunk
-    },
-  }
-}
+import type { IProvider, ChatRequest, ChatResponse, Logger } from '@chinmaymk/ra'
+import { mockProvider } from './test-utils'
 
 describe('AgentLoop', () => {
   it('runs single turn with no tool calls', async () => {
@@ -170,30 +159,7 @@ describe('AgentLoop', () => {
     expect(errors).toEqual(['provider down'])
   })
 
-  it('afterLoopComplete is NOT called when stop() is used', async () => {
-    const events: string[] = []
-    const provider = mockProvider([[{ type: 'text', delta: 'hi' }, { type: 'done' }]])
-    const loop = new AgentLoop({
-      provider, tools: new ToolRegistry(),
-      middleware: {
-        beforeModelCall: [async (ctx) => { ctx.stop() }],
-        afterLoopComplete: [async (_ctx) => { events.push('afterLoopComplete') }],
-      },
-    })
-    await loop.run([{ role: 'user', content: 'hi' }])
-    expect(events).not.toContain('afterLoopComplete')
-  })
-
-  it('afterLoopComplete IS called on normal completion', async () => {
-    const events: string[] = []
-    const provider = mockProvider([[{ type: 'text', delta: 'hi' }, { type: 'done' }]])
-    const loop = new AgentLoop({
-      provider, tools: new ToolRegistry(),
-      middleware: { afterLoopComplete: [async (_ctx) => { events.push('afterLoopComplete') }] },
-    })
-    await loop.run([{ role: 'user', content: 'hi' }])
-    expect(events).toContain('afterLoopComplete')
-  })
+  // stop() behavior tested in loop-stop.test.ts
 
   it('multiple handlers on same hook all run in order', async () => {
     const order: number[] = []
@@ -414,6 +380,63 @@ describe('AgentLoop', () => {
     expect(toolResults).toHaveLength(2)
     expect(toolResults.some(m => m.content === 'result_a')).toBe(true)
     expect(toolResults.some(m => m.content === 'result_b')).toBe(true)
+  })
+
+  it('beforeToolExecution deny() prevents tool execution and returns error', async () => {
+    const executed: string[] = []
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'risky' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'handled' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'risky', description: '', inputSchema: {}, execute: async () => { executed.push('risky'); return 'ok' } })
+    const loop = new AgentLoop({
+      provider, tools,
+      middleware: {
+        beforeToolExecution: [async (ctx) => { ctx.deny('Blocked by policy') }],
+      },
+    })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    expect(executed).toHaveLength(0)
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    expect(toolResult).toBeDefined()
+    expect(toolResult!.isError).toBe(true)
+    expect(toolResult!.content).toBe('Blocked by policy')
+  })
+
+  it('deny() only blocks targeted tool, others still execute', async () => {
+    const executed: string[] = []
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'safe' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'tool_call_start', id: 'tc2', name: 'risky' },
+        { type: 'tool_call_delta', id: 'tc2', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'done' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'safe', description: '', inputSchema: {}, execute: async () => { executed.push('safe'); return 'ok' } })
+    tools.register({ name: 'risky', description: '', inputSchema: {}, execute: async () => { executed.push('risky'); return 'ok' } })
+    const loop = new AgentLoop({
+      provider, tools,
+      middleware: {
+        beforeToolExecution: [async (ctx) => {
+          if (ctx.toolCall.name === 'risky') ctx.deny('Denied')
+        }],
+      },
+    })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    expect(executed).toEqual(['safe'])
+    const toolResults = result.messages.filter(m => m.role === 'tool')
+    expect(toolResults).toHaveLength(2)
+    expect(toolResults.find(m => m.isError)?.content).toBe('Denied')
+    expect(toolResults.find(m => !m.isError)?.content).toBe('ok')
   })
 
   it('unknown tool name produces isError tool result instead of crashing', async () => {
