@@ -1,5 +1,5 @@
 name: 'ra - AI Agent'
-description: 'Run the ra agentic loop in your GitHub Actions workflow'
+description: 'Run the ra agent harness in your GitHub Actions workflow'
 branding:
   icon: 'cpu'
   color: 'orange'
