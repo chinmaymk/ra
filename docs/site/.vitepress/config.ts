@@ -4,7 +4,7 @@ import path from 'node:path'
 
 export default defineConfig({
   title: 'ra',
-  description: 'One Loop. Infinite Agents. A small, hackable agent.',
+  description: 'The predictable, observable agent harness.',
   base: '/ra/',
   appearance: 'dark',
   head: [
