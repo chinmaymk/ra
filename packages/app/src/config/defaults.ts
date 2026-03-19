@@ -38,6 +38,7 @@ export const defaultConfig: RaConfig = {
     ttlDays: 30,
   },
   maxIterations: 50,
+  maxRetries: 3,
   toolTimeout: 30000,
   tools: {
     builtin: true,

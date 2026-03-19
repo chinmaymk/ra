@@ -84,6 +84,7 @@ export interface RaConfig {
     ttlDays: number
   }
   maxIterations: number
+  maxRetries: number
   toolTimeout: number
   tools: ToolsConfig
   permissions: PermissionsConfig
