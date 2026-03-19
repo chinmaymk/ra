@@ -28,14 +28,14 @@ export async function loadResolvers(
       const mod = await import(resolved)
       const resolver = mod.default as PatternResolver
       if (!resolver || !(resolver.pattern instanceof RegExp) || typeof resolver.resolve !== 'function') {
-        console.warn(`[ra] Resolver file "${resolved}" must export a default PatternResolver — skipping`)
+        console.warn('[ra] Resolver file must export a default PatternResolver — skipping', resolved)
         continue
       }
       resolvers.push({ ...resolver, name: resolver.name || config.name })
       continue
     }
 
-    console.warn(`[ra] Unknown resolver "${config.name}" — skipping (no built-in and no path specified)`)
+    console.warn('[ra] Unknown resolver — skipping (no built-in and no path specified)', config.name)
   }
 
   return resolvers

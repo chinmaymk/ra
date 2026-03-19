@@ -90,7 +90,7 @@ export class AgentLoop {
     const stop = (reason?: string) => {
       stoppedInternally = true
       stopReason = reason
-      if (reason) this.logger.info(`loop stopped: ${reason}`)
+      if (reason) this.logger.info('loop stopped', { reason })
       controller.abort()
     }
     const { signal } = controller
@@ -149,7 +149,7 @@ export class AgentLoop {
             // Reset accumulators on retry since the stream will restart
             textAccumulator = ''
             toolCallBuf.length = 0
-            this.logger.info(`Provider ${error.category} error, retrying (${attempt}/${this.maxRetries}): ${error.message}`)
+            this.logger.info('provider error, retrying', { category: error.category, attempt, maxRetries: this.maxRetries, error: error.message })
           },
         })
 

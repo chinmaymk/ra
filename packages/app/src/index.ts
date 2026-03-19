@@ -125,14 +125,14 @@ async function startSidecarMcp(app: AppContext): Promise<(() => Promise<void>) |
   if (!app.config.mcp.server?.enabled) return null
   const handler = createMcpHandler(app)
   const stop = await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
-  console.error(`MCP server (http) listening on port ${app.config.mcp.server.port}`)
+  console.error('MCP server (http) listening on port', app.config.mcp.server.port)
   return stop
 }
 
 async function launchMcpHttp(app: AppContext): Promise<void> {
   const handler = createMcpHandler(app)
   await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
-  console.error(`MCP server (http) listening on port ${app.config.mcp.server.port}`)
+  console.error('MCP server (http) listening on port', app.config.mcp.server.port)
   await new Promise(() => {}) // keep alive
 }
 
@@ -143,9 +143,9 @@ async function launchMcpStdio(app: AppContext): Promise<void> {
   const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp-stdio'] : ['--mcp-stdio']
   const mcpConfig = JSON.stringify({ mcpServers: { ra: { command: mcpCommand, args: mcpArgs } } }, null, 2)
   process.stderr.write(
-    `MCP stdio server starting.\n\n` +
-    `Cursor — .cursor/mcp.json:\n${mcpConfig}\n\n` +
-    `Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n${mcpConfig}\n\n`
+    'MCP stdio server starting.\n\n' +
+    'Cursor — .cursor/mcp.json:\n' + mcpConfig + '\n\n' +
+    'Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n' + mcpConfig + '\n\n'
   )
   await startMcpStdio(app.config.mcp.server, handler, mcpToolsFor(app))
   await app.shutdown()
@@ -213,7 +213,7 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
     tracesEnabled: app.config.tracesEnabled,
   })
   await httpServer.start()
-  console.error(`HTTP server listening on port ${httpServer.port}`)
+  console.error('HTTP server listening on port', httpServer.port)
 
   const httpShutdown = async () => {
     try { await httpServer.stop() } catch { /* best-effort */ }
@@ -257,7 +257,7 @@ async function launchRepl(app: AppContext): Promise<void> {
 async function launchInspector(app: AppContext): Promise<void> {
   const inspector = new InspectorServer(app)
   await inspector.start()
-  console.error(`Inspector running at http://localhost:${inspector.port}`)
+  console.error('Inspector running at', 'http://localhost:' + String(inspector.port))
 }
 
 // ── Main ─────────────────────────────────────────────────────────────
