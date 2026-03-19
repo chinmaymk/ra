@@ -60,6 +60,14 @@ function isActive(v: string) {
   return currentView.value === v || (!currentView.value && v === data.value?.latest)
 }
 
+function navigateTo(e: MouseEvent, url: string) {
+  e.preventDefault()
+  open.value = false
+  // Full page navigation — each version is a separate VitePress build
+  // so we can't use the SPA router
+  window.location.href = url
+}
+
 async function toggle() {
   open.value = !open.value
   if (open.value) {
@@ -93,7 +101,7 @@ function positionDropdown() {
           :href="versionUrl('dev')"
           class="version-item"
           :class="{ active: currentView === 'dev' }"
-          @click="open = false"
+          @click="navigateTo($event, versionUrl('dev'))"
         >
           dev
         </a>
@@ -103,7 +111,7 @@ function positionDropdown() {
           :href="v === data.latest ? siteRoot : versionUrl(v)"
           class="version-item"
           :class="{ active: isActive(v) }"
-          @click="open = false"
+          @click="navigateTo($event, v === data.latest ? siteRoot : versionUrl(v))"
         >
           v{{ v }}
           <span v-if="v === data.latest" class="latest-badge">latest</span>
