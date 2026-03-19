@@ -90,8 +90,11 @@ export class AnthropicProvider implements IProvider {
         }
         return { role: 'assistant', content }
       }
-      if (typeof msg.content === 'string') return { role: msg.role as 'user' | 'assistant', content: msg.content }
-      return { role: msg.role as 'user' | 'assistant', content: this.mapContentParts(msg.content) }
+      // user or assistant without tool calls
+      const role = msg.role as 'user' | 'assistant'
+      return typeof msg.content === 'string'
+        ? { role, content: msg.content }
+        : { role, content: this.mapContentParts(msg.content) }
     })
     return mergeConsecutiveRoles(mapped)
   }

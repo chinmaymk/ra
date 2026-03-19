@@ -173,26 +173,24 @@ describe('GoogleProvider', () => {
   })
 
   describe('thinking', () => {
-    it('builds thinkingConfig for medium', () => {
-      const provider = new GoogleProvider({ apiKey: 'test' })
-      const genConfig = provider.buildThinkingConfig('medium')
-      expect(genConfig).toEqual({ thinkingBudget: 4096 })
+    // buildGenerationConfig is private — test via the accessor for coverage
+    const buildConfig = (thinking?: 'low' | 'medium' | 'high') =>
+      (new GoogleProvider({ apiKey: 'test' }) as any).buildGenerationConfig(thinking)
+
+    it('builds generationConfig for medium', () => {
+      expect(buildConfig('medium')).toEqual({ thinkingConfig: { thinkingBudget: 4096 } })
     })
 
     it('returns undefined when thinking not set', () => {
-      const provider = new GoogleProvider({ apiKey: 'test' })
-      const genConfig = provider.buildThinkingConfig(undefined)
-      expect(genConfig).toBeUndefined()
+      expect(buildConfig(undefined)).toBeUndefined()
     })
 
     it('maps low to 512', () => {
-      const provider = new GoogleProvider({ apiKey: 'test' })
-      expect(provider.buildThinkingConfig('low')).toEqual({ thinkingBudget: 512 })
+      expect(buildConfig('low')).toEqual({ thinkingConfig: { thinkingBudget: 512 } })
     })
 
     it('maps high to 16384', () => {
-      const provider = new GoogleProvider({ apiKey: 'test' })
-      expect(provider.buildThinkingConfig('high')).toEqual({ thinkingBudget: 16384 })
+      expect(buildConfig('high')).toEqual({ thinkingConfig: { thinkingBudget: 16384 } })
     })
   })
 

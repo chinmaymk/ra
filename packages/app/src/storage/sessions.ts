@@ -4,6 +4,7 @@ import type { IMessage } from '@chinmaymk/ra'
 import { parseJsonlFile } from '../utils/files'
 
 const MS_PER_DAY = 86_400_000
+const UNSAFE_SESSION_ID_CHARS = /[^a-zA-Z0-9_-]/g
 
 export interface SessionMeta {
   id: string
@@ -41,7 +42,7 @@ export class SessionStorage {
   }
 
   sessionDir(id: string): string {
-    const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '')
+    const sanitized = id.replace(UNSAFE_SESSION_ID_CHARS, '')
     if (!sanitized) throw new Error('Invalid session ID')
     return join(this.storagePath, sanitized)
   }

@@ -22,7 +22,7 @@ export class OpenAICompletionsProvider implements IProvider {
     }
     if (request.tools?.length) params.tools = this.mapTools(request.tools)
     if (request.providerOptions) Object.assign(params, request.providerOptions)
-    if (request.thinking) (params as any).reasoning = { effort: request.thinking }
+    if (request.thinking) (params as unknown as Record<string, unknown>).reasoning = { effort: request.thinking }
     return params
   }
 

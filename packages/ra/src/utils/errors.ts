@@ -54,29 +54,34 @@ export class ProviderError extends Error {
 }
 
 function extractStatusCode(err: unknown): number | undefined {
-  if (err && typeof err === 'object') {
-    // Most SDK errors expose `status` or `statusCode`
-    if ('status' in err && typeof (err as any).status === 'number') return (err as any).status
-    if ('statusCode' in err && typeof (err as any).statusCode === 'number') return (err as any).statusCode
-    // Nested in error or response
-    if ('error' in err && typeof (err as any).error === 'object' && (err as any).error?.status) return (err as any).error.status
+  if (!err || typeof err !== 'object') return undefined
+  const obj = err as Record<string, unknown>
+  // Most SDK errors expose `status` or `statusCode`
+  if (typeof obj.status === 'number') return obj.status
+  if (typeof obj.statusCode === 'number') return obj.statusCode
+  // Nested in error or response
+  const nested = obj.error
+  if (nested && typeof nested === 'object' && typeof (nested as Record<string, unknown>).status === 'number') {
+    return (nested as Record<string, unknown>).status as number
   }
   return undefined
 }
 
 function extractRetryAfter(err: unknown): number | undefined {
-  if (err && typeof err === 'object' && 'headers' in err) {
-    const headers = (err as any).headers
-    const val = typeof headers?.get === 'function' ? headers.get('retry-after') : headers?.['retry-after']
-    if (val) {
-      const secs = Number(val)
-      if (!isNaN(secs)) return secs * 1000
-    }
+  if (!err || typeof err !== 'object') return undefined
+  const headers = (err as Record<string, unknown>).headers
+  if (!headers || typeof headers !== 'object') return undefined
+  const val = typeof (headers as Record<string, unknown>).get === 'function'
+    ? (headers as { get: (k: string) => string | null }).get('retry-after')
+    : (headers as Record<string, unknown>)['retry-after']
+  if (val) {
+    const secs = Number(val)
+    if (!isNaN(secs)) return secs * 1000
   }
   return undefined
 }
 
-const NETWORK_PATTERNS = ['econnrefused', 'econnreset', 'etimedout', 'enotfound', 'fetch failed', 'network', 'socket hang up', 'dns']
+const NETWORK_PATTERNS = ['econnrefused', 'econnreset', 'etimedout', 'enotfound', 'fetch failed', 'network', 'socket hang up', 'dns'] as const
 
 function isNetworkError(err: unknown): boolean {
   if (!(err instanceof Error)) return false

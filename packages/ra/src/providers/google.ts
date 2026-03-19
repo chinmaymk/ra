@@ -4,6 +4,11 @@ import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool
 
 const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
 
+/** Check if a Gemini part is a thinking/thought block (not in official types yet). */
+function isThoughtPart(part: Record<string, unknown>): boolean {
+  return 'thought' in part && !!part.thought
+}
+
 /** Separator for synthetic tool call IDs: `counter::name`. Using `::` avoids collisions with tool names that contain `_` or `-`. */
 const TOOL_ID_SEP = '::'
 
@@ -45,15 +50,14 @@ export class GoogleProvider implements IProvider {
     return { inputTokens: meta.promptTokenCount ?? 0, outputTokens: meta.candidatesTokenCount ?? 0 }
   }
 
-  buildThinkingConfig(thinking?: 'low' | 'medium' | 'high') {
+  private buildGenerationConfig(thinking?: 'low' | 'medium' | 'high'): Record<string, unknown> | undefined {
     if (!thinking) return undefined
-    return { thinkingBudget: THINKING_BUDGETS_GOOGLE[thinking] }
+    return { thinkingConfig: { thinkingBudget: THINKING_BUDGETS_GOOGLE[thinking] } }
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const { model, contents, tools } = this.buildModel(request)
-    const thinkingConfig = this.buildThinkingConfig(request.thinking)
-    const generationConfig = thinkingConfig ? { thinkingConfig } as any : undefined
+    const generationConfig = this.buildGenerationConfig(request.thinking)
     const result = await model.generateContent({
       contents,
       ...(tools && { tools }),
@@ -67,8 +71,7 @@ export class GoogleProvider implements IProvider {
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
     const { model, contents, tools } = this.buildModel(request)
-    const thinkingConfig = this.buildThinkingConfig(request.thinking)
-    const generationConfig = thinkingConfig ? { thinkingConfig } as any : undefined
+    const generationConfig = this.buildGenerationConfig(request.thinking)
     const result = await model.generateContentStream(
       {
         contents,
@@ -82,7 +85,7 @@ export class GoogleProvider implements IProvider {
 
     for await (const chunk of result.stream) {
       for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
-        if ('thought' in part && (part as any).thought && 'text' in part && part.text) {
+        if (isThoughtPart(part as unknown as Record<string, unknown>) && 'text' in part && part.text) {
           yield { type: 'thinking', delta: part.text }
         } else if ('text' in part && part.text) {
           yield { type: 'text', delta: part.text }
@@ -151,7 +154,7 @@ export class GoogleProvider implements IProvider {
     let textContent = ''
     let counter = 0
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-      if ('thought' in part && (part as any).thought) continue
+      if (isThoughtPart(part as unknown as Record<string, unknown>)) continue
       if ('text' in part && part.text) textContent += part.text
       else if ('functionCall' in part && part.functionCall) {
         const { name, args } = part.functionCall

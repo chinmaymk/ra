@@ -95,12 +95,15 @@ export class BedrockProvider implements IProvider {
         if (typeof msg.content === 'string' && msg.content) content.push({ text: msg.content })
         else if (Array.isArray(msg.content)) content.push(...this.mapContentParts(msg.content))
         for (const tc of msg.toolCalls) {
-          content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: parseToolArguments(tc.arguments) as any } })
+          content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: parseToolArguments(tc.arguments) as unknown as Record<string, never> } })
         }
         return { role: 'assistant', content }
       }
-      if (typeof msg.content === 'string') return { role: msg.role as 'user' | 'assistant', content: [{ text: msg.content }] }
-      return { role: msg.role as 'user' | 'assistant', content: this.mapContentParts(msg.content) }
+      // user or assistant without tool calls
+      const role = msg.role as 'user' | 'assistant'
+      return typeof msg.content === 'string'
+        ? { role, content: [{ text: msg.content }] }
+        : { role, content: this.mapContentParts(msg.content) }
     })
     // Merge consecutive same-role messages (required for alternating-turn APIs)
     return mergeConsecutive(mapped, (a, b) => { a.content = (a.content ?? []).concat(b.content ?? []) })

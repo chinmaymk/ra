@@ -190,7 +190,7 @@ async function _runCompaction(
       messages: [{ role: 'user', content: `${config.prompt || DEFAULT_SUMMARIZATION_PROMPT}\n\n<conversation>\n${conversationText}\n</conversation>` }],
     })
   } catch (err) {
-    console.error('[compaction] summarization failed:', errorMessage(err))
+    ctx.logger.error('compaction summarization failed', { error: errorMessage(err) })
     return false
   }
 
