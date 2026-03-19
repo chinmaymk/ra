@@ -1,4 +1,4 @@
-import { errorMessage } from '../utils/errors'
+import { errorMessage, ProviderError, withRetry } from '../utils/errors'
 import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
@@ -20,6 +20,8 @@ export interface AgentLoopOptions {
   compaction?: CompactionConfig
   toolTimeout?: number
   logger?: Logger
+  /** Max retries for transient provider errors (rate limits, server errors, network). Default 3. */
+  maxRetries?: number
 }
 
 export interface LoopResult {
@@ -45,6 +47,7 @@ export class AgentLoop {
   private thinking: 'low' | 'medium' | 'high' | undefined
   private toolTimeout: number
   private logger: Logger
+  private maxRetries: number
   private externalAbort: AbortController | null = null
 
   constructor(options: AgentLoopOptions) {
@@ -57,6 +60,7 @@ export class AgentLoop {
     this.thinking = options.thinking
     this.toolTimeout = options.toolTimeout ?? 0
     this.logger = options.logger ?? new NoopLogger()
+    this.maxRetries = options.maxRetries ?? 3
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
@@ -114,21 +118,32 @@ export class AgentLoop {
         const toolCallBuf: { id: string; name: string; argsRaw: string }[] = []
 
         currentPhase = 'stream'
-        for await (const chunk of this.provider.stream(request)) {
-          if (chunk.type === 'done') {
-            if (chunk.usage) { accumulateUsage(usage, chunk.usage); lastUsage = chunk.usage }
-            break
+        await withRetry(async () => {
+          for await (const chunk of this.provider.stream(request)) {
+            if (chunk.type === 'done') {
+              if (chunk.usage) { accumulateUsage(usage, chunk.usage); lastUsage = chunk.usage }
+              break
+            }
+
+            // All non-done chunks go through middleware + abort check
+            await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
+            if (signal.aborted) break
+
+            // Accumulate stream data
+            if (chunk.type === 'text') textAccumulator += chunk.delta
+            else if (chunk.type === 'tool_call_start') toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
+            else if (chunk.type === 'tool_call_delta') { const tc = toolCallBuf.find(t => t.id === chunk.id); if (tc) tc.argsRaw += chunk.argsDelta }
           }
-
-          // All non-done chunks go through middleware + abort check
-          await runMiddlewareChain({ ...stoppable, chunk, loop: loopCtx() } satisfies StreamChunkContext, this.middleware.onStreamChunk, this.toolTimeout)
-          if (signal.aborted) break
-
-          // Accumulate stream data
-          if (chunk.type === 'text') textAccumulator += chunk.delta
-          else if (chunk.type === 'tool_call_start') toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
-          else if (chunk.type === 'tool_call_delta') { const tc = toolCallBuf.find(t => t.id === chunk.id); if (tc) tc.argsRaw += chunk.argsDelta }
-        }
+        }, {
+          maxRetries: this.maxRetries,
+          signal,
+          onRetry: (error, attempt) => {
+            // Reset accumulators on retry since the stream will restart
+            textAccumulator = ''
+            toolCallBuf.length = 0
+            this.logger.info(`Provider ${error.category} error, retrying (${attempt}/${this.maxRetries}): ${error.message}`)
+          },
+        })
 
         if (signal.aborted) break
 
