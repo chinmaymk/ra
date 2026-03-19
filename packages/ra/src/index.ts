@@ -64,4 +64,5 @@ export type { Logger, LogLevel, LogEntry } from './observability/logger'
 export { NoopLogger } from './observability/logger'
 
 // ── Utilities ───────────────────────────────────────────────────────
-export { errorMessage } from './utils/errors'
+export { errorMessage, ProviderError, withRetry } from './utils/errors'
+export type { ProviderErrorCategory } from './utils/errors'

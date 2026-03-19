@@ -28,6 +28,7 @@ export interface CliOptions {
   skillMap?: Map<string, Skill>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
+  maxRetries?: number
   toolTimeout?: number
   onChunk?: (text: string) => void
   thinking?: 'low' | 'medium' | 'high'
@@ -48,7 +49,7 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
+  const { prompt, files = [], skills = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, maxRetries, toolTimeout, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
 
   const initialMessages: IMessage[] = []
   if (systemPrompt) initialMessages.push({ role: 'system', content: systemPrompt })
@@ -88,7 +89,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
     onStreamChunk: [async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) }],
   }
   const loop = new AgentLoop({
-    provider, tools, model, maxIterations, toolTimeout, thinking, compaction, sessionId,
+    provider, tools, model, maxIterations, maxRetries, toolTimeout, thinking, compaction, sessionId,
     logger: session.logger,
     middleware: mergeMiddleware(streamHook, session.middleware),
   })

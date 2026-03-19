@@ -82,6 +82,7 @@ const ENV_RULES: Record<string, EnvRule> = {
   RA_INTERFACE:      { type: 'string', path: ['interface'] },
   RA_SYSTEM_PROMPT:  { type: 'string', path: ['systemPrompt'] },
   RA_MAX_ITERATIONS: { type: 'int',    path: ['maxIterations'] },
+  RA_MAX_RETRIES:    { type: 'int',    path: ['maxRetries'] },
   RA_THINKING:       { type: 'enum',   path: ['thinking'], values: ['low', 'medium', 'high'] },
   RA_TOOL_TIMEOUT:   { type: 'int',    path: ['toolTimeout'] },
   RA_TOOLS_BUILTIN:  { type: 'bool',   path: ['tools', 'builtin'] },

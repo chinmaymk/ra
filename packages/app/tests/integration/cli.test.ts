@@ -38,7 +38,7 @@ describe('CLI integration', () => {
     const { stderr, exitCode } = await runBinaryWithStdin(
       ['--cli', 'hello'],
       '',
-      env.binaryEnv,
+      { ...env.binaryEnv, extra: { RA_MAX_RETRIES: '0' } },
     )
     expect(exitCode).not.toBe(0)
     expect(stderr.length).toBeGreaterThan(0)
