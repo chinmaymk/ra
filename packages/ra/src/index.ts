@@ -56,7 +56,7 @@ export { ToolRegistry } from './agent/tool-registry'
 export { runMiddlewareChain, mergeMiddleware } from './agent/middleware'
 export { createCompactionMiddleware, splitMessageZones, type CompactionConfig, type MessageZones } from './agent/context-compaction'
 export { withTimeout, TimeoutError } from './agent/timeout'
-export { estimateTokens, estimateTextTokens, estimateToolTokens } from './agent/token-estimator'
+export { estimateTokens } from './agent/token-estimator'
 export { getContextWindowSize, getDefaultCompactionModel } from './agent/model-registry'
 
 // ── Observability ───────────────────────────────────────────────────

@@ -1,6 +1,24 @@
 import type { IMessage, ITool } from '../providers/types'
 
-export function estimateTokens(messages: IMessage[]): number {
+/**
+ * Estimate token count using a chars/4 heuristic.
+ *
+ * Accepts a string, an array of messages, or an array of tool definitions.
+ */
+export function estimateTokens(input: string | IMessage[] | ITool[]): number {
+  if (typeof input === 'string') {
+    return Math.ceil(input.length / 4)
+  }
+  if (input.length === 0) return 0
+
+  // Distinguish ITool[] vs IMessage[] by checking for 'inputSchema'
+  if ('inputSchema' in input[0]!) {
+    return estimateToolArrayTokens(input as ITool[])
+  }
+  return estimateMessageArrayTokens(input as IMessage[])
+}
+
+function estimateMessageArrayTokens(messages: IMessage[]): number {
   let total = 0
   for (const m of messages) {
     const content = typeof m.content === 'string'
@@ -12,18 +30,12 @@ export function estimateTokens(messages: IMessage[]): number {
   return total
 }
 
-/** Estimate tokens for a raw string (chars / 4, rounded up). */
-export function estimateTextTokens(text: string): number {
-  return Math.ceil(text.length / 4)
-}
-
-/** Estimate tokens for tool definitions (name + description + JSON schema). */
-export function estimateToolTokens(tools: ITool[]): number {
+function estimateToolArrayTokens(tools: ITool[]): number {
   let total = 0
   for (const t of tools) {
-    total += estimateTextTokens(t.name)
-    total += estimateTextTokens(t.description)
-    total += estimateTextTokens(JSON.stringify(t.inputSchema))
+    total += estimateTokens(t.name)
+    total += estimateTokens(t.description)
+    total += estimateTokens(JSON.stringify(t.inputSchema))
   }
   return total
 }

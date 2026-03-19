@@ -10,8 +10,6 @@ import {
   createProvider,
   buildProviderConfig,
   estimateTokens,
-  estimateTextTokens,
-  estimateToolTokens,
   type MiddlewareConfig,
   type IMessage,
   type IProvider,
@@ -92,6 +90,7 @@ export async function bootstrap(
   config.compaction.onCompact = (info) => logger.info('context compacted', info)
 
   // ── Context files ──────────────────────────────────────────────────
+  const contextSpan = tracer.startSpan('context.discovery', { patterns: config.context.patterns })
   const contextFiles = config.context.enabled
     ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
     : []
@@ -105,11 +104,13 @@ export async function bootstrap(
       files: contextFiles.map(f => f.relativePath),
       estimatedTokens: contextTokens,
     })
-    tracer.endSpan(tracer.startSpan('context.discovery', {
+    tracer.endSpan(contextSpan, 'ok', {
       fileCount: contextFiles.length,
       estimatedTokens: contextTokens,
       files: contextFiles.map(f => f.relativePath),
-    }))
+    })
+  } else {
+    tracer.endSpan(contextSpan, 'ok', { fileCount: 0 })
   }
 
   // ── Middleware ──────────────────────────────────────────────────────
@@ -148,7 +149,7 @@ export async function bootstrap(
   const allTools = tools.all()
   const toolNames = allTools.map(t => t.name)
   if (toolNames.length > 0) {
-    const toolTokens = estimateToolTokens(allTools)
+    const toolTokens = estimateTokens(allTools)
     logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames, estimatedTokens: toolTokens })
   }
 
@@ -189,7 +190,7 @@ export async function bootstrap(
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
-    const skillTokens = [...skillMap.values()].reduce((sum, s) => sum + estimateTextTokens(s.body), 0)
+    const skillTokens = [...skillMap.values()].reduce((sum, s) => sum + estimateTokens(s.body), 0)
     logger.info('skills loaded', {
       skillCount: skillMap.size,
       skills: [...skillMap.keys()],
@@ -200,22 +201,23 @@ export async function bootstrap(
   // ── MCP clients ────────────────────────────────────────────────────
   const mcpClient = new McpClient()
   if (config.mcp.client?.length) {
+    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: config.mcp.client.length })
     logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
     const toolCountBefore = tools.all().length
     await mcpClient.connect(config.mcp.client, tools, { lazySchemas: config.mcp.lazySchemas })
     const mcpTools = tools.all().slice(toolCountBefore)
-    const mcpToolTokens = estimateToolTokens(mcpTools)
+    const mcpToolTokens = estimateTokens(mcpTools)
     logger.info('MCP servers connected', {
       totalTools: tools.all().length,
       mcpToolCount: mcpTools.length,
       lazySchemas: config.mcp.lazySchemas,
       estimatedMcpToolTokens: mcpToolTokens,
     })
-    tracer.endSpan(tracer.startSpan('mcp.connect', {
+    tracer.endSpan(mcpSpan, 'ok', {
       mcpToolCount: mcpTools.length,
       estimatedTokens: mcpToolTokens,
       lazySchemas: config.mcp.lazySchemas,
-    }))
+    })
   }
 
   // ── Permissions middleware ─────────────────────────────────────────
@@ -249,8 +251,8 @@ export async function bootstrap(
   {
     const allRegisteredTools = tools.all()
     const contextTokens = estimateTokens(contextMessages)
-    const skillTokens = [...skillMap.values()].reduce((sum, s) => sum + estimateTextTokens(s.body), 0)
-    const toolSchemaTokens = estimateToolTokens(allRegisteredTools)
+    const skillTokens = [...skillMap.values()].reduce((sum, s) => sum + estimateTokens(s.body), 0)
+    const toolSchemaTokens = estimateTokens(allRegisteredTools)
     const totalEstimated = contextTokens + skillTokens + toolSchemaTokens
     logger.info('token budget summary', {
       contextFiles: contextTokens,

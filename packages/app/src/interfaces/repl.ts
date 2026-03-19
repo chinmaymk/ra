@@ -3,7 +3,7 @@ import {
   AgentLoop,
   mergeMiddleware,
   errorMessage,
-  estimateTextTokens,
+  estimateTokens,
   type ToolRegistry,
   type MiddlewareConfig,
   type StreamChunkContext,
@@ -389,7 +389,7 @@ export class Repl {
         const lines = this.options.contextMessages.map(m => {
           const path = extractContextFilePath(m) ?? 'unknown'
           const content = typeof m.content === 'string' ? m.content : ''
-          const tokens = estimateTextTokens(content)
+          const tokens = estimateTokens(content)
           totalTokens += tokens
           return `  ${path}  (${content.length} chars, ~${tokens} tokens)`
         })
