@@ -57,13 +57,13 @@ export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
     case 'list': {
       const skills = await listInstalledSkills()
       if (skills.length === 0) {
-        console.log(`No skills installed in ${defaultSkillInstallDir()}`)
+        console.log('No skills installed in', defaultSkillInstallDir())
       } else {
         for (const s of skills) {
           const src = s.source
-            ? ` (${s.source.registry}${s.source.package ? ': ' + s.source.package : ''}${s.source.repo ? ': ' + s.source.repo : ''}${s.source.version ? '@' + s.source.version : ''})`
+            ? ' (' + s.source.registry + (s.source.package ? ': ' + s.source.package : '') + (s.source.repo ? ': ' + s.source.repo : '') + (s.source.version ? '@' + s.source.version : '') + ')'
             : ''
-          console.log(`  ${s.name}${src}`)
+          console.log('  ' + s.name + src)
         }
       }
       process.exit(0)
@@ -98,7 +98,7 @@ export function runMemoryCommand(
       console.log('Usage: ra --forget "search query"')
     } else {
       const deleted = memoryStore.forget(opts.forget, 1000)
-      console.log(deleted > 0 ? `Forgot ${deleted} memory(s).` : 'No matching memories found.')
+      console.log(deleted > 0 ? 'Forgot ' + deleted + ' memory(s).' : 'No matching memories found.')
     }
     return
   }
@@ -110,10 +110,10 @@ export function runMemoryCommand(
   } else {
     const total = memoryStore.count()
     console.log(query
-      ? `${memories.length} matching memories (${total} total):\n`
-      : `${memories.length} memories (${total} total):\n`)
+      ? memories.length + ' matching memories (' + total + ' total):\n'
+      : memories.length + ' memories (' + total + ' total):\n')
     for (const m of memories) {
-      console.log(`  [${m.id}] [${m.tags || 'general'}] ${m.content}`)
+      console.log('  [' + m.id + '] [' + (m.tags || 'general') + '] ' + m.content)
     }
   }
 }

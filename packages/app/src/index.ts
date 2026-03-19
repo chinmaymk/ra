@@ -143,9 +143,9 @@ async function launchMcpStdio(app: AppContext): Promise<void> {
   const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp-stdio'] : ['--mcp-stdio']
   const mcpConfig = JSON.stringify({ mcpServers: { ra: { command: mcpCommand, args: mcpArgs } } }, null, 2)
   process.stderr.write(
-    `MCP stdio server starting.\n\n` +
-    `Cursor — .cursor/mcp.json:\n${mcpConfig}\n\n` +
-    `Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n${mcpConfig}\n\n`
+    'MCP stdio server starting.\n\n' +
+    'Cursor — .cursor/mcp.json:\n' + mcpConfig + '\n\n' +
+    'Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n' + mcpConfig + '\n\n'
   )
   await startMcpStdio(app.config.mcp.server, handler, mcpToolsFor(app))
   await app.shutdown()
@@ -257,7 +257,7 @@ async function launchRepl(app: AppContext): Promise<void> {
 async function launchInspector(app: AppContext): Promise<void> {
   const inspector = new InspectorServer(app)
   await inspector.start()
-  console.error('Inspector running at http://localhost:' + inspector.port)
+  console.error('Inspector running at', 'http://localhost:' + String(inspector.port))
 }
 
 // ── Main ─────────────────────────────────────────────────────────────
