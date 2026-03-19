@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { ProviderError, withRetry } from '../../src/utils/errors'
+import { ProviderError, withRetry, errorMessage } from '../../src/utils/errors'
 
 describe('ProviderError.from', () => {
   it('classifies 429 as retryable rate_limit', () => {
@@ -99,5 +99,102 @@ describe('withRetry', () => {
       await withRetry(async () => { calls++; throw Object.assign(new Error('rate limited'), { status: 429 }) }, { maxRetries: 3, delays: [10], signal: controller.signal })
     } catch {}
     expect(calls).toBe(1)
+  })
+
+  it('uses retry-after delay when provider returns it', async () => {
+    let calls = 0
+    const start = Date.now()
+    await withRetry(async () => {
+      calls++
+      if (calls === 1) {
+        throw Object.assign(new Error('rate limited'), {
+          status: 429,
+          headers: { get: (name: string) => name === 'retry-after' ? '0' : null },
+        })
+      }
+      return 'ok'
+    }, { maxRetries: 3, delays: [10000] }) // large default delay, but retry-after=0 should override
+    expect(Date.now() - start).toBeLessThan(5000)
+    expect(calls).toBe(2)
+  })
+
+  it('calls onRetry callback with error and attempt number', async () => {
+    const retries: { msg: string; attempt: number }[] = []
+    let calls = 0
+    await withRetry(async () => {
+      calls++
+      if (calls < 3) throw Object.assign(new Error('server error'), { status: 500 })
+      return 'ok'
+    }, {
+      maxRetries: 3,
+      delays: [10, 10, 10],
+      onRetry: (err, attempt) => retries.push({ msg: err.message, attempt }),
+    })
+    expect(retries).toHaveLength(2)
+    expect(retries[0]!.attempt).toBe(1)
+    expect(retries[1]!.attempt).toBe(2)
+  })
+})
+
+describe('errorMessage', () => {
+  it('extracts message from Error objects', () => {
+    expect(errorMessage(new Error('test error'))).toBe('test error')
+  })
+
+  it('stringifies non-Error values', () => {
+    expect(errorMessage('string error')).toBe('string error')
+    expect(errorMessage(42)).toBe('42')
+    expect(errorMessage(null)).toBe('null')
+  })
+})
+
+describe('ProviderError classification', () => {
+  it('classifies all network error patterns', () => {
+    const patterns = [
+      'connect ECONNREFUSED 127.0.0.1:443',
+      'read ECONNRESET',
+      'connect ETIMEDOUT',
+      'getaddrinfo ENOTFOUND api.example.com',
+      'fetch failed',
+      'network error occurred',
+      'socket hang up',
+      'dns resolution failed',
+    ]
+    for (const msg of patterns) {
+      const err = ProviderError.from(new Error(msg))
+      expect(err.category).toBe('network')
+      expect(err.retryable).toBe(true)
+    }
+  })
+
+  it('classifies statusCode property (not just status)', () => {
+    const err = ProviderError.from({ statusCode: 502, message: 'bad gateway' })
+    expect(err.category).toBe('server')
+  })
+
+  it('classifies nested error.error.status', () => {
+    const err = ProviderError.from({ error: { status: 429 }, message: 'rate limited' })
+    expect(err.category).toBe('rate_limit')
+  })
+
+  it('extracts retry-after from plain object headers', () => {
+    const err = ProviderError.from({
+      status: 429,
+      message: 'rate limited',
+      headers: { 'retry-after': '10' },
+    })
+    expect(err.retryAfterMs).toBe(10000)
+  })
+
+  it('preserves cause in ProviderError', () => {
+    const original = new Error('original')
+    const pe = ProviderError.from(Object.assign(original, { status: 500 }))
+    expect(pe.cause).toBe(original)
+  })
+
+  it('non-Error values are classified as unknown', () => {
+    const err = ProviderError.from('just a string')
+    expect(err.category).toBe('unknown')
+    expect(err.message).toBe('just a string')
   })
 })

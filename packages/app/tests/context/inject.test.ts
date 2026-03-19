@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test'
-import { buildContextMessages } from '../../src/context/inject'
+import { buildContextMessages, extractContextFilePath } from '../../src/context/inject'
 import type { ContextFile } from '../../src/context/types'
+import type { IMessage } from '@chinmaymk/ra'
 
 describe('buildContextMessages', () => {
   it('returns empty array for no files', () => {
@@ -27,5 +28,38 @@ describe('buildContextMessages', () => {
     expect(messages[0]!.content).toBe(
       '<context-file path="CLAUDE.md">\n# Be helpful\n</context-file>'
     )
+  })
+})
+
+describe('extractContextFilePath', () => {
+  it('extracts path from context-file XML message', () => {
+    const msg: IMessage = {
+      role: 'user',
+      content: '<context-file path="src/utils.ts">\ncode here\n</context-file>',
+    }
+    expect(extractContextFilePath(msg)).toBe('src/utils.ts')
+  })
+
+  it('extracts path from message built by buildContextMessages', () => {
+    const files: ContextFile[] = [
+      { path: '/p/CLAUDE.md', relativePath: 'CLAUDE.md', content: 'instructions' },
+    ]
+    const msgs = buildContextMessages(files)
+    expect(extractContextFilePath(msgs[0]!)).toBe('CLAUDE.md')
+  })
+
+  it('returns undefined for non-context messages', () => {
+    expect(extractContextFilePath({ role: 'user', content: 'just a question' })).toBeUndefined()
+  })
+
+  it('returns undefined for non-string content', () => {
+    const msg: IMessage = { role: 'user', content: [{ type: 'text', text: 'text' }] }
+    expect(extractContextFilePath(msg)).toBeUndefined()
+  })
+
+  it('returns undefined for assistant messages', () => {
+    const msg: IMessage = { role: 'assistant', content: '<context-file path="x">y</context-file>' }
+    // Still works — extractContextFilePath doesn't filter by role
+    expect(extractContextFilePath(msg)).toBe('x')
   })
 })

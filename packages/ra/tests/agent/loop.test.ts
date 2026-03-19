@@ -717,4 +717,67 @@ describe('AgentLoop', () => {
     const result = await loop.run([{ role: 'user', content: 'go' }])
     expect(result.iterations).toBe(1)
   })
+
+  it('thinking chunks are captured in onStreamChunk but not in assistant content', async () => {
+    const streamedChunks: { type: string; delta: string }[] = []
+    const provider = mockProvider([[
+      { type: 'thinking', delta: 'let me think...' },
+      { type: 'text', delta: 'here is my answer' },
+      { type: 'done' },
+    ]])
+    const loop = new AgentLoop({
+      provider, tools: new ToolRegistry(),
+      middleware: {
+        onStreamChunk: [async (ctx) => {
+          if (ctx.chunk.type === 'text' || ctx.chunk.type === 'thinking') {
+            streamedChunks.push({ type: ctx.chunk.type, delta: ctx.chunk.delta })
+          }
+        }],
+      },
+    })
+    const result = await loop.run([{ role: 'user', content: 'think' }])
+    expect(streamedChunks).toHaveLength(2)
+    expect(streamedChunks[0]).toEqual({ type: 'thinking', delta: 'let me think...' })
+    expect(streamedChunks[1]).toEqual({ type: 'text', delta: 'here is my answer' })
+    // Assistant message content should only contain text, not thinking
+    expect(result.messages.at(-1)?.content).toBe('here is my answer')
+  })
+
+  it('multiple tool_call_delta chunks are concatenated for same tool', async () => {
+    let receivedArgs: unknown
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'capture' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{"key":' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '"value"}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'capture', description: '', inputSchema: {}, execute: async (input) => { receivedArgs = input; return 'ok' } })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    await loop.run([{ role: 'user', content: 'go' }])
+    expect(receivedArgs).toEqual({ key: 'value' })
+  })
+
+  it('text and tool calls in same response both captured in assistant message', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'text', delta: 'Let me check: ' },
+        { type: 'tool_call_start', id: 'tc1', name: 'noop' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'done' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'noop', description: '', inputSchema: {}, execute: async () => 'ok' })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    const assistantMsg = result.messages.find(m => m.role === 'assistant' && m.toolCalls?.length)
+    expect(assistantMsg?.content).toBe('Let me check: ')
+    expect(assistantMsg?.toolCalls).toHaveLength(1)
+    expect(assistantMsg?.toolCalls![0]!.name).toBe('noop')
+  })
 })
