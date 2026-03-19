@@ -5,6 +5,9 @@ import { estimateTokens } from './token-estimator'
 import { getContextWindowSize } from './model-registry'
 import { serializeContent } from '../providers/utils'
 
+/** Fraction of context window reserved for recent messages during compaction. */
+const RECENT_BUDGET_FRACTION = 0.20
+
 export interface MessageZones {
   pinned: IMessage[]
   compactable: IMessage[]
@@ -167,7 +170,7 @@ async function _runCompaction(
   // Keep 20% of context window as recent messages when we know the window size,
   // otherwise use a conservative flat budget so we always compact aggressively.
   const contextWindow = config.contextWindow ?? getContextWindowSize(ctx.request.model)
-  const targetPostCompaction = Math.floor(contextWindow * 0.20)
+  const targetPostCompaction = Math.floor(contextWindow * RECENT_BUDGET_FRACTION)
   const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
 
   if (compactable.length === 0) return false
@@ -194,18 +197,20 @@ async function _runCompaction(
   const summaryContent = serializeContent(summaryResponse.message.content)
   const summaryText = `[Context Summary]\n${summaryContent}`
 
+  // Merge summary into the last pinned user message, absorbing the first recent
+  // user message if it exists (to avoid an orphaned summary-only message).
   let recentStart = 0
   const userIdx = pinned.findLastIndex(m => m.role === 'user')
   if (userIdx >= 0) {
     let extraText = summaryText
-    let nonTextParts: ContentPart[] = []
+    const nonTextParts: ContentPart[] = []
 
     if (recent.length > 0 && recent[0]!.role === 'user') {
-      const recentMsg = recent[0]!
-      if (typeof recentMsg.content === 'string') {
-        extraText += `\n\n${recentMsg.content}`
+      const { content } = recent[0]!
+      if (typeof content === 'string') {
+        extraText += `\n\n${content}`
       } else {
-        for (const part of recentMsg.content) {
+        for (const part of content) {
           if (part.type === 'text') extraText += `\n\n${part.text}`
           else nonTextParts.push(part)
         }

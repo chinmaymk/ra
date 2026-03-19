@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { extractSystemMessages, mergeConsecutiveRoles, parseToolArguments, serializeContent, THINKING_BUDGETS } from './utils'
+import { extractSystemMessages, mergeConsecutiveRoles, parseToolArguments, serializeContent, THINKING_BUDGETS, DEFAULT_MAX_TOKENS } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 
@@ -20,7 +20,7 @@ export class AnthropicProvider implements IProvider {
     const { system, filtered } = extractSystemMessages(request.messages)
     return {
       model: request.model,
-      max_tokens: (request.providerOptions?.maxTokens as number) ?? 4096,
+      max_tokens: (request.providerOptions?.maxTokens as number) ?? DEFAULT_MAX_TOKENS,
       messages: this.mapMessages(filtered),
       ...(system && { system: [{ type: 'text' as const, text: system, cache_control: { type: 'ephemeral' as const } }] }),
       ...(request.tools?.length && { tools: this.mapTools(request.tools) }),
@@ -43,7 +43,7 @@ export class AnthropicProvider implements IProvider {
     let usage: TokenUsage | undefined
     let inputTokens = 0
     let emittedDone = false
-    const toolCallIds = new Map<number, string>()
+    const activeToolCalls = new Map<number, string>()
 
     for await (const event of stream as AsyncIterable<Anthropic.MessageStreamEvent>) {
       switch (event.type) {
@@ -52,13 +52,13 @@ export class AnthropicProvider implements IProvider {
           break
         case 'content_block_start':
           if (event.content_block.type === 'tool_use') {
-            toolCallIds.set(event.index, event.content_block.id)
+            activeToolCalls.set(event.index, event.content_block.id)
             yield { type: 'tool_call_start', id: event.content_block.id, name: event.content_block.name }
           }
           break
         case 'content_block_delta':
           if (event.delta.type === 'text_delta') yield { type: 'text', delta: event.delta.text }
-          else if (event.delta.type === 'input_json_delta') yield { type: 'tool_call_delta', id: toolCallIds.get(event.index) ?? '', argsDelta: event.delta.partial_json }
+          else if (event.delta.type === 'input_json_delta') yield { type: 'tool_call_delta', id: activeToolCalls.get(event.index) ?? '', argsDelta: event.delta.partial_json }
           else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as any).thinking }
           break
         case 'message_delta':

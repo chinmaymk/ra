@@ -1,7 +1,7 @@
 // Pure ANSI TUI utilities — no external dependencies
 import wrapAnsi from 'wrap-ansi'
 
-export const c = {
+export const ansi = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',
   dim: '\x1b[2m',
@@ -53,16 +53,17 @@ function tagline(sessionId: string): string {
 
 export function printHeader(model: string, sessionId: string): void {
   process.stdout.write('\n')
-  process.stdout.write(`  ${c.bold}${c.cyanBright}ra${c.reset}  ${c.dim}${tagline(sessionId)}${c.reset}\n`)
-  process.stdout.write(`  ${c.dim}${model}  ·  ${sessionId}${c.reset}\n`)
-  process.stdout.write(`  ${c.dim}/clear  /attach  /skill  /resume${c.reset}\n\n`)
+  process.stdout.write(`  ${ansi.bold}${ansi.cyanBright}ra${ansi.reset}  ${ansi.dim}${tagline(sessionId)}${ansi.reset}\n`)
+  process.stdout.write(`  ${ansi.dim}${model}  ·  ${sessionId}${ansi.reset}\n`)
+  process.stdout.write(`  ${ansi.dim}/clear  /attach  /skill  /resume${ansi.reset}\n\n`)
 }
 
 export function printResumeHeader(sessionId: string, messageCount: number): void {
-  process.stdout.write(`  ${c.dim}↩ ${sessionId}  ·  ${messageCount} messages${c.reset}\n\n`)
+  process.stdout.write(`  ${ansi.dim}↩ ${sessionId}  ·  ${messageCount} messages${ansi.reset}\n\n`)
 }
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const SPINNER_TICK_MS = 80
 let spinnerTimer: ReturnType<typeof setInterval> | null = null
 let spinnerFrame = 0
 
@@ -70,11 +71,11 @@ export function startSpinner(): void {
   if (spinnerTimer) return
   spinnerFrame = 0
   const tick = () => {
-    process.stdout.write(`\r${c.dim}${SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]}${c.reset}`)
+    process.stdout.write(`\r${ansi.dim}${SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]}${ansi.reset}`)
     spinnerFrame++
   }
   tick()
-  spinnerTimer = setInterval(tick, 80)
+  spinnerTimer = setInterval(tick, SPINNER_TICK_MS)
 }
 
 export function stopSpinner(silent = false): void {
@@ -157,36 +158,83 @@ export function printToolCall(name: string, args: string): void {
   const prefix = `  ◆ ${name} `
   const maxFlat = cols - prefix.length - 1  // -1 for the ellipsis if truncated
   const truncated = flat.length > maxFlat ? flat.slice(0, maxFlat) + '…' : flat
-  process.stdout.write(`  ${c.yellow}◆ ${name}${c.reset} ${c.dim}${truncated}${c.reset}`)
+  process.stdout.write(`  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${truncated}${ansi.reset}`)
 }
 
 export function printToolResult(name: string, ms: number): void {
-  process.stdout.write(`\r  ${c.greenBright}✔ ${name}${c.dim} (${ms}ms)${c.reset}\n`)
+  process.stdout.write(`\r  ${ansi.greenBright}✔ ${name}${ansi.dim} (${ms}ms)${ansi.reset}\n`)
 }
 
 export function printStatus(msg: string): void {
-  process.stdout.write(`${c.dim}${msg}${c.reset}\n`)
+  process.stdout.write(`${ansi.dim}${msg}${ansi.reset}\n`)
 }
 
 export function printCommandResponse(msg: string): void {
-  process.stdout.write(`  ${c.dim}${msg}${c.reset}\n`)
+  process.stdout.write(`  ${ansi.dim}${msg}${ansi.reset}\n`)
 }
 
 export function printError(msg: string): void {
-  process.stdout.write(`${c.red}Error: ${msg}${c.reset}\n`)
+  process.stdout.write(`${ansi.red}Error: ${msg}${ansi.reset}\n`)
 }
 
 export function printInterrupt(msg: string): void {
-  process.stdout.write(`\n${c.yellow}${msg}${c.reset}\n`)
+  process.stdout.write(`\n${ansi.yellow}${msg}${ansi.reset}\n`)
 }
 
 // Styled prompt for readline — ANSI OK here, cursor math only breaks on very long wrapped lines
 export const PROMPT = `\x1b[96m›\x1b[0m `
 
+/** TUI streaming state — tracks thinking/text display and stream buffer. */
+export interface TuiStreamState {
+  boxOpened: boolean
+  thinkingOpened: boolean
+  streamBuf: StreamBuffer | null
+  toolStartTimes: Map<string, number>
+}
+
+/** Create a new TUI streaming state for a single agent loop run. */
+export function createStreamState(): TuiStreamState {
+  return { boxOpened: false, thinkingOpened: false, streamBuf: null, toolStartTimes: new Map() }
+}
+
+/** Handle a stream chunk for TUI display. */
+export function handleStreamChunk(state: TuiStreamState, chunkType: string, delta?: string): void {
+  if (chunkType === 'thinking') {
+    if (!state.thinkingOpened) {
+      stopSpinner(true)
+      printThinkingStart()
+      state.thinkingOpened = true
+    }
+    if (delta) process.stdout.write(delta)
+  } else if (chunkType === 'text') {
+    if (state.thinkingOpened) {
+      printThinkingEnd()
+      state.thinkingOpened = false
+    }
+    if (!state.boxOpened) {
+      stopSpinner()
+      state.boxOpened = true
+      const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
+      state.streamBuf = new StreamBuffer(contentWidth)
+    }
+    if (delta) process.stdout.write(state.streamBuf!.write(delta))
+  }
+}
+
+/** Flush TUI state at end of loop run (success or error). */
+export function flushStreamState(state: TuiStreamState): void {
+  if (state.thinkingOpened) printThinkingEnd()
+  stopSpinner(true)
+  const out = state.streamBuf?.end()
+  if (out) process.stdout.write(out)
+  if (state.boxOpened) closeAssistantBox()
+  else process.stdout.write('\n\n')
+}
+
 export function printThinkingStart(): void {
-  process.stdout.write(`  ${c.dim}╌╌ thinking ╌╌${c.reset}\n  ${c.dim}`)
+  process.stdout.write(`  ${ansi.dim}╌╌ thinking ╌╌${ansi.reset}\n  ${ansi.dim}`)
 }
 
 export function printThinkingEnd(): void {
-  process.stdout.write(`${c.reset}\n  ${c.dim}╌╌╌╌╌╌╌╌╌╌╌╌╌╌${c.reset}\n`)
+  process.stdout.write(`${ansi.reset}\n  ${ansi.dim}╌╌╌╌╌╌╌╌╌╌╌╌╌╌${ansi.reset}\n`)
 }

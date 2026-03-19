@@ -51,6 +51,9 @@ export function serializeContent(content: string | ContentPart[]): string {
 /** Thinking budget tokens shared by Anthropic and Bedrock providers. */
 export const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
 
+/** Default max output tokens for providers that require an explicit limit (Anthropic, Bedrock). */
+export const DEFAULT_MAX_TOKENS = 4096
+
 /** Parse tool call arguments from string or object, returning {} on failure. */
 export function parseToolArguments(args: string | Record<string, unknown>): Record<string, unknown> {
   if (typeof args !== 'string') return args

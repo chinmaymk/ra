@@ -1,5 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { Content, Part, Tool as GeminiTool, GenerateContentResponse } from '@google/generative-ai'
+import { GoogleGenerativeAI, type Content, type Part, type Tool as GeminiTool, type GenerateContentResponse } from '@google/generative-ai'
 import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 

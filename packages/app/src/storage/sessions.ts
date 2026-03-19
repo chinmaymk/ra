@@ -3,6 +3,8 @@ import { appendFile, mkdir, rm } from 'node:fs/promises'
 import type { IMessage } from '@chinmaymk/ra'
 import { parseJsonlFile } from '../utils/files'
 
+const MS_PER_DAY = 86_400_000
+
 export interface SessionMeta {
   id: string
   created: string
@@ -96,7 +98,7 @@ export class SessionStorage {
     const toDelete = new Set<string>()
 
     if (options.ttlDays !== undefined) {
-      const cutoff = Date.now() - options.ttlDays * 86_400_000
+      const cutoff = Date.now() - options.ttlDays * MS_PER_DAY
       for (const s of sessions) if (new Date(s.meta.created).getTime() < cutoff) toDelete.add(s.id)
     }
     if (options.maxSessions !== undefined) {
