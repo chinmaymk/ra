@@ -115,5 +115,5 @@ curl http://localhost:3002/api/sessions/SESSION_ID/stats | jq '.totalTokens'
 ## See also
 
 - [Observability](/observability/) — traces and logs that feed the inspector
-- [Sessions](/core/sessions/) — session persistence and storage
+- [Sessions](/core/sessions) — session persistence and storage
 - [Configuration](/configuration/) — full config reference
