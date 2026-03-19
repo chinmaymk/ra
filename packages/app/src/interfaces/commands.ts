@@ -1,7 +1,7 @@
-import { errorMessage } from '@chinmaymk/ra'
+import { errorMessage, type IMessage } from '@chinmaymk/ra'
 import { resolve } from 'path'
 import type { PackageCommand } from './parse-args'
-import type { IMessage } from '@chinmaymk/ra'
+import type { PackageSource } from '../skills/types'
 import type { MemoryStore } from '../memory'
 import type { RaConfig } from '../config/types'
 
@@ -16,7 +16,7 @@ export async function runExecScript(scriptPath: string): Promise<void> {
   }
 }
 
-function formatSource(source: { registry: string; package?: string; repo?: string; version?: string; url?: string }): string {
+function formatSource(source: PackageSource): string {
   const parts: string[] = [source.registry]
   if (source.package) parts.push(`: ${source.package}`)
   else if (source.repo) parts.push(`: ${source.repo}`)

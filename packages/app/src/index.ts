@@ -54,6 +54,7 @@ async function handleEarlyExits(parsed: ReturnType<typeof parseArgs>): Promise<v
   }
   if (parsed.meta.packageCommand) {
     await runPackageCommand(parsed.meta.packageCommand)
+    return
   }
   // Resolve --recipe to a config path
   if (parsed.meta.recipe) {

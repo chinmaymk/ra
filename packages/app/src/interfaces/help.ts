@@ -56,7 +56,7 @@ PROVIDER OPTIONS
   --openai-base-url <url>             OpenAI API base URL
   --ollama-host <url>                 Ollama host URL
 
-  --builtin-tools                     Enable built-in tools (filesystem, shell, network)
+  --tools-builtin                     Enable built-in tools (filesystem, shell, network)
   --show-context                      Show discovered context files and exit
   --show-config                       Show resolved configuration and exit
   --exec <script>                     Execute a JS/TS file and exit
