@@ -30,9 +30,9 @@ export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
       for (const source of args) {
         try {
           const installed = await installSkill(source)
-          console.log(`Installed skills: ${installed.join(', ')} → ${defaultSkillInstallDir()}`)
+          console.log('Installed skills:', installed.join(', '), '→', defaultSkillInstallDir())
         } catch (err) {
-          console.error(`Failed to install "${source}": ${errorMessage(err)}`)
+          console.error('Failed to install skill:', source, errorMessage(err))
           process.exit(1)
         }
       }
@@ -46,9 +46,9 @@ export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
       for (const name of args) {
         try {
           await removeSkill(name)
-          console.log(`Removed skill: ${name}`)
+          console.log('Removed skill:', name)
         } catch (err) {
-          console.error(`Failed to remove "${name}": ${errorMessage(err)}`)
+          console.error('Failed to remove skill:', name, errorMessage(err))
           process.exit(1)
         }
       }

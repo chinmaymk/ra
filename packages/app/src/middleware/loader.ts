@@ -40,7 +40,7 @@ export async function loadMiddleware(
 
   for (const [hook, entries] of Object.entries(config.middleware ?? {})) {
     if (!VALID_HOOKS.has(hook as keyof MiddlewareConfig)) {
-      console.warn(`[ra] Unknown middleware hook "${hook}" — skipping`)
+      console.warn('[ra] Unknown middleware hook — skipping', hook)
       continue
     }
     const fns = await Promise.all(entries.map(e => loadOne(e, cwd)))

@@ -83,6 +83,7 @@ Middleware hooks intercept every step. Context compaction is itself a `beforeMod
 - Every `stream()` must yield a `{ type: 'done' }` chunk at the end
 - Tool call IDs must be preserved exactly — they match results back to calls
 - Prefer `Bun.file` over `node:fs`, `Bun.$` over `execa`, `bun:sqlite` over `better-sqlite3`
+- Always use structured logging — pass a static message string and a data object: `logger.info('event name', { key: value })`. Never use string interpolation in log messages: `logger.info(\`thing ${x}\`)` is wrong
 
 ## Testing
 
