@@ -37,7 +37,7 @@ const FLAG_RULES: Record<string, CoercionRule> = {
   'max-iterations':              { type: 'int',    path: ['maxIterations'] },
   thinking:                      { type: 'string', path: ['thinking'] },
   'tool-timeout':                { type: 'int',    path: ['toolTimeout'] },
-  'max-tool-response-size':      { type: 'int',    path: ['maxToolResponseSize'] },
+  'max-tool-response-size':      { type: 'int',    path: ['tools', 'maxResponseSize'] },
   'tools-builtin':               { type: 'bool',   path: ['tools', 'builtin'], value: true },
   'http-port':                   { type: 'int',    path: ['http', 'port'] },
   'http-token':                  { type: 'string', path: ['http', 'token'] },

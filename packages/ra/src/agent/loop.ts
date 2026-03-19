@@ -22,7 +22,7 @@ export interface AgentLoopOptions {
   logger?: Logger
   /** Max retries for transient provider errors (rate limits, server errors, network). Default 3. */
   maxRetries?: number
-  /** Max characters for a single tool response. Responses exceeding this are truncated with a notice. Default 75000. */
+  /** Max characters for a single tool response. Responses exceeding this are truncated with a notice. Default 25000. */
   maxToolResponseSize?: number
 }
 
@@ -44,7 +44,7 @@ function emptyMiddleware(): MiddlewareConfig {
 const DEFAULT_MAX_ITERATIONS = 10
 const DEFAULT_MAX_RETRIES = 3
 const MAX_COMPACTION_RETRIES = 3
-const DEFAULT_MAX_TOOL_RESPONSE_SIZE = 75_000
+const DEFAULT_MAX_TOOL_RESPONSE_SIZE = 25_000
 
 /** Truncate tool output that exceeds maxChars, appending a notice for the model. */
 export function truncateToolOutput(content: string, maxChars: number): string {

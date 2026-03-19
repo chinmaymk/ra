@@ -70,7 +70,7 @@ const ENV_RULES: Record<string, CoercionRule> = {
   RA_MAX_RETRIES:    { type: 'int',    path: ['maxRetries'] },
   RA_THINKING:       { type: 'enum',   path: ['thinking'], values: ['low', 'medium', 'high'] },
   RA_TOOL_TIMEOUT:   { type: 'int',    path: ['toolTimeout'] },
-  RA_MAX_TOOL_RESPONSE_SIZE: { type: 'int', path: ['maxToolResponseSize'] },
+  RA_MAX_TOOL_RESPONSE_SIZE: { type: 'int', path: ['tools', 'maxResponseSize'] },
   RA_TOOLS_BUILTIN:  { type: 'bool',   path: ['tools', 'builtin'] },
   RA_HTTP_PORT:      { type: 'int',    path: ['http', 'port'] },
   RA_HTTP_TOKEN:     { type: 'string', path: ['http', 'token'] },
@@ -140,13 +140,14 @@ function normalizeToolsConfig(raw: Record<string, unknown>): void {
 
   // Flat form: extract builtin, treat other keys as per-tool overrides
   const builtin = t.builtin !== undefined ? !!t.builtin : true
+  const maxResponseSize = typeof t.maxResponseSize === 'number' ? t.maxResponseSize : undefined
   const overrides: Record<string, ToolSettings> = {}
   for (const [key, val] of Object.entries(t)) {
-    if (key === 'builtin' || key === 'overrides') continue
+    if (key === 'builtin' || key === 'overrides' || key === 'maxResponseSize') continue
     if (val === false) overrides[key] = { enabled: false }
     else if (isPlainObject(val)) overrides[key] = val as ToolSettings
   }
-  raw.tools = { builtin, overrides }
+  raw.tools = { builtin, overrides, ...(maxResponseSize !== undefined && { maxResponseSize }) }
 }
 
 export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaConfig> {
