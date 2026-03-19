@@ -540,7 +540,7 @@ describe('createCompactionMiddleware', () => {
     const ctx = makeCtx(messages)
     await mw(ctx)
     expect(receivedPrompt).toContain(customPrompt)
-    expect(receivedPrompt).not.toContain('Key decisions made')
+    expect(receivedPrompt).not.toContain('<instructions>')
   })
 
   it('uses default prompt when no custom prompt is provided', async () => {
@@ -568,7 +568,8 @@ describe('createCompactionMiddleware', () => {
     ]
     const ctx = makeCtx(messages)
     await mw(ctx)
-    expect(receivedPrompt).toContain('Key decisions made')
+    expect(receivedPrompt).toContain('<instructions>')
+    expect(receivedPrompt).toContain('<conversation>')
   })
 
   it('skips when nothing to compact (all pinned)', async () => {
