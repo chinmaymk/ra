@@ -109,81 +109,110 @@ Be concise but complete. This summary will replace the original messages in the 
 
 Conversation to summarize:`
 
+const CONTEXT_LENGTH_PATTERNS = [
+  /context.*(length|window|limit)/i,
+  /too many tokens/i,
+  /maximum.*tokens/i,
+  /token.*limit.*exceed/i,
+  /request.*too.*large/i,
+  /input.*too.*long/i,
+  /prompt.*too.*long/i,
+  /exceeded.*max.*context/i,
+  /content.*length.*exceed/i,
+]
+
+export function isContextLengthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return CONTEXT_LENGTH_PATTERNS.some(p => p.test(msg))
+}
+
+export async function forceCompact(
+  provider: IProvider,
+  config: CompactionConfig,
+  ctx: ModelCallContext,
+): Promise<boolean> {
+  return _runCompaction(provider, config, ctx, true)
+}
+
+async function _runCompaction(
+  provider: IProvider,
+  config: CompactionConfig,
+  ctx: ModelCallContext,
+  force: boolean,
+): Promise<boolean> {
+  const messages = ctx.request.messages
+  const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
+
+  const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
+  const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
+
+  if (!force && estimated <= triggerThreshold) return false
+
+  const targetPostCompaction = Math.floor(contextWindow * 0.20)
+  const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
+
+  if (compactable.length === 0) return false
+
+  const conversationText = compactable.map(m => {
+    const content = serializeContent(m.content)
+    const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
+    const toolId = m.toolCallId ? ` [tool result for: ${m.toolCallId}]` : ''
+    return `${m.role}${toolInfo}${toolId}: ${content}`
+  }).join('\n')
+
+  let summaryResponse
+  try {
+    const compactionModel = config.model || ctx.request.model
+    summaryResponse = await provider.chat({
+      model: compactionModel,
+      messages: [{ role: 'user', content: `${SUMMARIZATION_PROMPT}\n\n${conversationText}` }],
+    })
+  } catch (err) {
+    console.error('[compaction] summarization failed:', errorMessage(err))
+    return false
+  }
+
+  const summaryContent = serializeContent(summaryResponse.message.content)
+  const summaryText = `[Context Summary]\n${summaryContent}`
+
+  let recentStart = 0
+  const userIdx = pinned.findLastIndex(m => m.role === 'user')
+  if (userIdx >= 0) {
+    let extraText = summaryText
+    let nonTextParts: ContentPart[] = []
+
+    if (recent.length > 0 && recent[0]!.role === 'user') {
+      const recentMsg = recent[0]!
+      if (typeof recentMsg.content === 'string') {
+        extraText += `\n\n${recentMsg.content}`
+      } else {
+        const text = recentMsg.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
+        if (text) extraText += `\n\n${text}`
+        nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
+      }
+      recentStart = 1
+    }
+
+    pinned[userIdx] = appendToMessage(pinned[userIdx]!, extraText, nonTextParts)
+  }
+  const originalCount = messages.length
+  ctx.request.messages.length = 0
+  ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
+  config.onCompact?.({
+    originalMessages: originalCount,
+    compactedMessages: ctx.request.messages.length,
+    estimatedTokens: estimated,
+    threshold: triggerThreshold,
+  })
+  return true
+}
+
 export function createCompactionMiddleware(
   provider: IProvider,
   config: CompactionConfig,
 ): Middleware<ModelCallContext> {
   return async (ctx: ModelCallContext) => {
     if (!config.enabled) return
-
-    const messages = ctx.request.messages
-    const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
-
-    const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
-    const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
-
-    if (estimated <= triggerThreshold) return
-
-    const targetPostCompaction = Math.floor(contextWindow * 0.20)
-    const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
-
-    if (compactable.length === 0) return
-
-    const conversationText = compactable.map(m => {
-      const content = serializeContent(m.content)
-      const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
-      const toolId = m.toolCallId ? ` [tool result for: ${m.toolCallId}]` : ''
-      return `${m.role}${toolInfo}${toolId}: ${content}`
-    }).join('\n')
-
-    let summaryResponse
-    try {
-      const compactionModel = config.model || ctx.request.model
-      summaryResponse = await provider.chat({
-        model: compactionModel,
-        messages: [{ role: 'user', content: `${SUMMARIZATION_PROMPT}\n\n${conversationText}` }],
-      })
-    } catch (err) {
-      console.error('[compaction] summarization failed:', errorMessage(err))
-      return // Leave messages unchanged on summarization failure
-    }
-
-    const summaryContent = serializeContent(summaryResponse.message.content)
-
-    const summaryText = `[Context Summary]\n${summaryContent}`
-
-    // Merge summary into the last pinned user message to avoid consecutive user messages.
-    // Pinned always ends with a user message. If recent also starts with user, merge that too.
-    // Find the last pinned user message to merge into
-    let recentStart = 0
-    const userIdx = pinned.findLastIndex(m => m.role === 'user')
-    if (userIdx >= 0) {
-      let extraText = summaryText
-      let nonTextParts: ContentPart[] = []
-
-      // Absorb first recent user message if present (avoids consecutive user messages)
-      if (recent.length > 0 && recent[0]!.role === 'user') {
-        const recentMsg = recent[0]!
-        if (typeof recentMsg.content === 'string') {
-          extraText += `\n\n${recentMsg.content}`
-        } else {
-          const text = recentMsg.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
-          if (text) extraText += `\n\n${text}`
-          nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
-        }
-        recentStart = 1
-      }
-
-      pinned[userIdx] = appendToMessage(pinned[userIdx]!, extraText, nonTextParts)
-    }
-    const originalCount = messages.length
-    ctx.request.messages.length = 0
-    ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
-    config.onCompact?.({
-      originalMessages: originalCount,
-      compactedMessages: ctx.request.messages.length,
-      estimatedTokens: estimated,
-      threshold: triggerThreshold,
-    })
+    await _runCompaction(provider, config, ctx, false)
   }
 }

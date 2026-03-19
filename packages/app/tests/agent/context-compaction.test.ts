@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { splitMessageZones, createCompactionMiddleware, NoopLogger } from '@chinmaymk/ra'
-import type { IMessage, IProvider, ChatRequest, ModelCallContext } from '@chinmaymk/ra'
+import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact, NoopLogger } from '@chinmaymk/ra'
+import type { IMessage, IProvider, ChatRequest, ChatResponse, ModelCallContext } from '@chinmaymk/ra'
 
 const logger = new NoopLogger()
 
@@ -512,6 +512,33 @@ describe('createCompactionMiddleware', () => {
     expect(called).toBe(false)
   })
 
+  it('forceCompact compacts regardless of threshold', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async (): Promise<ChatResponse> => ({
+        message: { role: 'assistant' as const, content: 'Forced summary.' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    // Very high threshold that would never trigger normally, but small contextWindow so messages are compactable
+    const result = await forceCompact(provider, { enabled: true, threshold: 0.99, contextWindow: 100 }, ctx)
+    expect(result).toBe(true)
+    const hasSummary = ctx.request.messages.some(
+      m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
+    )
+    expect(hasSummary).toBe(true)
+  })
+
   it('skips when nothing to compact (all pinned)', async () => {
     const provider: IProvider = {
       name: 'mock',
@@ -526,5 +553,30 @@ describe('createCompactionMiddleware', () => {
     const ctx = makeCtx(messages)
     await mw(ctx)
     expect(ctx.request.messages).toEqual(messages)
+  })
+})
+
+describe('isContextLengthError', () => {
+  it('detects context length exceeded errors', () => {
+    expect(isContextLengthError(new Error('context length exceeded'))).toBe(true)
+    expect(isContextLengthError(new Error('maximum context length'))).toBe(true)
+    expect(isContextLengthError(new Error('This request has too many tokens'))).toBe(true)
+    expect(isContextLengthError(new Error('maximum tokens exceeded'))).toBe(true)
+    expect(isContextLengthError(new Error('request too large'))).toBe(true)
+    expect(isContextLengthError(new Error('prompt too long for model'))).toBe(true)
+    expect(isContextLengthError(new Error('input too long'))).toBe(true)
+    expect(isContextLengthError(new Error('exceeded max context window'))).toBe(true)
+    expect(isContextLengthError(new Error('token limit exceeded'))).toBe(true)
+  })
+
+  it('does not match unrelated errors', () => {
+    expect(isContextLengthError(new Error('API rate limit'))).toBe(false)
+    expect(isContextLengthError(new Error('network timeout'))).toBe(false)
+    expect(isContextLengthError(new Error('authentication failed'))).toBe(false)
+  })
+
+  it('handles non-Error values', () => {
+    expect(isContextLengthError('context length exceeded')).toBe(true)
+    expect(isContextLengthError('random error')).toBe(false)
   })
 })

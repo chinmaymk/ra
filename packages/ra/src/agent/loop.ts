@@ -3,7 +3,7 @@ import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/ty
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
-import { createCompactionMiddleware, type CompactionConfig } from './context-compaction'
+import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
 import { accumulateUsage, parseToolArguments } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'crypto'
@@ -45,6 +45,7 @@ export class AgentLoop {
   private thinking: 'low' | 'medium' | 'high' | undefined
   private toolTimeout: number
   private logger: Logger
+  private compactionConfig: CompactionConfig | undefined
   private externalAbort: AbortController | null = null
 
   constructor(options: AgentLoopOptions) {
@@ -57,6 +58,7 @@ export class AgentLoop {
     this.thinking = options.thinking
     this.toolTimeout = options.toolTimeout ?? 0
     this.logger = options.logger ?? new NoopLogger()
+    this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
@@ -187,6 +189,20 @@ export class AgentLoop {
       if (signal.aborted) {
         this.externalAbort = null
         return { messages, iterations, usage, stopReason: stopReason ?? 'aborted' }
+      }
+      // Attempt recovery via compaction when a provider rejects due to context length
+      if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err)) {
+        const modelCallCtx: ModelCallContext = {
+          ...stoppable,
+          request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }), signal },
+          loop: loopCtx(),
+        }
+        const compacted = await forceCompact(this.provider, this.compactionConfig, modelCallCtx)
+        if (compacted) {
+          // Restart the loop from the outer try block by recursing into run
+          this.externalAbort = null
+          return this.run(messages)
+        }
       }
       const error = err instanceof Error ? err : new Error(String(err))
       await runMiddlewareChain({ ...stoppable, error, loop: loopCtx(), phase: currentPhase } satisfies ErrorContext, this.middleware.onError, this.toolTimeout)

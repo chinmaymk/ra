@@ -17,7 +17,7 @@ const MODEL_FAMILIES: [string, number][] = [
 
 const SORTED_FAMILIES = MODEL_FAMILIES.sort((a, b) => b[0].length - a[0].length)
 
-const DEFAULT_CONTEXT_WINDOW = 128_000
+const DEFAULT_CONTEXT_WINDOW = 200_000
 
 export function getContextWindowSize(model: string, userOverride?: number): number {
   if (userOverride !== undefined) return userOverride
