@@ -22,6 +22,21 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
 }
 
+/** Find the nearest config file by walking up from cwd. Returns the path or undefined. */
+export async function findConfigFilePath(cwd?: string): Promise<string | undefined> {
+  let dir = cwd ?? process.cwd()
+  while (true) {
+    for (const name of CONFIG_FILES) {
+      const full = join(dir, name)
+      if (await Bun.file(full).exists()) return full
+    }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return undefined
+}
+
 export function deepMerge(
   target: Record<string, unknown>,
   source: Record<string, unknown>,

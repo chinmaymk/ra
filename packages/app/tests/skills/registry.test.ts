@@ -77,10 +77,9 @@ describe('parseRecipeSource', () => {
 })
 
 describe('defaultSkillInstallDir', () => {
-  it('returns a path under .ra/skills', () => {
-    const dir = defaultSkillInstallDir()
-    expect(dir).toContain('.ra')
-    expect(dir).toContain('skills')
+  it('returns a path under dataDir/skills', () => {
+    const dir = defaultSkillInstallDir('/tmp/project/.ra')
+    expect(dir).toBe('/tmp/project/.ra/skills')
   })
 })
 

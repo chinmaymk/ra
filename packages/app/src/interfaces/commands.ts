@@ -4,6 +4,7 @@ import type { PackageCommand } from './parse-args'
 import type { PackageSource } from '../skills/types'
 import type { MemoryStore } from '../memory'
 import type { RaConfig } from '../config/types'
+import { loadConfig, findConfigFilePath } from '../config'
 import {
   installRecipe, removeRecipe, listInstalledRecipes, defaultRecipeInstallDir,
   installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir,
@@ -42,8 +43,9 @@ async function printRecipes(): Promise<number> {
 }
 
 /** Print installed skills. */
-async function printSkills(): Promise<number> {
-  const skills = await listInstalledSkills()
+async function printSkills(skillDir?: string): Promise<number> {
+  if (!skillDir) return 0
+  const skills = await listInstalledSkills(skillDir)
   if (skills.length > 0) {
     console.log('Skills:')
     for (const s of skills) {
@@ -58,13 +60,27 @@ async function printSkills(): Promise<number> {
 export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
   const { kind, action, args } = cmd
 
+  // Skill operations require a config file to resolve dataDir
+  let skillDir: string | undefined
+  if (kind === 'skill' || action === 'list') {
+    const configPath = await findConfigFilePath()
+    if (kind === 'skill' && !configPath) {
+      console.error('No ra config file found. Skills are project-local — run this from a directory with ra.config.{yaml,yml,json,toml}.')
+      process.exit(1)
+    }
+    if (configPath) {
+      const config = await loadConfig({ configPath })
+      skillDir = defaultSkillInstallDir(config.dataDir)
+    }
+  }
+
   if (action === 'list') {
     const recipeCount = await printRecipes()
     if (recipeCount > 0) console.log()
-    const skillCount = await printSkills()
+    const skillCount = await printSkills(skillDir)
     if (recipeCount === 0 && skillCount === 0) {
       console.log(`No recipes installed in ${defaultRecipeInstallDir()}`)
-      console.log(`No skills installed in ${defaultSkillInstallDir()}`)
+      if (skillDir) console.log(`No skills installed in ${skillDir}`)
     }
     process.exit(0)
   }
@@ -117,8 +133,8 @@ export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
         }
         for (const source of args) {
           try {
-            const installed = await installSkill(source)
-            console.log(`Installed skills: ${installed.join(', ')} → ${defaultSkillInstallDir()}`)
+            const installed = await installSkill(source, skillDir!)
+            console.log(`Installed skills: ${installed.join(', ')} → ${skillDir!}`)
           } catch (err) {
             console.error(`Failed to install skill "${source}": ${errorMessage(err)}`)
             process.exit(1)
@@ -133,7 +149,7 @@ export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
         }
         for (const name of args) {
           try {
-            await removeSkill(name)
+            await removeSkill(name, skillDir!)
             console.log(`Removed skill: ${name}`)
           } catch (err) {
             console.error(`Failed to remove skill "${name}": ${errorMessage(err)}`)

@@ -1,13 +1,13 @@
 import { join, basename } from 'path'
 import { mkdir, cp, rm, writeFile } from 'fs/promises'
-import { globalRaDir, localRaDir, firstSegment } from '../utils/paths'
+import { globalRaDir, firstSegment } from '../utils/paths'
 import type { PackageSource } from './types'
 
 // ── Directory defaults ──────────────────────────────────────────────
 
-/** Default directory for installed skills (project-local: .ra/skills) */
-export function defaultSkillInstallDir(): string {
-  return join(localRaDir(), 'skills')
+/** Default directory for installed skills: <dataDir>/skills */
+export function defaultSkillInstallDir(dataDir: string): string {
+  return join(dataDir, 'skills')
 }
 
 /** Default directory for installed recipes (global: ~/.ra/recipes) */
@@ -293,39 +293,37 @@ async function installRecipeFromUrl(url: string, installDir: string): Promise<st
  * Install a skill from a source string.
  * Returns the list of installed skill names.
  */
-export async function installSkill(source: string, installDir?: string): Promise<string[]> {
-  const dir = installDir ?? defaultSkillInstallDir()
-  await mkdir(dir, { recursive: true })
+export async function installSkill(source: string, installDir: string): Promise<string[]> {
+  await mkdir(installDir, { recursive: true })
 
   const parsed = parseSkillSource(source)
   switch (parsed.registry) {
     case 'npm':
-      return installSkillFromNpm(parsed.identifier, parsed.version, dir)
+      return installSkillFromNpm(parsed.identifier, parsed.version, installDir)
     case 'github':
-      return installSkillFromGithub(parsed.identifier, dir)
+      return installSkillFromGithub(parsed.identifier, installDir)
     case 'url':
-      return installSkillFromUrl(parsed.identifier, dir)
+      return installSkillFromUrl(parsed.identifier, installDir)
   }
 }
 
 /**
  * Remove an installed skill by name.
  */
-export async function removeSkill(skillName: string, installDir?: string): Promise<void> {
-  const dir = installDir ?? defaultSkillInstallDir()
-  const skillDir = join(dir, skillName)
+export async function removeSkill(skillName: string, installDir: string): Promise<void> {
+  const skillDir = join(installDir, skillName)
   try {
     await rm(skillDir, { recursive: true })
   } catch {
-    throw new Error(`Skill not found: ${skillName} in ${dir}`)
+    throw new Error(`Skill not found: ${skillName} in ${installDir}`)
   }
 }
 
 /**
  * List installed skills with their source information.
  */
-export async function listInstalledSkills(installDir?: string): Promise<Array<{ name: string; source?: PackageSource }>> {
-  const dir = installDir ?? defaultSkillInstallDir()
+export async function listInstalledSkills(installDir: string): Promise<Array<{ name: string; source?: PackageSource }>> {
+  const dir = installDir
   const skills: Array<{ name: string; source?: PackageSource }> = []
 
   try {

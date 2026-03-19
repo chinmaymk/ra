@@ -13,14 +13,6 @@ export function globalRaDir(): string {
   return join(homedir(), '.ra')
 }
 
-/** Local ra data directory — project-specific data.
- *  Uses RA_DATA_DIR env var if set, otherwise .ra relative to cwd. */
-export function localRaDir(): string {
-  const envDir = process.env.RA_DATA_DIR
-  if (envDir) return isAbsolute(envDir) ? envDir : join(process.cwd(), envDir)
-  return join(process.cwd(), '.ra')
-}
-
 /**
  * Resolve a user-provided path (absolute, relative, or ~/home-relative) against cwd.
  * Handles both forward and back slashes for home-relative paths on Windows.
