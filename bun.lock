@@ -32,7 +32,7 @@
     "packages/ra": {
       "name": "@chinmaymk/ra",
       "version": "0.0.5",
-      "peerDependencies": {
+      "devDependencies": {
         "@anthropic-ai/sdk": "^0.78.0",
         "@aws-sdk/client-bedrock-runtime": "^3.1001.0",
         "@azure/identity": "^4.13.0",
@@ -41,15 +41,6 @@
         "ollama": "^0.6.3",
         "openai": "^6.25.0",
       },
-      "optionalPeers": [
-        "@anthropic-ai/sdk",
-        "@aws-sdk/client-bedrock-runtime",
-        "@azure/identity",
-        "@azure/openai",
-        "@google/generative-ai",
-        "ollama",
-        "openai",
-      ],
     },
   },
   "packages": {
