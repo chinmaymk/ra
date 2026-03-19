@@ -49,26 +49,21 @@ jobs:
           rm .vitepress/config.dev.ts
 
       - name: Build latest tag docs (for site root)
-        id: build-latest
         if: steps.latest-tag.outputs.tag != ''
         working-directory: docs/site
         run: |
           LATEST_TAG="${{ steps.latest-tag.outputs.tag }}"
           LATEST_VERSION="${{ steps.latest-tag.outputs.version }}"
+          REPO_ROOT=$(git rev-parse --show-toplevel)
 
           TAG_DIR=$(mktemp -d)
-          if ! git archive "$LATEST_TAG" -- docs/site/ 2>/dev/null | tar -x -C "$TAG_DIR" 2>/dev/null; then
-            echo "Tag $LATEST_TAG does not contain docs/site/ — skipping"
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          if git -C "$REPO_ROOT" archive "$LATEST_TAG" -- docs/site/ 2>/dev/null | tar -x -C "$TAG_DIR" 2>/dev/null && [ -f "$TAG_DIR/docs/site/package.json" ]; then
+            echo "Using docs/site/ from $LATEST_TAG"
+          else
+            echo "Tag $LATEST_TAG has no docs/site/ — using current source"
             rm -rf "$TAG_DIR"
-            exit 0
-          fi
-
-          if [ ! -f "$TAG_DIR/docs/site/package.json" ]; then
-            echo "Tag $LATEST_TAG has no docs/site/package.json — skipping"
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-            rm -rf "$TAG_DIR"
-            exit 0
+            TAG_DIR=$(mktemp -d)
+            git -C "$REPO_ROOT" archive HEAD -- docs/site/ | tar -x -C "$TAG_DIR"
           fi
 
           # Use current theme
@@ -114,6 +109,7 @@ jobs:
         working-directory: docs/site
         run: |
           TAGS=$(git tag -l 'v*' --sort=-version:refname)
+          REPO_ROOT=$(git rev-parse --show-toplevel)
           mkdir -p /tmp/versioned-docs-dist
 
           for tag in $TAGS; do
@@ -128,16 +124,13 @@ jobs:
             echo "Building docs for $tag..."
 
             TAG_DIR=$(mktemp -d)
-            if ! git archive "$tag" -- docs/site/ 2>/dev/null | tar -x -C "$TAG_DIR" 2>/dev/null; then
-              echo "  Skipping $tag — no docs/site/"
+            if git -C "$REPO_ROOT" archive "$tag" -- docs/site/ 2>/dev/null | tar -x -C "$TAG_DIR" 2>/dev/null && [ -f "$TAG_DIR/docs/site/package.json" ]; then
+              echo "  Using docs/site/ from $tag"
+            else
+              echo "  Tag $tag has no docs/site/ — using current source"
               rm -rf "$TAG_DIR"
-              continue
-            fi
-
-            if [ ! -f "$TAG_DIR/docs/site/package.json" ]; then
-              echo "  Skipping $tag — no package.json"
-              rm -rf "$TAG_DIR"
-              continue
+              TAG_DIR=$(mktemp -d)
+              git -C "$REPO_ROOT" archive HEAD -- docs/site/ | tar -x -C "$TAG_DIR"
             fi
 
             # Copy the current theme so version switcher works
