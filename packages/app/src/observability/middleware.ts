@@ -34,7 +34,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     drainOpenSpans('error', { reason: 'stale_from_previous_run' })
     loopSpan = undefined
 
-    logger.setSessionId?.(ctx.sessionId)
+    if ('setSessionId' in logger) (logger as { setSessionId(id: string): void }).setSessionId(ctx.sessionId)
     tracer.setSessionId(ctx.sessionId)
 
     loopSpan = tracer.startSpan('agent.loop', {

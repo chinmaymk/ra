@@ -14,7 +14,6 @@ export interface Logger {
   warn(message: string, data?: Record<string, unknown>): void
   error(message: string, data?: Record<string, unknown>): void
   flush(): Promise<void>
-  setSessionId?(sessionId: string): void
 }
 
 /** A no-op logger that silently discards all messages. */

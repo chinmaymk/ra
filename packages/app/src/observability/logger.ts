@@ -1,9 +1,6 @@
 import type { Logger as ILogger, LogLevel } from '@chinmaymk/ra'
 import { JsonlWriter } from './writer'
 
-export type { LogLevel, LogEntry } from '@chinmaymk/ra'
-export { NoopLogger } from '@chinmaymk/ra'
-
 const LOG_LEVEL_RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 }
 
 export interface LoggerOptions {

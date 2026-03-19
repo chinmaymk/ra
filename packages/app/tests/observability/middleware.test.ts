@@ -168,7 +168,7 @@ describe('observability middleware', () => {
   })
 
   it('does not touch the loop when using noop logger/tracer', async () => {
-    const { NoopLogger } = await import('../../src/observability/logger')
+    const { NoopLogger } = await import('@chinmaymk/ra')
     const { NoopTracer } = await import('../../src/observability/tracer')
     const obsMw = createObservabilityMiddleware(new NoopLogger(), new NoopTracer())
 

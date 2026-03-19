@@ -1,74 +1,35 @@
 /**
- * @chinmaymk/ra — Type definitions only.
+ * ra application types.
  *
- * This package publishes types for the ra AI agent framework.
- * It does NOT include runtime code. For the CLI and runtime,
- * install ra via the compiled binaries from GitHub releases.
- *
- * @see https://github.com/chinmaymk/ra
+ * Core types (IProvider, IMessage, AgentLoop, etc.) are published
+ * via the @chinmaymk/ra package. This file re-exports app-specific
+ * types only.
  */
 
-// Re-export everything from @chinmaymk/ra core
-export {
-  // Provider types
-  type ContentPart,
-  type ImageSource,
-  type IMessage,
-  type IToolCall,
-  type IToolResult,
-  type ITool,
-  type TokenUsage,
-  type StreamChunk,
-  type ChatRequest,
-  type ChatResponse,
-  type IProvider,
-  type ProviderName,
-  // Agent / middleware types
-  type StoppableContext,
-  type LoopContext,
-  type ModelCallContext,
-  type StreamChunkContext,
-  type ToolExecutionContext,
-  type ToolResultContext,
-  type ErrorContext,
-  type Middleware,
-  type MiddlewareConfig,
-  // Observability types
-  type Logger,
-  type LogLevel,
-  type LogEntry,
-  // Provider option types
-  type AnthropicProviderOptions,
-  type OpenAIProviderOptions,
-  type GoogleProviderOptions,
-  type OllamaProviderOptions,
-  type BedrockProviderOptions,
-  type AzureProviderOptions,
-} from '@chinmaymk/ra'
-
-// Config types (app-specific)
+// Config types
 export type {
+  ProviderName,
   RaConfig,
   McpClientConfig,
   McpServerConfig,
   LoadConfigOptions,
   ToolsConfig,
   ToolSettings,
-} from './config/types.ts'
+} from './config/types'
 
-// Skill types (app-specific)
+// Skill types
 export type {
   SkillMetadata,
   Skill,
-} from './skills/types.ts'
+} from './skills/types'
 
-// Context / resolver types (app-specific)
+// Context / resolver types
 export type {
   PatternResolver,
   ResolvedReference,
   ResolutionResult,
-} from './context/resolvers.ts'
-export type { ResolverConfig } from './context/types.ts'
+} from './context/resolvers'
+export type { ResolverConfig } from './context/types'
 
 // Built-in tools
 export { registerBuiltinTools } from './tools/index'

@@ -1,4 +1,5 @@
-export { Logger, NoopLogger, type LogLevel, type LogEntry, type LoggerOptions } from './logger'
+export { Logger, type LoggerOptions } from './logger'
+export { type LogLevel, type LogEntry, NoopLogger } from '@chinmaymk/ra'
 export { Tracer, NoopTracer, type Span, type SpanEvent, type TraceRecord, type TracerOptions } from './tracer'
 export { createObservabilityMiddleware } from './middleware'
 

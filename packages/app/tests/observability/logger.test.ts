@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { Logger, type LogEntry } from '../../src/observability/logger'
-import { NoopLogger } from '@chinmaymk/ra'
+import { Logger } from '../../src/observability/logger'
+import { NoopLogger, type LogEntry } from '@chinmaymk/ra'
 
 describe('Logger', () => {
   let captured: string[]
