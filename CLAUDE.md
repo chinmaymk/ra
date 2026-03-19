@@ -73,16 +73,27 @@ Middleware hooks intercept every step. Context compaction is itself a `beforeMod
 - **Middleware as arrays**: config defines `middleware: { hookName: ["./path.ts"] }`, loaded at startup
 - **Skills as directories**: `SKILL.md` with YAML frontmatter, optional `scripts/` and `references/` subdirs
 
+## Runtime Compatibility
+
+The `packages/ra` core library (`@chinmaymk/ra`) must remain compatible with Node.js, Bun, and Deno. This means:
+
+- **No Bun-specific APIs** in `packages/ra/src/` — no `Bun.file`, `Bun.$`, `Bun.sleep`, `bun:sqlite`, `bun:test`, or any other `Bun.*` / `bun:*` imports
+- **No Deno-specific APIs** in `packages/ra/src/` — no `Deno.*` globals
+- **Use `node:` prefixed imports** for Node.js built-ins (e.g. `import { randomUUID } from 'node:crypto'`) — the `node:` prefix is supported by Node.js 16+, Bun, and Deno
+- **Stick to standard ECMAScript and universally supported Node.js APIs** (crypto, streams, etc.)
+- Bun-specific APIs (`Bun.file`, `Bun.$`, `bun:sqlite`, etc.) are fine in `packages/app/` which is the CLI binary and only runs on Bun
+
 ## Development Rules
 
-- Use Bun everywhere — never Node.js, npm, npx, jest, vitest, vite, express, or dotenv
+- Use Bun for development tooling (running, testing, building) — never npm, npx, jest, vitest, vite, express, or dotenv
 - `bun tsc` must pass before committing — don't use `as any` to silence errors
 - Tests colocated with their package: `packages/ra/tests/` for core, `packages/app/tests/` for app
 - Cast tool input narrowly: `input as { param: string }` not `input as any`
 - Use optional spread for conditional fields: `...(x && { key: x })`
 - Every `stream()` must yield a `{ type: 'done' }` chunk at the end
 - Tool call IDs must be preserved exactly — they match results back to calls
-- Prefer `Bun.file` over `node:fs`, `Bun.$` over `execa`, `bun:sqlite` over `better-sqlite3`
+- In `packages/app/`: prefer `Bun.file` over `node:fs`, `Bun.$` over `execa`, `bun:sqlite` over `better-sqlite3`
+- In `packages/ra/`: use only runtime-agnostic APIs (see Runtime Compatibility above)
 - Always use structured logging — pass a static message string and a data object: `logger.info('event name', { key: value })`. Never use string interpolation in log messages: `logger.info(\`thing ${x}\`)` is wrong
 
 ## Testing

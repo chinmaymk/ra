@@ -6,7 +6,7 @@ import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
 import { accumulateUsage, parseToolArguments } from '../providers/utils'
 import { withTimeout } from './timeout'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { type Logger, NoopLogger } from '../observability/logger'
 
 export interface AgentLoopOptions {
