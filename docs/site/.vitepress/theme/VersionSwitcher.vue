@@ -8,10 +8,19 @@ interface VersionsData {
 
 const data = ref<VersionsData | null>(null)
 const open = ref(false)
+const currentView = ref<string | null>(null)
 
 const siteRoot = '/ra/'
 
 onMounted(async () => {
+  // Detect current page context from URL (must run client-side to avoid hydration mismatch)
+  if (window.location.pathname.startsWith('/ra/dev/')) {
+    currentView.value = 'dev'
+  } else {
+    const match = window.location.pathname.match(/\/v\/(\d+\.\d+\.\d+[^/]*)\//)
+    currentView.value = match ? match[1] : null
+  }
+
   try {
     const res = await fetch(`${siteRoot}versions.json`)
     if (res.ok) {
@@ -22,17 +31,9 @@ onMounted(async () => {
   }
 })
 
-// Detect current page context from URL
-const currentView = (() => {
-  if (typeof window === 'undefined') return null
-  if (window.location.pathname.startsWith('/ra/dev/')) return 'dev'
-  const match = window.location.pathname.match(/\/v\/(\d+\.\d+\.\d+[^/]*)\//)
-  return match ? match[1] : null
-})()
-
 const displayLabel = computed(() => {
-  if (currentView === 'dev') return 'dev'
-  if (currentView) return `v${currentView}`
+  if (currentView.value === 'dev') return 'dev'
+  if (currentView.value) return `v${currentView.value}`
   return data.value ? `v${data.value.latest}` : ''
 })
 
@@ -88,7 +89,6 @@ function close() {
   display: flex;
   align-items: center;
   margin-left: 8px;
-  height: 100%;
 }
 
 .version-btn {

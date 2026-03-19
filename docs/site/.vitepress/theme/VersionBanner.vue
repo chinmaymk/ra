@@ -1,14 +1,19 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
+
 // Always link to site root, not the versioned base
 const siteRoot = '/ra/'
 
-// Detect versioned or dev page from URL
-const pageInfo = (() => {
-  if (typeof window === 'undefined') return null
-  if (window.location.pathname.startsWith('/ra/dev/')) return { type: 'dev' as const }
-  const match = window.location.pathname.match(/\/v\/(\d+\.\d+\.\d+[^/]*)\//)
-  return match ? { type: 'version' as const, version: match[1] } : null
-})()
+const pageInfo = ref<{ type: 'dev' } | { type: 'version'; version: string } | null>(null)
+
+onMounted(() => {
+  if (window.location.pathname.startsWith('/ra/dev/')) {
+    pageInfo.value = { type: 'dev' }
+  } else {
+    const match = window.location.pathname.match(/\/v\/(\d+\.\d+\.\d+[^/]*)\//)
+    pageInfo.value = match ? { type: 'version', version: match[1] } : null
+  }
+})
 </script>
 
 <template>
@@ -17,7 +22,7 @@ const pageInfo = (() => {
     <a :href="siteRoot">Switch to latest release</a>
   </div>
   <div v-else-if="pageInfo?.type === 'version'" class="version-banner">
-    You are viewing docs for <strong>v{{ pageInfo.version }}</strong>.
+    You are viewing docs for <strong>v{{ (pageInfo as { type: 'version'; version: string }).version }}</strong>.
     <a :href="siteRoot">Switch to latest release</a>
   </div>
 </template>
