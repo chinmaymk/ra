@@ -20,7 +20,7 @@ describe('getContextWindowSize', () => {
   })
 
   it('returns fallback for unknown model', () => {
-    expect(getContextWindowSize('some-unknown-model')).toBe(128_000)
+    expect(getContextWindowSize('some-unknown-model')).toBe(200_000)
   })
 
   it('accepts user override', () => {

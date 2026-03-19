@@ -111,81 +111,136 @@ const DEFAULT_SUMMARIZATION_PROMPT = `Summarize the conversation in <conversatio
 <rule>Be concise but complete</rule>
 </instructions>`
 
+// Patterns matched against err.message from each provider's SDK.
+// Both Anthropic and OpenAI SDKs prefix messages with the HTTP status:
+//   Anthropic → "400 prompt is too long: 208310 tokens > 200000 maximum"
+//   OpenAI    → "400 This model's maximum context length is 128000 tokens..."
+//
+// Real error messages per provider:
+//   Anthropic:  "prompt is too long: N tokens > M maximum"
+//               "input length and max_tokens exceed context limit: N + M > L ..."
+//               "request too large" / "Request too large"
+//               "Request size exceeds model context window"
+//   OpenAI:     "This model's maximum context length is N tokens..."
+//   Azure:      same as OpenAI (uses openai SDK)
+//   Ollama:     "prompt too long; exceeded max context length by N tokens"
+//   Google:     "[400 Bad Request] ... exceeds the maximum number of tokens"
+//   Bedrock:    "ValidationException: ... prompt too long ..." / "... too many tokens ..."
+const CONTEXT_LENGTH_PATTERNS = [
+  /maximum context length/i,        // OpenAI / Azure: "This model's maximum context length is..."
+  /context.length.exceed/i,         // generic: "context length exceeded"
+  /exceed.{0,20}context.limit/i,    // Anthropic: "...exceed context limit: ..."
+  /exceeds?.{0,20}context.window/i, // Anthropic: "...exceeds model context window"
+  /request too large/i,             // Anthropic 413: "request too large" / "Request too large"
+  /prompt is too long/i,            // Anthropic 400: "prompt is too long: N tokens > M maximum"
+  /prompt too long/i,               // Ollama: "prompt too long; exceeded max context length..."
+  /too many tokens/i,               // generic / Bedrock
+  /exceeds? the maximum/i,          // Google: "... exceeds the maximum number of tokens"
+  /token.{0,3}limit/i,              // generic: "token limit exceeded", "token_limit_exceeded" (not "token rate limit")
+  /input.{0,5}too long/i,           // Bedrock: "Input is too long for requested model" / generic
+  /sequence.length.exceeds/i,       // Ollama: "Token sequence length exceeds limit (X > Y)"
+]
+
+export function isContextLengthError(err: unknown): boolean {
+  // OpenAI SDK sets error.code = 'context_length_exceeded' — most reliable signal
+  if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'context_length_exceeded') {
+    return true
+  }
+  const msg = err instanceof Error ? err.message : String(err)
+  return CONTEXT_LENGTH_PATTERNS.some(p => p.test(msg))
+}
+
+export async function forceCompact(
+  provider: IProvider,
+  config: CompactionConfig,
+  ctx: ModelCallContext,
+): Promise<boolean> {
+  return _runCompaction(provider, config, ctx, true)
+}
+
+async function _runCompaction(
+  provider: IProvider,
+  config: CompactionConfig,
+  ctx: ModelCallContext,
+  force: boolean,
+): Promise<boolean> {
+  const messages = ctx.request.messages
+
+  if (!force) {
+    const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
+    const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
+    const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
+    if (estimated <= triggerThreshold) return false
+  }
+
+  // Keep 20% of context window as recent messages when we know the window size,
+  // otherwise use a conservative flat budget so we always compact aggressively.
+  const contextWindow = config.contextWindow ?? getContextWindowSize(ctx.request.model)
+  const targetPostCompaction = Math.floor(contextWindow * 0.20)
+  const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
+
+  if (compactable.length === 0) return false
+
+  const conversationText = compactable.map(m => {
+    const content = serializeContent(m.content)
+    const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
+    const toolId = m.toolCallId ? ` [tool result for: ${m.toolCallId}]` : ''
+    return `${m.role}${toolInfo}${toolId}: ${content}`
+  }).join('\n')
+
+  let summaryResponse
+  try {
+    const compactionModel = config.model || ctx.request.model
+    summaryResponse = await provider.chat({
+      model: compactionModel,
+      messages: [{ role: 'user', content: `${config.prompt || DEFAULT_SUMMARIZATION_PROMPT}\n\n<conversation>\n${conversationText}\n</conversation>` }],
+    })
+  } catch (err) {
+    console.error('[compaction] summarization failed:', errorMessage(err))
+    return false
+  }
+
+  const summaryContent = serializeContent(summaryResponse.message.content)
+  const summaryText = `[Context Summary]\n${summaryContent}`
+
+  let recentStart = 0
+  const userIdx = pinned.findLastIndex(m => m.role === 'user')
+  if (userIdx >= 0) {
+    let extraText = summaryText
+    let nonTextParts: ContentPart[] = []
+
+    if (recent.length > 0 && recent[0]!.role === 'user') {
+      const recentMsg = recent[0]!
+      if (typeof recentMsg.content === 'string') {
+        extraText += `\n\n${recentMsg.content}`
+      } else {
+        const text = recentMsg.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
+        if (text) extraText += `\n\n${text}`
+        nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
+      }
+      recentStart = 1
+    }
+
+    pinned[userIdx] = appendToMessage(pinned[userIdx]!, extraText, nonTextParts)
+  }
+  const originalCount = messages.length
+  ctx.request.messages.length = 0
+  ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
+  config.onCompact?.({
+    originalMessages: originalCount,
+    compactedMessages: ctx.request.messages.length,
+    estimatedTokens: ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages),
+    threshold: config.maxTokens ?? Math.floor(contextWindow * config.threshold),
+  })
+  return true
+}
+
 export function createCompactionMiddleware(
   provider: IProvider,
   config: CompactionConfig,
 ): Middleware<ModelCallContext> {
   return async (ctx: ModelCallContext) => {
     if (!config.enabled) return
-
-    const messages = ctx.request.messages
-    const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
-
-    const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
-    const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
-
-    if (estimated <= triggerThreshold) return
-
-    const targetPostCompaction = Math.floor(contextWindow * 0.20)
-    const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
-
-    if (compactable.length === 0) return
-
-    const conversationText = compactable.map(m => {
-      const content = serializeContent(m.content)
-      const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
-      const toolId = m.toolCallId ? ` [tool result for: ${m.toolCallId}]` : ''
-      return `${m.role}${toolInfo}${toolId}: ${content}`
-    }).join('\n')
-
-    let summaryResponse
-    try {
-      const compactionModel = config.model || ctx.request.model
-      summaryResponse = await provider.chat({
-        model: compactionModel,
-        messages: [{ role: 'user', content: `${config.prompt || DEFAULT_SUMMARIZATION_PROMPT}\n\n<conversation>\n${conversationText}\n</conversation>` }],
-      })
-    } catch (err) {
-      console.error('[compaction] summarization failed:', errorMessage(err))
-      return // Leave messages unchanged on summarization failure
-    }
-
-    const summaryContent = serializeContent(summaryResponse.message.content)
-
-    const summaryText = `[Context Summary]\n${summaryContent}`
-
-    // Merge summary into the last pinned user message to avoid consecutive user messages.
-    // Pinned always ends with a user message. If recent also starts with user, merge that too.
-    // Find the last pinned user message to merge into
-    let recentStart = 0
-    const userIdx = pinned.findLastIndex(m => m.role === 'user')
-    if (userIdx >= 0) {
-      let extraText = summaryText
-      let nonTextParts: ContentPart[] = []
-
-      // Absorb first recent user message if present (avoids consecutive user messages)
-      if (recent.length > 0 && recent[0]!.role === 'user') {
-        const recentMsg = recent[0]!
-        if (typeof recentMsg.content === 'string') {
-          extraText += `\n\n${recentMsg.content}`
-        } else {
-          const text = recentMsg.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
-          if (text) extraText += `\n\n${text}`
-          nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
-        }
-        recentStart = 1
-      }
-
-      pinned[userIdx] = appendToMessage(pinned[userIdx]!, extraText, nonTextParts)
-    }
-    const originalCount = messages.length
-    ctx.request.messages.length = 0
-    ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
-    config.onCompact?.({
-      originalMessages: originalCount,
-      compactedMessages: ctx.request.messages.length,
-      estimatedTokens: estimated,
-      threshold: triggerThreshold,
-    })
+    await _runCompaction(provider, config, ctx, false)
   }
 }

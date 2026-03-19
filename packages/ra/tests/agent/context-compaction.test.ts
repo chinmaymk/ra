@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { splitMessageZones, createCompactionMiddleware, NoopLogger } from '@chinmaymk/ra'
-import type { IMessage, IProvider, ChatRequest, ModelCallContext } from '@chinmaymk/ra'
+import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact, NoopLogger } from '@chinmaymk/ra'
+import type { IMessage, IProvider, ChatRequest, ChatResponse, ModelCallContext } from '@chinmaymk/ra'
 
 const logger = new NoopLogger()
 
@@ -512,6 +512,33 @@ describe('createCompactionMiddleware', () => {
     expect(called).toBe(false)
   })
 
+  it('forceCompact compacts regardless of threshold', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async (): Promise<ChatResponse> => ({
+        message: { role: 'assistant' as const, content: 'Forced summary.' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    // Very high threshold that would never trigger normally, but small contextWindow so messages are compactable
+    const result = await forceCompact(provider, { enabled: true, threshold: 0.99, contextWindow: 100 }, ctx)
+    expect(result).toBe(true)
+    const hasSummary = ctx.request.messages.some(
+      m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
+    )
+    expect(hasSummary).toBe(true)
+  })
+
   it('uses custom prompt when provided in config', async () => {
     let receivedPrompt = ''
     const provider: IProvider = {
@@ -586,5 +613,44 @@ describe('createCompactionMiddleware', () => {
     const ctx = makeCtx(messages)
     await mw(ctx)
     expect(ctx.request.messages).toEqual(messages)
+  })
+})
+
+describe('isContextLengthError', () => {
+  it('matches real provider SDK error messages', () => {
+    // Anthropic SDK
+    expect(isContextLengthError(new Error('400 request too large'))).toBe(true)
+    expect(isContextLengthError(new Error('400 prompt is too long: 250000 tokens > 200000 maximum'))).toBe(true)
+    expect(isContextLengthError(new Error('400 input length and max_tokens exceed context limit: 188240 + 21333 > 200000'))).toBe(true)
+    expect(isContextLengthError(new Error('413 Request size exceeds model context window'))).toBe(true)
+    // OpenAI / Azure SDK
+    expect(isContextLengthError(new Error("400 This model's maximum context length is 128000 tokens."))).toBe(true)
+    // Ollama
+    expect(isContextLengthError(new Error('prompt too long; exceeded max context length by 4 tokens'))).toBe(true)
+    // Google Gemini
+    expect(isContextLengthError(new Error('[400 Bad Request] Request exceeds the maximum number of tokens'))).toBe(true)
+    // Bedrock
+    expect(isContextLengthError(new Error('ValidationException: Too many tokens'))).toBe(true)
+    expect(isContextLengthError(new Error('ValidationException: Input is too long for requested model.'))).toBe(true)
+    // Ollama sequence length
+    expect(isContextLengthError(new Error('Token sequence length exceeds limit (5000 > 4096)'))).toBe(true)
+    // Generic patterns
+    expect(isContextLengthError(new Error('context length exceeded'))).toBe(true)
+    expect(isContextLengthError(new Error('token limit exceeded'))).toBe(true)
+    expect(isContextLengthError(new Error('token_limit_exceeded'))).toBe(true)
+    expect(isContextLengthError(new Error('input too long'))).toBe(true)
+  })
+
+  it('does not match unrelated errors', () => {
+    expect(isContextLengthError(new Error('API rate limit'))).toBe(false)
+    expect(isContextLengthError(new Error('Exceeded token rate limit of your current OpenAI model'))).toBe(false)
+    expect(isContextLengthError(new Error('Prediction aborted due to token repeat limit reached'))).toBe(false)
+    expect(isContextLengthError(new Error('network timeout'))).toBe(false)
+    expect(isContextLengthError(new Error('authentication failed'))).toBe(false)
+  })
+
+  it('handles non-Error values', () => {
+    expect(isContextLengthError('context length exceeded')).toBe(true)
+    expect(isContextLengthError('random error')).toBe(false)
   })
 })
