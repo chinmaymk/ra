@@ -24,7 +24,7 @@ jobs:
 
       - name: Build ra binary
         run: |
-          bun build src/index.ts --compile --outfile dist/ra
+          bun build packages/app/src/index.ts --compile --outfile dist/ra
           chmod +x dist/ra
           echo "$PWD/dist" >> "$GITHUB_PATH"
 

@@ -4,11 +4,21 @@
   "workspaces": {
     "": {
       "name": "ra",
+      "devDependencies": {
+        "@types/bun": "^1.3.10",
+        "@types/js-yaml": "^4.0.9",
+        "typescript": "^5",
+      },
+    },
+    "packages/app": {
+      "name": "ra-app",
+      "version": "0.0.5",
       "dependencies": {
         "@anthropic-ai/sdk": "^0.78.0",
         "@aws-sdk/client-bedrock-runtime": "^3.1001.0",
         "@azure/identity": "^4.13.0",
         "@azure/openai": "^2.0.0",
+        "@chinmaymk/ra": "workspace:*",
         "@google/generative-ai": "^0.24.1",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "js-yaml": "^4.1.1",
@@ -16,14 +26,30 @@
         "openai": "^6.25.0",
         "smol-toml": "^1.6.0",
         "wrap-ansi": "^10.0.0",
+        "zod": "^3.25 || ^4.0",
       },
-      "devDependencies": {
-        "@types/bun": "^1.3.10",
-        "@types/js-yaml": "^4.0.9",
-      },
+    },
+    "packages/ra": {
+      "name": "@chinmaymk/ra",
+      "version": "0.0.5",
       "peerDependencies": {
-        "typescript": "^5",
+        "@anthropic-ai/sdk": "^0.78.0",
+        "@aws-sdk/client-bedrock-runtime": "^3.1001.0",
+        "@azure/identity": "^4.13.0",
+        "@azure/openai": "^2.0.0",
+        "@google/generative-ai": "^0.24.1",
+        "ollama": "^0.6.3",
+        "openai": "^6.25.0",
       },
+      "optionalPeers": [
+        "@anthropic-ai/sdk",
+        "@aws-sdk/client-bedrock-runtime",
+        "@azure/identity",
+        "@azure/openai",
+        "@google/generative-ai",
+        "ollama",
+        "openai",
+      ],
     },
   },
   "packages": {
@@ -122,6 +148,8 @@
     "@azure/openai": ["@azure/openai@2.0.0", "", { "dependencies": { "@azure-rest/core-client": "^2.2.0", "tslib": "^2.6.3" } }, "sha512-zSNhwarYbqg3P048uKMjEjbge41OnAgmiiE1elCHVsuCCXRyz2BXnHMJkW6WR6ZKQy5NHswJNUNSWsuqancqFA=="],
 
     "@babel/runtime": ["@babel/runtime@7.28.6", "", {}, "sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA=="],
+
+    "@chinmaymk/ra": ["@chinmaymk/ra@workspace:packages/ra"],
 
     "@google/generative-ai": ["@google/generative-ai@0.24.1", "", {}, "sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q=="],
 
@@ -428,6 +456,8 @@
     "proxy-addr": ["proxy-addr@2.0.7", "", { "dependencies": { "forwarded": "0.2.0", "ipaddr.js": "1.9.1" } }, "sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg=="],
 
     "qs": ["qs@6.15.0", "", { "dependencies": { "side-channel": "^1.1.0" } }, "sha512-mAZTtNCeetKMH+pSjrb76NAM8V9a05I9aBZOHztWy/UqcJdQYNsf59vrRKWnojAT9Y+GbIvoTBC++CPHqpDBhQ=="],
+
+    "ra-app": ["ra-app@workspace:packages/app"],
 
     "range-parser": ["range-parser@1.2.1", "", {}, "sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg=="],
 

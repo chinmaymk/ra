@@ -1,0 +1,25 @@
+{
+  "name": "ra-app",
+  "version": "0.0.5",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ra": "bun run src/index.ts",
+    "compile": "bun build src/index.ts --compile --target bun --outfile dist/ra --define __RA_VERSION__='\"'$(bun -e \"process.stdout.write(require('../ra/package.json').version)\")'\"' --define __RA_COMMIT__='\"'$(git rev-parse --short HEAD)'\"'"
+  },
+  "dependencies": {
+    "@chinmaymk/ra": "workspace:*",
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1001.0",
+    "@azure/identity": "^4.13.0",
+    "@azure/openai": "^2.0.0",
+    "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "js-yaml": "^4.1.1",
+    "ollama": "^0.6.3",
+    "openai": "^6.25.0",
+    "smol-toml": "^1.6.0",
+    "wrap-ansi": "^10.0.0",
+    "zod": "^3.25 || ^4.0"
+  }
+}
