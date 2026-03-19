@@ -323,15 +323,14 @@ export async function removeSkill(skillName: string, installDir: string): Promis
  * List installed skills with their source information.
  */
 export async function listInstalledSkills(installDir: string): Promise<Array<{ name: string; source?: PackageSource }>> {
-  const dir = installDir
   const skills: Array<{ name: string; source?: PackageSource }> = []
 
   try {
-    for await (const rel of new Bun.Glob('*/SKILL.md').scan({ cwd: dir, onlyFiles: true })) {
+    for await (const rel of new Bun.Glob('*/SKILL.md').scan({ cwd: installDir, onlyFiles: true })) {
       const name = firstSegment(rel)
       let source: PackageSource | undefined
       try {
-        const sourceFile = Bun.file(join(dir, name, '.source.json'))
+        const sourceFile = Bun.file(join(installDir, name, '.source.json'))
         if (await sourceFile.exists()) {
           source = JSON.parse(await sourceFile.text()) as PackageSource
         }
