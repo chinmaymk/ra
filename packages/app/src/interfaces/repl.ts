@@ -20,7 +20,8 @@ import { fileToContentPart } from '../utils/files'
 import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
 import type { Skill } from '../skills/types'
-import { buildAvailableSkillsXml, buildActiveSkillXml, readSkillReference } from '../skills/loader'
+import { buildActiveSkillXml, readSkillReference } from '../skills/loader'
+import { buildMessagePrefix } from './messages'
 import type { MemoryStore } from '../memory/store'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
@@ -176,22 +177,13 @@ export class Repl {
 
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
 
-    const initialMessages: IMessage[] = []
-    if (this.options.systemPrompt) initialMessages.push({ role: 'system', content: this.options.systemPrompt })
-    if (this.options.contextMessages?.length) initialMessages.push(...this.options.contextMessages)
-
-    // Inject available skills XML as first user message if skills exist
-    if (this.options.skillMap && this.options.skillMap.size > 0 && this.messages.length === 0) {
-      const xml = buildAvailableSkillsXml(this.options.skillMap)
-      if (xml) {
-        initialMessages.splice(
-          this.options.systemPrompt ? 1 : 0,
-          0,
-          { role: 'user', content: xml }
-        )
-      }
-    }
-
+    // Include skills XML only on first turn (avoids repetition in ongoing sessions)
+    const isFirstTurn = this.messages.length === 0
+    const initialMessages = buildMessagePrefix({
+      systemPrompt: this.options.systemPrompt,
+      skillMap: isFirstTurn ? this.options.skillMap : undefined,
+      contextMessages: this.options.contextMessages,
+    })
     initialMessages.push(...this.messages)
     const priorCount = initialMessages.length
     initialMessages.push(userMessage)

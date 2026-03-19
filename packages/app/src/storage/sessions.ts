@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { appendFile, mkdir, rm } from 'node:fs/promises'
 import type { IMessage } from '@chinmaymk/ra'
+import { parseJsonlFile } from '../utils/files'
 
 export interface SessionMeta {
   id: string
@@ -65,13 +66,7 @@ export class SessionStorage {
   }
 
   async readMessages(id: string): Promise<IMessage[]> {
-    const f = Bun.file(join(this.sessionDir(id), 'messages.jsonl'))
-    if (!(await f.exists())) return []
-    return (await f.text())
-      .split('\n')
-      .filter(line => line.trim().length > 0)
-      .map(line => { try { return JSON.parse(line) as IMessage } catch { return null } })
-      .filter((msg): msg is IMessage => msg !== null)
+    return parseJsonlFile<IMessage>(join(this.sessionDir(id), 'messages.jsonl'))
   }
 
   async list(): Promise<Session[]> {

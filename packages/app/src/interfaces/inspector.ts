@@ -1,6 +1,7 @@
 import { join } from 'path'
 import type { AppContext } from '../bootstrap'
 import { discoverContextFiles } from '../context'
+import { parseJsonlFile } from '../utils/files'
 import inspectorHtml from './inspector.html' with { type: 'text' }
 import faviconSvg from './favicon.svg' with { type: 'text' }
 
@@ -11,17 +12,6 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
   })
-}
-
-async function parseJsonl(path: string): Promise<unknown[]> {
-  const file = Bun.file(path)
-  if (!(await file.exists())) return []
-  const text = await file.text()
-  return text
-    .split('\n')
-    .filter(l => l.trim())
-    .map(l => { try { return JSON.parse(l) } catch { return null } })
-    .filter(Boolean)
 }
 
 // ── Stats aggregation ─────────────────────────────────────────────────
@@ -203,16 +193,16 @@ export class InspectorServer {
           try {
             switch (view) {
               case 'messages': return json(await storage.readMessages(id!))
-              case 'logs':     return json(await parseJsonl(join(dir, 'logs.jsonl')))
-              case 'traces':   return json(await parseJsonl(join(dir, 'traces.jsonl')))
+              case 'logs':     return json(await parseJsonlFile(join(dir, 'logs.jsonl')))
+              case 'traces':   return json(await parseJsonlFile(join(dir, 'traces.jsonl')))
               case 'stats': {
-                const traces = await parseJsonl(join(dir, 'traces.jsonl')) as TraceSpan[]
+                const traces = await parseJsonlFile(join(dir, 'traces.jsonl')) as TraceSpan[]
                 const messages = await storage.readMessages(id!) as Array<{ role?: string; toolCalls?: unknown[]; isError?: boolean; content?: unknown }>
                 return json(buildStats(traces, messages))
               }
               case 'timeline': {
-                const traces = await parseJsonl(join(dir, 'traces.jsonl')) as TraceSpan[]
-                const logs = await parseJsonl(join(dir, 'logs.jsonl')) as LogEntry[]
+                const traces = await parseJsonlFile(join(dir, 'traces.jsonl')) as TraceSpan[]
+                const logs = await parseJsonlFile(join(dir, 'logs.jsonl')) as LogEntry[]
                 return json(buildTimeline(traces, logs))
               }
               default: return json({ error: 'Unknown view' }, 404)

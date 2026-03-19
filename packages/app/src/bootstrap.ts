@@ -31,6 +31,16 @@ import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath } from './utils/paths'
 import type { Tracer } from './observability/tracer'
+import type { Middleware } from '@chinmaymk/ra'
+
+/** Prepend a middleware to a hook array (creates the array if needed). */
+function prepend<T>(arr: Middleware<T>[] | undefined, mw: Middleware<T>): Middleware<T>[] {
+  return [mw, ...(arr ?? [])]
+}
+/** Append a middleware to a hook array (creates the array if needed). */
+function append<T>(arr: Middleware<T>[] | undefined, mw: Middleware<T>): Middleware<T>[] {
+  return [...(arr ?? []), mw]
+}
 
 export interface AppContext {
   config: RaConfig
@@ -127,7 +137,7 @@ export async function bootstrap(
     const resolvers = await loadResolvers(config.context.resolvers, config.configDir)
     if (resolvers.length > 0) {
       const resolverMw = createResolverMiddleware(resolvers, process.cwd())
-      middleware.beforeModelCall = [resolverMw, ...(middleware.beforeModelCall ?? [])]
+      middleware.beforeModelCall = prepend(middleware.beforeModelCall, resolverMw)
     }
   }
 
@@ -135,7 +145,7 @@ export async function bootstrap(
   if (config.context.enabled) {
     const root = (await findGitRoot(process.cwd())) ?? process.cwd()
     const discoveryMw = createDiscoveryMiddleware(config.context.patterns, root, new Set(contextFiles.map(f => f.path)))
-    middleware.afterToolExecution = [...(middleware.afterToolExecution ?? []), discoveryMw]
+    middleware.afterToolExecution = append(middleware.afterToolExecution, discoveryMw)
   }
 
   // ── Provider ───────────────────────────────────────────────────────
@@ -168,7 +178,7 @@ export async function bootstrap(
     tools.register(memoryForgetTool(memoryStore))
 
     const memMw = createMemoryMiddleware({ store: memoryStore, injectLimit: config.memory.injectLimit })
-    middleware.beforeLoopBegin = [memMw.beforeLoopBegin, ...(middleware.beforeLoopBegin ?? [])]
+    middleware.beforeLoopBegin = prepend(middleware.beforeLoopBegin, memMw.beforeLoopBegin)
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
 
@@ -184,7 +194,7 @@ export async function bootstrap(
     tools.register(scratchpadDeleteTool(scratchpadStore))
 
     const scratchpadMw = createScratchpadMiddleware(scratchpadStore)
-    middleware.beforeModelCall = [...(middleware.beforeModelCall ?? []), scratchpadMw]
+    middleware.beforeModelCall = append(middleware.beforeModelCall, scratchpadMw)
     logger.info('scratchpad initialized')
   }
 
@@ -226,7 +236,7 @@ export async function bootstrap(
   // ── Permissions middleware ─────────────────────────────────────────
   if (config.permissions.rules?.length && !config.permissions.no_rules_rules) {
     const permMw = createPermissionsMiddleware(config.permissions)
-    middleware.beforeToolExecution = [permMw, ...(middleware.beforeToolExecution ?? [])]
+    middleware.beforeToolExecution = prepend(middleware.beforeToolExecution, permMw)
     logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
   }
 

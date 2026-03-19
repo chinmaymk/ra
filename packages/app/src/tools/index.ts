@@ -1,5 +1,5 @@
 import type { ToolRegistry, ITool } from '@chinmaymk/ra'
-import type { ToolsConfig, ToolSettings } from '../config/types'
+import type { ToolsConfig } from '../config/types'
 import { readFileTool } from './read-file'
 import { writeFileTool } from './write-file'
 import { updateFileTool } from './update-file'
@@ -16,27 +16,10 @@ import { subagentTool, type SubagentToolOptions } from './subagent'
 
 export { subagentTool, type SubagentToolOptions } from './subagent'
 
-/** Check whether a tool is enabled given the tools config. */
-function isEnabled(toolName: string, config: ToolsConfig): boolean {
-  const override = config.overrides[toolName]
-  if (override?.enabled === false) return false
-  return config.builtin
-}
-
-/** Get per-tool settings (empty object when no overrides). */
-function settingsFor(toolName: string, config: ToolsConfig): ToolSettings {
-  return config.overrides[toolName] ?? {}
-}
-
-/** Conditionally register a tool if enabled. */
+/** Conditionally register a tool if enabled in config. */
 function maybeRegister(registry: ToolRegistry, tool: ITool, config: ToolsConfig): void {
-  if (isEnabled(tool.name, config)) registry.register(tool)
-}
-
-/** Extract rootDir from tool settings (shared across filesystem tools). */
-function rootDirFrom(s: ToolSettings): { rootDir?: string } {
-  const rootDir = s.rootDir as string | undefined
-  return rootDir ? { rootDir } : {}
+  if (config.overrides[tool.name]?.enabled === false || !config.builtin) return
+  registry.register(tool)
 }
 
 export function registerBuiltinTools(registry: ToolRegistry, config?: ToolsConfig): void {
@@ -58,8 +41,8 @@ export function registerBuiltinTools(registry: ToolRegistry, config?: ToolsConfi
   }
 
   for (const name of fsNames) {
-    const settings = settingsFor(name, cfg)
-    maybeRegister(registry, fsFactories[name]!(rootDirFrom(settings)), cfg)
+    const rootDir = cfg.overrides[name]?.rootDir as string | undefined
+    maybeRegister(registry, fsFactories[name]!(rootDir ? { rootDir } : {}), cfg)
   }
 
   // Shell — platform-specific
