@@ -48,46 +48,19 @@ jobs:
           mv .vitepress/dist /tmp/dev-docs-dist
           rm .vitepress/config.dev.ts
 
-      - name: Build latest tag docs (for site root)
+      - name: Build latest release docs (for site root)
         if: steps.latest-tag.outputs.tag != ''
         working-directory: docs/site
         run: |
-          LATEST_TAG="${{ steps.latest-tag.outputs.tag }}"
           LATEST_VERSION="${{ steps.latest-tag.outputs.version }}"
-          REPO_ROOT=$(git rev-parse --show-toplevel)
 
-          TAG_DIR=$(mktemp -d)
-          if git -C "$REPO_ROOT" archive "$LATEST_TAG" -- docs/site/ 2>/dev/null | tar -x -C "$TAG_DIR" 2>/dev/null && [ -f "$TAG_DIR/docs/site/package.json" ]; then
-            echo "Using docs/site/ from $LATEST_TAG"
-          else
-            echo "Tag $LATEST_TAG has no docs/site/ — using current source"
-            rm -rf "$TAG_DIR"
-            TAG_DIR=$(mktemp -d)
-            git -C "$REPO_ROOT" archive HEAD -- docs/site/ | tar -x -C "$TAG_DIR"
-          fi
-
-          # Use current theme
-          rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
-          cp -r .vitepress/theme "$TAG_DIR/docs/site/.vitepress/theme"
-
-          # Build with root base path
-          cat > "$TAG_DIR/docs/site/.vitepress/config.ts" << 'VCONF'
-          import { defineConfig } from 'vitepress'
-          export default defineConfig({
-            title: 'ra',
-            base: '/ra/',
-            appearance: 'dark',
-            themeConfig: {
-              logo: '/logo.svg',
-              search: { provider: 'local' },
-            },
-          })
-          VCONF
-
-          (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$LATEST_VERSION" bun vitepress build)
+          # Build from main with the latest release version label.
+          # Main always has the most up-to-date docs content (link fixes,
+          # typos, etc.), so it's the best source for the site root.
+          DOCS_VERSION="$LATEST_VERSION" bun vitepress build
           mkdir -p /tmp/root-docs-dist
-          cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* /tmp/root-docs-dist/
-          rm -rf "$TAG_DIR"
+          cp -r .vitepress/dist/* /tmp/root-docs-dist/
+          rm -rf .vitepress/dist
 
       - name: Compute version cache key
         id: version-key
