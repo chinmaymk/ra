@@ -204,9 +204,9 @@ export async function bootstrap(
   if (config.mcp.client?.length) {
     const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: config.mcp.client.length })
     logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
-    const toolCountBefore = tools.all().length
+    const knownToolNames = new Set(tools.all().map(t => t.name))
     await mcpClient.connect(config.mcp.client, tools, { lazySchemas: config.mcp.lazySchemas })
-    const mcpTools = tools.all().slice(toolCountBefore)
+    const mcpTools = tools.all().filter(t => !knownToolNames.has(t.name))
     const mcpToolTokens = estimateTokens(mcpTools)
     logger.info('MCP servers connected', {
       totalTools: tools.all().length,

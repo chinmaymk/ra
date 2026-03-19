@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { estimateTokens } from '@chinmaymk/ra'
-import type { IMessage, ITool } from '@chinmaymk/ra'
+import { estimateTokens } from '../agent/token-estimator'
+import type { IMessage, ITool } from '../providers/types'
 
 describe('estimateTokens', () => {
   describe('messages', () => {
