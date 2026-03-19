@@ -9,7 +9,7 @@ import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
 export { defaultConfig } from './defaults'
-export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
+export type { RaConfig, LoadConfigOptions, RecipeResolver, McpClientConfig, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
 
 const CONFIG_FILES = [
   'ra.config.json',
@@ -50,7 +50,7 @@ export function deepMerge(
   return result
 }
 
-async function loadConfigFile(cwd: string, configPath?: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
+export async function loadConfigFile(cwd: string, configPath?: string): Promise<{ config: Partial<RaConfig>; filePath?: string }> {
   if (configPath) {
     const full = isAbsolute(configPath) ? configPath : join(cwd, configPath)
     if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
@@ -193,11 +193,29 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   // Coerce after normalization so schema paths match (e.g. "50" → 50)
   const coercedFileConfig = coerceTypes(fileConfig, rawDefaults) as Record<string, unknown>
 
-  // defaults < file < CLI
-  const defaults = interpolateEnvVars(rawDefaults, env) as Record<string, unknown>
+  // Resolve recipe: recipePath (direct) > recipeName (CLI flag) > fileConfig.recipe
+  let recipePath = options.recipePath
+  if (!recipePath && options.resolveRecipePath) {
+    const recipeName = options.recipeName ?? (rawFileConfig as Record<string, unknown>).recipe as string | undefined
+    if (recipeName) {
+      recipePath = await options.resolveRecipePath(recipeName)
+      if (!recipePath) throw new Error(`Recipe not found: ${recipeName}`)
+    }
+  }
+
+  // defaults < recipe < file < CLI
+  let base = interpolateEnvVars(rawDefaults, env) as Record<string, unknown>
+  if (recipePath) {
+    const { config: rawRecipeConfig } = await loadConfigFile(cwd, recipePath)
+    const recipeConfig = interpolateEnvVars(rawRecipeConfig, env) as Record<string, unknown>
+    normalizeFlatConfig(recipeConfig)
+    normalizeToolsConfig(recipeConfig)
+    base = deepMerge(base, recipeConfig)
+  }
+
   const merged = [coercedFileConfig, cliArgs].reduce(
     (acc, layer) => deepMerge(acc, layer),
-    defaults,
+    base,
   )
 
   const config = merged as unknown as RaConfig

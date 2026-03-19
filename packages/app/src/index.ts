@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { AgentLoop, serializeContent, errorMessage, type IMessage } from '@chinmaymk/ra'
-import { loadConfig, deepMerge } from './config'
+import { loadConfig } from './config'
 import type { RaConfig } from './config/types'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
@@ -328,26 +328,41 @@ async function main(): Promise<void> {
     parsedApp.interface = 'cli' as const
   }
 
-  let config = await loadConfig({
+  // Resolve recipe name: --recipe CLI flag takes precedence, then config file recipe field.
+  // We do a preliminary load (without recipe) to read the config file's recipe field,
+  // then reload with the recipe inserted into the layer chain (defaults < recipe < file < env < CLI).
+  let recipePath: string | undefined
+  if (parsed.meta.recipe) {
+    const { resolveRecipeConfigPath } = await import('./skills/registry')
+    recipePath = await resolveRecipeConfigPath(parsed.meta.recipe)
+    if (!recipePath) {
+      console.error(`Recipe not found: ${parsed.meta.recipe}`)
+      process.exit(1)
+    }
+  } else {
+    // Check if the config file itself specifies a recipe
+    const preliminary = await loadConfig({
+      cwd: process.cwd(),
+      configPath: parsed.meta.configPath,
+      env: process.env as Record<string, string | undefined>,
+    })
+    if (preliminary.recipe) {
+      const { resolveRecipeConfigPath } = await import('./skills/registry')
+      recipePath = await resolveRecipeConfigPath(preliminary.recipe)
+      if (!recipePath) {
+        console.error(`Recipe not found: ${preliminary.recipe}`)
+        process.exit(1)
+      }
+    }
+  }
+
+  const config = await loadConfig({
     cwd: process.cwd(),
     configPath: parsed.meta.configPath,
     cliArgs: parsed.config,
     env: process.env as Record<string, string | undefined>,
+    ...(recipePath && { recipePath }),
   })
-
-  // Resolve recipe: --recipe CLI flag takes precedence, then config file recipe field.
-  // Recipe config is loaded as a base, then the user's config is merged on top.
-  const recipeName = parsed.meta.recipe ?? config.recipe
-  if (recipeName) {
-    const { resolveRecipeConfigPath } = await import('./skills/registry')
-    const recipePath = await resolveRecipeConfigPath(recipeName)
-    if (!recipePath) {
-      console.error(`Recipe not found: ${recipeName}`)
-      process.exit(1)
-    }
-    const recipeBase = await loadConfig({ configPath: recipePath })
-    config = deepMerge(recipeBase as unknown as Record<string, unknown>, config as unknown as Record<string, unknown>) as unknown as typeof config
-  }
 
   if (parsed.meta.showConfig || parsed.meta.showContext) {
     const { discoverContextFiles, buildContextMessages } = await import('./context')

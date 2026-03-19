@@ -162,6 +162,7 @@ export interface McpServerConfig {
 export interface LoadConfigOptions {
   cwd?: string
   configPath?: string
+  recipePath?: string
   cliArgs?: Partial<RaConfig>
   env?: Record<string, string | undefined>
 }
