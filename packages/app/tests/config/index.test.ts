@@ -448,7 +448,7 @@ describe('config edge cases', () => {
   it('empty string env vars are set as empty string', async () => {
     const c = await loadConfig({ cwd: tmp, env: { RA_PROVIDER: '' } })
     // Empty string env var is still coerced and set (no guard)
-    expect(c.provider).toBe('')
+    expect(c.provider).toBe('' as never)
   })
 
   it('unknown config keys in file are ignored', async () => {
