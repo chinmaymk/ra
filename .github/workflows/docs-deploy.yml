@@ -39,14 +39,8 @@ jobs:
       - name: Build dev docs (from main)
         working-directory: docs/site
         run: |
-          cat > .vitepress/config.dev.ts << 'DEVCONF'
-          import config from './config'
-          import { defineConfig } from 'vitepress'
-          export default defineConfig({ ...config, base: '/ra/dev/' })
-          DEVCONF
-          DOCS_VERSION="dev" bun vitepress build --config .vitepress/config.dev.ts
+          DOCS_BASE="/ra/dev/" DOCS_VERSION="dev" bun vitepress build
           mv .vitepress/dist /tmp/dev-docs-dist
-          rm .vitepress/config.dev.ts
 
       - name: Build latest release docs (for site root)
         if: steps.latest-tag.outputs.tag != ''
@@ -113,14 +107,7 @@ jobs:
             # Copy the current config so versioned docs get full nav/sidebar
             cp .vitepress/config.ts "$TAG_DIR/docs/site/.vitepress/config.ts"
 
-            # Create a version-specific config that extends the full config
-            cat > "$TAG_DIR/docs/site/.vitepress/config.version.ts" << VCONF
-          import config from './config'
-          import { defineConfig } from 'vitepress'
-          export default defineConfig({ ...config, base: '/ra/v/${version}/' })
-          VCONF
-
-            (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build --config .vitepress/config.version.ts) || {
+            (cd "$TAG_DIR/docs/site" && bun install && DOCS_BASE="/ra/v/${version}/" DOCS_VERSION="$version" bun vitepress build) || {
               echo "  Warning: build failed for $tag, skipping"
               rm -rf "$TAG_DIR"
               continue

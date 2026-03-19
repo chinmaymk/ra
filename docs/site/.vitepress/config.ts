@@ -2,10 +2,12 @@ import { defineConfig } from 'vitepress'
 import fs from 'node:fs'
 import path from 'node:path'
 
+const base = process.env.DOCS_BASE ?? '/ra/'
+
 export default defineConfig({
   title: 'ra',
   description: 'One Loop. Infinite Agents. A small, hackable agent.',
-  base: '/ra/',
+  base: base as `/${string}/`,
   appearance: 'dark',
   head: [
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
