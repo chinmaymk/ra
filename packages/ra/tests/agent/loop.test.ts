@@ -646,4 +646,75 @@ describe('AgentLoop', () => {
     await loop.run([{ role: 'user', content: 'hi' }])
     expect(seenLogger).toBeInstanceOf(NoopLogger)
   })
+
+  it('parallel tool calls: one succeeds, one fails — both results returned', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'good' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'tool_call_start', id: 'tc2', name: 'bad' },
+        { type: 'tool_call_delta', id: 'tc2', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'recovered' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'good', description: '', inputSchema: {}, execute: async () => 'success' })
+    tools.register({ name: 'bad', description: '', inputSchema: {}, execute: async () => { throw new Error('fail') } })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    const toolResults = result.messages.filter(m => m.role === 'tool')
+    expect(toolResults).toHaveLength(2)
+    expect(toolResults.find(m => m.content === 'success')?.isError).toBeFalsy()
+    expect(toolResults.find(m => m.content === 'fail')?.isError).toBe(true)
+  })
+
+  it('empty tool arguments (no delta chunks) parsed as empty object', async () => {
+    let receivedInput: unknown
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'capture' },
+        // no tool_call_delta — args will be empty string
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'capture', description: '', inputSchema: {}, execute: async (input) => { receivedInput = input; return 'ok' } })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    await loop.run([{ role: 'user', content: 'go' }])
+    expect(receivedInput).toEqual({})
+  })
+
+  it('tool returning object is JSON-serialized in result message', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'obj' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'obj', description: '', inputSchema: {}, execute: async () => ({ key: 'value', num: 42 }) })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    expect(toolResult?.content).toBe('{"key":"value","num":42}')
+  })
+
+  it('maxIterations=1 stops after one model call even with tool calls', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'noop' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+    ])
+    const tools = new ToolRegistry()
+    tools.register({ name: 'noop', description: '', inputSchema: {}, execute: async () => 'ok' })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 1 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    expect(result.iterations).toBe(1)
+  })
 })

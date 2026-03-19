@@ -1,5 +1,5 @@
-import { test, expect } from 'bun:test'
-import { runMiddlewareChain, NoopLogger } from '@chinmaymk/ra'
+import { test, expect, describe, it } from 'bun:test'
+import { runMiddlewareChain, mergeMiddleware, NoopLogger } from '@chinmaymk/ra'
 import type { LoopContext } from '@chinmaymk/ra'
 
 const logger = new NoopLogger()
@@ -72,6 +72,46 @@ test('skips slow middleware when timeout is set', async () => {
   await runMiddlewareChain(ctx, [
     async () => { order.push(1) },
     async () => { await new Promise(r => setTimeout(r, 5000)); order.push(2) },
+    async () => { order.push(3) },
+  ], 50)
+  expect(order).toEqual([1, 3])
+})
+
+describe('mergeMiddleware', () => {
+  it('merges handlers from multiple layers in order', () => {
+    const mw = mergeMiddleware(
+      { beforeModelCall: [async () => {}] },
+      { beforeModelCall: [async () => {}], afterModelResponse: [async () => {}] },
+    )
+    expect(mw.beforeModelCall).toHaveLength(2)
+    expect(mw.afterModelResponse).toHaveLength(1)
+  })
+
+  it('skips undefined layers', () => {
+    const mw = mergeMiddleware(undefined, { beforeModelCall: [async () => {}] }, undefined)
+    expect(mw.beforeModelCall).toHaveLength(1)
+  })
+
+  it('returns empty object for no layers', () => {
+    const mw = mergeMiddleware()
+    expect(Object.keys(mw)).toHaveLength(0)
+  })
+
+  it('skips hooks with empty arrays', () => {
+    const mw = mergeMiddleware({ beforeModelCall: [] }, { afterModelResponse: [async () => {}] })
+    expect(mw.beforeModelCall).toBeUndefined()
+    expect(mw.afterModelResponse).toHaveLength(1)
+  })
+})
+
+test('timeout is per-middleware, not global — fast handlers still run', async () => {
+  const order: number[] = []
+  const controller = new AbortController()
+  const ctx = makeCtx(controller)
+  // Three middlewares: fast, slow (times out), fast — both fast ones should run
+  await runMiddlewareChain(ctx, [
+    async () => { order.push(1) },
+    async () => { await new Promise(r => setTimeout(r, 200)); order.push(2) },
     async () => { order.push(3) },
   ], 50)
   expect(order).toEqual([1, 3])

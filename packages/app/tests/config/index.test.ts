@@ -403,3 +403,76 @@ describe('systemPrompt file-path detection', () => {
     }
   })
 })
+
+describe('config edge cases', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-config-edge-${Date.now()}`)
+    mkdirSync(tmp, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('empty config file does not break loading', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), '')
+    const c = await loadConfig({ cwd: tmp })
+    expect(c.provider).toBe('anthropic') // falls back to defaults
+  })
+
+  it('config file with empty JSON object uses all defaults', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), '{}')
+    const c = await loadConfig({ cwd: tmp })
+    expect(c.provider).toBe('anthropic')
+    expect(c.maxIterations).toBe(50)
+  })
+
+  it('negative maxIterations from env is ignored', async () => {
+    const c = await loadConfig({ cwd: tmp, env: { RA_MAX_ITERATIONS: '-5' } })
+    expect(c.maxIterations).toBe(50) // default
+  })
+
+  it('zero maxIterations from env is accepted', async () => {
+    const c = await loadConfig({ cwd: tmp, env: { RA_MAX_ITERATIONS: '0' } })
+    expect(c.maxIterations).toBe(0)
+  })
+
+  it('RA_THINKING accepts valid values: low, medium, high', async () => {
+    for (const level of ['low', 'medium', 'high']) {
+      const c = await loadConfig({ cwd: tmp, env: { RA_THINKING: level } })
+      expect(c.thinking).toBe(level)
+    }
+  })
+
+  it('empty string env vars do not override defaults', async () => {
+    const c = await loadConfig({ cwd: tmp, env: { RA_PROVIDER: '' } })
+    // Empty string should not replace the default
+    expect(c.provider).toBeTruthy()
+  })
+
+  it('unknown config keys in file are ignored', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'openai', unknownKey: 'value', nested: { deep: true } }))
+    const c = await loadConfig({ cwd: tmp })
+    expect(c.provider).toBe('openai')
+  })
+
+  it('systemPrompt with empty file returns empty string', async () => {
+    const promptFile = join(tmp, 'empty.txt')
+    writeFileSync(promptFile, '')
+    const c = await loadConfig({ cwd: tmp, cliArgs: { systemPrompt: promptFile } })
+    expect(c.systemPrompt).toBe('')
+  })
+
+  it('CLI args override config file and env simultaneously', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ provider: 'google', model: 'gemini' }))
+    const c = await loadConfig({
+      cwd: tmp,
+      env: { RA_MODEL: 'gpt-4o' },
+      cliArgs: { provider: 'openai', model: 'gpt-4o-mini' },
+    })
+    expect(c.provider).toBe('openai')
+    expect(c.model).toBe('gpt-4o-mini') // CLI wins over env
+  })
+})
