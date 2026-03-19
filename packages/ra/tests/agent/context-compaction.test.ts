@@ -572,14 +572,19 @@ describe('isContextLengthError', () => {
     // Bedrock
     expect(isContextLengthError(new Error('ValidationException: Too many tokens'))).toBe(true)
     expect(isContextLengthError(new Error('ValidationException: Input is too long for requested model.'))).toBe(true)
+    // Ollama sequence length
+    expect(isContextLengthError(new Error('Token sequence length exceeds limit (5000 > 4096)'))).toBe(true)
     // Generic patterns
     expect(isContextLengthError(new Error('context length exceeded'))).toBe(true)
     expect(isContextLengthError(new Error('token limit exceeded'))).toBe(true)
+    expect(isContextLengthError(new Error('token_limit_exceeded'))).toBe(true)
     expect(isContextLengthError(new Error('input too long'))).toBe(true)
   })
 
   it('does not match unrelated errors', () => {
     expect(isContextLengthError(new Error('API rate limit'))).toBe(false)
+    expect(isContextLengthError(new Error('Exceeded token rate limit of your current OpenAI model'))).toBe(false)
+    expect(isContextLengthError(new Error('Prediction aborted due to token repeat limit reached'))).toBe(false)
     expect(isContextLengthError(new Error('network timeout'))).toBe(false)
     expect(isContextLengthError(new Error('authentication failed'))).toBe(false)
   })

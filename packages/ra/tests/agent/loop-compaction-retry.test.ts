@@ -27,6 +27,7 @@ describe('isContextLengthError', () => {
 
   it('matches Ollama errors', () => {
     expect(isContextLengthError(new Error('prompt too long; exceeded max context length by 4 tokens'))).toBe(true)
+    expect(isContextLengthError(new Error('Token sequence length exceeds limit (5000 > 4096)'))).toBe(true)
   })
 
   it('matches Google Gemini errors', () => {

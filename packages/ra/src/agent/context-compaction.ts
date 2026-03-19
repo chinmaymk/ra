@@ -134,8 +134,9 @@ const CONTEXT_LENGTH_PATTERNS = [
   /prompt too long/i,               // Ollama: "prompt too long; exceeded max context length..."
   /too many tokens/i,               // generic / Bedrock
   /exceeds? the maximum/i,          // Google: "... exceeds the maximum number of tokens"
-  /token.{0,10}limit/i,             // generic: "token limit exceeded", "token limit reached"
-  /input.{0,5}too long/i,            // Bedrock: "Input is too long for requested model" / generic
+  /token.{0,3}limit/i,              // generic: "token limit exceeded", "token_limit_exceeded" (not "token rate limit")
+  /input.{0,5}too long/i,           // Bedrock: "Input is too long for requested model" / generic
+  /sequence.length.exceeds/i,       // Ollama: "Token sequence length exceeds limit (X > Y)"
 ]
 
 export function isContextLengthError(err: unknown): boolean {
