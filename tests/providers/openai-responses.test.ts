@@ -112,20 +112,116 @@ describe('OpenAIResponsesProvider', () => {
     ]
     const mapped = provider.mapContentParts(parts) as any[]
     expect(mapped[0]).toEqual({ type: 'input_text', text: 'hello' })
-    expect(mapped[1].type).toBe('input_image')
-    expect(mapped[1].image_url).toBe('data:image/png;base64,abc')
-    expect(mapped[2].type).toBe('input_image')
-    expect(mapped[2].image_url).toBe('https://example.com/img.png')
+    expect(mapped[1]).toEqual({ type: 'input_image', image_url: 'data:image/png;base64,abc', detail: 'auto' })
+    expect(mapped[2]).toEqual({ type: 'input_image', image_url: 'https://example.com/img.png', detail: 'auto' })
   })
 
-  it('maps file content part as text placeholder', () => {
+  it('maps file content part as input_file with base64 data URI', () => {
     const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
     const parts = [
       { type: 'file' as const, mimeType: 'application/pdf', data: 'abc' },
     ]
     const mapped = provider.mapContentParts(parts) as any[]
-    expect(mapped[0].type).toBe('input_text')
-    expect(mapped[0].text).toContain('application/pdf')
+    expect(mapped[0].type).toBe('input_file')
+    expect(mapped[0].file_data).toBe('data:application/pdf;base64,abc')
+  })
+
+  it('maps file content part with Buffer data to base64', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const parts = [
+      { type: 'file' as const, mimeType: 'image/png', data: Buffer.from('hello') },
+    ]
+    const mapped = provider.mapContentParts(parts) as any[]
+    expect(mapped[0].type).toBe('input_file')
+    expect(mapped[0].file_data).toBe(`data:image/png;base64,${Buffer.from('hello').toString('base64')}`)
+  })
+})
+
+describe('OpenAIResponsesProvider - multimodal message mapping', () => {
+  it('maps user message with image content parts through mapMessages', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const messages = [{
+      role: 'user' as const,
+      content: [
+        { type: 'text' as const, text: 'What is in this image?' },
+        { type: 'image' as const, source: { type: 'url' as const, url: 'https://example.com/cat.png' } },
+      ],
+    }]
+    const { input } = provider.mapMessages(messages)
+    const userMsg = input[0] as any
+    expect(userMsg.type).toBe('message')
+    expect(userMsg.role).toBe('user')
+    expect(userMsg.content).toHaveLength(2)
+    expect(userMsg.content[0]).toEqual({ type: 'input_text', text: 'What is in this image?' })
+    expect(userMsg.content[1]).toEqual({ type: 'input_image', image_url: 'https://example.com/cat.png', detail: 'auto' })
+  })
+
+  it('maps user message with file content part through mapMessages', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const messages = [{
+      role: 'user' as const,
+      content: [
+        { type: 'text' as const, text: 'Summarize this PDF' },
+        { type: 'file' as const, mimeType: 'application/pdf', data: 'pdfdata' },
+      ],
+    }]
+    const { input } = provider.mapMessages(messages)
+    const userMsg = input[0] as any
+    expect(userMsg.content).toHaveLength(2)
+    expect(userMsg.content[1].type).toBe('input_file')
+    expect(userMsg.content[1].file_data).toBe('data:application/pdf;base64,pdfdata')
+  })
+
+  it('maps system message with array content to joined instructions', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'system' as const, content: [{ type: 'text' as const, text: 'hello ' }, { type: 'text' as const, text: 'world' }] },
+      { role: 'user' as const, content: 'hi' },
+    ]
+    const { instructions } = provider.mapMessages(messages)
+    expect(instructions).toBe('hello world')
+  })
+
+  it('maps assistant message with only toolCalls and no text', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const messages = [{
+      role: 'assistant' as const,
+      content: '',
+      toolCalls: [{ id: 'call_1', name: 'Read', arguments: '{"path":"x"}' }],
+    }]
+    const { input } = provider.mapMessages(messages)
+    // No assistant message item (empty text), only a function_call
+    expect(input).toHaveLength(1)
+    expect((input[0] as any).type).toBe('function_call')
+    expect((input[0] as any).call_id).toBe('call_1')
+  })
+
+  it('returns undefined instructions when no system messages', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const messages = [{ role: 'user' as const, content: 'hi' }]
+    const { instructions, input } = provider.mapMessages(messages)
+    expect(instructions).toBeUndefined()
+    expect(input).toHaveLength(1)
+  })
+
+  it('handles full conversation round-trip', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'system' as const, content: 'You are helpful' },
+      { role: 'user' as const, content: 'Read file x' },
+      { role: 'assistant' as const, content: '', toolCalls: [{ id: 'call_1', name: 'Read', arguments: '{"path":"x"}' }] },
+      { role: 'tool' as const, content: 'file contents here', toolCallId: 'call_1' },
+      { role: 'assistant' as const, content: 'The file contains...' },
+      { role: 'user' as const, content: 'thanks' },
+    ]
+    const { instructions, input } = provider.mapMessages(messages)
+    expect(instructions).toBe('You are helpful')
+    expect(input).toHaveLength(5)
+    expect((input[0] as any).type).toBe('message')     // user: Read file x
+    expect((input[1] as any).type).toBe('function_call') // assistant tool call
+    expect((input[2] as any).type).toBe('function_call_output') // tool result
+    expect((input[3] as any).type).toBe('message')      // assistant: The file contains...
+    expect((input[4] as any).type).toBe('message')       // user: thanks
   })
 })
 
@@ -307,6 +403,66 @@ describe('OpenAIResponsesProvider - stream()', () => {
     expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'Read' })
     expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"x"}' })
     expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'tc_1' })
+  })
+
+  it('handles multiple parallel tool calls', async () => {
+    mockResponsesCreate.mockResolvedValue((async function* () {
+      yield { type: 'response.output_item.added', output_index: 0, item: { type: 'function_call', id: 'item_0', call_id: 'tc_1', name: 'Read' } }
+      yield { type: 'response.output_item.added', output_index: 1, item: { type: 'function_call', id: 'item_1', call_id: 'tc_2', name: 'Write' } }
+      yield { type: 'response.function_call_arguments.delta', item_id: 'item_0', output_index: 0, delta: '{"path":"a"}' }
+      yield { type: 'response.function_call_arguments.delta', item_id: 'item_1', output_index: 1, delta: '{"path":"b"}' }
+      yield { type: 'response.function_call_arguments.done', item_id: 'item_0', output_index: 0, name: 'Read', arguments: '{"path":"a"}' }
+      yield { type: 'response.function_call_arguments.done', item_id: 'item_1', output_index: 1, name: 'Write', arguments: '{"path":"b"}' }
+      yield { type: 'response.completed', response: {} }
+    })())
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'Read' })
+    expect(chunks[1]).toEqual({ type: 'tool_call_start', id: 'tc_2', name: 'Write' })
+    expect(chunks[2]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"a"}' })
+    expect(chunks[3]).toEqual({ type: 'tool_call_delta', id: 'tc_2', argsDelta: '{"path":"b"}' })
+    expect(chunks[4]).toEqual({ type: 'tool_call_end', id: 'tc_1' })
+    expect(chunks[5]).toEqual({ type: 'tool_call_end', id: 'tc_2' })
+  })
+
+  it('handles text followed by tool calls', async () => {
+    mockResponsesCreate.mockResolvedValue((async function* () {
+      yield { type: 'response.output_text.delta', delta: 'Let me help. ' }
+      yield { type: 'response.output_item.added', output_index: 1, item: { type: 'function_call', id: 'item_1', call_id: 'tc_1', name: 'Read' } }
+      yield { type: 'response.function_call_arguments.delta', item_id: 'item_1', output_index: 1, delta: '{}' }
+      yield { type: 'response.function_call_arguments.done', item_id: 'item_1', output_index: 1, name: 'Read', arguments: '{}' }
+      yield { type: 'response.completed', response: { usage: { input_tokens: 10, output_tokens: 15 } } }
+    })())
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'Let me help. ' })
+    expect(chunks[1]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'Read' })
+    expect(chunks[2]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{}' })
+    expect(chunks[3]).toEqual({ type: 'tool_call_end', id: 'tc_1' })
+    expect(chunks[4].type).toBe('done')
+    expect(chunks[4].usage.inputTokens).toBe(10)
+  })
+
+  it('ignores unhandled event types gracefully', async () => {
+    mockResponsesCreate.mockResolvedValue((async function* () {
+      yield { type: 'response.created', response: { id: 'resp_1' } }
+      yield { type: 'response.output_text.delta', delta: 'Hello' }
+      yield { type: 'response.content_part.added', part: {} }
+      yield { type: 'response.completed', response: {} }
+    })())
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'text', delta: 'Hello' })
+    expect(chunks[1].type).toBe('done')
   })
 
   it('emits done even when stream ends without completed event', async () => {

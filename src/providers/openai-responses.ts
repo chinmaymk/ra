@@ -28,7 +28,7 @@ export class OpenAIResponsesProvider implements IProvider {
     return params as OpenAI.Responses.ResponseCreateParams
   }
 
-  toUsage(u: { input_tokens: number; output_tokens: number; output_tokens_details?: { reasoning_tokens?: number } }): TokenUsage {
+  toUsage(u: OpenAI.Responses.ResponseUsage): TokenUsage {
     return {
       inputTokens: u.input_tokens,
       outputTokens: u.output_tokens,
@@ -41,7 +41,7 @@ export class OpenAIResponsesProvider implements IProvider {
     const response = await this.client.responses.create({ ...params, stream: false } as OpenAI.Responses.ResponseCreateParamsNonStreaming)
     return {
       message: this.mapResponseToMessage(response),
-      usage: response.usage ? this.toUsage(response.usage as { input_tokens: number; output_tokens: number; output_tokens_details?: { reasoning_tokens?: number } }) : undefined,
+      usage: response.usage ? this.toUsage(response.usage) : undefined,
     }
   }
 
@@ -85,7 +85,7 @@ export class OpenAIResponsesProvider implements IProvider {
 
         case 'response.completed':
           if (event.response.usage) {
-            usage = this.toUsage(event.response.usage as { input_tokens: number; output_tokens: number; output_tokens_details?: { reasoning_tokens?: number } })
+            usage = this.toUsage(event.response.usage)
           }
           break
       }
@@ -100,7 +100,6 @@ export class OpenAIResponsesProvider implements IProvider {
 
     for (const msg of messages) {
       if (msg.role === 'system') {
-        // Accumulate system messages into instructions
         const text = extractTextContent(msg.content)
         instructions = instructions ? `${instructions}\n\n${text}` : text
         continue
@@ -115,12 +114,10 @@ export class OpenAIResponsesProvider implements IProvider {
       }
 
       if (msg.role === 'assistant') {
-        // Add text content as assistant message if present
         const text = extractTextContent(msg.content)
         if (text) {
           input.push({ type: 'message', role: 'assistant', content: text } as OpenAI.Responses.ResponseInputItem)
         }
-        // Add tool calls as function_call items
         if (msg.toolCalls?.length) {
           for (const tc of msg.toolCalls) {
             input.push({ type: 'function_call', call_id: tc.id, name: tc.name, arguments: tc.arguments } as OpenAI.Responses.ResponseInputItem)
@@ -130,7 +127,6 @@ export class OpenAIResponsesProvider implements IProvider {
       }
 
       if (msg.role === 'tool') {
-        // Tool results become function_call_output items
         input.push({ type: 'function_call_output', call_id: msg.toolCallId ?? '', output: serializeContent(msg.content) } as OpenAI.Responses.ResponseInputItem)
       }
     }
@@ -150,18 +146,19 @@ export class OpenAIResponsesProvider implements IProvider {
 
   mapContentParts(parts: ContentPart[]): OpenAI.Responses.ResponseInputContent[] {
     return parts.map((part): OpenAI.Responses.ResponseInputContent => {
-      if (part.type === 'text') return { type: 'input_text', text: part.text } as OpenAI.Responses.ResponseInputContent
+      if (part.type === 'text') return { type: 'input_text', text: part.text }
       if (part.type === 'image') {
         const url = part.source.type === 'base64' ? `data:${part.source.mediaType};base64,${part.source.data}` : part.source.url
-        return { type: 'input_image', image_url: url } as OpenAI.Responses.ResponseInputContent
+        return { type: 'input_image', image_url: url, detail: 'auto' }
       }
-      return { type: 'input_text', text: `[file: ${part.mimeType}]` } as OpenAI.Responses.ResponseInputContent
+      // Native file support — base64-encode if needed
+      const data = typeof part.data === 'string' ? part.data : Buffer.from(part.data).toString('base64')
+      return { type: 'input_file', file_data: `data:${part.mimeType};base64,${data}` }
     })
   }
 
   mapResponseToMessage(response: OpenAI.Responses.Response): IMessage {
-    const text = response.output_text ?? ''
-    const result: IMessage = { role: 'assistant', content: text }
+    const result: IMessage = { role: 'assistant', content: response.output_text ?? '' }
     const toolCalls = response.output
       .filter((item): item is OpenAI.Responses.ResponseFunctionToolCall => item.type === 'function_call')
       .map(item => ({ id: item.call_id, name: item.name, arguments: item.arguments }))
