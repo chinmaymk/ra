@@ -35,9 +35,9 @@
     "types"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node --format esm --packages external && bun tsc -p tsconfig.build.json"
+    "build": "bun build src/index.ts --outdir dist --target node --format esm && bun tsc -p tsconfig.build.json"
   },
-  "dependencies": {
+  "devDependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "openai": "^6.25.0",
     "@google/generative-ai": "^0.24.1",
