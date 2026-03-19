@@ -839,7 +839,7 @@ describe('AgentLoop', () => {
     const result = await loop.run([{ role: 'user', content: 'go' }])
     const toolResult = result.messages.find(m => m.role === 'tool')
     // The content before the clipping notice should end at a newline boundary
-    const clippedContent = toolResult!.content.split('\n\n<response clipped>')[0]!
+    const clippedContent = (toolResult!.content as string).split('\n\n<response clipped>')[0]!
     expect(clippedContent.endsWith('\n') || !clippedContent.includes('\n') || lines.some(l => clippedContent.endsWith(l))).toBe(true)
   })
 })

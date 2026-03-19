@@ -48,7 +48,7 @@ export interface ToolsConfig {
   /** Per-tool overrides keyed by tool name (e.g. Read, Write, Bash, Agent). */
   overrides: Record<string, ToolSettings>
   /** Max characters for a single tool response. Responses exceeding this are truncated with a notice. Default 25000. */
-  maxResponseSize: number
+  maxResponseSize?: number
 }
 
 export interface RaConfig {
