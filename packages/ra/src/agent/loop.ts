@@ -22,6 +22,8 @@ export interface AgentLoopOptions {
   logger?: Logger
   /** Max retries for transient provider errors (rate limits, server errors, network). Default 3. */
   maxRetries?: number
+  /** Max characters for a single tool response. Responses exceeding this are truncated with a notice. Default 75000. */
+  maxToolResponseSize?: number
 }
 
 export interface LoopResult {
@@ -42,6 +44,19 @@ function emptyMiddleware(): MiddlewareConfig {
 const DEFAULT_MAX_ITERATIONS = 10
 const DEFAULT_MAX_RETRIES = 3
 const MAX_COMPACTION_RETRIES = 3
+const DEFAULT_MAX_TOOL_RESPONSE_SIZE = 75_000
+
+/** Truncate tool output that exceeds maxChars, appending a notice for the model. */
+export function truncateToolOutput(content: string, maxChars: number): string {
+  if (content.length <= maxChars) return content
+  const truncated = content.slice(0, maxChars)
+  // Try to cut at a newline boundary to avoid splitting a line
+  const lastNewline = truncated.lastIndexOf('\n')
+  const cutPoint = lastNewline > maxChars * 0.8 ? lastNewline : maxChars
+  return content.slice(0, cutPoint) +
+    `\n\n<response clipped>\nOutput truncated: ${content.length.toLocaleString()} chars exceeded limit of ${maxChars.toLocaleString()}. ` +
+    'Use more targeted queries (e.g. offset/limit, specific paths, narrower search patterns) to get the information you need.'
+}
 
 export class AgentLoop {
   private provider: IProvider
@@ -55,6 +70,7 @@ export class AgentLoop {
   private logger: Logger
   private compactionConfig: CompactionConfig | undefined
   private maxRetries: number
+  private maxToolResponseSize: number
   private externalAbort: AbortController | null = null
 
   constructor(options: AgentLoopOptions) {
@@ -69,6 +85,7 @@ export class AgentLoop {
     this.logger = options.logger ?? new NoopLogger()
     this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
+    this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
@@ -181,6 +198,7 @@ export class AgentLoop {
                 ? await withTimeout(this.tools.execute(tc.name, input), this.toolTimeout, `Tool '${tc.name}'`)
                 : await this.tools.execute(tc.name, input)
               content = typeof value === 'string' ? value : JSON.stringify(value)
+              content = truncateToolOutput(content, this.maxToolResponseSize)
               // Roll up child usage (e.g. from subagent tool) into parent totals
               if (value && typeof value === 'object' && 'usage' in value) {
                 const childUsage = (value as { usage: TokenUsage }).usage

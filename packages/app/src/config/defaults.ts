@@ -40,6 +40,7 @@ export const defaultConfig: RaConfig = {
   maxIterations: 50,
   maxRetries: 3,
   toolTimeout: 30000,
+  maxToolResponseSize: 75000,
   tools: {
     builtin: true,
     overrides: {},

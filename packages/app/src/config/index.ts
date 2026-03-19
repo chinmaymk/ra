@@ -70,6 +70,7 @@ const ENV_RULES: Record<string, CoercionRule> = {
   RA_MAX_RETRIES:    { type: 'int',    path: ['maxRetries'] },
   RA_THINKING:       { type: 'enum',   path: ['thinking'], values: ['low', 'medium', 'high'] },
   RA_TOOL_TIMEOUT:   { type: 'int',    path: ['toolTimeout'] },
+  RA_MAX_TOOL_RESPONSE_SIZE: { type: 'int', path: ['maxToolResponseSize'] },
   RA_TOOLS_BUILTIN:  { type: 'bool',   path: ['tools', 'builtin'] },
   RA_HTTP_PORT:      { type: 'int',    path: ['http', 'port'] },
   RA_HTTP_TOKEN:     { type: 'string', path: ['http', 'token'] },

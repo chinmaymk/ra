@@ -39,6 +39,7 @@ export interface ReplOptions {
   maxIterations?: number
   maxRetries?: number
   toolTimeout?: number
+  maxToolResponseSize?: number
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
@@ -232,6 +233,7 @@ export class Repl {
       maxIterations: this.options.maxIterations,
       maxRetries: this.options.maxRetries,
       toolTimeout: this.options.toolTimeout,
+      maxToolResponseSize: this.options.maxToolResponseSize,
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,
