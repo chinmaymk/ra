@@ -135,7 +135,7 @@ const CONTEXT_LENGTH_PATTERNS = [
   /too many tokens/i,               // generic / Bedrock
   /exceeds? the maximum/i,          // Google: "... exceeds the maximum number of tokens"
   /token.{0,10}limit/i,             // generic: "token limit exceeded", "token limit reached"
-  /input.too.long/i,                // generic
+  /input.{0,5}too long/i,            // Bedrock: "Input is too long for requested model" / generic
 ]
 
 export function isContextLengthError(err: unknown): boolean {

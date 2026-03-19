@@ -571,6 +571,7 @@ describe('isContextLengthError', () => {
     expect(isContextLengthError(new Error('[400 Bad Request] Request exceeds the maximum number of tokens'))).toBe(true)
     // Bedrock
     expect(isContextLengthError(new Error('ValidationException: Too many tokens'))).toBe(true)
+    expect(isContextLengthError(new Error('ValidationException: Input is too long for requested model.'))).toBe(true)
     // Generic patterns
     expect(isContextLengthError(new Error('context length exceeded'))).toBe(true)
     expect(isContextLengthError(new Error('token limit exceeded'))).toBe(true)

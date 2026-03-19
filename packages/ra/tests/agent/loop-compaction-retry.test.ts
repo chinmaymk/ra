@@ -34,8 +34,9 @@ describe('isContextLengthError', () => {
   })
 
   it('matches Bedrock errors', () => {
+    expect(isContextLengthError(new Error('ValidationException: An error occurred (ValidationException) when calling the InvokeModel operation: Input is too long for requested model.'))).toBe(true)
+    expect(isContextLengthError(new Error('ValidationException: The model returned the following errors: Input is too long for requested model.'))).toBe(true)
     expect(isContextLengthError(new Error('ValidationException: Too many tokens, please reduce your prompt'))).toBe(true)
-    expect(isContextLengthError(new Error('ValidationException: prompt is too long'))).toBe(true)
   })
 
   it('matches generic context length patterns', () => {
