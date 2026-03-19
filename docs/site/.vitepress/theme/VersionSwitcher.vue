@@ -93,6 +93,7 @@ function positionDropdown() {
           :href="versionUrl('dev')"
           class="version-item"
           :class="{ active: currentView === 'dev' }"
+          @click="open = false"
         >
           dev
         </a>
@@ -102,6 +103,7 @@ function positionDropdown() {
           :href="v === data.latest ? siteRoot : versionUrl(v)"
           class="version-item"
           :class="{ active: isActive(v) }"
+          @click="open = false"
         >
           v{{ v }}
           <span v-if="v === data.latest" class="latest-badge">latest</span>
