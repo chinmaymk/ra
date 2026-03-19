@@ -1,5 +1,5 @@
 import { errorMessage } from '../utils/errors'
-import type { IMessage, IProvider } from '../providers/types'
+import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { Middleware, ModelCallContext } from './types'
 import { estimateTokens } from './token-estimator'
 import { getContextWindowSize } from './model-registry'
@@ -12,20 +12,13 @@ export interface MessageZones {
 }
 
 export function splitMessageZones(messages: IMessage[], recentBudgetTokens: number): MessageZones {
-  // Pin: all leading system messages + first user message
+  // Pin: all leading system messages + first user message.
+  // If no user message exists, pin only the leading system block.
   let pinnedEnd = 0
-  let foundUser = false
   for (let i = 0; i < messages.length; i++) {
-    pinnedEnd = i + 1
-    if (messages[i]!.role === 'user') { foundUser = true; break }
-  }
-  // If no user message found, only pin leading system messages
-  if (!foundUser) {
-    pinnedEnd = 0
-    for (let i = 0; i < messages.length; i++) {
-      if (messages[i]!.role === 'system') pinnedEnd = i + 1
-      else break
-    }
+    const role = messages[i]!.role
+    if (role === 'user') { pinnedEnd = i + 1; break }
+    if (role === 'system') { pinnedEnd = i + 1 } else { break }
   }
   const pinned = messages.slice(0, pinnedEnd)
   const rest = messages.slice(pinnedEnd)
@@ -76,8 +69,6 @@ function adjustToolCallBoundary(messages: IMessage[], boundary: number): number 
 
   return boundary
 }
-
-import type { ContentPart } from '../providers/types'
 
 /** Append extra text (and optional non-text parts) to a message, preserving its content type. */
 function appendToMessage(msg: IMessage, text: string, extraParts: ContentPart[] = []): IMessage {
@@ -214,9 +205,10 @@ async function _runCompaction(
       if (typeof recentMsg.content === 'string') {
         extraText += `\n\n${recentMsg.content}`
       } else {
-        const text = recentMsg.content.filter(p => p.type === 'text').map(p => (p as { type: 'text'; text: string }).text).join('\n')
-        if (text) extraText += `\n\n${text}`
-        nonTextParts = recentMsg.content.filter(p => p.type !== 'text')
+        for (const part of recentMsg.content) {
+          if (part.type === 'text') extraText += `\n\n${part.text}`
+          else nonTextParts.push(part)
+        }
       }
       recentStart = 1
     }

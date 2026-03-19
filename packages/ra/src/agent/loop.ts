@@ -182,12 +182,11 @@ export class AgentLoop {
                 const childUsage = (value as { usage: TokenUsage }).usage
                 if (childUsage) accumulateUsage(usage, childUsage)
               }
-              await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: false }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             } catch (err) {
               isError = true
               content = errorMessage(err)
-              await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError: true }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             }
+            await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
             messages.push({ role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) })
           }
           currentPhase = 'model_call'

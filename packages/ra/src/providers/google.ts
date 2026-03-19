@@ -138,18 +138,13 @@ export class GoogleProvider implements IProvider {
       if (part.type === 'text') return { text: part.text }
       if (part.type === 'image') {
         const src = part.source
-        return src.type === 'base64' ? { inlineData: { mimeType: src.mediaType, data: src.data } } : { fileData: { mimeType: this.inferMimeType(src.url), fileUri: src.url } }
+        if (src.type === 'base64') return { inlineData: { mimeType: src.mediaType, data: src.data } }
+        const ext = src.url.match(/\.(png|gif|webp|svg)$/)?.[1]
+        const mimeType = ext === 'svg' ? 'image/svg+xml' : ext ? `image/${ext}` : 'image/jpeg'
+        return { fileData: { mimeType, fileUri: src.url } }
       }
       return { inlineData: { mimeType: part.mimeType, data: typeof part.data === 'string' ? part.data : Buffer.from(part.data).toString('base64') } }
     })
-  }
-
-  private inferMimeType(url: string): string {
-    if (url.endsWith('.png')) return 'image/png'
-    if (url.endsWith('.gif')) return 'image/gif'
-    if (url.endsWith('.webp')) return 'image/webp'
-    if (url.endsWith('.svg')) return 'image/svg+xml'
-    return 'image/jpeg'
   }
 
   mapResponseToMessage(response: GenerateContentResponse): IMessage {

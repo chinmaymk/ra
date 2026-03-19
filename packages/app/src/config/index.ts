@@ -2,7 +2,7 @@ import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
-import { setPath, safeParseInt } from '../utils/config-helpers'
+import { applyRule, type CoercionRule } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
@@ -68,14 +68,7 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
   return {}
 }
 
-type EnvRule =
-  | { type: 'string'; path: string[] }
-  | { type: 'int'; path: string[] }
-  | { type: 'bool'; path: string[] }
-  | { type: 'csv'; path: string[] }
-  | { type: 'enum'; path: string[]; values: string[] }
-
-const ENV_RULES: Record<string, EnvRule> = {
+const ENV_RULES: Record<string, CoercionRule> = {
   RA_DATA_DIR:       { type: 'string', path: ['dataDir'] },
   RA_PROVIDER:       { type: 'string', path: ['provider'] },
   RA_MODEL:          { type: 'string', path: ['model'] },
@@ -126,12 +119,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   const r: Record<string, unknown> = {}
   for (const [key, rule] of Object.entries(ENV_RULES)) {
     const val = env[key]
-    if (val === undefined) continue
-    if (rule.type === 'string') setPath(r, rule.path, val)
-    else if (rule.type === 'int') { const n = safeParseInt(val); if (n !== undefined) setPath(r, rule.path, n) }
-    else if (rule.type === 'bool') setPath(r, rule.path, val === 'true')
-    else if (rule.type === 'csv') setPath(r, rule.path, val.split(',').filter(Boolean))
-    else if (rule.type === 'enum' && rule.values.includes(val)) setPath(r, rule.path, val)
+    if (val !== undefined) applyRule(r, rule, val)
   }
   return r
 }
