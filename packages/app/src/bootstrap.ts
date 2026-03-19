@@ -83,6 +83,8 @@ export async function bootstrap(
     traces: { enabled: config.tracesEnabled, output: 'session' },
   }, { sessionId, sessionDir })
 
+  const bootstrapTokenSpan = tracer.startSpan('bootstrap.tokenBudget')
+
   // ── Compaction model default ───────────────────────────────────────
   if (!config.compaction.model) {
     config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
@@ -255,18 +257,18 @@ export async function bootstrap(
     const skillTokens = estimateTokens(buildAvailableSkillsXml(skillMap))
     const toolSchemaTokens = estimateTokens(allRegisteredTools)
     const totalEstimated = contextTokens + skillTokens + toolSchemaTokens
-    logger.info('token budget summary', {
+    logger.info('bootstrap token estimate', {
       contextFiles: contextTokens,
       skills: skillTokens,
       toolSchemas: toolSchemaTokens,
       total: totalEstimated,
     })
-    tracer.endSpan(tracer.startSpan('bootstrap.tokenBudget', {
+    tracer.endSpan(bootstrapTokenSpan, 'ok', {
       contextFiles: contextTokens,
       skills: skillTokens,
       toolSchemas: toolSchemaTokens,
       total: totalEstimated,
-    }))
+    })
   }
 
   // ── Shutdown ───────────────────────────────────────────────────────
