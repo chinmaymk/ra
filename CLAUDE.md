@@ -9,29 +9,38 @@ bun run ra              # run from source
 bun run compile         # build binary → dist/ra
 bun tsc                 # type check (must pass, zero errors)
 bun test                # run all tests
-bun test tests/agent/   # run tests in a directory
+bun test packages/ra/tests/agent/   # run tests in a directory
 cd docs/site && bun install && bun run build  # build docs (vitepress)
 ```
 
 ## Project Structure
 
 ```
-src/
-  agent/       # Core loop, middleware chain, tool registry, context compaction
-  providers/   # LLM adapters: anthropic, openai, google, ollama, bedrock, azure
-  tools/       # Built-in tools (filesystem, shell, network, agent interaction)
-  config/      # Layered config: CLI flags > env > file
-  interfaces/  # Entry points: cli, repl, http, mcp
-  skills/      # Skill loader, runner, installer
-  middleware/   # Middleware file loader
-  context/     # Context file discovery and pattern resolution
-  mcp/         # MCP client + server
-  memory/      # SQLite-backed persistent memory
-  storage/     # JSONL session persistence
-  utils/       # Shared utilities
-tests/         # Mirrors src/ structure
-skills/        # Built-in skills (code-review, architect, planner, debugger, code-style, writer)
-recipes/       # Complete agent configurations (coding-agent, code-review-agent)
+packages/
+  ra/                # @chinmaymk/ra — core library (published)
+    src/
+      agent/         # Core loop, middleware chain, tool registry, context compaction
+      providers/     # LLM adapters: anthropic, openai, google, ollama, bedrock, azure
+      observability/ # Logger
+      utils/         # Shared utilities
+    tests/           # Tests colocated with core library code
+      agent/         # Agent loop, compaction, middleware, tool registry tests
+      providers/     # Provider adapter tests
+  app/               # ra-app — CLI binary (not published)
+    src/
+      tools/         # Built-in tools (filesystem, shell, network, agent interaction)
+      config/        # Layered config: CLI flags > env > file
+      interfaces/    # Entry points: cli, repl, http, mcp
+      skills/        # Skill loader, runner, installer
+      middleware/    # Middleware file loader
+      context/       # Context file discovery and pattern resolution
+      mcp/           # MCP client + server
+      memory/        # SQLite-backed persistent memory
+      storage/       # JSONL session persistence
+      utils/         # Shared utilities
+    tests/           # App-specific tests
+skills/              # Built-in skills (code-review, architect, planner, debugger, code-style, writer)
+recipes/             # Complete agent configurations (coding-agent, code-review-agent)
 ```
 
 ## Architecture
@@ -68,7 +77,7 @@ Middleware hooks intercept every step. Context compaction is itself a `beforeMod
 
 - Use Bun everywhere — never Node.js, npm, npx, jest, vitest, vite, express, or dotenv
 - `bun tsc` must pass before committing — don't use `as any` to silence errors
-- Tests go in `tests/` mirroring `src/` structure
+- Tests colocated with their package: `packages/ra/tests/` for core, `packages/app/tests/` for app
 - Cast tool input narrowly: `input as { param: string }` not `input as any`
 - Use optional spread for conditional fields: `...(x && { key: x })`
 - Every `stream()` must yield a `{ type: 'done' }` chunk at the end
@@ -85,6 +94,6 @@ test("description", () => {
 })
 ```
 
-- Provider tests mock the SDK client
-- Loop tests use a `mockProvider()` that yields `StreamChunk[][]`
-- Integration tests in `tests/integration/` test full end-to-end flows
+- Provider tests mock the SDK client (`packages/ra/tests/providers/`)
+- Loop tests use a `mockProvider()` that yields `StreamChunk[][]` (`packages/ra/tests/agent/`)
+- Integration tests in `packages/app/tests/integration/` test full end-to-end flows
