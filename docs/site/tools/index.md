@@ -339,6 +339,19 @@ tools:
     maxConcurrency: 2
 ```
 
+### Truncate large tool responses
+
+When a tool returns more characters than `maxResponseSize`, the output is truncated at a newline boundary and a notice is appended telling the model to use more targeted queries. Default: `25000`.
+
+```yaml
+tools:
+  maxResponseSize: 50000   # raise the limit
+```
+
+```bash
+RA_MAX_TOOL_RESPONSE_SIZE=50000 ra   # or via env var
+```
+
 ### Disable all built-in tools
 
 To run ra without any built-in tools (e.g., when using only [MCP tools](/modes/mcp)):
