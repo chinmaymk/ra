@@ -9,6 +9,9 @@ import {
   getDefaultCompactionModel,
   createProvider,
   buildProviderConfig,
+  estimateTokens,
+  estimateTextTokens,
+  estimateToolTokens,
   type MiddlewareConfig,
   type IMessage,
   type IProvider,
@@ -95,11 +98,18 @@ export async function bootstrap(
   const contextMessages = buildContextMessages(contextFiles)
 
   if (contextFiles.length > 0) {
+    const contextTokens = estimateTokens(contextMessages)
     logger.info('context files discovered', {
       fileCount: contextFiles.length,
       patterns: config.context.patterns,
       files: contextFiles.map(f => f.relativePath),
+      estimatedTokens: contextTokens,
     })
+    tracer.endSpan(tracer.startSpan('context.discovery', {
+      fileCount: contextFiles.length,
+      estimatedTokens: contextTokens,
+      files: contextFiles.map(f => f.relativePath),
+    }))
   }
 
   // ── Middleware ──────────────────────────────────────────────────────
@@ -135,9 +145,11 @@ export async function bootstrap(
     registerBuiltinTools(tools, config.tools)
   }
 
-  const toolNames = tools.all().map(t => t.name)
+  const allTools = tools.all()
+  const toolNames = allTools.map(t => t.name)
   if (toolNames.length > 0) {
-    logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames })
+    const toolTokens = estimateToolTokens(allTools)
+    logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames, estimatedTokens: toolTokens })
   }
 
   // ── Memory ─────────────────────────────────────────────────────────
@@ -177,15 +189,33 @@ export async function bootstrap(
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
-    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+    const skillTokens = [...skillMap.values()].reduce((sum, s) => sum + estimateTextTokens(s.body), 0)
+    logger.info('skills loaded', {
+      skillCount: skillMap.size,
+      skills: [...skillMap.keys()],
+      estimatedTokens: skillTokens,
+    })
   }
 
   // ── MCP clients ────────────────────────────────────────────────────
   const mcpClient = new McpClient()
   if (config.mcp.client?.length) {
     logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
+    const toolCountBefore = tools.all().length
     await mcpClient.connect(config.mcp.client, tools, { lazySchemas: config.mcp.lazySchemas })
-    logger.info('MCP servers connected', { totalTools: tools.all().length, lazySchemas: config.mcp.lazySchemas })
+    const mcpTools = tools.all().slice(toolCountBefore)
+    const mcpToolTokens = estimateToolTokens(mcpTools)
+    logger.info('MCP servers connected', {
+      totalTools: tools.all().length,
+      mcpToolCount: mcpTools.length,
+      lazySchemas: config.mcp.lazySchemas,
+      estimatedMcpToolTokens: mcpToolTokens,
+    })
+    tracer.endSpan(tracer.startSpan('mcp.connect', {
+      mcpToolCount: mcpTools.length,
+      estimatedTokens: mcpToolTokens,
+      lazySchemas: config.mcp.lazySchemas,
+    }))
   }
 
   // ── Permissions middleware ─────────────────────────────────────────
@@ -212,6 +242,27 @@ export async function bootstrap(
       maxIterations: config.maxIterations,
       maxConcurrency: agentMaxConcurrency,
       logger,
+    }))
+  }
+
+  // ── Token budget summary ─────────────────────────────────────────
+  {
+    const allRegisteredTools = tools.all()
+    const contextTokens = estimateTokens(contextMessages)
+    const skillTokens = [...skillMap.values()].reduce((sum, s) => sum + estimateTextTokens(s.body), 0)
+    const toolSchemaTokens = estimateToolTokens(allRegisteredTools)
+    const totalEstimated = contextTokens + skillTokens + toolSchemaTokens
+    logger.info('token budget summary', {
+      contextFiles: contextTokens,
+      skills: skillTokens,
+      toolSchemas: toolSchemaTokens,
+      total: totalEstimated,
+    })
+    tracer.endSpan(tracer.startSpan('bootstrap.tokenBudget', {
+      contextFiles: contextTokens,
+      skills: skillTokens,
+      toolSchemas: toolSchemaTokens,
+      total: totalEstimated,
     }))
   }
 

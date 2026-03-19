@@ -3,6 +3,7 @@ import {
   AgentLoop,
   mergeMiddleware,
   errorMessage,
+  estimateTextTokens,
   type ToolRegistry,
   type MiddlewareConfig,
   type StreamChunkContext,
@@ -384,11 +385,15 @@ export class Repl {
       }
       case '/context': {
         if (!this.options.contextMessages?.length) return 'No context files discovered.'
+        let totalTokens = 0
         const lines = this.options.contextMessages.map(m => {
           const path = extractContextFilePath(m) ?? 'unknown'
-          const size = (typeof m.content === 'string' ? m.content : '').length
-          return `  ${path}  (${size} chars)`
+          const content = typeof m.content === 'string' ? m.content : ''
+          const tokens = estimateTextTokens(content)
+          totalTokens += tokens
+          return `  ${path}  (${content.length} chars, ~${tokens} tokens)`
         })
+        lines.push(`  ── total: ~${totalTokens} tokens`)
         return `Discovered context files:\n${lines.join('\n')}`
       }
       default:
