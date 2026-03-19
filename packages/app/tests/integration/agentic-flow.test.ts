@@ -113,7 +113,6 @@ export default async function(_ctx: unknown) {
       compaction: { enabled: true, maxTokens: 1000, contextWindow: 5000 },
       context: { enabled: false },
       skillDirs: [],
-      builtinSkills: { 'write-skill': false, 'write-recipe': false, 'write-middleware': false },
     }))
 
     const { stdout, exitCode } = await runBinary(

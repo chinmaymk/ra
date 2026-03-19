@@ -24,7 +24,6 @@ import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, create
 import { ScratchpadStore, scratchpadWriteTool, scratchpadDeleteTool, createScratchpadMiddleware } from './scratchpad'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
-import { loadBuiltinSkills } from './skills/builtin'
 import { loadSkills } from './skills/loader'
 import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
@@ -179,11 +178,6 @@ export async function bootstrap(
   const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
     logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
-  }
-
-  const builtinSkills = loadBuiltinSkills(config.builtinSkills)
-  for (const [name, skill] of builtinSkills) {
-    if (!skillMap.has(name)) skillMap.set(name, skill)
   }
 
   // ── MCP clients ────────────────────────────────────────────────────
