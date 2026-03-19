@@ -10,7 +10,7 @@ OPTIONS
   --system-prompt <text>              System prompt text or path to file
   --max-iterations <n>                Max agent loop iterations
   --config <path>                     Path to config file
-  --recipe <name>                     Use an installed recipe
+  --recipe <name>                     Use an installed recipe (or set recipe: <name> in config)
   --skill <name>                      Skill to activate for this run (repeatable)
   --skill-dir <path>                  Directory to load skills from (repeatable)
   --file <path>                       File to attach (repeatable)

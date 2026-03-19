@@ -136,6 +136,8 @@ export interface RaConfig {
   agent: AgentConfig
   /** Cron job definitions. Only used when `app.interface` is `'cron'`. */
   cron?: CronJob[]
+  /** Recipe name or path — resolved before merging config layers. */
+  recipe?: string
 }
 
 export interface McpClientConfig {

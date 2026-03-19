@@ -11,12 +11,20 @@ ra install recipe github:chinmaymk/ra    # install all recipes from the ra repo
 ra list                                   # see installed recipes and skills
 ```
 
-Use an installed recipe with `--recipe`:
+Use an installed recipe with `--recipe` or in your config file:
 
 ```bash
 ra --recipe coding-agent "Hello"
 ra --recipe code-review-agent --file diff.patch "Review this"
 ```
+
+```yaml
+# ra.config.yml — use a recipe as your base config
+recipe: coding-agent
+model: claude-sonnet-4-6  # override the recipe's model
+```
+
+When `recipe` is set in a config file, the recipe config is loaded as a base layer — your config file settings override the recipe defaults.
 
 ### Available recipes
 

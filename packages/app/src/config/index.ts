@@ -22,7 +22,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
 }
 
-function deepMerge(
+export function deepMerge(
   target: Record<string, unknown>,
   source: Record<string, unknown>,
 ): Record<string, unknown> {

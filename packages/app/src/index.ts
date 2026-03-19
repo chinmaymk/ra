@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { AgentLoop, serializeContent, errorMessage, type IMessage } from '@chinmaymk/ra'
-import { loadConfig } from './config'
+import { loadConfig, deepMerge } from './config'
 import type { RaConfig } from './config/types'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
@@ -337,12 +337,24 @@ async function main(): Promise<void> {
     parsedApp.interface = 'cli' as const
   }
 
-  const config = await loadConfig({
+  let config = await loadConfig({
     cwd: process.cwd(),
     configPath: parsed.meta.configPath,
     cliArgs: parsed.config,
     env: process.env as Record<string, string | undefined>,
   })
+
+  // Resolve recipe from config file (--recipe CLI flag already handled in handleEarlyExits)
+  if (config.recipe && !parsed.meta.recipe) {
+    const { resolveRecipeConfigPath } = await import('./skills/registry')
+    const recipePath = await resolveRecipeConfigPath(config.recipe)
+    if (!recipePath) {
+      console.error(`Recipe not found: ${config.recipe}`)
+      process.exit(1)
+    }
+    const recipeBase = await loadConfig({ configPath: recipePath })
+    config = deepMerge(recipeBase as Record<string, unknown>, config as unknown as Record<string, unknown>) as unknown as typeof config
+  }
 
   if (parsed.meta.showConfig || parsed.meta.showContext) {
     const { discoverContextFiles, buildContextMessages } = await import('./context')
