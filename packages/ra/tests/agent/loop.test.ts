@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import { AgentLoop, ToolRegistry, NoopLogger } from '@chinmaymk/ra'
-import type { IProvider, ChatRequest, ChatResponse, Logger } from '@chinmaymk/ra'
+import type { IProvider, ChatRequest, ChatResponse, Logger, StreamChunk } from '@chinmaymk/ra'
 import { mockProvider } from './test-utils'
 
 describe('AgentLoop', () => {

@@ -48,7 +48,7 @@ describe('mergeConsecutiveRoles', () => {
     ]
     const merged = mergeConsecutiveRoles(messages)
     expect(merged).toHaveLength(1)
-    const content = merged[0]!.content as any[]
+    const content = merged[0]!.content as unknown as unknown[]
     expect(content).toHaveLength(3)
   })
 
