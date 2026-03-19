@@ -1,12 +1,13 @@
 # Inspector
 
-A built-in web dashboard for debugging agent sessions. Launches alongside any interface and serves a single-page app that lets you browse sessions, inspect messages, view token usage, and trace every tool call the agent made.
+A standalone web dashboard for debugging agent sessions. Serves a single-page app that lets you browse sessions, inspect messages, view token usage, and trace every tool call the agent made.
 
 ```bash
-ra --inspector                          # enable on default port 3002
+ra --inspector                          # launch on default port 3002
 ra --inspector --inspector-port 8080    # custom port
-ra --inspector --http                   # works with any interface
 ```
+
+> The inspector is a standalone interface — it reads saved session data from disk. Run your agent normally (CLI, REPL, HTTP, etc.), then launch the inspector separately to review sessions.
 
 Open `http://localhost:3002` in your browser.
 
@@ -80,7 +81,7 @@ inspector:
 |-------|---------|----------|---------|-------------|
 | `inspector.port` | `RA_INSPECTOR_PORT` | `--inspector-port` | `3002` | Port for the inspector server |
 
-The inspector is enabled with the `--inspector` flag. It runs as a side server alongside whatever interface you're using (CLI, REPL, HTTP, MCP).
+The inspector is enabled with the `--inspector` flag. It launches as its own interface — it cannot run as a sidecar alongside another interface (CLI, REPL, HTTP, MCP). Instead, run your agent sessions first, then launch the inspector separately to review them.
 
 ## API endpoints
 
@@ -104,7 +105,10 @@ The inspector serves a JSON API that the dashboard consumes. You can also query 
 ## Example
 
 ```bash
-# Start an interactive REPL with the inspector
+# Run an agent session first
+ra "Explain the architecture of this project"
+
+# Then launch the inspector to review it
 ra --inspector
 
 # In another terminal, query the API directly
