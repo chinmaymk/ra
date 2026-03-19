@@ -9,15 +9,17 @@ export type ProviderErrorCategory = 'rate_limit' | 'auth' | 'network' | 'server'
 export class ProviderError extends Error {
   readonly category: ProviderErrorCategory
   readonly statusCode?: number
-  readonly retryable: boolean
   readonly retryAfterMs?: number
+
+  get retryable(): boolean {
+    return this.category === 'rate_limit' || this.category === 'server' || this.category === 'overloaded' || this.category === 'network'
+  }
 
   constructor(message: string, options: { category: ProviderErrorCategory; statusCode?: number; retryAfterMs?: number; cause?: unknown }) {
     super(message)
     this.name = 'ProviderError'
     this.category = options.category
     this.statusCode = options.statusCode
-    this.retryable = options.category === 'rate_limit' || options.category === 'server' || options.category === 'overloaded' || options.category === 'network'
     this.retryAfterMs = options.retryAfterMs
     this.cause = options.cause
   }
@@ -74,11 +76,12 @@ function extractRetryAfter(err: unknown): number | undefined {
   return undefined
 }
 
+const NETWORK_PATTERNS = ['econnrefused', 'econnreset', 'etimedout', 'enotfound', 'fetch failed', 'network', 'socket hang up', 'dns']
+
 function isNetworkError(err: unknown): boolean {
   if (!(err instanceof Error)) return false
   const msg = err.message.toLowerCase()
-  const networkPatterns = ['econnrefused', 'econnreset', 'etimedout', 'enotfound', 'fetch failed', 'network', 'socket hang up', 'dns']
-  return networkPatterns.some(p => msg.includes(p))
+  return NETWORK_PATTERNS.some(p => msg.includes(p))
 }
 
 const DEFAULT_DELAYS = [1000, 2000, 4000]
