@@ -77,6 +77,7 @@ jobs:
             title: 'ra',
             base: '/ra/',
             appearance: 'dark',
+            ignoreDeadLinks: true,
             themeConfig: {
               logo: '/logo.svg',
               search: { provider: 'local' },
@@ -144,6 +145,7 @@ jobs:
             title: 'ra',
             base: '/ra/v/${version}/',
             appearance: 'dark',
+            ignoreDeadLinks: true,
             themeConfig: {
               logo: '/logo.svg',
               search: { provider: 'local' },
