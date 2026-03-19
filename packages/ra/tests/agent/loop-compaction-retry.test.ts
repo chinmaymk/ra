@@ -16,6 +16,13 @@ describe('isContextLengthError', () => {
 
   it('matches OpenAI / Azure SDK errors', () => {
     expect(isContextLengthError(new Error("400 This model's maximum context length is 128000 tokens. However, you requested 150000 tokens (149000 in the messages, 1000 in the completion)."))).toBe(true)
+    // Responses API variant
+    expect(isContextLengthError(new Error('400 Your input exceeds the context window of this model.'))).toBe(true)
+  })
+
+  it('matches OpenAI error.code property', () => {
+    const err = Object.assign(new Error('some message'), { code: 'context_length_exceeded' })
+    expect(isContextLengthError(err)).toBe(true)
   })
 
   it('matches Ollama errors', () => {

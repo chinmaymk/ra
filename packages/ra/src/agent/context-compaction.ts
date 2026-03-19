@@ -139,6 +139,10 @@ const CONTEXT_LENGTH_PATTERNS = [
 ]
 
 export function isContextLengthError(err: unknown): boolean {
+  // OpenAI SDK sets error.code = 'context_length_exceeded' — most reliable signal
+  if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'context_length_exceeded') {
+    return true
+  }
   const msg = err instanceof Error ? err.message : String(err)
   return CONTEXT_LENGTH_PATTERNS.some(p => p.test(msg))
 }
