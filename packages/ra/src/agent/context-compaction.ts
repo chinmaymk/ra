@@ -96,18 +96,20 @@ export interface CompactionConfig {
   maxTokens?: number
   contextWindow?: number
   model?: string
+  /** Custom prompt for summarization. Overrides the default summarization prompt. */
+  prompt?: string
   onCompact?: (info: { originalMessages: number; compactedMessages: number; estimatedTokens: number; threshold: number }) => void
 }
 
-const SUMMARIZATION_PROMPT = `Summarize the following conversation concisely. Preserve:
-- Key decisions made
-- Important facts and context established
-- Current state of the task being worked on
-- Relevant tool results and their outcomes
+const DEFAULT_SUMMARIZATION_PROMPT = `Summarize the conversation in <conversation> concisely. This summary will replace the original messages in the conversation context.
 
-Be concise but complete. This summary will replace the original messages in the conversation context.
-
-Conversation to summarize:`
+<instructions>
+<rule>Preserve key decisions made</rule>
+<rule>Preserve important facts and context established</rule>
+<rule>Preserve current state of the task being worked on</rule>
+<rule>Preserve relevant tool results and their outcomes</rule>
+<rule>Be concise but complete</rule>
+</instructions>`
 
 export function createCompactionMiddleware(
   provider: IProvider,
@@ -141,7 +143,7 @@ export function createCompactionMiddleware(
       const compactionModel = config.model || ctx.request.model
       summaryResponse = await provider.chat({
         model: compactionModel,
-        messages: [{ role: 'user', content: `${SUMMARIZATION_PROMPT}\n\n${conversationText}` }],
+        messages: [{ role: 'user', content: `${config.prompt || DEFAULT_SUMMARIZATION_PROMPT}\n\n<conversation>\n${conversationText}\n</conversation>` }],
       })
     } catch (err) {
       console.error('[compaction] summarization failed:', errorMessage(err))
