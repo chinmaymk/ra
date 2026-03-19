@@ -512,6 +512,65 @@ describe('createCompactionMiddleware', () => {
     expect(called).toBe(false)
   })
 
+  it('uses custom prompt when provided in config', async () => {
+    let receivedPrompt = ''
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async (req) => {
+        const content = req.messages[0]?.content
+        receivedPrompt = typeof content === 'string' ? content : ''
+        return { message: { role: 'assistant' as const, content: 'Summary.' } }
+      },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const customPrompt = 'You are a custom summarizer. Summarize everything in bullet points.'
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      prompt: customPrompt,
+    })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(receivedPrompt).toContain(customPrompt)
+    expect(receivedPrompt).not.toContain('Key decisions made')
+  })
+
+  it('uses default prompt when no custom prompt is provided', async () => {
+    let receivedPrompt = ''
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async (req) => {
+        const content = req.messages[0]?.content
+        receivedPrompt = typeof content === 'string' ? content : ''
+        return { message: { role: 'assistant' as const, content: 'Summary.' } }
+      },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+    })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(receivedPrompt).toContain('Key decisions made')
+  })
+
   it('skips when nothing to compact (all pinned)', async () => {
     const provider: IProvider = {
       name: 'mock',
