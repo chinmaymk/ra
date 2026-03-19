@@ -49,6 +49,7 @@ jobs:
           rm .vitepress/config.dev.ts
 
       - name: Build latest tag docs (for site root)
+        id: build-latest
         if: steps.latest-tag.outputs.tag != ''
         working-directory: docs/site
         run: |
@@ -56,7 +57,19 @@ jobs:
           LATEST_VERSION="${{ steps.latest-tag.outputs.version }}"
 
           TAG_DIR=$(mktemp -d)
-          git archive "$LATEST_TAG" -- docs/site/ | tar -x -C "$TAG_DIR"
+          if ! git archive "$LATEST_TAG" -- docs/site/ 2>/dev/null | tar -x -C "$TAG_DIR" 2>/dev/null; then
+            echo "Tag $LATEST_TAG does not contain docs/site/ — skipping"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            rm -rf "$TAG_DIR"
+            exit 0
+          fi
+
+          if [ ! -f "$TAG_DIR/docs/site/package.json" ]; then
+            echo "Tag $LATEST_TAG has no docs/site/package.json — skipping"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            rm -rf "$TAG_DIR"
+            exit 0
+          fi
 
           # Use current theme
           rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
@@ -115,11 +128,11 @@ jobs:
             echo "Building docs for $tag..."
 
             TAG_DIR=$(mktemp -d)
-            git archive "$tag" -- docs/site/ | tar -x -C "$TAG_DIR" 2>/dev/null || {
+            if ! git archive "$tag" -- docs/site/ 2>/dev/null | tar -x -C "$TAG_DIR" 2>/dev/null; then
               echo "  Skipping $tag — no docs/site/"
               rm -rf "$TAG_DIR"
               continue
-            }
+            fi
 
             if [ ! -f "$TAG_DIR/docs/site/package.json" ]; then
               echo "  Skipping $tag — no package.json"
