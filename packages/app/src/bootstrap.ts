@@ -9,6 +9,7 @@ import {
   getDefaultCompactionModel,
   createProvider,
   buildProviderConfig,
+  estimateTokens,
   type MiddlewareConfig,
   type IMessage,
   type IProvider,
@@ -24,7 +25,7 @@ import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, create
 import { ScratchpadStore, scratchpadWriteTool, scratchpadDeleteTool, createScratchpadMiddleware } from './scratchpad'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
-import { loadSkills } from './skills/loader'
+import { loadSkills, buildAvailableSkillsXml } from './skills/loader'
 import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
@@ -82,6 +83,8 @@ export async function bootstrap(
     traces: { enabled: config.tracesEnabled, output: 'session' },
   }, { sessionId, sessionDir })
 
+  const bootstrapTokenSpan = tracer.startSpan('bootstrap.tokenBudget')
+
   // ── Compaction model default ───────────────────────────────────────
   if (!config.compaction.model) {
     config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
@@ -89,17 +92,27 @@ export async function bootstrap(
   config.compaction.onCompact = (info) => logger.info('context compacted', info)
 
   // ── Context files ──────────────────────────────────────────────────
+  const contextSpan = tracer.startSpan('context.discovery', { patterns: config.context.patterns })
   const contextFiles = config.context.enabled
     ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
     : []
   const contextMessages = buildContextMessages(contextFiles)
 
   if (contextFiles.length > 0) {
+    const contextTokens = estimateTokens(contextMessages)
     logger.info('context files discovered', {
       fileCount: contextFiles.length,
       patterns: config.context.patterns,
       files: contextFiles.map(f => f.relativePath),
+      estimatedTokens: contextTokens,
     })
+    tracer.endSpan(contextSpan, 'ok', {
+      fileCount: contextFiles.length,
+      estimatedTokens: contextTokens,
+      files: contextFiles.map(f => f.relativePath),
+    })
+  } else {
+    tracer.endSpan(contextSpan, 'ok', { fileCount: 0 })
   }
 
   // ── Middleware ──────────────────────────────────────────────────────
@@ -135,9 +148,11 @@ export async function bootstrap(
     registerBuiltinTools(tools, config.tools)
   }
 
-  const toolNames = tools.all().map(t => t.name)
+  const allTools = tools.all()
+  const toolNames = allTools.map(t => t.name)
   if (toolNames.length > 0) {
-    logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames })
+    const toolTokens = estimateTokens(allTools)
+    logger.info('tools registered', { toolCount: toolNames.length, tools: toolNames, estimatedTokens: toolTokens })
   }
 
   // ── Memory ─────────────────────────────────────────────────────────
@@ -177,15 +192,35 @@ export async function bootstrap(
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
-    logger.info('skills loaded', { skillCount: skillMap.size, skills: [...skillMap.keys()] })
+    const availableXml = buildAvailableSkillsXml(skillMap)
+    const skillTokens = estimateTokens(availableXml)
+    logger.info('skills loaded', {
+      skillCount: skillMap.size,
+      skills: [...skillMap.keys()],
+      estimatedTokens: skillTokens,
+    })
   }
 
   // ── MCP clients ────────────────────────────────────────────────────
   const mcpClient = new McpClient()
   if (config.mcp.client?.length) {
+    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: config.mcp.client.length })
     logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
+    const knownToolNames = new Set(tools.all().map(t => t.name))
     await mcpClient.connect(config.mcp.client, tools, { lazySchemas: config.mcp.lazySchemas })
-    logger.info('MCP servers connected', { totalTools: tools.all().length, lazySchemas: config.mcp.lazySchemas })
+    const mcpTools = tools.all().filter(t => !knownToolNames.has(t.name))
+    const mcpToolTokens = estimateTokens(mcpTools)
+    logger.info('MCP servers connected', {
+      totalTools: tools.all().length,
+      mcpToolCount: mcpTools.length,
+      lazySchemas: config.mcp.lazySchemas,
+      estimatedMcpToolTokens: mcpToolTokens,
+    })
+    tracer.endSpan(mcpSpan, 'ok', {
+      mcpToolCount: mcpTools.length,
+      estimatedTokens: mcpToolTokens,
+      lazySchemas: config.mcp.lazySchemas,
+    })
   }
 
   // ── Permissions middleware ─────────────────────────────────────────
@@ -213,6 +248,27 @@ export async function bootstrap(
       maxConcurrency: agentMaxConcurrency,
       logger,
     }))
+  }
+
+  // ── Token budget summary ─────────────────────────────────────────
+  {
+    const allRegisteredTools = tools.all()
+    const contextTokens = estimateTokens(contextMessages)
+    const skillTokens = estimateTokens(buildAvailableSkillsXml(skillMap))
+    const toolSchemaTokens = estimateTokens(allRegisteredTools)
+    const totalEstimated = contextTokens + skillTokens + toolSchemaTokens
+    logger.info('bootstrap token estimate', {
+      contextFiles: contextTokens,
+      skills: skillTokens,
+      toolSchemas: toolSchemaTokens,
+      total: totalEstimated,
+    })
+    tracer.endSpan(bootstrapTokenSpan, 'ok', {
+      contextFiles: contextTokens,
+      skills: skillTokens,
+      toolSchemas: toolSchemaTokens,
+      total: totalEstimated,
+    })
   }
 
   // ── Shutdown ───────────────────────────────────────────────────────

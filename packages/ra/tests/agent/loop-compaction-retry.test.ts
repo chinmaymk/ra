@@ -1,58 +1,11 @@
 import { describe, it, expect } from 'bun:test'
-import { AgentLoop, ToolRegistry, isContextLengthError, forceCompact } from '@chinmaymk/ra'
+import { AgentLoop, ToolRegistry, forceCompact, isContextLengthError } from '@chinmaymk/ra'
 import type { IProvider, ChatResponse, ModelCallContext, ChatRequest } from '@chinmaymk/ra'
 import { NoopLogger } from '@chinmaymk/ra'
 
 const logger = new NoopLogger()
 
-describe('isContextLengthError', () => {
-  it('matches Anthropic SDK errors', () => {
-    expect(isContextLengthError(new Error('400 request too large'))).toBe(true)
-    expect(isContextLengthError(new Error('400 prompt is too long: 250000 tokens > 200000 maximum'))).toBe(true)
-    expect(isContextLengthError(new Error('400 input length and max_tokens exceed context limit: 188240 + 21333 > 200000, decrease input length or max_tokens and try again'))).toBe(true)
-    expect(isContextLengthError(new Error('413 Request too large'))).toBe(true)
-    expect(isContextLengthError(new Error('413 Request size exceeds model context window'))).toBe(true)
-  })
-
-  it('matches OpenAI / Azure SDK errors', () => {
-    expect(isContextLengthError(new Error("400 This model's maximum context length is 128000 tokens. However, you requested 150000 tokens (149000 in the messages, 1000 in the completion)."))).toBe(true)
-    // Responses API variant
-    expect(isContextLengthError(new Error('400 Your input exceeds the context window of this model.'))).toBe(true)
-  })
-
-  it('matches OpenAI error.code property', () => {
-    const err = Object.assign(new Error('some message'), { code: 'context_length_exceeded' })
-    expect(isContextLengthError(err)).toBe(true)
-  })
-
-  it('matches Ollama errors', () => {
-    expect(isContextLengthError(new Error('prompt too long; exceeded max context length by 4 tokens'))).toBe(true)
-    expect(isContextLengthError(new Error('Token sequence length exceeds limit (5000 > 4096)'))).toBe(true)
-  })
-
-  it('matches Google Gemini errors', () => {
-    expect(isContextLengthError(new Error('[400 Bad Request] Request exceeds the maximum number of tokens'))).toBe(true)
-  })
-
-  it('matches Bedrock errors', () => {
-    expect(isContextLengthError(new Error('ValidationException: An error occurred (ValidationException) when calling the InvokeModel operation: Input is too long for requested model.'))).toBe(true)
-    expect(isContextLengthError(new Error('ValidationException: The model returned the following errors: Input is too long for requested model.'))).toBe(true)
-    expect(isContextLengthError(new Error('ValidationException: Too many tokens, please reduce your prompt'))).toBe(true)
-  })
-
-  it('matches generic context length patterns', () => {
-    expect(isContextLengthError(new Error('context length exceeded'))).toBe(true)
-    expect(isContextLengthError(new Error('token limit exceeded'))).toBe(true)
-    expect(isContextLengthError(new Error('input too long'))).toBe(true)
-  })
-
-  it('does not match unrelated errors', () => {
-    expect(isContextLengthError(new Error('API rate limit'))).toBe(false)
-    expect(isContextLengthError(new Error('network timeout'))).toBe(false)
-    expect(isContextLengthError(new Error('authentication failed'))).toBe(false)
-    expect(isContextLengthError(new Error('internal server error'))).toBe(false)
-  })
-})
+// isContextLengthError tests are in context-compaction.test.ts
 
 describe('forceCompact', () => {
   it('compacts regardless of threshold', async () => {
