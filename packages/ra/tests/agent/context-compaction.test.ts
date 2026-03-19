@@ -557,16 +557,22 @@ describe('createCompactionMiddleware', () => {
 })
 
 describe('isContextLengthError', () => {
-  it('detects context length exceeded errors', () => {
+  it('matches real provider SDK error messages', () => {
+    // Anthropic SDK
+    expect(isContextLengthError(new Error('400 request too large'))).toBe(true)
+    expect(isContextLengthError(new Error('400 prompt is too long: 250000 tokens > 200000 maximum'))).toBe(true)
+    // OpenAI / Azure SDK
+    expect(isContextLengthError(new Error("400 This model's maximum context length is 128000 tokens."))).toBe(true)
+    // Ollama
+    expect(isContextLengthError(new Error('prompt too long; exceeded max context length by 4 tokens'))).toBe(true)
+    // Google Gemini
+    expect(isContextLengthError(new Error('[400 Bad Request] Request exceeds the maximum number of tokens'))).toBe(true)
+    // Bedrock
+    expect(isContextLengthError(new Error('ValidationException: Too many tokens'))).toBe(true)
+    // Generic patterns
     expect(isContextLengthError(new Error('context length exceeded'))).toBe(true)
-    expect(isContextLengthError(new Error('maximum context length'))).toBe(true)
-    expect(isContextLengthError(new Error('This request has too many tokens'))).toBe(true)
-    expect(isContextLengthError(new Error('maximum tokens exceeded'))).toBe(true)
-    expect(isContextLengthError(new Error('request too large'))).toBe(true)
-    expect(isContextLengthError(new Error('prompt too long for model'))).toBe(true)
-    expect(isContextLengthError(new Error('input too long'))).toBe(true)
-    expect(isContextLengthError(new Error('exceeded max context window'))).toBe(true)
     expect(isContextLengthError(new Error('token limit exceeded'))).toBe(true)
+    expect(isContextLengthError(new Error('input too long'))).toBe(true)
   })
 
   it('does not match unrelated errors', () => {

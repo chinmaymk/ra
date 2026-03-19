@@ -6,18 +6,39 @@ import { NoopLogger } from '@chinmaymk/ra'
 const logger = new NoopLogger()
 
 describe('isContextLengthError', () => {
-  it('detects context length exceeded errors', () => {
+  it('matches Anthropic SDK errors', () => {
+    expect(isContextLengthError(new Error('400 request too large'))).toBe(true)
+    expect(isContextLengthError(new Error('400 prompt is too long: 250000 tokens > 200000 maximum'))).toBe(true)
+  })
+
+  it('matches OpenAI / Azure SDK errors', () => {
+    expect(isContextLengthError(new Error("400 This model's maximum context length is 128000 tokens. However, you requested 150000 tokens (149000 in the messages, 1000 in the completion)."))).toBe(true)
+  })
+
+  it('matches Ollama errors', () => {
+    expect(isContextLengthError(new Error('prompt too long; exceeded max context length by 4 tokens'))).toBe(true)
+  })
+
+  it('matches Google Gemini errors', () => {
+    expect(isContextLengthError(new Error('[400 Bad Request] Request exceeds the maximum number of tokens'))).toBe(true)
+  })
+
+  it('matches Bedrock errors', () => {
+    expect(isContextLengthError(new Error('ValidationException: Too many tokens, please reduce your prompt'))).toBe(true)
+    expect(isContextLengthError(new Error('ValidationException: prompt is too long'))).toBe(true)
+  })
+
+  it('matches generic context length patterns', () => {
     expect(isContextLengthError(new Error('context length exceeded'))).toBe(true)
-    expect(isContextLengthError(new Error('This request has too many tokens'))).toBe(true)
-    expect(isContextLengthError(new Error('maximum tokens exceeded'))).toBe(true)
-    expect(isContextLengthError(new Error('request too large'))).toBe(true)
-    expect(isContextLengthError(new Error('prompt too long for model'))).toBe(true)
+    expect(isContextLengthError(new Error('token limit exceeded'))).toBe(true)
     expect(isContextLengthError(new Error('input too long'))).toBe(true)
   })
 
   it('does not match unrelated errors', () => {
     expect(isContextLengthError(new Error('API rate limit'))).toBe(false)
     expect(isContextLengthError(new Error('network timeout'))).toBe(false)
+    expect(isContextLengthError(new Error('authentication failed'))).toBe(false)
+    expect(isContextLengthError(new Error('internal server error'))).toBe(false)
   })
 })
 

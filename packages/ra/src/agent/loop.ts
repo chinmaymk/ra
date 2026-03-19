@@ -70,7 +70,7 @@ export class AgentLoop {
     this.externalAbort?.abort()
   }
 
-  async run(initialMessages: IMessage[]): Promise<LoopResult> {
+  async run(initialMessages: IMessage[], _compactionRetries = 0): Promise<LoopResult> {
     const messages = initialMessages
     let iterations = 0
     const controller = new AbortController()
@@ -190,8 +190,10 @@ export class AgentLoop {
         this.externalAbort = null
         return { messages, iterations, usage, stopReason: stopReason ?? 'aborted' }
       }
-      // Attempt recovery via compaction when a provider rejects due to context length
-      if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err)) {
+      // Attempt recovery via compaction when a provider rejects due to context length.
+      // Guard against infinite retry: allow at most 3 compaction retries per run.
+      const MAX_COMPACTION_RETRIES = 3
+      if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err) && _compactionRetries < MAX_COMPACTION_RETRIES) {
         const modelCallCtx: ModelCallContext = {
           ...stoppable,
           request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }), signal },
@@ -199,9 +201,8 @@ export class AgentLoop {
         }
         const compacted = await forceCompact(this.provider, this.compactionConfig, modelCallCtx)
         if (compacted) {
-          // Restart the loop from the outer try block by recursing into run
           this.externalAbort = null
-          return this.run(messages)
+          return this.run(messages, _compactionRetries + 1)
         }
       }
       const error = err instanceof Error ? err : new Error(String(err))

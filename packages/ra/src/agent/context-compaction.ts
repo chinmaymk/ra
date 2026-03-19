@@ -109,16 +109,23 @@ Be concise but complete. This summary will replace the original messages in the 
 
 Conversation to summarize:`
 
+// Patterns matched against err.message from each provider's SDK:
+//   Anthropic SDK:  "400 request too large" / "400 prompt is too long: ..."
+//   OpenAI SDK:     "400 This model's maximum context length is N tokens..."
+//   Azure OpenAI:   same as OpenAI (uses openai SDK)
+//   Google Gemini:  "[400 Bad Request] ... token limit ..." or "... exceeds the maximum ..."
+//   Ollama:         "prompt too long; exceeded max context length by N tokens"
+//   Bedrock:        "ValidationException: ... prompt too long ..." or "... too many ... tokens"
 const CONTEXT_LENGTH_PATTERNS = [
-  /context.*(length|window|limit)/i,
-  /too many tokens/i,
-  /maximum.*tokens/i,
-  /token.*limit.*exceed/i,
-  /request.*too.*large/i,
-  /input.*too.*long/i,
-  /prompt.*too.*long/i,
-  /exceeded.*max.*context/i,
-  /content.*length.*exceed/i,
+  /maximum context length/i,        // OpenAI / Azure: "This model's maximum context length is..."
+  /context.length.exceed/i,         // generic: "context length exceeded"
+  /request too large/i,             // Anthropic: "400 request too large"
+  /prompt is too long/i,            // Anthropic: "400 prompt is too long: ..."
+  /prompt too long/i,               // Ollama: "prompt too long; exceeded max context length..."
+  /too many tokens/i,               // generic / Bedrock
+  /exceeds? the maximum/i,          // Google: "... exceeds the maximum number of tokens"
+  /token.{0,10}limit/i,             // generic: "token limit exceeded", "token limit reached"
+  /input.too.long/i,                // generic
 ]
 
 export function isContextLengthError(err: unknown): boolean {
@@ -141,13 +148,17 @@ async function _runCompaction(
   force: boolean,
 ): Promise<boolean> {
   const messages = ctx.request.messages
-  const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
 
-  const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
-  const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
+  if (!force) {
+    const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
+    const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
+    const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
+    if (estimated <= triggerThreshold) return false
+  }
 
-  if (!force && estimated <= triggerThreshold) return false
-
+  // Keep 20% of context window as recent messages when we know the window size,
+  // otherwise use a conservative flat budget so we always compact aggressively.
+  const contextWindow = config.contextWindow ?? getContextWindowSize(ctx.request.model)
   const targetPostCompaction = Math.floor(contextWindow * 0.20)
   const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
 
@@ -201,8 +212,8 @@ async function _runCompaction(
   config.onCompact?.({
     originalMessages: originalCount,
     compactedMessages: ctx.request.messages.length,
-    estimatedTokens: estimated,
-    threshold: triggerThreshold,
+    estimatedTokens: ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages),
+    threshold: config.maxTokens ?? Math.floor(contextWindow * config.threshold),
   })
   return true
 }
