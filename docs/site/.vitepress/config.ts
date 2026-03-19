@@ -25,12 +25,7 @@ export default defineConfig({
   },
   themeConfig: {
     logo: '/logo.svg',
-    nav: [
-      { text: 'Guide', link: '/getting-started/install' },
-      { text: 'Providers', link: '/providers/anthropic' },
-      { text: 'Config', link: '/configuration/' },
-      { text: 'API', link: '/api/' },
-    ],
+    nav: [],
     sidebar: [
       {
         text: 'Getting Started',
