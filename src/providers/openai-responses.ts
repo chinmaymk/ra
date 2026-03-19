@@ -28,7 +28,7 @@ export class OpenAIResponsesProvider implements IProvider {
     return params as OpenAI.Responses.ResponseCreateParams
   }
 
-  toUsage(u: OpenAI.Responses.ResponseUsage): TokenUsage {
+  toUsage(u: { input_tokens: number; output_tokens: number; output_tokens_details?: { reasoning_tokens?: number } }): TokenUsage {
     return {
       inputTokens: u.input_tokens,
       outputTokens: u.output_tokens,
