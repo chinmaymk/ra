@@ -269,23 +269,19 @@ export class Repl {
     })
 
     this.activeLoop = loop
-    try {
-      const result = await loop.run(initialMessages)
+    const flushOutput = () => {
       if (thinkingOpened) { tui.printThinkingEnd(); thinkingOpened = false }
       tui.stopSpinner(true)
-      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
       const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
       if (boxOpened) tui.closeAssistantBox()
       else process.stdout.write('\n\n')
-
+    }
+    try {
+      const result = await loop.run(initialMessages)
+      flushOutput()
       this.messages.push(...result.messages.slice(priorCount))
     } catch (err) {
-      tui.stopSpinner(true)
-      // TS narrows streamBuf to null (closure writes aren't tracked); cast back
-      const _out = (streamBuf as tui.StreamBuffer | null)?.end(); if (_out) process.stdout.write(_out)
-      if (boxOpened) tui.closeAssistantBox()
-      else process.stdout.write('\n\n')
-      // AbortError from Ctrl+C is not a real error — just notify the user
+      flushOutput()
       if (err instanceof DOMException && err.name === 'AbortError') {
         tui.printInterrupt('Request cancelled.')
       } else {
@@ -332,31 +328,23 @@ export class Repl {
         this.pendingSkill = skill
         return `Skill "${name}" will be injected with your next message.`
       }
-      case '/skill-run': {
-        const skillName = parts[1]
-        const scriptName = parts[2]
-        if (!skillName || !scriptName) return 'Usage: /skill-run <skill> <script>'
-        const skill = this.options.skillMap?.get(skillName)
-        if (!skill) return `Skill not found: ${skillName}`
-        const output = await runSkillScriptByName(skill, scriptName, {})
-        if (output.trim()) {
-          this.pendingAttachments.push({ type: 'text', text: `<skill-script name="${scriptName}">\n${output.trim()}\n</skill-script>` })
-          return `Script output from "${scriptName}" will be attached to your next message.`
-        }
-        return `Script "${scriptName}" produced no output.`
-      }
+      case '/skill-run':
       case '/skill-ref': {
+        const isRun = cmd === '/skill-run'
         const skillName = parts[1]
-        const refName = parts[2]
-        if (!skillName || !refName) return 'Usage: /skill-ref <skill> <reference>'
+        const targetName = parts[2]
+        if (!skillName || !targetName) return `Usage: ${cmd} <skill> <${isRun ? 'script' : 'reference'}>`
         const skill = this.options.skillMap?.get(skillName)
         if (!skill) return `Skill not found: ${skillName}`
-        const content = await readSkillReference(skill, refName)
-        if (content.trim()) {
-          this.pendingAttachments.push({ type: 'text', text: `<skill-reference name="${refName}">\n${content.trim()}\n</skill-reference>` })
-          return `Reference "${refName}" will be attached to your next message.`
+        const output = isRun
+          ? await runSkillScriptByName(skill, targetName, {})
+          : await readSkillReference(skill, targetName)
+        if (output.trim()) {
+          const tag = isRun ? 'skill-script' : 'skill-reference'
+          this.pendingAttachments.push({ type: 'text', text: `<${tag} name="${targetName}">\n${output.trim()}\n</${tag}>` })
+          return `${isRun ? 'Script output from' : 'Reference'} "${targetName}" will be attached to your next message.`
         }
-        return `Reference "${refName}" is empty.`
+        return `${isRun ? 'Script' : 'Reference'} "${targetName}" ${isRun ? 'produced no output' : 'is empty'}.`
       }
       case '/attach': {
         const filePath = parts.slice(1).join(' ')

@@ -199,24 +199,27 @@ export class InspectorServer {
         const sessionMatch = path.match(/^\/api\/sessions\/([^/]+)\/(\w+)$/)
         if (sessionMatch) {
           const [, id, view] = sessionMatch
+          const dir = storage.sessionDir(id!)
           try {
-            if (view === 'messages') return json(await storage.readMessages(id!))
-            if (view === 'logs') return json(await parseJsonl(join(storage.sessionDir(id!), 'logs.jsonl')))
-            if (view === 'traces') return json(await parseJsonl(join(storage.sessionDir(id!), 'traces.jsonl')))
-            if (view === 'stats') {
-              const traces = await parseJsonl(join(storage.sessionDir(id!), 'traces.jsonl')) as TraceSpan[]
-              const messages = await storage.readMessages(id!) as Array<{ role?: string; toolCalls?: unknown[]; isError?: boolean; content?: unknown }>
-              return json(buildStats(traces, messages))
-            }
-            if (view === 'timeline') {
-              const traces = await parseJsonl(join(storage.sessionDir(id!), 'traces.jsonl')) as TraceSpan[]
-              const logs = await parseJsonl(join(storage.sessionDir(id!), 'logs.jsonl')) as LogEntry[]
-              return json(buildTimeline(traces, logs))
+            switch (view) {
+              case 'messages': return json(await storage.readMessages(id!))
+              case 'logs':     return json(await parseJsonl(join(dir, 'logs.jsonl')))
+              case 'traces':   return json(await parseJsonl(join(dir, 'traces.jsonl')))
+              case 'stats': {
+                const traces = await parseJsonl(join(dir, 'traces.jsonl')) as TraceSpan[]
+                const messages = await storage.readMessages(id!) as Array<{ role?: string; toolCalls?: unknown[]; isError?: boolean; content?: unknown }>
+                return json(buildStats(traces, messages))
+              }
+              case 'timeline': {
+                const traces = await parseJsonl(join(dir, 'traces.jsonl')) as TraceSpan[]
+                const logs = await parseJsonl(join(dir, 'logs.jsonl')) as LogEntry[]
+                return json(buildTimeline(traces, logs))
+              }
+              default: return json({ error: 'Unknown view' }, 404)
             }
           } catch {
             return json({ error: 'Session not found' }, 404)
           }
-          return json({ error: 'Unknown view' }, 404)
         }
 
         // ── Memory CRUD ──

@@ -150,13 +150,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   const r: Record<string, unknown> = {}
 
-  // Interface selection
-  if (values['mcp-stdio'])    setPath(r, ['interface'], 'mcp-stdio')
-  else if (values.mcp)       setPath(r, ['interface'], 'mcp')
-  else if (values.http) setPath(r, ['interface'], 'http')
-  else if (values.inspector) setPath(r, ['interface'], 'inspector')
-  else if (values.repl) setPath(r, ['interface'], 'repl')
-  else if (values.cli)  setPath(r, ['interface'], 'cli')
+  // Interface selection (first match wins, order matters: mcp-stdio before mcp)
+  const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'repl', 'cli'] as const
+  for (const flag of interfaceFlags) {
+    if (values[flag]) { setPath(r, ['interface'], flag); break }
+  }
 
   // Apply declarative flag rules
   for (const [flag, rule] of Object.entries(FLAG_RULES)) {

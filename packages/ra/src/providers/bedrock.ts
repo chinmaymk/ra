@@ -116,6 +116,11 @@ export class BedrockProvider implements IProvider {
     }))
   }
 
+  private static toBedrockImageFormat(mediaType: string): 'jpeg' | 'png' | 'gif' | 'webp' {
+    const sub = mediaType.split('/')[1] ?? 'jpeg'
+    return (sub === 'jpg' ? 'jpeg' : sub) as 'jpeg' | 'png' | 'gif' | 'webp'
+  }
+
   mapContentParts(parts: ContentPart[]): ContentBlock[] {
     return parts.map((part): ContentBlock => {
       if (part.type === 'text') return { text: part.text }
@@ -124,15 +129,13 @@ export class BedrockProvider implements IProvider {
         if (src.type === 'base64') {
           return {
             image: {
-              format: (src.mediaType.split('/')[1] === 'jpg' ? 'jpeg' : src.mediaType.split('/')[1]) as 'jpeg' | 'png' | 'gif' | 'webp',
+              format: BedrockProvider.toBedrockImageFormat(src.mediaType),
               source: { bytes: Buffer.from(src.data, 'base64') },
             },
           }
         }
-        // URL images not natively supported by Bedrock — fall back to text
         return { text: `[Image: ${src.url}]` }
       }
-      // file/document
       return { text: `[File: ${part.mimeType}]` }
     })
   }

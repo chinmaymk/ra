@@ -5,6 +5,18 @@ import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool
 
 const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
 
+/** Separator for synthetic tool call IDs: `counter::name`. Using `::` avoids collisions with tool names that contain `_` or `-`. */
+const TOOL_ID_SEP = '::'
+
+function makeToolCallId(counter: number, name: string): string {
+  return `${counter}${TOOL_ID_SEP}${name}`
+}
+
+function parseToolCallId(id: string): string {
+  const sepIdx = id.indexOf(TOOL_ID_SEP)
+  return sepIdx >= 0 ? id.slice(sepIdx + TOOL_ID_SEP.length) : id
+}
+
 export interface GoogleProviderOptions {
   apiKey: string
   baseURL?: string
@@ -77,7 +89,7 @@ export class GoogleProvider implements IProvider {
           yield { type: 'text', delta: part.text }
         } else if ('functionCall' in part && part.functionCall) {
           const { name, args } = part.functionCall
-          const id = `${name}_${toolCallCounter++}`
+          const id = makeToolCallId(toolCallCounter++, name)
           yield { type: 'tool_call_start', id, name }
           yield { type: 'tool_call_delta', id, argsDelta: JSON.stringify(args ?? {}) }
           yield { type: 'tool_call_end', id }
@@ -92,8 +104,7 @@ export class GoogleProvider implements IProvider {
   mapMessages(messages: IMessage[]): Content[] {
     const mapped = messages.map((msg): Content => {
       if (msg.role === 'tool') {
-        // toolCallId is formatted as "functionName_counter" — extract the function name for Gemini
-        const toolName = msg.toolCallId!.substring(0, msg.toolCallId!.lastIndexOf('_'))
+        const toolName = parseToolCallId(msg.toolCallId!)
         return {
           role: 'user',
           parts: [{ functionResponse: { name: toolName, response: { content: serializeContent(msg.content) } } }],
@@ -150,7 +161,7 @@ export class GoogleProvider implements IProvider {
       if ('text' in part && part.text) textContent += part.text
       else if ('functionCall' in part && part.functionCall) {
         const { name, args } = part.functionCall
-        toolCalls.push({ id: `${name}_${counter++}`, name, arguments: JSON.stringify(args ?? {}) })
+        toolCalls.push({ id: makeToolCallId(counter++, name), name, arguments: JSON.stringify(args ?? {}) })
       }
     }
     return { role: 'assistant', content: textContent, ...(toolCalls.length && { toolCalls }) }
