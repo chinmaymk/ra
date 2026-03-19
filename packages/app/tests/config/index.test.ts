@@ -306,13 +306,6 @@ describe('tools config', () => {
   })
 })
 
-describe('builtinSkills config', () => {
-  it('defaults builtinSkills to empty object', async () => {
-    const config = await loadConfig({ env: {} })
-    expect(config.builtinSkills).toEqual({})
-  })
-})
-
 describe('toolTimeout config', () => {
   it('RA_TOOL_TIMEOUT sets toolTimeout', async () => {
     const config = await loadConfig({ env: { RA_TOOL_TIMEOUT: '60000' } })

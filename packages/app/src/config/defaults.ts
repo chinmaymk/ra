@@ -43,7 +43,6 @@ export const defaultConfig: RaConfig = {
     builtin: true,
     overrides: {},
   },
-  builtinSkills: {},
   permissions: {},
   middleware: {},
   maxConcurrency: 4,

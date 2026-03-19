@@ -86,7 +86,6 @@ export interface RaConfig {
   maxIterations: number
   toolTimeout: number
   tools: ToolsConfig
-  builtinSkills: Record<string, boolean>
   permissions: PermissionsConfig
   middleware: Record<string, string[]>
   thinking?: 'low' | 'medium' | 'high'
