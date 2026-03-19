@@ -3,6 +3,34 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const base = process.env.DOCS_BASE ?? '/ra/'
+const docsVersion = process.env.DOCS_VERSION ?? 'dev'
+
+// Build version nav dropdown from versions.json (written by build-versioned.sh)
+function buildVersionNav() {
+  const versionsPath = path.resolve(__dirname, 'dist', 'versions.json')
+  let versions: { latest: string; versions: string[] } | null = null
+  try {
+    versions = JSON.parse(fs.readFileSync(versionsPath, 'utf-8'))
+  } catch {
+    // versions.json doesn't exist yet (first build or dev mode)
+  }
+
+  if (!versions || versions.versions.length === 0) {
+    return []
+  }
+
+  const label = docsVersion === 'dev' ? 'dev' : `v${docsVersion}`
+  const items = [
+    { text: 'dev', link: '/ra/dev/', target: '_self' },
+    ...versions.versions.map(v => ({
+      text: `v${v}${v === versions!.latest ? ' (latest)' : ''}`,
+      link: v === versions!.latest ? '/ra/' : `/ra/v/${v}/`,
+      target: '_self',
+    })),
+  ]
+
+  return [{ text: label, items }]
+}
 
 export default defineConfig({
   title: 'ra',
@@ -25,7 +53,7 @@ export default defineConfig({
   },
   themeConfig: {
     logo: '/logo.svg',
-    nav: [],
+    nav: buildVersionNav(),
     sidebar: [
       {
         text: 'Getting Started',

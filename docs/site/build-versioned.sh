@@ -18,6 +18,24 @@ LATEST_TAG=$(git -C "$REPO_ROOT" tag -l 'v*' --sort=-version:refname | head -n1 
 LATEST_VERSION="${LATEST_TAG#v}"
 echo "Latest tag: ${LATEST_TAG:-<none>}  version: ${LATEST_VERSION:-<none>}"
 
+# --- Write versions.json early so config.ts can read it during builds ---
+TAGS=$(git -C "$REPO_ROOT" tag -l 'v*' --sort=-version:refname)
+first=true
+VERSION_LIST=""
+for tag in $TAGS; do
+  version="${tag#v}"
+  if [[ "$first" == true ]]; then
+    VERSION_LIST="\"${version}\""
+    first=false
+  else
+    VERSION_LIST="${VERSION_LIST},\"${version}\""
+  fi
+done
+
+mkdir -p .vitepress/dist
+echo "{\"latest\":\"${LATEST_VERSION}\",\"versions\":[${VERSION_LIST}]}" > .vitepress/dist/versions.json
+echo "==> versions.json: $(cat .vitepress/dist/versions.json)"
+
 # --- Build dev docs ---
 echo ""
 echo "==> Building dev docs..."
@@ -27,6 +45,8 @@ mv .vitepress/dist /tmp/dev-docs-dist
 # --- Build root (latest release label) ---
 echo ""
 echo "==> Building root docs (version label: ${LATEST_VERSION:-dev})..."
+mkdir -p .vitepress/dist
+cp /tmp/dev-docs-dist/versions.json .vitepress/dist/versions.json 2>/dev/null || true
 DOCS_VERSION="${LATEST_VERSION:-dev}" bun vitepress build
 mkdir -p /tmp/root-docs-dist
 cp -r .vitepress/dist/* /tmp/root-docs-dist/
@@ -36,7 +56,6 @@ rm -rf .vitepress/dist
 mkdir -p /tmp/versioned-docs-dist
 
 if [[ "$SKIP_TAGS" == false && -n "$LATEST_TAG" ]]; then
-  TAGS=$(git -C "$REPO_ROOT" tag -l 'v*' --sort=-version:refname)
   for tag in $TAGS; do
     version="${tag#v}"
 
@@ -60,10 +79,13 @@ if [[ "$SKIP_TAGS" == false && -n "$LATEST_TAG" ]]; then
       git -C "$REPO_ROOT" archive HEAD -- docs/site/ | tar -x -C "$TAG_DIR"
     fi
 
-    # Copy current theme so version switcher works in old docs
+    # Copy current theme + config so version nav works in old docs
     rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
     cp -r .vitepress/theme "$TAG_DIR/docs/site/.vitepress/theme"
     cp .vitepress/config.ts "$TAG_DIR/docs/site/.vitepress/config.ts"
+    # Provide versions.json so config can build the nav dropdown
+    mkdir -p "$TAG_DIR/docs/site/.vitepress/dist"
+    cp /tmp/dev-docs-dist/versions.json "$TAG_DIR/docs/site/.vitepress/dist/versions.json"
 
     (cd "$TAG_DIR/docs/site" && bun install && \
      DOCS_BASE="/ra/v/${version}/" DOCS_VERSION="$version" bun vitepress build) || {
@@ -92,29 +114,20 @@ cp -r /tmp/root-docs-dist/* .vitepress/dist/
 mkdir -p .vitepress/dist/dev
 cp -r /tmp/dev-docs-dist/* .vitepress/dist/dev/
 
-# Versioned docs + versions.json
-TAGS=$(git -C "$REPO_ROOT" tag -l 'v*' --sort=-version:refname)
-first=true
-VERSION_LIST=""
-
+# Versioned docs
 for tag in $TAGS; do
   version="${tag#v}"
   if [[ -d "/tmp/versioned-docs-dist/$version" ]]; then
     mkdir -p ".vitepress/dist/v/$version"
     cp -r "/tmp/versioned-docs-dist/$version/"* ".vitepress/dist/v/$version/"
-
-    if [[ "$first" == true ]]; then
-      VERSION_LIST="\"${version}\""
-      first=false
-    else
-      VERSION_LIST="${VERSION_LIST},\"${version}\""
-    fi
   fi
 done
 
+# Ensure versions.json is in final dist
 echo "{\"latest\":\"${LATEST_VERSION}\",\"versions\":[${VERSION_LIST}]}" > .vitepress/dist/versions.json
+
 echo ""
-echo "==> versions.json:"
+echo "==> Final versions.json:"
 cat .vitepress/dist/versions.json
 echo ""
 
