@@ -8,6 +8,16 @@ export function homeDir(): string {
   return homedir()
 }
 
+/** Global ra directory — user-wide config and recipes: ~/.ra */
+export function globalRaDir(): string {
+  return join(homedir(), '.ra')
+}
+
+/** Local ra directory — project-specific data: .ra (relative to cwd) */
+export function localRaDir(): string {
+  return join(process.cwd(), '.ra')
+}
+
 /**
  * Resolve a user-provided path (absolute, relative, or ~/home-relative) against cwd.
  * Handles both forward and back slashes for home-relative paths on Windows.

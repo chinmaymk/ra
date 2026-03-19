@@ -2,7 +2,8 @@ import { parseArgs as utilParseArgs } from 'util'
 import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
-export interface SkillCommand {
+export interface PackageCommand {
+  kind: 'recipe' | 'skill'
   action: 'install' | 'remove' | 'list'
   args: string[]
 }
@@ -14,6 +15,7 @@ export interface ParsedArgsMeta {
   prompt?: string
   resume?: string | true
   configPath?: string
+  recipe?: string
   exec?: string
   showContext: boolean
   showConfig: boolean
@@ -21,7 +23,7 @@ export interface ParsedArgsMeta {
   listMemories: boolean
   memories?: string
   forget?: string
-  skillCommand?: SkillCommand
+  packageCommand?: PackageCommand
 }
 
 export interface ParsedArgs {
@@ -66,23 +68,24 @@ export function parseArgs(argv: string[]): ParsedArgs {
   )
   const userArgs = argv.slice(isScriptPath ? 2 : 1)
 
-  // Check for skill subcommand: ra skill install|remove|list [args...]
-  if (userArgs[0] === 'skill' && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
-    const action = userArgs[1] as 'install' | 'remove' | 'list'
-    const subArgs = userArgs.slice(2)
-    return {
-      config: {},
-      meta: {
-        help: false,
-        version: false,
-        showContext: false,
-        showConfig: false,
-        runImmediately: false,
-        listMemories: false,
-        files: [],
-        skillCommand: { action, args: subArgs },
-      },
+  // Package subcommands:
+  //   ra install recipe <source>  /  ra install skill <source>
+  //   ra remove recipe <name>     /  ra remove skill <name>
+  //   ra list
+  const cmd0 = userArgs[0]
+  const cmd1 = userArgs[1]
+  if (cmd0 === 'list' || ((cmd0 === 'install' || cmd0 === 'remove') && (cmd1 === 'recipe' || cmd1 === 'skill'))) {
+    const emptyMeta: ParsedArgsMeta = {
+      help: false, version: false, showContext: false, showConfig: false,
+      runImmediately: false, listMemories: false, files: [],
     }
+    if (cmd0 === 'list') {
+      return { config: {}, meta: { ...emptyMeta, packageCommand: { kind: 'recipe', action: 'list', args: [] } } }
+    }
+    const kind = cmd1 as 'recipe' | 'skill'
+    const action = cmd0 as 'install' | 'remove'
+    const subArgs = userArgs.slice(2)
+    return { config: {}, meta: { ...emptyMeta, packageCommand: { kind, action, args: subArgs } } }
   }
 
   // Extract --resume manually: supports `--resume` (latest) and `--resume=<id>`.
@@ -105,6 +108,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       // Meta (not mapped to RaConfig)
       exec:                          { type: 'string' },
       config:                        { type: 'string' },
+      recipe:                        { type: 'string' },
+      skill:                         { type: 'string', multiple: true },
       file:                          { type: 'string', multiple: true },
       help:                          { type: 'boolean', short: 'h' },
       version:                       { type: 'boolean', short: 'v' },
@@ -193,6 +198,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       prompt:     positionals.join(' ') || undefined,
       resume:     resumeValue,
       configPath: values.config as string | undefined,
+      recipe:     values.recipe as string | undefined,
       exec:       values.exec as string | undefined,
     },
   }

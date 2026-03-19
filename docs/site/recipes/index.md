@@ -2,24 +2,43 @@
 
 Common patterns and pre-built agent configurations.
 
-## Pre-built recipes
+## Installing recipes
 
-ra ships with ready-to-use agent configurations in the `recipes/` directory. These are complete `ra.config.yaml` files that compose skills, middleware, and settings into purpose-built agents.
-
-### Coding Agent
-
-A general-purpose coding agent with file editing, shell execution, codebase navigation, extended thinking, and smart context compaction. Uses 200 max iterations and high thinking budget.
+Recipes are installed globally to `~/.ra/recipes/` and can be used from any project:
 
 ```bash
-ra --config recipes/coding-agent/ra.config.yaml
+ra install recipe github:chinmaymk/ra    # install all recipes from the ra repo
+ra list                                   # see installed recipes and skills
 ```
 
-### Code Review Agent
-
-Reviews diffs for correctness, style, and performance. Connects to GitHub via MCP, includes a diff-gathering script and style guide, and enforces a token budget via middleware.
+Use an installed recipe with `--recipe`:
 
 ```bash
-ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review this"
+ra --recipe coding-agent "Hello"
+ra --recipe code-review-agent --file diff.patch "Review this"
+```
+
+### Available recipes
+
+| Recipe | Purpose |
+|--------|---------|
+| `coding-agent` | General-purpose coding agent with file editing, shell execution, extended thinking, and smart context compaction |
+| `code-review-agent` | Reviews diffs for correctness, style, and performance. Connects to GitHub via MCP |
+
+### Recipe sources
+
+Recipes can be installed from GitHub repos or URL tarballs. The repo must have a `recipes/` directory at the top level:
+
+```bash
+ra install recipe github:user/repo                # GitHub repo
+ra install recipe https://example.com/recipes.tgz # URL tarball
+```
+
+### Manage installed recipes
+
+```bash
+ra list                              # list installed recipes and skills
+ra remove recipe coding-agent        # remove a recipe
 ```
 
 ## Common patterns

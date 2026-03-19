@@ -1,6 +1,6 @@
 import { errorMessage } from '@chinmaymk/ra'
 import { resolve } from 'path'
-import type { SkillCommand } from './parse-args'
+import type { PackageCommand } from './parse-args'
 import type { IMessage } from '@chinmaymk/ra'
 import type { MemoryStore } from '../memory'
 import type { RaConfig } from '../config/types'
@@ -16,57 +16,120 @@ export async function runExecScript(scriptPath: string): Promise<void> {
   }
 }
 
-/** Handle `ra skill install|remove|list` subcommands. Exits the process. */
-export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
-  const { installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir } = await import('../skills/registry')
-  const { action, args } = cmd
+function formatSource(source: { registry: string; package?: string; repo?: string; version?: string; url?: string }): string {
+  const parts: string[] = [source.registry]
+  if (source.package) parts.push(`: ${source.package}`)
+  else if (source.repo) parts.push(`: ${source.repo}`)
+  if (source.version) parts.push(`@${source.version}`)
+  return ` (${parts.join('')})`
+}
 
-  switch (action) {
-    case 'install': {
-      if (args.length === 0) {
-        console.error('Usage: ra skill install <source>')
-        process.exit(1)
-      }
-      for (const source of args) {
-        try {
-          const installed = await installSkill(source)
-          console.log('Installed skills:', installed.join(', '), '→', defaultSkillInstallDir())
-        } catch (err) {
-          console.error('Failed to install skill:', source, errorMessage(err))
-          process.exit(1)
+/** Handle `ra install|remove|list` subcommands. Exits the process. */
+export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
+  const reg = await import('../skills/registry')
+  const { kind, action, args } = cmd
+
+  // `ra list` lists both recipes and skills
+  if (action === 'list') {
+    const recipes = await reg.listInstalledRecipes()
+    const skills = await reg.listInstalledSkills()
+
+    if (recipes.length === 0 && skills.length === 0) {
+      console.log(`No recipes installed in ${reg.defaultRecipeInstallDir()}`)
+      console.log(`No skills installed in ${reg.defaultSkillInstallDir()}`)
+    } else {
+      if (recipes.length > 0) {
+        console.log('Recipes:')
+        for (const r of recipes) {
+          const src = r.source ? formatSource(r.source) : ''
+          console.log(`  ${r.name}${src}`)
         }
       }
-      process.exit(0)
-    }
-    case 'remove': {
-      if (args.length === 0) {
-        console.error('Usage: ra skill remove <name>')
-        process.exit(1)
-      }
-      for (const name of args) {
-        try {
-          await removeSkill(name)
-          console.log('Removed skill:', name)
-        } catch (err) {
-          console.error('Failed to remove skill:', name, errorMessage(err))
-          process.exit(1)
-        }
-      }
-      process.exit(0)
-    }
-    case 'list': {
-      const skills = await listInstalledSkills()
-      if (skills.length === 0) {
-        console.log('No skills installed in', defaultSkillInstallDir())
-      } else {
+      if (skills.length > 0) {
+        if (recipes.length > 0) console.log()
+        console.log('Skills:')
         for (const s of skills) {
-          const src = s.source
-            ? ' (' + s.source.registry + (s.source.package ? ': ' + s.source.package : '') + (s.source.repo ? ': ' + s.source.repo : '') + (s.source.version ? '@' + s.source.version : '') + ')'
-            : ''
-          console.log('  ' + s.name + src)
+          const src = s.source ? formatSource(s.source) : ''
+          console.log(`  ${s.name}${src}`)
         }
       }
-      process.exit(0)
+    }
+    process.exit(0)
+  }
+
+  if (kind === 'recipe') {
+    switch (action) {
+      case 'install': {
+        if (args.length === 0) {
+          console.error('Usage: ra install recipe <source>')
+          process.exit(1)
+        }
+        for (const source of args) {
+          try {
+            const installed = await reg.installRecipe(source)
+            for (const name of installed) {
+              console.log(`Installed recipe: ${name} → ${reg.defaultRecipeInstallDir()}/${name}`)
+            }
+          } catch (err) {
+            console.error(`Failed to install recipe "${source}": ${errorMessage(err)}`)
+            process.exit(1)
+          }
+        }
+        process.exit(0)
+      }
+      case 'remove': {
+        if (args.length === 0) {
+          console.error('Usage: ra remove recipe <name>')
+          process.exit(1)
+        }
+        for (const name of args) {
+          try {
+            await reg.removeRecipe(name)
+            console.log(`Removed recipe: ${name}`)
+          } catch (err) {
+            console.error(`Failed to remove recipe "${name}": ${errorMessage(err)}`)
+            process.exit(1)
+          }
+        }
+        process.exit(0)
+      }
+    }
+  }
+
+  if (kind === 'skill') {
+    switch (action) {
+      case 'install': {
+        if (args.length === 0) {
+          console.error('Usage: ra install skill <source>')
+          process.exit(1)
+        }
+        for (const source of args) {
+          try {
+            const installed = await reg.installSkill(source)
+            console.log(`Installed skills: ${installed.join(', ')} → ${reg.defaultSkillInstallDir()}`)
+          } catch (err) {
+            console.error(`Failed to install skill "${source}": ${errorMessage(err)}`)
+            process.exit(1)
+          }
+        }
+        process.exit(0)
+      }
+      case 'remove': {
+        if (args.length === 0) {
+          console.error('Usage: ra remove skill <name>')
+          process.exit(1)
+        }
+        for (const name of args) {
+          try {
+            await reg.removeSkill(name)
+            console.log(`Removed skill: ${name}`)
+          } catch (err) {
+            console.error(`Failed to remove skill "${name}": ${errorMessage(err)}`)
+            process.exit(1)
+          }
+        }
+        process.exit(0)
+      }
     }
   }
 }

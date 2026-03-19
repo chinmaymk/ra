@@ -32,12 +32,11 @@ export function resolveSkillAsset(list: string[], name: string, prefix: string):
 
 /** Source information for a package installed from a registry */
 export interface PackageSource {
-  registry: 'npm' | 'github' | 'url' | 'builtin'
+  registry: 'npm' | 'github' | 'url'
   package?: string      // npm package name
   repo?: string         // github owner/repo
   url?: string          // raw URL
   version?: string      // installed version
-  recipeName?: string   // builtin recipe name
   installedAt: string   // ISO timestamp
 }
 

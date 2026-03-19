@@ -205,31 +205,52 @@ describe('parseArgs', () => {
     })
   })
 
-  describe('skill subcommands', () => {
-    it('parses "skill install <source>"', () => {
-      const r = parseArgs(dev('skill', 'install', 'code-review'))
-      expect(r.meta.skillCommand).toEqual({ action: 'install', args: ['code-review'] })
+  describe('package subcommands', () => {
+    it('parses "install recipe <source>"', () => {
+      const r = parseArgs(dev('install', 'recipe', 'github:user/repo'))
+      expect(r.meta.packageCommand).toEqual({ kind: 'recipe', action: 'install', args: ['github:user/repo'] })
     })
 
-    it('parses "skill install" with multiple sources', () => {
-      const r = parseArgs(dev('skill', 'install', 'review', 'lint'))
-      expect(r.meta.skillCommand).toEqual({ action: 'install', args: ['review', 'lint'] })
+    it('parses "install skill <source>"', () => {
+      const r = parseArgs(dev('install', 'skill', 'code-review'))
+      expect(r.meta.packageCommand).toEqual({ kind: 'skill', action: 'install', args: ['code-review'] })
     })
 
-    it('parses "skill remove <name>"', () => {
-      const r = parseArgs(dev('skill', 'remove', 'review'))
-      expect(r.meta.skillCommand).toEqual({ action: 'remove', args: ['review'] })
+    it('parses "install skill" with multiple sources', () => {
+      const r = parseArgs(dev('install', 'skill', 'review', 'lint'))
+      expect(r.meta.packageCommand).toEqual({ kind: 'skill', action: 'install', args: ['review', 'lint'] })
     })
 
-    it('parses "skill list"', () => {
-      const r = parseArgs(dev('skill', 'list'))
-      expect(r.meta.skillCommand).toEqual({ action: 'list', args: [] })
+    it('parses "remove recipe <name>"', () => {
+      const r = parseArgs(dev('remove', 'recipe', 'coding-agent'))
+      expect(r.meta.packageCommand).toEqual({ kind: 'recipe', action: 'remove', args: ['coding-agent'] })
     })
 
-    it('does not treat "skill" without subcommand as skill command', () => {
-      const r = parseArgs(dev('skill'))
-      expect(r.meta.skillCommand).toBeUndefined()
-      expect(r.meta.prompt).toBe('skill')
+    it('parses "remove skill <name>"', () => {
+      const r = parseArgs(dev('remove', 'skill', 'review'))
+      expect(r.meta.packageCommand).toEqual({ kind: 'skill', action: 'remove', args: ['review'] })
+    })
+
+    it('parses "list"', () => {
+      const r = parseArgs(dev('list'))
+      expect(r.meta.packageCommand).toEqual({ kind: 'recipe', action: 'list', args: [] })
+    })
+
+    it('does not treat "install" without kind as package command', () => {
+      const r = parseArgs(dev('install'))
+      expect(r.meta.packageCommand).toBeUndefined()
+      expect(r.meta.prompt).toBe('install')
+    })
+  })
+
+  describe('--recipe flag', () => {
+    it('parses --recipe into meta.recipe', () => {
+      const r = parseArgs(dev('--recipe', 'coding-agent'))
+      expect(r.meta.recipe).toBe('coding-agent')
+    })
+
+    it('defaults recipe to undefined', () => {
+      expect(parseArgs(dev()).meta.recipe).toBeUndefined()
     })
   })
 

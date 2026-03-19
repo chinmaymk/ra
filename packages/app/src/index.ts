@@ -5,7 +5,7 @@ import type { RaConfig } from './config/types'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { HELP } from './interfaces/help'
-import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showConfig } from './interfaces/commands'
+import { runExecScript, runPackageCommand, showContext, runMemoryCommand, showConfig } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
@@ -52,8 +52,18 @@ async function handleEarlyExits(parsed: ReturnType<typeof parseArgs>): Promise<v
     console.log(HELP)
     process.exit(0)
   }
-  if (parsed.meta.skillCommand) {
-    await runSkillCommand(parsed.meta.skillCommand)
+  if (parsed.meta.packageCommand) {
+    await runPackageCommand(parsed.meta.packageCommand)
+  }
+  // Resolve --recipe to a config path
+  if (parsed.meta.recipe) {
+    const { resolveRecipeConfigPath } = await import('./skills/registry')
+    const configPath = await resolveRecipeConfigPath(parsed.meta.recipe)
+    if (!configPath) {
+      console.error(`Recipe not found: ${parsed.meta.recipe}`)
+      process.exit(1)
+    }
+    parsed.meta.configPath = configPath
   }
 }
 

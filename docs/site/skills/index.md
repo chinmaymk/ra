@@ -117,50 +117,27 @@ app:
     - ~/.ra/skills      # globally installed skills
 ```
 
-## Installing skills from registries
+By default, ra scans `.ra/skills`, `.claude/skills`, `.agents/skills`, and `.opencode/skills`.
 
-ra can download skills from npm, GitHub, or URLs and store them in `~/.ra/skills`.
+## Installing skills
 
-### Install from npm
+Skills are installed project-locally into `.ra/skills/`:
 
 ```bash
-ra skill install code-review                  # bare package name
-ra skill install npm:ra-skill-lint            # explicit npm prefix
-ra skill install npm:ra-skill-lint@1.2.3      # specific version
+ra install skill code-review                  # npm package "code-review"
+ra install skill npm:ra-skill-lint            # explicit npm prefix
+ra install skill npm:ra-skill-lint@1.2.3      # specific version
+ra install skill github:user/ra-skill-review  # GitHub repository
+ra install skill https://example.com/s.tgz    # URL tarball
 ```
 
 **Package convention:** Packages can either have a `SKILL.md` at their root, or contain one or more skill subdirectories (each with its own `SKILL.md`). The `ra-skill-` prefix in the package name is stripped when naming the installed skill directory.
 
-### Install from GitHub
-
-```bash
-ra skill install github:user/ra-skill-review
-```
-
-Downloads the default branch and looks for skill directories within.
-
-### Install from URL
-
-```bash
-ra skill install https://example.com/skills.tgz
-```
-
-Downloads and extracts a tarball, then installs any skill directories found inside.
-
 ### Manage installed skills
 
 ```bash
-ra skill list                     # list installed skills
-ra skill remove code-review       # remove a skill
-```
-
-After installing, add `~/.ra/skills` to your skill directories:
-
-```yaml
-app:
-  skillDirs:
-    - ./skills           # project-local skills
-    - ~/.ra/skills       # installed skills
+ra list                           # list installed skills and recipes
+ra remove skill code-review       # remove a skill
 ```
 
 ## Scripts

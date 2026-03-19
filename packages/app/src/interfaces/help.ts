@@ -10,6 +10,7 @@ OPTIONS
   --system-prompt <text>              System prompt text or path to file
   --max-iterations <n>                Max agent loop iterations
   --config <path>                     Path to config file
+  --recipe <name>                     Use an installed recipe
   --skill <name>                      Skill to activate for this run (repeatable)
   --skill-dir <path>                  Directory to load skills from (repeatable)
   --file <path>                       File to attach (repeatable)
@@ -62,16 +63,22 @@ PROVIDER OPTIONS
   --version, -v                       Print version and exit
   --help, -h                          Print this help message
 
-SKILL MANAGEMENT
-  ra skill install <source>           Install skill from npm, GitHub, or URL
-  ra skill remove <name>              Remove an installed skill
-  ra skill list                       List installed skills
+PACKAGE MANAGEMENT
+  ra install recipe <source>          Install recipe(s) from a GitHub repo or URL
+  ra install skill <source>           Install a skill from npm, GitHub, or URL
+  ra remove recipe <name>             Remove an installed recipe
+  ra remove skill <name>              Remove an installed skill
+  ra list                             List installed recipes and skills
 
-  Sources:
-    ra skill install code-review             npm package "code-review"
-    ra skill install npm:ra-skill-lint@1.0   npm with version
-    ra skill install github:user/repo        GitHub repository
-    ra skill install https://example.com/s.tgz  URL tarball
+  Recipe sources:
+    ra install recipe github:user/repo          GitHub repo (recipes/ folder)
+    ra install recipe https://example.com/r.tgz URL tarball
+
+  Skill sources:
+    ra install skill code-review                npm package "code-review"
+    ra install skill npm:ra-skill-lint@1.0      npm with version
+    ra install skill github:user/repo           GitHub repository
+    ra install skill https://example.com/s.tgz  URL tarball
 
 ENV VARS
   Config files and defaults support Docker Compose–style interpolation:
