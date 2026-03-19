@@ -780,4 +780,66 @@ describe('AgentLoop', () => {
     expect(assistantMsg?.toolCalls).toHaveLength(1)
     expect(assistantMsg?.toolCalls![0]!.name).toBe('noop')
   })
+
+  it('truncates tool output exceeding maxToolResponseSize', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'big' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    const bigOutput = 'x'.repeat(200)
+    tools.register({ name: 'big', description: '', inputSchema: {}, execute: async () => bigOutput })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10, maxToolResponseSize: 100 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    expect(toolResult?.content).toContain('<response clipped>')
+    expect(toolResult?.content).toContain('200')
+    expect(toolResult?.content).toContain('100')
+    const contentPortion = (toolResult!.content as string).split('\n\n<response clipped>')[0]!
+    expect(contentPortion.length).toBeLessThanOrEqual(100)
+  })
+
+  it('does not truncate tool output within maxToolResponseSize', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'small' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    const smallOutput = 'hello world'
+    tools.register({ name: 'small', description: '', inputSchema: {}, execute: async () => smallOutput })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10, maxToolResponseSize: 100 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    expect(toolResult?.content).toBe(smallOutput)
+  })
+
+  it('truncates at newline boundary when possible', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'lines' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    // Build output with lines of 10 chars each: "line 0000\n" = 10 chars
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${String(i).padStart(4, '0')}`)
+    const bigOutput = lines.join('\n')
+    tools.register({ name: 'lines', description: '', inputSchema: {}, execute: async () => bigOutput })
+    const loop = new AgentLoop({ provider, tools, maxIterations: 10, maxToolResponseSize: 100 })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    // The content before the clipping notice should end at a newline boundary
+    const clippedContent = (toolResult!.content as string).split('\n\n<response clipped>')[0]!
+    expect(clippedContent.endsWith('\n') || !clippedContent.includes('\n') || lines.some(l => clippedContent.endsWith(l))).toBe(true)
+  })
 })

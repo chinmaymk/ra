@@ -43,6 +43,7 @@ export const defaultConfig: RaConfig = {
   tools: {
     builtin: true,
     overrides: {},
+    maxResponseSize: 25000,
   },
   permissions: {},
   middleware: {},
