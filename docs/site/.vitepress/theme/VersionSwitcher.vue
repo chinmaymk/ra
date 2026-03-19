@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 
 interface VersionsData {
   latest: string
@@ -9,6 +9,8 @@ interface VersionsData {
 const data = ref<VersionsData | null>(null)
 const open = ref(false)
 const currentView = ref<string | null>(null)
+const btnRef = ref<HTMLElement | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
 
 const siteRoot = '/ra/'
 
@@ -42,8 +44,26 @@ function versionUrl(version: string) {
   return `${siteRoot}v/${version}/`
 }
 
-function toggle() {
+function isActive(v: string) {
+  return currentView.value === v || (!currentView.value && v === data.value?.latest)
+}
+
+async function toggle() {
   open.value = !open.value
+  if (open.value) {
+    await nextTick()
+    positionDropdown()
+  }
+}
+
+function positionDropdown() {
+  if (!btnRef.value) return
+  const rect = btnRef.value.getBoundingClientRect()
+  dropdownStyle.value = {
+    position: 'fixed',
+    top: `${rect.bottom + 4}px`,
+    right: `${window.innerWidth - rect.right}px`,
+  }
 }
 
 function close() {
@@ -53,33 +73,35 @@ function close() {
 
 <template>
   <div v-if="data && data.versions.length > 0" class="version-switcher" @mouseleave="close">
-    <button class="version-btn" @click="toggle">
+    <button ref="btnRef" class="version-btn" @click="toggle">
       {{ displayLabel }}
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
     </button>
-    <div v-show="open" class="version-dropdown">
-      <a
-        :href="versionUrl('dev')"
-        class="version-item"
-        :class="{ active: currentView === 'dev' }"
-        @click="close"
-      >
-        dev
-      </a>
-      <a
-        v-for="v in data.versions"
-        :key="v"
-        :href="v === data.latest ? siteRoot : versionUrl(v)"
-        class="version-item"
-        :class="{ active: currentView === v || (!currentView && v === data.latest) }"
-        @click="close"
-      >
-        v{{ v }}
-        <span v-if="v === data.latest" class="latest-badge">latest</span>
-      </a>
-    </div>
+    <Teleport to="body">
+      <div v-show="open" class="version-dropdown" :style="dropdownStyle" @mouseleave="close">
+        <a
+          :href="versionUrl('dev')"
+          class="version-item"
+          :class="{ active: currentView === 'dev' }"
+          @click="close"
+        >
+          dev
+        </a>
+        <a
+          v-for="v in data.versions"
+          :key="v"
+          :href="v === data.latest ? siteRoot : versionUrl(v)"
+          class="version-item"
+          :class="{ active: isActive(v) }"
+          @click="close"
+        >
+          v{{ v }}
+          <span v-if="v === data.latest" class="latest-badge">latest</span>
+        </a>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -113,11 +135,11 @@ function close() {
   color: var(--vp-c-brand-1);
   border-color: var(--vp-c-brand-1);
 }
+</style>
 
+<style>
+/* Dropdown is teleported to body, so styles must be global */
 .version-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
   min-width: 140px;
   padding: 4px;
   background: var(--vp-c-bg-elv);
