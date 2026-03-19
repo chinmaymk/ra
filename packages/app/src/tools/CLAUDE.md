@@ -16,11 +16,9 @@ Built-in tools, each in its own file. `index.ts` registers them all.
 | `move-file.ts` | `MoveFile` | Filesystem |
 | `copy-file.ts` | `CopyFile` | Filesystem |
 | `delete-file.ts` | `DeleteFile` | Filesystem |
-| `execute-bash.ts` | `Bash` | Shell (Linux/macOS) |
-| `execute-powershell.ts` | `PowerShell` | Shell (Windows) |
+| `shell-exec.ts` | `Bash` / `PowerShell` | Shell (platform-specific) |
 | `web-fetch.ts` | `WebFetch` | Network |
 | `ask-user.ts` | `AskUserQuestion` | Agent interaction |
-| `checklist.ts` | `TodoWrite` | Agent interaction |
 | `subagent.ts` | `Agent` | Agent interaction (exported separately, not auto-registered) |
 
 ## Tool Pattern
