@@ -26,7 +26,7 @@ jobs:
         run: bun tsc --noEmit
 
       - name: Test
-        run: bun test packages/app/tests packages/ra
+        run: bun test packages/ra/tests packages/app/tests
 
   goreleaser:
     name: Release
