@@ -20,13 +20,23 @@ function buildVersionNav() {
   }
 
   const label = docsVersion === 'dev' ? 'dev' : `v${docsVersion}`
+  const minVersion = [0, 0, 4]
   const items = [
     { text: 'dev', link: '/ra/dev/', target: '_self' },
-    ...versions.versions.map(v => ({
-      text: `v${v}${v === versions!.latest ? ' (latest)' : ''}`,
-      link: v === versions!.latest ? '/ra/' : `/ra/v/${v}/`,
-      target: '_self',
-    })),
+    ...versions.versions
+      .filter(v => {
+        const parts = v.split('.').map(Number)
+        for (let i = 0; i < 3; i++) {
+          if ((parts[i] ?? 0) > minVersion[i]) return true
+          if ((parts[i] ?? 0) < minVersion[i]) return false
+        }
+        return true
+      })
+      .map(v => ({
+        text: `v${v}${v === versions!.latest ? ' (latest)' : ''}`,
+        link: v === versions!.latest ? '/ra/' : `/ra/v/${v}/`,
+        target: '_self',
+      })),
   ]
 
   return [{ text: label, items }]
