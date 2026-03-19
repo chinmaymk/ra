@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { AgentLoop, serializeContent, errorMessage, type IMessage } from '@chinmaymk/ra'
-import { loadConfig, loadConfigFile } from './config'
+import { loadConfig } from './config'
 import type { RaConfig } from './config/types'
+import type { RecipeResolver } from './config'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { HELP } from './interfaces/help'
@@ -328,31 +329,26 @@ async function main(): Promise<void> {
     parsedApp.interface = 'cli' as const
   }
 
-  // Resolve recipe: --recipe CLI flag > config file's recipe field.
-  // Read the raw config file (cheap) to check for recipe before the full loadConfig.
-  let recipeName = parsed.meta.recipe
-  if (!recipeName) {
-    const { config: rawFile } = await loadConfigFile(process.cwd(), parsed.meta.configPath)
-    recipeName = rawFile.recipe
-  }
-
-  let recipePath: string | undefined
-  if (recipeName) {
+  // Recipe resolver: lazily imports skills/registry to avoid circular deps
+  const resolveRecipePath: RecipeResolver = async (name) => {
     const { resolveRecipeConfigPath } = await import('./skills/registry')
-    recipePath = await resolveRecipeConfigPath(recipeName)
-    if (!recipePath) {
-      console.error(`Recipe not found: ${recipeName}`)
-      process.exit(1)
-    }
+    return resolveRecipeConfigPath(name)
   }
 
-  const config = await loadConfig({
-    cwd: process.cwd(),
-    configPath: parsed.meta.configPath,
-    cliArgs: parsed.config,
-    env: process.env as Record<string, string | undefined>,
-    ...(recipePath && { recipePath }),
-  })
+  let config: Awaited<ReturnType<typeof loadConfig>>
+  try {
+    config = await loadConfig({
+      cwd: process.cwd(),
+      configPath: parsed.meta.configPath,
+      cliArgs: parsed.config,
+      env: process.env as Record<string, string | undefined>,
+      recipeName: parsed.meta.recipe,
+      resolveRecipePath,
+    })
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err))
+    process.exit(1)
+  }
 
   if (parsed.meta.showConfig || parsed.meta.showContext) {
     const { discoverContextFiles, buildContextMessages } = await import('./context')

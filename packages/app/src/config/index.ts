@@ -56,16 +56,8 @@ export async function loadConfigFile(cwd: string, configPath?: string): Promise<
     if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
     return { config: {} }
   }
-  let dir = cwd
-  while (true) {
-    for (const name of CONFIG_FILES) {
-      const full = join(dir, name)
-      if (await Bun.file(full).exists()) return { config: await parseFile(full), filePath: full }
-    }
-    const parent = dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
+  const filePath = await findConfigFilePath(cwd)
+  if (filePath) return { config: await parseFile(filePath), filePath }
   return { config: {} }
 }
 
@@ -221,10 +213,9 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   const config = merged as unknown as RaConfig
   config.app.configDir = configDir
 
-  // Resolve dataDir against configDir
+  // 5. Resolve paths
   config.app.dataDir = resolvePath(config.app.dataDir, configDir)
 
-  // Only try loading systemPrompt as a file if it looks like a path
   if (config.agent.systemPrompt && looksLikePath(config.agent.systemPrompt, ['.txt', '.md'])) {
     const resolved = resolvePath(config.agent.systemPrompt, configDir)
     const f = Bun.file(resolved)

@@ -146,6 +146,71 @@ describe('loadConfig with recipePath', () => {
   })
 })
 
+// ── recipeName + resolveRecipePath (name-based resolution) ──────────
+
+describe('loadConfig with recipeName + resolveRecipePath', () => {
+  it('resolves recipe by name via callback', async () => {
+    const recipePath = writeRecipe(['maxIterations: 200'])
+    const resolver = async (name: string) => name === 'my-recipe' ? recipePath : undefined
+
+    const config = await loadConfig({
+      cwd: TMP, env: {}, recipeName: 'my-recipe', resolveRecipePath: resolver,
+    })
+
+    expect(config.maxIterations).toBe(200)
+  })
+
+  it('picks up recipe name from config file when recipeName is not provided', async () => {
+    const recipePath = writeRecipe(['maxIterations: 200'])
+    writeFileSync(join(TMP, 'ra.config.yaml'), 'recipe: my-recipe\n')
+    const resolver = async (name: string) => name === 'my-recipe' ? recipePath : undefined
+
+    const config = await loadConfig({
+      cwd: TMP, env: {}, resolveRecipePath: resolver,
+    })
+
+    expect(config.maxIterations).toBe(200)
+  })
+
+  it('recipeName from option takes precedence over config file recipe field', async () => {
+    const recipeA = writeRecipe(['maxIterations: 100'])
+    const recipeBDir = join(TMP, 'recipe-b')
+    mkdirSync(recipeBDir, { recursive: true })
+    const recipeBPath = join(recipeBDir, 'ra.config.yaml')
+    writeFileSync(recipeBPath, 'maxIterations: 200')
+
+    writeFileSync(join(TMP, 'ra.config.yaml'), 'recipe: recipe-a\n')
+    const resolver = async (name: string) => {
+      if (name === 'recipe-a') return recipeA
+      if (name === 'recipe-b') return recipeBPath
+      return undefined
+    }
+
+    const config = await loadConfig({
+      cwd: TMP, env: {}, recipeName: 'recipe-b', resolveRecipePath: resolver,
+    })
+
+    expect(config.maxIterations).toBe(200)
+  })
+
+  it('throws when recipe name cannot be resolved', async () => {
+    const resolver = async () => undefined
+
+    expect(loadConfig({
+      cwd: TMP, env: {}, recipeName: 'nonexistent', resolveRecipePath: resolver,
+    })).rejects.toThrow('Recipe not found: nonexistent')
+  })
+
+  it('skips resolution when no resolveRecipePath callback is provided', async () => {
+    writeFileSync(join(TMP, 'ra.config.yaml'), 'recipe: some-recipe\n')
+
+    // No resolver provided — recipe field is ignored, no error
+    const config = await loadConfig({ cwd: TMP, env: {} })
+    expect(config.recipe).toBe('some-recipe')
+    expect(config.maxIterations).toBe(50) // default, not recipe
+  })
+})
+
 // ── config.recipe field ─────────────────────────────────────────────
 
 describe('config file recipe field', () => {

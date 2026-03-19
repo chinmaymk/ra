@@ -159,10 +159,18 @@ export interface McpServerConfig {
   }
 }
 
+/** Resolves a recipe name to its config file path. Returns undefined if not found. */
+export type RecipeResolver = (name: string) => Promise<string | undefined>
+
 export interface LoadConfigOptions {
   cwd?: string
   configPath?: string
-  recipePath?: string
   cliArgs?: Partial<RaConfig>
   env?: Record<string, string | undefined>
+  /** Recipe name from --recipe flag. If omitted, loadConfig checks the config file's `recipe` field. */
+  recipeName?: string
+  /** Direct path to a recipe config file (skips name resolution). Used by tests. */
+  recipePath?: string
+  /** Callback to resolve a recipe name → config file path. Required when using recipeName or config file recipe field. */
+  resolveRecipePath?: RecipeResolver
 }
