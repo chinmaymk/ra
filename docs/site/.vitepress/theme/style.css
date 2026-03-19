@@ -91,6 +91,51 @@
   max-width: 1080px !important;
 }
 
+/* Nav bar — extend background across full width (VitePress only applies it to .content-body) */
+.dark .VPNavBar {
+  background-color: var(--vp-nav-bg-color) !important;
+}
+
+/* Search button — fix focus ring and border in solarized dark */
+.dark .DocSearch-Button {
+  border: 1px solid var(--vp-c-border) !important;
+  background-color: var(--vp-c-bg-soft) !important;
+}
+
+.dark .DocSearch-Button:focus {
+  outline: none !important;
+  border-color: var(--vp-c-brand-1) !important;
+}
+
+.dark .DocSearch-Button:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 1px;
+}
+
+/* Thin, subtle scrollbars that blend with both themes */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--vp-c-border);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-text-3);
+}
+
 /* Local search modal */
 .dark .VPLocalSearchBox {
   --vp-local-search-bg: #002b36;
