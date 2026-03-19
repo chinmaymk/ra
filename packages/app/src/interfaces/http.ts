@@ -33,6 +33,7 @@ export interface HttpOptions {
   skillMap?: Map<string, Skill>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
+  maxRetries?: number
   toolTimeout?: number
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
@@ -161,6 +162,7 @@ export class HttpServer {
       model: this.options.model,
       middleware: mergeMiddleware(extraMiddleware, session.middleware),
       maxIterations: this.options.maxIterations,
+      maxRetries: this.options.maxRetries,
       toolTimeout: this.options.toolTimeout,
       sessionId,
       thinking: this.options.thinking,
