@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { loadConfig } from '../../src/config'
+import { loadConfig, findConfigFilePath } from '../../src/config'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -657,5 +657,52 @@ describe('legacy flat config migration', () => {
     ].join('\n'))
     const c = await loadConfig({ cwd: tmp, env: {} })
     expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-direct')
+  })
+})
+
+describe('findConfigFilePath', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-findconfig-test-${Date.now()}`)
+    mkdirSync(tmp, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('returns undefined when no config file exists', async () => {
+    expect(await findConfigFilePath(tmp)).toBeUndefined()
+  })
+
+  it('finds ra.config.yaml in cwd', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), 'provider: anthropic')
+    expect(await findConfigFilePath(tmp)).toBe(join(tmp, 'ra.config.yaml'))
+  })
+
+  it('finds ra.config.json in cwd', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), '{}')
+    expect(await findConfigFilePath(tmp)).toBe(join(tmp, 'ra.config.json'))
+  })
+
+  it('finds ra.config.toml in cwd', async () => {
+    writeFileSync(join(tmp, 'ra.config.toml'), 'provider = "openai"')
+    expect(await findConfigFilePath(tmp)).toBe(join(tmp, 'ra.config.toml'))
+  })
+
+  it('walks up to find config in parent directory', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), 'provider: google')
+    const child = join(tmp, 'a', 'b', 'c')
+    mkdirSync(child, { recursive: true })
+    expect(await findConfigFilePath(child)).toBe(join(tmp, 'ra.config.yaml'))
+  })
+
+  it('prefers config in cwd over parent', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), 'provider: google')
+    const child = join(tmp, 'sub')
+    mkdirSync(child, { recursive: true })
+    writeFileSync(join(child, 'ra.config.json'), '{}')
+    expect(await findConfigFilePath(child)).toBe(join(child, 'ra.config.json'))
   })
 })

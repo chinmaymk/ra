@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { AgentLoop, serializeContent, errorMessage, type IMessage } from '@chinmaymk/ra'
-import { loadConfig } from './config'
+import { loadConfig, loadConfigFile } from './config'
 import type { RaConfig } from './config/types'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
@@ -328,31 +328,21 @@ async function main(): Promise<void> {
     parsedApp.interface = 'cli' as const
   }
 
-  // Resolve recipe name: --recipe CLI flag takes precedence, then config file recipe field.
-  // We do a preliminary load (without recipe) to read the config file's recipe field,
-  // then reload with the recipe inserted into the layer chain (defaults < recipe < file < env < CLI).
+  // Resolve recipe: --recipe CLI flag > config file's recipe field.
+  // Read the raw config file (cheap) to check for recipe before the full loadConfig.
+  let recipeName = parsed.meta.recipe
+  if (!recipeName) {
+    const { config: rawFile } = await loadConfigFile(process.cwd(), parsed.meta.configPath)
+    recipeName = rawFile.recipe
+  }
+
   let recipePath: string | undefined
-  if (parsed.meta.recipe) {
+  if (recipeName) {
     const { resolveRecipeConfigPath } = await import('./skills/registry')
-    recipePath = await resolveRecipeConfigPath(parsed.meta.recipe)
+    recipePath = await resolveRecipeConfigPath(recipeName)
     if (!recipePath) {
-      console.error(`Recipe not found: ${parsed.meta.recipe}`)
+      console.error(`Recipe not found: ${recipeName}`)
       process.exit(1)
-    }
-  } else {
-    // Check if the config file itself specifies a recipe
-    const preliminary = await loadConfig({
-      cwd: process.cwd(),
-      configPath: parsed.meta.configPath,
-      env: process.env as Record<string, string | undefined>,
-    })
-    if (preliminary.recipe) {
-      const { resolveRecipeConfigPath } = await import('./skills/registry')
-      recipePath = await resolveRecipeConfigPath(preliminary.recipe)
-      if (!recipePath) {
-        console.error(`Recipe not found: ${preliminary.recipe}`)
-        process.exit(1)
-      }
     }
   }
 
