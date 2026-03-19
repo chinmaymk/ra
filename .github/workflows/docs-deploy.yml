@@ -22,40 +22,6 @@ jobs:
         run: bun install
         working-directory: docs/site
 
-      - name: Determine latest tag
-        id: latest-tag
-        run: |
-          LATEST=$(git tag -l 'v*' --sort=-version:refname | head -n1)
-          if [ -n "$LATEST" ]; then
-            echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
-            echo "version=${LATEST#v}" >> "$GITHUB_OUTPUT"
-            echo "Latest tag: $LATEST"
-          else
-            echo "tag=" >> "$GITHUB_OUTPUT"
-            echo "version=" >> "$GITHUB_OUTPUT"
-            echo "No tags found"
-          fi
-
-      - name: Build dev docs (from main)
-        working-directory: docs/site
-        run: |
-          DOCS_BASE="/ra/dev/" DOCS_VERSION="dev" bun vitepress build
-          mv .vitepress/dist /tmp/dev-docs-dist
-
-      - name: Build latest release docs (for site root)
-        if: steps.latest-tag.outputs.tag != ''
-        working-directory: docs/site
-        run: |
-          LATEST_VERSION="${{ steps.latest-tag.outputs.version }}"
-
-          # Build from main with the latest release version label.
-          # Main always has the most up-to-date docs content (link fixes,
-          # typos, etc.), so it's the best source for the site root.
-          DOCS_VERSION="$LATEST_VERSION" bun vitepress build
-          mkdir -p /tmp/root-docs-dist
-          cp -r .vitepress/dist/* /tmp/root-docs-dist/
-          rm -rf .vitepress/dist
-
       - name: Compute version cache key
         id: version-key
         run: |
@@ -72,93 +38,9 @@ jobs:
           key: ${{ steps.version-key.outputs.key }}
           restore-keys: docs-versions-
 
-      - name: Build versioned docs from tags
+      - name: Build versioned docs
         working-directory: docs/site
-        run: |
-          TAGS=$(git tag -l 'v*' --sort=-version:refname)
-          REPO_ROOT=$(git rev-parse --show-toplevel)
-          mkdir -p /tmp/versioned-docs-dist
-
-          for tag in $TAGS; do
-            version="${tag#v}"
-
-            # Skip if already cached from a previous build
-            if [ -d "/tmp/versioned-docs-dist/$version" ]; then
-              echo "Cache hit for $tag — skipping build"
-              continue
-            fi
-
-            echo "Building docs for $tag..."
-
-            TAG_DIR=$(mktemp -d)
-            if git -C "$REPO_ROOT" archive "$tag" -- docs/site/ 2>/dev/null | tar -x -C "$TAG_DIR" 2>/dev/null && [ -f "$TAG_DIR/docs/site/package.json" ]; then
-              echo "  Using docs/site/ from $tag"
-            else
-              echo "  Tag $tag has no docs/site/ — using current source"
-              rm -rf "$TAG_DIR"
-              TAG_DIR=$(mktemp -d)
-              git -C "$REPO_ROOT" archive HEAD -- docs/site/ | tar -x -C "$TAG_DIR"
-            fi
-
-            # Copy the current theme so version switcher works
-            rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
-            cp -r .vitepress/theme "$TAG_DIR/docs/site/.vitepress/theme"
-
-            # Copy the current config so versioned docs get full nav/sidebar
-            cp .vitepress/config.ts "$TAG_DIR/docs/site/.vitepress/config.ts"
-
-            (cd "$TAG_DIR/docs/site" && bun install && DOCS_BASE="/ra/v/${version}/" DOCS_VERSION="$version" bun vitepress build) || {
-              echo "  Warning: build failed for $tag, skipping"
-              rm -rf "$TAG_DIR"
-              continue
-            }
-
-            mkdir -p "/tmp/versioned-docs-dist/$version"
-            cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* "/tmp/versioned-docs-dist/$version/"
-            rm -rf "$TAG_DIR"
-            echo "  Done: v$version"
-          done
-
-      - name: Assemble site
-        working-directory: docs/site
-        run: |
-          TAGS=$(git tag -l 'v*' --sort=-version:refname)
-          LATEST_VERSION="${{ steps.latest-tag.outputs.version }}"
-
-          # Root: use latest tag build if available, otherwise build main
-          # with root base as fallback (first deploy before any release)
-          mkdir -p .vitepress/dist
-          if [ -d /tmp/root-docs-dist ]; then
-            cp -r /tmp/root-docs-dist/* .vitepress/dist/
-          else
-            bun run build
-          fi
-
-          # Add dev docs
-          mkdir -p .vitepress/dist/dev
-          cp -r /tmp/dev-docs-dist/* .vitepress/dist/dev/
-
-          # Add versioned docs and build versions.json
-          first=true
-          VERSION_LIST=""
-
-          for tag in $TAGS; do
-            version="${tag#v}"
-            if [ -d "/tmp/versioned-docs-dist/$version" ]; then
-              mkdir -p ".vitepress/dist/v/$version"
-              cp -r "/tmp/versioned-docs-dist/$version/"* ".vitepress/dist/v/$version/"
-
-              if [ "$first" = true ]; then
-                VERSION_LIST="\"${version}\""
-                first=false
-              else
-                VERSION_LIST="${VERSION_LIST},\"${version}\""
-              fi
-            fi
-          done
-
-          echo "{\"latest\":\"${LATEST_VERSION}\",\"versions\":[${VERSION_LIST}]}" > .vitepress/dist/versions.json
-          echo "versions.json written (latest: ${LATEST_VERSION})"
+        run: ./build-versioned.sh
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
