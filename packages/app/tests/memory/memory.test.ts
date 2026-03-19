@@ -168,6 +168,44 @@ describe('MemoryStore', () => {
     // Prevent afterEach from double-closing
     store = new MemoryStore({ path: join(TMP, 'dummy.db'), maxMemories: 100, ttlDays: 30 })
   })
+
+  it('deleteById returns true when memory exists', () => {
+    const m = store.save('to be deleted')
+    expect(store.deleteById(m.id)).toBe(true)
+    expect(store.count()).toBe(0)
+  })
+
+  it('deleteById returns false for nonexistent ID', () => {
+    expect(store.deleteById(99999)).toBe(false)
+  })
+
+  it('deleteById removes memory from FTS index', () => {
+    const m = store.save('findable content', 'tag')
+    expect(store.search('findable')).toHaveLength(1)
+    store.deleteById(m.id)
+    expect(store.search('findable')).toHaveLength(0)
+  })
+
+  it('list returns memories in reverse chronological order', () => {
+    store.save('first')
+    store.save('second')
+    store.save('third')
+    const list = store.list()
+    expect(list).toHaveLength(3)
+    expect(list[0]!.content).toBe('third')
+    expect(list[2]!.content).toBe('first')
+  })
+
+  it('list respects limit parameter', () => {
+    for (let i = 0; i < 10; i++) store.save(`memory ${i}`)
+    expect(store.list(3)).toHaveLength(3)
+  })
+
+  it('forget returns 0 for empty query', () => {
+    store.save('hello world')
+    expect(store.forget('')).toBe(0)
+    expect(store.count()).toBe(1)
+  })
 })
 
 describe('memory tools', () => {

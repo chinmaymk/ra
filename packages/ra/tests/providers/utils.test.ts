@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { extractSystemMessages, mergeConsecutiveRoles } from '@chinmaymk/ra'
+import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, extractTextContent, serializeContent, parseToolArguments } from '@chinmaymk/ra'
+import type { TokenUsage, ContentPart } from '@chinmaymk/ra'
 
 describe('mergeConsecutiveRoles', () => {
   it('returns empty array for empty input', () => {
@@ -37,6 +38,24 @@ describe('mergeConsecutiveRoles', () => {
     ]
     mergeConsecutiveRoles(messages)
     expect((messages[0]!.content as any[]).length).toBe(1)
+  })
+
+  it('merges three consecutive user messages into one', () => {
+    const messages = [
+      { role: 'user', content: 'a' },
+      { role: 'user', content: 'b' },
+      { role: 'user', content: 'c' },
+    ]
+    const merged = mergeConsecutiveRoles(messages)
+    expect(merged).toHaveLength(1)
+    const content = merged[0]!.content as unknown as unknown[]
+    expect(content).toHaveLength(3)
+  })
+
+  it('single message returns unchanged', () => {
+    const messages = [{ role: 'user', content: 'solo' }]
+    const merged = mergeConsecutiveRoles(messages)
+    expect(merged).toHaveLength(1)
   })
 
   it('preserves original array length (middleware sees unmerged messages)', () => {
@@ -90,5 +109,97 @@ describe('extractSystemMessages', () => {
       { role: 'user', content: 'hi' },
     ])
     expect(system).toBeUndefined()
+  })
+
+  it('joins multiple system messages with newline', () => {
+    const { system } = extractSystemMessages([
+      { role: 'system', content: 'Rule 1' },
+      { role: 'user', content: 'hi' },
+      { role: 'system', content: 'Rule 2' },
+    ])
+    expect(system).toBe('Rule 1\nRule 2')
+  })
+})
+
+describe('accumulateUsage', () => {
+  it('adds input and output tokens', () => {
+    const target: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+    accumulateUsage(target, { inputTokens: 20, outputTokens: 10 })
+    expect(target).toEqual({ inputTokens: 30, outputTokens: 15 })
+  })
+
+  it('adds thinkingTokens when source has it but target does not', () => {
+    const target: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+    accumulateUsage(target, { inputTokens: 1, outputTokens: 1, thinkingTokens: 100 })
+    expect(target.thinkingTokens).toBe(100)
+  })
+
+  it('accumulates thinkingTokens when both have it', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0, thinkingTokens: 50 }
+    accumulateUsage(target, { inputTokens: 0, outputTokens: 0, thinkingTokens: 30 })
+    expect(target.thinkingTokens).toBe(80)
+  })
+
+  it('does not set thinkingTokens when source lacks it', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0 }
+    accumulateUsage(target, { inputTokens: 1, outputTokens: 1 })
+    expect(target.thinkingTokens).toBeUndefined()
+  })
+})
+
+describe('extractTextContent', () => {
+  it('returns string content as-is', () => {
+    expect(extractTextContent('hello world')).toBe('hello world')
+  })
+
+  it('joins text parts from ContentPart array', () => {
+    const parts: ContentPart[] = [
+      { type: 'text', text: 'Hello' },
+      { type: 'text', text: ' world' },
+    ]
+    expect(extractTextContent(parts)).toBe('Hello world')
+  })
+
+  it('filters out non-text parts', () => {
+    const parts: ContentPart[] = [
+      { type: 'text', text: 'before' },
+      { type: 'image', source: { type: 'url', url: 'http://img' } } as ContentPart,
+      { type: 'text', text: 'after' },
+    ]
+    expect(extractTextContent(parts)).toBe('beforeafter')
+  })
+
+  it('returns empty string for empty array', () => {
+    expect(extractTextContent([])).toBe('')
+  })
+})
+
+describe('serializeContent', () => {
+  it('returns string content as-is', () => {
+    expect(serializeContent('hello')).toBe('hello')
+  })
+
+  it('JSON-stringifies ContentPart array', () => {
+    const parts: ContentPart[] = [{ type: 'text', text: 'hi' }]
+    expect(serializeContent(parts)).toBe(JSON.stringify(parts))
+  })
+})
+
+describe('parseToolArguments', () => {
+  it('parses valid JSON string', () => {
+    expect(parseToolArguments('{"key":"value"}')).toEqual({ key: 'value' })
+  })
+
+  it('returns {} for malformed JSON', () => {
+    expect(parseToolArguments('{bad json')).toEqual({})
+  })
+
+  it('returns object input as-is', () => {
+    const obj = { a: 1, b: 'two' }
+    expect(parseToolArguments(obj)).toBe(obj)
+  })
+
+  it('returns {} for empty string', () => {
+    expect(parseToolArguments('')).toEqual({})
   })
 })

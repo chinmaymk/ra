@@ -145,4 +145,86 @@ describe('SessionStorage', () => {
     expect(messages[1]?.content).toBe('another good message')
   })
 
+  it('readMessages returns empty array for non-existent session', async () => {
+    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    // Session exists but no messages written yet
+    const messages = await storage.readMessages(session.id)
+    expect(messages).toEqual([])
+  })
+
+  it('appendMessages writes multiple messages in one call', async () => {
+    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    await storage.appendMessages(session.id, [
+      { role: 'user', content: 'msg1' },
+      { role: 'assistant', content: 'msg2' },
+      { role: 'user', content: 'msg3' },
+    ])
+    const messages = await storage.readMessages(session.id)
+    expect(messages).toHaveLength(3)
+    expect(messages[0]?.content).toBe('msg1')
+    expect(messages[2]?.content).toBe('msg3')
+  })
+
+  it('appendMessages with empty array is a no-op', async () => {
+    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    await storage.appendMessages(session.id, [])
+    const messages = await storage.readMessages(session.id)
+    expect(messages).toEqual([])
+  })
+
+  it('ensureSession creates new session if none exists', async () => {
+    const id = 'custom-session-id'
+    await storage.ensureSession(id, { provider: 'openai', model: 'gpt-4o', interface: 'http' })
+    const { join } = await import('path')
+    const metaPath = join(TEST_PATH, id, 'meta.json')
+    const meta = JSON.parse(await Bun.file(metaPath).text())
+    expect(meta.provider).toBe('openai')
+    expect(meta.model).toBe('gpt-4o')
+  })
+
+  it('ensureSession does not overwrite existing meta', async () => {
+    const session = await storage.create({ provider: 'anthropic', model: 'claude', interface: 'cli' })
+    // Call ensureSession with different options — should not overwrite
+    await storage.ensureSession(session.id, { provider: 'openai', model: 'gpt-4o', interface: 'http' })
+    const { join } = await import('path')
+    const metaPath = join(TEST_PATH, session.id, 'meta.json')
+    const meta = JSON.parse(await Bun.file(metaPath).text())
+    expect(meta.provider).toBe('anthropic') // original preserved
+  })
+
+  it('messages preserve toolCalls and toolCallId fields', async () => {
+    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    await storage.appendMessage(session.id, {
+      role: 'assistant', content: 'calling tool',
+      toolCalls: [{ id: 'tc1', name: 'Read', arguments: '{"path":"/tmp"}' }],
+    })
+    await storage.appendMessage(session.id, {
+      role: 'tool', content: 'file contents', toolCallId: 'tc1',
+    })
+    const messages = await storage.readMessages(session.id)
+    expect(messages[0]?.toolCalls).toHaveLength(1)
+    expect(messages[0]?.toolCalls![0]!.id).toBe('tc1')
+    expect(messages[1]?.toolCallId).toBe('tc1')
+  })
+
+  it('prune with no options is a no-op', async () => {
+    await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    await storage.prune({})
+    const list = await storage.list()
+    expect(list).toHaveLength(2)
+  })
+
+  it('readMessages handles multiple consecutive corrupt lines', async () => {
+    const { join } = await import('path')
+    const { appendFile: nodeAppendFile } = await import('node:fs/promises')
+    const session = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    const filePath = join(TEST_PATH, session.id, 'messages.jsonl')
+    await storage.appendMessage(session.id, { role: 'user', content: 'valid' })
+    await nodeAppendFile(filePath, 'bad1\nbad2\nbad3\n')
+    await storage.appendMessage(session.id, { role: 'assistant', content: 'also valid' })
+    const messages = await storage.readMessages(session.id)
+    expect(messages).toHaveLength(2)
+  })
+
 })

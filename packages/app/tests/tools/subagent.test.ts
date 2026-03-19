@@ -2,18 +2,7 @@ import { describe, it, expect } from 'bun:test'
 import { subagentTool, type SubagentToolOptions } from '../../src/tools/subagent'
 import { ToolRegistry } from '@chinmaymk/ra'
 import type { IProvider, StreamChunk, ChatRequest } from '@chinmaymk/ra'
-
-function mockProvider(responses: StreamChunk[][]): IProvider {
-  let callIndex = 0
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error('use stream') },
-    async *stream() {
-      const chunks = responses[callIndex++] ?? [{ type: 'text', delta: 'done' }, { type: 'done' }]
-      for (const chunk of chunks) yield chunk
-    },
-  }
-}
+import { mockSequenceProvider } from '../fixtures'
 
 /** Mock provider that calls onStream for each request, then yields 'ok' */
 function capturingProvider(onStream: (req: ChatRequest) => void): IProvider {
@@ -31,7 +20,7 @@ function capturingProvider(onStream: (req: ChatRequest) => void): IProvider {
 function baseOptions(overrides?: Partial<SubagentToolOptions> & { responses?: StreamChunk[][] }): SubagentToolOptions {
   const responses = overrides?.responses ?? [[{ type: 'text', delta: 'hello' }, { type: 'done' }]]
   return {
-    provider: mockProvider(responses),
+    provider: mockSequenceProvider(responses),
     tools: new ToolRegistry(),
     model: 'test-model',
     ...overrides,
@@ -126,7 +115,7 @@ describe('subagent tool', () => {
   // ── Token usage ────────────────────────────────────────────────
 
   it('reports token usage from subagent runs', async () => {
-    const provider = mockProvider([
+    const provider = mockSequenceProvider([
       [{ type: 'text', delta: 'hi' }, { type: 'done', usage: { inputTokens: 100, outputTokens: 50 } }],
     ])
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
@@ -198,7 +187,7 @@ describe('subagent tool', () => {
   })
 
   it('returns empty string when model produces empty assistant message', async () => {
-    const provider = mockProvider([[{ type: 'done' as const }]])
+    const provider = mockSequenceProvider([[{ type: 'done' as const }]])
     const tool = subagentTool({ provider, tools: new ToolRegistry(), model: 'test' })
     const out = await tool.execute({ tasks: [{ task: 'silent' }] }) as any
     expect(out.results[0].status).toBe('completed')
@@ -337,7 +326,7 @@ describe('subagent tool', () => {
     ]
     const tools = new ToolRegistry()
     tools.register({ name: 'noop', description: 'noop', inputSchema: {}, execute: async () => 'ok' })
-    const provider = mockProvider(Array(100).fill(infiniteToolCall))
+    const provider = mockSequenceProvider(Array(100).fill(infiniteToolCall))
 
     const tool = subagentTool({ provider, tools, model: 'test', maxIterations: 3 })
     const out = await tool.execute({ tasks: [{ task: 'loop forever' }] }) as any

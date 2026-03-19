@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'bun:test'
-import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact, NoopLogger } from '@chinmaymk/ra'
-import type { IMessage, IProvider, ChatRequest, ChatResponse, ModelCallContext } from '@chinmaymk/ra'
-
-const logger = new NoopLogger()
+import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact } from '@chinmaymk/ra'
+import type { IMessage, IProvider, ChatResponse } from '@chinmaymk/ra'
+import { makeModelCallCtx } from './test-utils'
 
 describe('splitMessageZones', () => {
   const sys: IMessage = { role: 'system', content: 'You are helpful.' }
@@ -178,27 +177,8 @@ describe('splitMessageZones', () => {
   })
 })
 
-function makeCtx(messages: IMessage[], model = 'claude-sonnet-4-6'): ModelCallContext {
-  const controller = new AbortController()
-  const request: ChatRequest = { model, messages: [...messages], tools: [] }
-  return {
-    stop: () => controller.abort(),
-    signal: controller.signal,
-    logger,
-    request,
-    loop: {
-      stop: () => controller.abort(),
-      signal: controller.signal,
-      logger,
-      messages,
-      iteration: 1,
-      maxIterations: 10,
-      sessionId: 'test',
-      usage: { inputTokens: 0, outputTokens: 0 },
-      lastUsage: undefined,
-    },
-  }
-}
+const makeCtx = (messages: IMessage[], model = 'claude-sonnet-4-6') =>
+  makeModelCallCtx(messages, { request: { model, messages: [...messages], tools: [] } })
 
 describe('createCompactionMiddleware', () => {
   it('passes through when under threshold', async () => {

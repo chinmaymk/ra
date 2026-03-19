@@ -1,21 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { Tracer, NoopTracer, type Span, type TraceRecord } from '../../src/observability/tracer'
+import { captureStdout, captureStderr } from '../fixtures'
 
 describe('Tracer', () => {
   let captured: string[]
-  let originalWrite: typeof process.stderr.write
+  let restore: () => void
 
   beforeEach(() => {
-    captured = []
-    originalWrite = process.stderr.write
-    process.stderr.write = ((data: string) => {
-      captured.push(data)
-      return true
-    }) as typeof process.stderr.write
+    ({ captured, restore } = captureStderr())
   })
 
   afterEach(() => {
-    process.stderr.write = originalWrite
+    restore()
   })
 
   it('creates spans with traceId and spanId', () => {
@@ -97,42 +93,27 @@ describe('Tracer', () => {
   })
 
   it('outputs to stdout when configured', () => {
-    process.stderr.write = originalWrite
-    const stdoutCaptured: string[] = []
-    const origStdout = process.stdout.write
-    process.stdout.write = ((data: string) => {
-      stdoutCaptured.push(data)
-      return true
-    }) as typeof process.stdout.write
-
-    try {
+    restore() // restore stderr first
+    const output = captureStdout(() => {
       const tracer = new Tracer({ output: 'stdout' })
       const span = tracer.startSpan('op')
       tracer.endSpan(span)
-      expect(stdoutCaptured).toHaveLength(1)
-    } finally {
-      process.stdout.write = origStdout
-    }
+    })
+    expect(output.trim().length).toBeGreaterThan(0)
   })
 })
 
 describe('NoopTracer', () => {
   it('returns noop spans without output', () => {
-    const captured: string[] = []
-    const originalWrite = process.stderr.write
-    process.stderr.write = ((data: string) => {
-      captured.push(data)
-      return true
-    }) as typeof process.stderr.write
-
+    const stderr = captureStderr()
     try {
       const tracer = new NoopTracer()
       const span = tracer.startSpan('test')
       tracer.addEvent(span, 'event')
       tracer.endSpan(span)
-      expect(captured).toHaveLength(0)
+      expect(stderr.captured).toHaveLength(0)
     } finally {
-      process.stderr.write = originalWrite
+      stderr.restore()
     }
   })
 })

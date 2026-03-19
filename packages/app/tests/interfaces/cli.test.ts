@@ -4,17 +4,7 @@ import { ToolRegistry } from '@chinmaymk/ra'
 import type { IProvider } from '@chinmaymk/ra'
 
 import { tmpdir } from '../tmpdir'
-
-function mockProvider(text: string): IProvider {
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error() },
-    async *stream() {
-      yield { type: 'text', delta: text }
-      yield { type: 'done' }
-    },
-  }
-}
+import { mockProvider } from '../fixtures'
 
 describe('runCli', () => {
   it('runs and collects output', async () => {

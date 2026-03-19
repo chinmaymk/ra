@@ -5,36 +5,14 @@ import { ToolRegistry } from '@chinmaymk/ra'
 import { SessionStorage } from '../../src/storage/sessions'
 import type { IProvider, IMessage } from '@chinmaymk/ra'
 import { tmpdir } from '../tmpdir'
+import { mockProvider, mockProviderWithThinking } from '../fixtures'
 
 const TEST_STORAGE = tmpdir('ra-repl-test')
-
-function mockProvider(text: string): IProvider {
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error() },
-    async *stream() {
-      yield { type: 'text', delta: text }
-      yield { type: 'done' }
-    },
-  }
-}
 
 async function makeStorage(): Promise<SessionStorage> {
   const storage = new SessionStorage(TEST_STORAGE)
   await storage.init()
   return storage
-}
-
-function mockProviderWithThinking(thinkingDelta: string, textDelta: string): IProvider {
-  return {
-    name: 'mock',
-    chat: async () => { throw new Error() },
-    async *stream() {
-      yield { type: 'thinking', delta: thinkingDelta }
-      yield { type: 'text', delta: textDelta }
-      yield { type: 'done' }
-    },
-  }
 }
 
 describe('Repl', () => {
