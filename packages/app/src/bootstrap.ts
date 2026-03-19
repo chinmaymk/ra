@@ -25,7 +25,7 @@ import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, create
 import { ScratchpadStore, scratchpadWriteTool, scratchpadDeleteTool, createScratchpadMiddleware } from './scratchpad'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
-import { loadSkills } from './skills/loader'
+import { loadSkills, buildAvailableSkillsXml } from './skills/loader'
 import type { Skill } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
@@ -190,7 +190,8 @@ export async function bootstrap(
   const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
-    const skillTokens = [...skillMap.values()].reduce((sum, s) => sum + estimateTokens(s.body), 0)
+    const availableXml = buildAvailableSkillsXml(skillMap)
+    const skillTokens = estimateTokens(availableXml)
     logger.info('skills loaded', {
       skillCount: skillMap.size,
       skills: [...skillMap.keys()],
@@ -251,7 +252,7 @@ export async function bootstrap(
   {
     const allRegisteredTools = tools.all()
     const contextTokens = estimateTokens(contextMessages)
-    const skillTokens = [...skillMap.values()].reduce((sum, s) => sum + estimateTokens(s.body), 0)
+    const skillTokens = estimateTokens(buildAvailableSkillsXml(skillMap))
     const toolSchemaTokens = estimateTokens(allRegisteredTools)
     const totalEstimated = contextTokens + skillTokens + toolSchemaTokens
     logger.info('token budget summary', {
