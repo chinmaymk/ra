@@ -110,21 +110,17 @@ jobs:
             rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
             cp -r .vitepress/theme "$TAG_DIR/docs/site/.vitepress/theme"
 
-            # Overwrite the config to set the versioned base path
-            cat > "$TAG_DIR/docs/site/.vitepress/config.ts" << VCONF
+            # Copy the current config so versioned docs get full nav/sidebar
+            cp .vitepress/config.ts "$TAG_DIR/docs/site/.vitepress/config.ts"
+
+            # Create a version-specific config that extends the full config
+            cat > "$TAG_DIR/docs/site/.vitepress/config.version.ts" << VCONF
+          import config from './config'
           import { defineConfig } from 'vitepress'
-          export default defineConfig({
-            title: 'ra',
-            base: '/ra/v/${version}/',
-            appearance: 'dark',
-            themeConfig: {
-              logo: '/logo.svg',
-              search: { provider: 'local' },
-            },
-          })
+          export default defineConfig({ ...config, base: '/ra/v/${version}/' })
           VCONF
 
-            (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build) || {
+            (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build --config .vitepress/config.version.ts) || {
               echo "  Warning: build failed for $tag, skipping"
               rm -rf "$TAG_DIR"
               continue
