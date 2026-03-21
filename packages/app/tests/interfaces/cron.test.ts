@@ -7,7 +7,6 @@ import type { RaConfig, CronJob } from '../../src/config/types'
 import { makeStorage } from '../fixtures'
 import { tmpdir } from '../tmpdir'
 
-// ── Test helpers ──────────────────────────────────────────────────────
 
 interface LogRecord {
   level: string
@@ -184,7 +183,6 @@ async function runOnce(
   })
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────
 
 describe('runCron', () => {
   describe('validation', () => {

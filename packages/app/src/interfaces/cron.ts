@@ -19,8 +19,6 @@ import type { CronJob, AgentConfig } from '../config/types'
 import { buildMessagePrefix } from './messages'
 import { createSessionMiddleware } from '../agent/session'
 
-// ── Public types ──────────────────────────────────────────────────────
-
 export interface CronRunnerOptions {
   app: AppContext
   jobs: CronJob[]
@@ -34,15 +32,11 @@ export interface CronRunnerOptions {
   runImmediately?: boolean
 }
 
-// ── Internal types ────────────────────────────────────────────────────
-
 interface ScheduledJob {
   job: CronJob
   nextRun: Date
   agentConfig: Partial<AgentConfig> | undefined
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────
 
 /** Resolve a cron job's agent override into a partial AgentConfig. */
 async function resolveJobAgent(
@@ -85,8 +79,6 @@ function resolveJobConfig(baseCfg: AgentConfig, overrides: Partial<AgentConfig> 
   }
 }
 
-// ── Job execution ─────────────────────────────────────────────────────
-
 /** Run a single cron job with full logging and tracing. */
 async function executeJob(
   job: CronJob,
@@ -96,7 +88,6 @@ async function executeJob(
   const { config, logger, tracer } = app
   const jobCfg = resolveJobConfig(config.agent, jobAgentConfig)
 
-  // ── Trace span for the entire job ──
   const jobSpan = tracer.startSpan('cron.job', {
     job: job.name,
     schedule: job.schedule,
@@ -109,7 +100,6 @@ async function executeJob(
     promptLength: job.prompt.length,
   })
 
-  // ── Build initial messages ──
   const initialMessages = buildMessagePrefix({
     systemPrompt: config.agent.systemPrompt,
     skillMap: app.skillMap,
@@ -118,7 +108,6 @@ async function executeJob(
   })
   initialMessages.push({ role: 'user', content: job.prompt })
 
-  // ── Create per-job session (isolates logs/traces to its own directory) ──
   const session = await app.storage.create({
     provider: config.agent.provider,
     model: jobCfg.model,
@@ -130,7 +119,6 @@ async function executeJob(
     sessionId: session.id,
   })
 
-  // ── Wire up per-session observability + history middleware ──
   const loopSession = createSessionMiddleware(app.middleware, {
     storage: app.storage,
     sessionId: session.id,
@@ -148,7 +136,6 @@ async function executeJob(
     model: jobCfg.model,
   })
 
-  // ── Stream text to stderr so operators can follow along ──
   const stderrHook: Partial<MiddlewareConfig> = {
     onStreamChunk: [async (ctx: StreamChunkContext) => {
       if (ctx.chunk.type === 'text') {
@@ -157,7 +144,6 @@ async function executeJob(
     }],
   }
 
-  // ── Create and run the agent loop ──
   const loop = new AgentLoop({
     provider: app.provider,
     tools: app.tools,
@@ -194,8 +180,6 @@ async function executeJob(
   await loopSession.logger.flush()
 }
 
-// ── Scheduler ─────────────────────────────────────────────────────────
-
 /** Start the cron scheduler. Runs until the signal is aborted. */
 export async function runCron(options: CronRunnerOptions): Promise<void> {
   const { app, jobs, onJobStart, onJobEnd, signal, runImmediately } = options
@@ -216,7 +200,6 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
     jobs: jobs.map(j => ({ name: j.name, schedule: j.schedule })),
   })
 
-  // ── Validate and resolve all jobs ──
   const scheduled: ScheduledJob[] = []
   for (const job of jobs) {
     try {
@@ -248,13 +231,11 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
     return
   }
 
-  // ── Print schedule summary to stderr ──
   process.stderr.write(`Cron scheduler started with ${scheduled.length} job(s)\n`)
   for (const s of scheduled) {
     process.stderr.write(`  ${s.job.name}: ${s.job.schedule} → next: ${s.nextRun.toISOString()}\n`)
   }
 
-  // ── Main scheduler loop ──
   let jobsRun = 0
   let jobsFailed = 0
 
@@ -277,7 +258,6 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
 
     if (signal?.aborted) break
 
-    // ── Execute the job ──
     const { job, agentConfig } = next
     logger.info('cron job starting', { job: job.name, schedule: job.schedule })
     onJobStart?.(job)
@@ -296,7 +276,6 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
     await logger.flush()
     await tracer.flush()
 
-    // ── Schedule next run ──
     next.nextRun = nextRunDate(job.schedule)
     logger.info('cron job rescheduled', {
       job: job.name,
@@ -304,7 +283,6 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
     })
   }
 
-  // ── Shutdown ──
   tracer.endSpan(schedulerSpan, 'ok', {
     jobsRun,
     jobsFailed,
