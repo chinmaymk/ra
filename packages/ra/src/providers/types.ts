@@ -13,6 +13,8 @@ export interface IMessage {
   toolCallId?: string
   toolCalls?: IToolCall[]
   isError?: boolean
+  /** Internal tracking ID for session persistence. Survives object replacement (spread). */
+  _messageId?: string
 }
 
 export interface IToolCall {

@@ -275,6 +275,55 @@ describe('SessionHistoryMiddleware', () => {
     expect(stored[4]?.role).toBe('assistant')
   })
 
+  it('does not duplicate messages when middleware replaces objects via spread', async () => {
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
+
+    // Middleware that replaces the system message object (simulating resolver spread)
+    let modelCallCount = 0
+    const replacer = async (ctx: any) => {
+      modelCallCount++
+      if (modelCallCount === 1) {
+        const msgs = ctx.request.messages
+        const sys = msgs[0]
+        if (sys?.role === 'system') {
+          // Replace with a NEW object (spread) — simulates resolver middleware.
+          // The _messageId should be copied, preventing duplicate storage.
+          msgs[0] = { ...sys, content: sys.content + '\n[resolved]' }
+        }
+      }
+    }
+
+    const middleware = mergeMiddleware(
+      { beforeModelCall: [replacer] },
+      createHistoryMiddleware(storage, 0),
+    )
+
+    const loop = new AgentLoop({
+      provider: mockProvider('response'),
+      tools: new ToolRegistry(),
+      model: 'test',
+      sessionId: session.id,
+      middleware,
+    })
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'you are helpful' },
+      { role: 'user', content: 'hello' },
+    ]
+    await loop.run(messages)
+
+    const stored = await storage.readMessages(session.id)
+    // system + user + assistant = 3. NOT 4 (which would mean duplicate system message).
+    expect(stored).toHaveLength(3)
+    expect(stored[0]?.role).toBe('system')
+    expect(stored[1]?.role).toBe('user')
+    expect(stored[2]?.role).toBe('assistant')
+
+    // Verify only one system message was stored
+    const systemMessages = stored.filter(m => m.role === 'system')
+    expect(systemMessages).toHaveLength(1)
+  })
+
   it('skips initial messages with priorCount and saves new ones', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
 

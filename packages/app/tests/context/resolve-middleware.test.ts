@@ -147,22 +147,19 @@ describe('createResolverMiddleware', () => {
     expect(afterSecond).toBe(afterFirst) // unchanged
   })
 
-  it('mutates message in place (preserves object identity for WeakSet tracking)', async () => {
+  it('preserves _messageId across resolution (spread copies the ID)', async () => {
     const mw = createResolverMiddleware([echoResolver], '/tmp')
     const messages = [
-      { role: 'system', content: 'See @config' },
-      { role: 'user', content: 'look at @readme' },
+      { role: 'system', content: 'See @config', _messageId: 'sys-1' },
+      { role: 'user', content: 'look at @readme', _messageId: 'usr-1' },
     ]
-    const systemRef = messages[0]
-    const userRef = messages[1]
     const ctx = makeCtx(messages)
     await mw(ctx)
 
-    // The same object references must be preserved — creating new objects
-    // would break WeakSet-based change tracking in the history middleware,
-    // causing duplicate entries in session storage.
-    expect(ctx.request.messages[0]).toBe(systemRef)
-    expect(ctx.request.messages[1]).toBe(userRef)
+    // _messageId must survive even if the resolver creates a new object
+    // (via spread). The history middleware tracks by ID, not object identity.
+    expect((ctx.request.messages[0] as { _messageId?: string })._messageId).toBe('sys-1')
+    expect((ctx.request.messages[1] as { _messageId?: string })._messageId).toBe('usr-1')
     // Content should still be resolved
     expect((ctx.request.messages[0]!.content as string)).toContain('content of config')
     expect((ctx.request.messages[1]!.content as string)).toContain('content of readme')

@@ -65,6 +65,47 @@ describe('Agentic flow integration', () => {
     expect(JSON.stringify(messages)).toContain('banana')
   })
 
+  it('no duplicate messages sent to model on resumed session', async () => {
+    const sessionId = `dedup-test-${Date.now()}`
+
+    // Turn 1
+    env.mock.enqueue([{ type: 'text', content: 'first response' }])
+    await runBinary(
+      ['--cli', `--resume=${sessionId}`, 'hello world'],
+      env.binaryEnv,
+    )
+    env.mock.resetRequests()
+
+    // Turn 2 — resume the session
+    env.mock.enqueue([{ type: 'text', content: 'second response' }])
+    await runBinary(
+      ['--cli', `--resume=${sessionId}`, 'follow up'],
+      env.binaryEnv,
+    )
+
+    const secondReq = env.mock.requests()[0]?.body as Record<string, unknown>
+    const messages = (secondReq?.messages ?? []) as { role: string; content: string }[]
+
+    // System prompt must appear at most once
+    const systemMessages = messages.filter(m => m.role === 'system')
+    expect(systemMessages.length).toBeLessThanOrEqual(1)
+
+    // No two consecutive messages should have identical content (duplicate detection)
+    for (let i = 1; i < messages.length; i++) {
+      const prev = messages[i - 1]!
+      const curr = messages[i]!
+      if (prev.role === curr.role && typeof prev.content === 'string' && typeof curr.content === 'string') {
+        expect(prev.content).not.toBe(curr.content)
+      }
+    }
+
+    // The conversation should flow: ...prior messages → user "hello world" → assistant → user "follow up"
+    const userMessages = messages.filter(m => m.role === 'user')
+    const userTexts = userMessages.map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
+    expect(userTexts.some(t => t.includes('hello world'))).toBe(true)
+    expect(userTexts.some(t => t.includes('follow up'))).toBe(true)
+  })
+
   it('middleware hooks fire: beforeLoopBegin is invoked', async () => {
     const hooksFile = join(tmpDir, 'hooks-log.json')
     writeFileSync(hooksFile, '[]')
