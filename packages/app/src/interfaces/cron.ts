@@ -3,20 +3,30 @@
  *
  * Each job has a name, schedule (cron expression), prompt, and optional
  * agent override (a recipe path or partial agent config merged with base).
+ *
+ * Observability:
+ *   - App-level tracer: `cron.scheduler` span wraps the full lifecycle,
+ *     `cron.job` span wraps each individual execution.
+ *   - App-level logger: scheduler lifecycle events (starting, stopping,
+ *     job scheduled/completed/failed/rescheduled).
+ *   - Per-job session logger: detailed execution logs written to the
+ *     job's own session directory ({dataDir}/sessions/{id}/logs.jsonl).
  */
 import { CronExpressionParser } from 'cron-parser'
-import { AgentLoop, mergeMiddleware, type StreamChunkContext, type MiddlewareConfig, type Logger } from '@chinmaymk/ra'
+import { AgentLoop, mergeMiddleware, type StreamChunkContext, type MiddlewareConfig } from '@chinmaymk/ra'
 import type { AppContext } from '../bootstrap'
 import type { CronJob, AgentConfig } from '../config/types'
 import { buildMessagePrefix } from './messages'
 import { createSessionMiddleware } from '../agent/session'
+
+// ── Public types ──────────────────────────────────────────────────────
 
 export interface CronRunnerOptions {
   app: AppContext
   jobs: CronJob[]
   /** Called when a job starts. */
   onJobStart?: (job: CronJob) => void
-  /** Called when a job completes. */
+  /** Called when a job completes (successfully or with error). */
   onJobEnd?: (job: CronJob, result: { ok: boolean; error?: string }) => void
   /** Abort signal to stop the scheduler. */
   signal?: AbortSignal
@@ -24,11 +34,15 @@ export interface CronRunnerOptions {
   runImmediately?: boolean
 }
 
+// ── Internal types ────────────────────────────────────────────────────
+
 interface ScheduledJob {
   job: CronJob
   nextRun: Date
   agentConfig: Partial<AgentConfig> | undefined
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────
 
 /** Resolve a cron job's agent override into a partial AgentConfig. */
 async function resolveJobAgent(
@@ -44,19 +58,34 @@ async function resolveJobAgent(
     const yaml = await import('js-yaml')
     const content = await Bun.file(path).text()
     const parsed = yaml.load(content) as Record<string, unknown>
-    // A recipe file has { agent: {...} } or is a flat agent config
     return (parsed.agent ?? parsed) as Partial<AgentConfig>
   }
 
-  // Object → partial agent config
+  // Object → use directly as partial agent config
   return job.agent
 }
 
 /** Compute next run date from a cron expression. */
 function nextRunDate(schedule: string): Date {
-  const interval = CronExpressionParser.parse(schedule)
-  return interval.next().toDate()
+  return CronExpressionParser.parse(schedule).next().toDate()
 }
+
+/** Merge base agent config with per-job overrides, returning resolved loop options. */
+function resolveJobConfig(baseCfg: AgentConfig, overrides: Partial<AgentConfig> | undefined) {
+  return {
+    model: overrides?.model ?? baseCfg.model,
+    maxIterations: overrides?.maxIterations ?? baseCfg.maxIterations,
+    maxRetries: overrides?.maxRetries ?? baseCfg.maxRetries,
+    toolTimeout: overrides?.toolTimeout ?? baseCfg.toolTimeout,
+    thinking: overrides?.thinking ?? baseCfg.thinking,
+    maxToolResponseSize: overrides?.tools?.maxResponseSize ?? baseCfg.tools.maxResponseSize,
+    compaction: overrides?.compaction
+      ? { ...baseCfg.compaction, ...overrides.compaction }
+      : baseCfg.compaction,
+  }
+}
+
+// ── Job execution ─────────────────────────────────────────────────────
 
 /** Run a single cron job with full logging and tracing. */
 async function executeJob(
@@ -65,45 +94,34 @@ async function executeJob(
   jobAgentConfig: Partial<AgentConfig> | undefined,
 ): Promise<void> {
   const { config, logger, tracer } = app
-  const agentCfg = config.agent
+  const jobCfg = resolveJobConfig(config.agent, jobAgentConfig)
 
-  // App-level tracer span wrapping the entire job execution
+  // ── Trace span for the entire job ──
   const jobSpan = tracer.startSpan('cron.job', {
     job: job.name,
     schedule: job.schedule,
   })
 
-  // Merge base agent config with job-specific overrides
-  const model = jobAgentConfig?.model ?? agentCfg.model
-  const maxIterations = jobAgentConfig?.maxIterations ?? agentCfg.maxIterations
-  const maxRetries = jobAgentConfig?.maxRetries ?? agentCfg.maxRetries
-  const toolTimeout = jobAgentConfig?.toolTimeout ?? agentCfg.toolTimeout
-  const thinking = jobAgentConfig?.thinking ?? agentCfg.thinking
-  const compaction = jobAgentConfig?.compaction
-    ? { ...agentCfg.compaction, ...jobAgentConfig.compaction }
-    : agentCfg.compaction
-  const maxToolResponseSize = jobAgentConfig?.tools?.maxResponseSize ?? agentCfg.tools.maxResponseSize
-
   logger.info('cron job executing', {
     job: job.name,
-    model,
-    maxIterations,
+    model: jobCfg.model,
+    maxIterations: jobCfg.maxIterations,
     promptLength: job.prompt.length,
   })
 
-  // Build initial messages
+  // ── Build initial messages ──
   const initialMessages = buildMessagePrefix({
-    systemPrompt: agentCfg.systemPrompt,
+    systemPrompt: config.agent.systemPrompt,
     skillMap: app.skillMap,
     contextMessages: app.contextMessages,
     activeSkillNames: config.app.skills,
   })
   initialMessages.push({ role: 'user', content: job.prompt })
 
-  // Create a per-job session for isolated log/trace output
+  // ── Create per-job session (isolates logs/traces to its own directory) ──
   const session = await app.storage.create({
-    provider: agentCfg.provider,
-    model,
+    provider: config.agent.provider,
+    model: jobCfg.model,
     interface: 'cron',
   })
 
@@ -112,6 +130,7 @@ async function executeJob(
     sessionId: session.id,
   })
 
+  // ── Wire up per-session observability + history middleware ──
   const loopSession = createSessionMiddleware(app.middleware, {
     storage: app.storage,
     sessionId: session.id,
@@ -122,16 +141,15 @@ async function executeJob(
     logger,
   })
 
-  // Log the cron job name into the per-session logger so each log line
-  // includes context about which job produced it
   loopSession.logger.info('cron job started', {
     job: job.name,
     schedule: job.schedule,
     sessionId: session.id,
-    model,
+    model: jobCfg.model,
   })
 
-  const logHook: Partial<MiddlewareConfig> = {
+  // ── Stream text to stderr so operators can follow along ──
+  const stderrHook: Partial<MiddlewareConfig> = {
     onStreamChunk: [async (ctx: StreamChunkContext) => {
       if (ctx.chunk.type === 'text') {
         process.stderr.write(ctx.chunk.delta)
@@ -139,87 +157,49 @@ async function executeJob(
     }],
   }
 
+  // ── Create and run the agent loop ──
   const loop = new AgentLoop({
     provider: app.provider,
     tools: app.tools,
-    model,
-    maxIterations,
-    maxRetries,
-    toolTimeout,
-    maxToolResponseSize,
-    thinking,
-    compaction,
     sessionId: session.id,
     logger: loopSession.logger,
-    middleware: mergeMiddleware(logHook, loopSession.middleware),
+    middleware: mergeMiddleware(stderrHook, loopSession.middleware),
+    ...jobCfg,
   })
 
   try {
     const result = await loop.run(initialMessages)
 
-    loopSession.logger.info('cron job finished', {
-      job: job.name,
+    const usage = {
       iterations: result.iterations,
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
       messageCount: result.messages.length,
-    })
+    }
 
-    tracer.endSpan(jobSpan, 'ok', {
-      sessionId: session.id,
-      iterations: result.iterations,
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
-      messageCount: result.messages.length,
-    })
-
-    logger.info('cron job completed', {
-      job: job.name,
-      sessionId: session.id,
-      iterations: result.iterations,
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
-    })
+    loopSession.logger.info('cron job finished', { job: job.name, ...usage })
+    tracer.endSpan(jobSpan, 'ok', { sessionId: session.id, ...usage })
+    logger.info('cron job completed', { job: job.name, sessionId: session.id, ...usage })
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err)
+    const error = err instanceof Error ? err.message : String(err)
 
-    loopSession.logger.error('cron job failed', {
-      job: job.name,
-      error: errorMsg,
-    })
+    loopSession.logger.error('cron job failed', { job: job.name, error })
+    logger.error('cron job failed', { job: job.name, sessionId: session.id, error })
+    tracer.endSpan(jobSpan, 'error', { sessionId: session.id, error })
 
-    logger.error('cron job failed', {
-      job: job.name,
-      sessionId: session.id,
-      error: errorMsg,
-    })
-
-    tracer.endSpan(jobSpan, 'error', {
-      sessionId: session.id,
-      error: errorMsg,
-    })
-
-    // Ensure per-job logger/tracer flush even on error paths
-    // that bypass the afterLoopComplete middleware hook
-    await flushSessionLogger(loopSession.logger)
-
+    await loopSession.logger.flush()
     throw err
   }
 
-  // Flush per-job logger/tracer after successful completion
-  await flushSessionLogger(loopSession.logger)
+  await loopSession.logger.flush()
 }
 
-/** Flush the per-session logger created by createSessionMiddleware. */
-async function flushSessionLogger(sessionLogger: Logger): Promise<void> {
-  await sessionLogger.flush()
-}
+// ── Scheduler ─────────────────────────────────────────────────────────
 
 /** Start the cron scheduler. Runs until the signal is aborted. */
 export async function runCron(options: CronRunnerOptions): Promise<void> {
   const { app, jobs, onJobStart, onJobEnd, signal, runImmediately } = options
   const { logger, tracer } = app
-  const configDir = app.config.app.configDir
 
   if (jobs.length === 0) {
     logger.warn('no cron jobs configured')
@@ -236,22 +216,26 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
     jobs: jobs.map(j => ({ name: j.name, schedule: j.schedule })),
   })
 
-  // Validate and resolve all jobs
+  // ── Validate and resolve all jobs ──
   const scheduled: ScheduledJob[] = []
   for (const job of jobs) {
     try {
-      CronExpressionParser.parse(job.schedule) // validate expression
+      CronExpressionParser.parse(job.schedule)
     } catch (err) {
-      logger.error('invalid cron expression', { job: job.name, schedule: job.schedule, error: String(err) })
+      logger.error('invalid cron expression', {
+        job: job.name,
+        schedule: job.schedule,
+        error: String(err),
+      })
       continue
     }
 
-    const agentConfig = await resolveJobAgent(job, configDir)
+    const agentConfig = await resolveJobAgent(job, app.config.app.configDir)
     const nextRun = runImmediately ? new Date() : nextRunDate(job.schedule)
     scheduled.push({ job, nextRun, agentConfig })
 
     logger.info('cron job scheduled', {
-      name: job.name,
+      job: job.name,
       schedule: job.schedule,
       nextRun: nextRun.toISOString(),
       hasAgentOverride: !!agentConfig,
@@ -264,21 +248,20 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
     return
   }
 
+  // ── Print schedule summary to stderr ──
   process.stderr.write(`Cron scheduler started with ${scheduled.length} job(s)\n`)
   for (const s of scheduled) {
     process.stderr.write(`  ${s.job.name}: ${s.job.schedule} → next: ${s.nextRun.toISOString()}\n`)
   }
 
+  // ── Main scheduler loop ──
   let jobsRun = 0
   let jobsFailed = 0
 
-  // Main scheduler loop
   while (!signal?.aborted) {
-    // Find the next job to run
     scheduled.sort((a, b) => a.nextRun.getTime() - b.nextRun.getTime())
     const next = scheduled[0]!
-    const now = Date.now()
-    const delay = Math.max(0, next.nextRun.getTime() - now)
+    const delay = Math.max(0, next.nextRun.getTime() - Date.now())
 
     if (delay > 0) {
       logger.debug('cron scheduler sleeping', {
@@ -286,7 +269,6 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
         delayMs: delay,
         nextRun: next.nextRun.toISOString(),
       })
-      // Sleep until next job is due (or signal aborts)
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, delay)
         signal?.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true })
@@ -295,9 +277,9 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
 
     if (signal?.aborted) break
 
-    // Execute the job
+    // ── Execute the job ──
     const { job, agentConfig } = next
-    logger.info('cron job starting', { name: job.name, schedule: job.schedule })
+    logger.info('cron job starting', { job: job.name, schedule: job.schedule })
     onJobStart?.(job)
 
     try {
@@ -307,19 +289,22 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
     } catch (err) {
       jobsRun++
       jobsFailed++
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      onJobEnd?.(job, { ok: false, error: errorMsg })
+      const error = err instanceof Error ? err.message : String(err)
+      onJobEnd?.(job, { ok: false, error })
     }
 
-    // Flush app-level logger/tracer after each job
     await logger.flush()
     await tracer.flush()
 
-    // Schedule next run for this job
+    // ── Schedule next run ──
     next.nextRun = nextRunDate(job.schedule)
-    logger.info('cron job rescheduled', { name: job.name, nextRun: next.nextRun.toISOString() })
+    logger.info('cron job rescheduled', {
+      job: job.name,
+      nextRun: next.nextRun.toISOString(),
+    })
   }
 
+  // ── Shutdown ──
   tracer.endSpan(schedulerSpan, 'ok', {
     jobsRun,
     jobsFailed,

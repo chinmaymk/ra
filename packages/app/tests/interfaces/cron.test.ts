@@ -7,24 +7,56 @@ import type { RaConfig, CronJob } from '../../src/config/types'
 import { makeStorage } from '../fixtures'
 import { tmpdir } from '../tmpdir'
 
+// ── Test helpers ──────────────────────────────────────────────────────
+
+interface LogRecord {
+  level: string
+  message: string
+  data?: Record<string, unknown>
+}
+
 interface SpanRecord {
   name: string
   status?: 'ok' | 'error'
   attributes: Record<string, unknown>
 }
 
+/** Create a mock logger that captures all log calls. */
+function makeMockLogger() {
+  const logs: LogRecord[] = []
+  const capture = (level: string) =>
+    (msg: string, data?: Record<string, unknown>) => { logs.push({ level, message: msg, data }) }
+
+  return {
+    logs,
+    logger: {
+      debug: capture('debug'),
+      info: capture('info'),
+      warn: capture('warn'),
+      error: capture('error'),
+      flush: async () => {},
+    },
+  }
+}
+
+/** Create a mock tracer that captures span start/end calls. */
 function makeMockTracer() {
   const spans: SpanRecord[] = []
-  let spanCounter = 0
+  let counter = 0
+
   return {
     spans,
     tracer: {
       startSpan: (name: string, attributes?: Record<string, unknown>) => {
         const span: SpanRecord = { name, attributes: attributes ?? {} }
         spans.push(span)
-        return { spanId: `span-${spanCounter++}`, name, attributes: attributes ?? {} }
+        return { spanId: `span-${counter++}`, name, attributes: attributes ?? {} }
       },
-      endSpan: (span: { spanId: string; name: string }, status: 'ok' | 'error', attributes?: Record<string, unknown>) => {
+      endSpan: (
+        span: { spanId: string; name: string },
+        status: 'ok' | 'error',
+        attributes?: Record<string, unknown>,
+      ) => {
         const record = spans.find(s => s.name === span.name && !s.status)
         if (record) {
           record.status = status
@@ -38,37 +70,19 @@ function makeMockTracer() {
   }
 }
 
-interface LogRecord {
-  level: string
-  message: string
-  data?: Record<string, unknown>
+/** Minimal mock provider that streams a single text response. */
+const defaultProvider: IProvider = {
+  name: 'mock',
+  chat: async () => { throw new Error('not implemented') },
+  async *stream() {
+    yield { type: 'text', delta: 'done' }
+    yield { type: 'done' }
+  },
 }
 
-function makeMockLogger() {
-  const logs: LogRecord[] = []
-  const logger = {
-    debug: (msg: string, data?: Record<string, unknown>) => { logs.push({ level: 'debug', message: msg, data }) },
-    info: (msg: string, data?: Record<string, unknown>) => { logs.push({ level: 'info', message: msg, data }) },
-    warn: (msg: string, data?: Record<string, unknown>) => { logs.push({ level: 'warn', message: msg, data }) },
-    error: (msg: string, data?: Record<string, unknown>) => { logs.push({ level: 'error', message: msg, data }) },
-    flush: async () => {},
-  }
-  return { logs, logger }
-}
-
-function makeApp(overrides: {
-  provider?: IProvider
-  jobs?: CronJob[]
-}): { app: AppContext; config: RaConfig; logs: LogRecord[]; spans: SpanRecord[] } {
-  const provider: IProvider = overrides.provider ?? {
-    name: 'mock',
-    chat: async () => { throw new Error() },
-    async *stream() {
-      yield { type: 'text', delta: 'done' }
-      yield { type: 'done' }
-    },
-  }
-
+/** Build an AppContext + config with mock logger/tracer. Returns log/span collectors. */
+function makeApp(overrides?: { provider?: IProvider }) {
+  const provider = overrides?.provider ?? defaultProvider
   const { logs, logger } = makeMockLogger()
   const { spans, tracer } = makeMockTracer()
 
@@ -115,7 +129,7 @@ function makeApp(overrides: {
       compaction: { enabled: false, threshold: 0.8 },
       memory: { enabled: false, maxMemories: 100, ttlDays: 30, injectLimit: 5 },
     },
-    cron: overrides.jobs ?? [],
+    cron: [],
   }
 
   const app = {
@@ -124,7 +138,7 @@ function makeApp(overrides: {
     tools: new ToolRegistry(),
     middleware: {},
     skillMap: new Map(),
-    storage: undefined!, // will be set in tests that need it
+    storage: undefined!, // set by individual tests
     sessionId: 'test',
     contextMessages: [],
     memoryStore: undefined,
@@ -138,254 +152,250 @@ function makeApp(overrides: {
   return { app, config, logs, spans }
 }
 
+/** Find a log entry by message (and optional data key/value). */
+function findLog(logs: LogRecord[], message: string, data?: Record<string, unknown>): LogRecord | undefined {
+  return logs.find(l => {
+    if (l.message !== message) return false
+    if (!data) return true
+    return Object.entries(data).every(([k, v]) => l.data?.[k] === v)
+  })
+}
+
+/** Run a cron job once then abort. */
+async function runOnce(
+  app: AppContext,
+  jobs: CronJob[],
+  callbacks?: {
+    onJobStart?: (job: CronJob) => void
+    onJobEnd?: (job: CronJob, result: { ok: boolean; error?: string }) => void
+  },
+) {
+  const controller = new AbortController()
+  await runCron({
+    app,
+    jobs,
+    signal: controller.signal,
+    runImmediately: true,
+    onJobStart: callbacks?.onJobStart,
+    onJobEnd: (job, result) => {
+      callbacks?.onJobEnd?.(job, result)
+      controller.abort()
+    },
+  })
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────
+
 describe('runCron', () => {
-  it('warns and returns when no jobs are configured', async () => {
-    const { app, logs } = makeApp({ jobs: [] })
+  describe('validation', () => {
+    it('warns and returns when no jobs are configured', async () => {
+      const { app, logs } = makeApp()
+      await runCron({ app, jobs: [], runImmediately: true })
 
-    await runCron({ app, jobs: [], runImmediately: true })
-    expect(logs.some(l => l.message === 'no cron jobs configured' && l.level === 'warn')).toBe(true)
-  })
-
-  it('skips jobs with invalid cron expressions', async () => {
-    const { app, logs } = makeApp({ jobs: [] })
-
-    const jobs: CronJob[] = [
-      { name: 'bad-job', schedule: 'not-a-cron', prompt: 'hello' },
-    ]
-
-    await runCron({ app, jobs, runImmediately: true })
-    expect(logs.some(l => l.message === 'invalid cron expression' && l.data?.job === 'bad-job')).toBe(true)
-    expect(logs.some(l => l.message === 'no valid cron jobs to schedule')).toBe(true)
-  })
-
-  it('executes a job and stops on abort', async () => {
-    const storage = await makeStorage('ra-cron-exec')
-    const prompts: string[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error() },
-      async *stream(req) {
-        const userMsg = req.messages.filter(m => m.role === 'user').pop()
-        if (userMsg && typeof userMsg.content === 'string') {
-          prompts.push(userMsg.content)
-        }
-        yield { type: 'text', delta: 'response' }
-        yield { type: 'done' }
-      },
-    }
-
-    const { app } = makeApp({ provider })
-    app.storage = storage
-
-    const controller = new AbortController()
-    const startedJobs: string[] = []
-    const completedJobs: string[] = []
-
-    const jobs: CronJob[] = [
-      { name: 'test-job', schedule: '* * * * *', prompt: 'do the thing' },
-    ]
-
-    await runCron({
-      app,
-      jobs,
-      signal: controller.signal,
-      runImmediately: true,
-      onJobStart: (job) => { startedJobs.push(job.name) },
-      onJobEnd: (job) => {
-        completedJobs.push(job.name)
-        controller.abort()
-      },
+      expect(findLog(logs, 'no cron jobs configured')).toBeDefined()
     })
 
-    expect(startedJobs).toContain('test-job')
-    expect(completedJobs).toContain('test-job')
-    expect(prompts).toContain('do the thing')
+    it('skips jobs with invalid cron expressions', async () => {
+      const { app, logs } = makeApp()
+      const jobs: CronJob[] = [
+        { name: 'bad-job', schedule: 'not-a-cron', prompt: 'hello' },
+      ]
+
+      await runCron({ app, jobs, runImmediately: true })
+
+      expect(findLog(logs, 'invalid cron expression', { job: 'bad-job' })).toBeDefined()
+      expect(findLog(logs, 'no valid cron jobs to schedule')).toBeDefined()
+    })
   })
 
-  it('handles job execution failure gracefully', async () => {
-    const storage = await makeStorage('ra-cron-fail')
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error() },
-      async *stream() {
-        throw new Error('model exploded')
-      },
-    }
+  describe('execution', () => {
+    it('runs a job and delivers the prompt to the provider', async () => {
+      const prompts: string[] = []
+      const provider: IProvider = {
+        name: 'mock',
+        chat: async () => { throw new Error('not implemented') },
+        async *stream(req) {
+          const userMsg = req.messages.filter(m => m.role === 'user').pop()
+          if (userMsg && typeof userMsg.content === 'string') prompts.push(userMsg.content)
+          yield { type: 'text', delta: 'response' }
+          yield { type: 'done' }
+        },
+      }
 
-    const { app } = makeApp({ provider })
-    app.storage = storage
+      const { app } = makeApp({ provider })
+      app.storage = await makeStorage('ra-cron-exec')
 
-    const controller = new AbortController()
-    const failures: string[] = []
+      const started: string[] = []
+      const completed: string[] = []
+      const jobs: CronJob[] = [
+        { name: 'test-job', schedule: '* * * * *', prompt: 'do the thing' },
+      ]
 
-    const jobs: CronJob[] = [
-      { name: 'failing-job', schedule: '* * * * *', prompt: 'crash' },
-    ]
+      await runOnce(app, jobs, {
+        onJobStart: (job) => { started.push(job.name) },
+        onJobEnd: (job) => { completed.push(job.name) },
+      })
 
-    await runCron({
-      app,
-      jobs,
-      signal: controller.signal,
-      runImmediately: true,
-      onJobEnd: (_job, result) => {
-        if (!result.ok) failures.push(result.error ?? 'unknown')
-        controller.abort()
-      },
+      expect(started).toContain('test-job')
+      expect(completed).toContain('test-job')
+      expect(prompts).toContain('do the thing')
     })
 
-    expect(failures).toHaveLength(1)
-    expect(failures[0]).toContain('model exploded')
-  })
+    it('handles job execution failure gracefully', async () => {
+      const provider: IProvider = {
+        name: 'mock',
+        chat: async () => { throw new Error('not implemented') },
+        async *stream() { throw new Error('model exploded') },
+      }
 
-  it('merges partial agent config override', async () => {
-    const storage = await makeStorage('ra-cron-merge')
-    let capturedModel = ''
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error() },
-      async *stream(req) {
-        capturedModel = req.model
-        yield { type: 'text', delta: 'ok' }
-        yield { type: 'done' }
-      },
-    }
+      const { app } = makeApp({ provider })
+      app.storage = await makeStorage('ra-cron-fail')
 
-    const { app } = makeApp({ provider })
-    app.storage = storage
+      const failures: string[] = []
+      const jobs: CronJob[] = [
+        { name: 'failing-job', schedule: '* * * * *', prompt: 'crash' },
+      ]
 
-    const controller = new AbortController()
-    const jobs: CronJob[] = [
-      {
+      await runOnce(app, jobs, {
+        onJobEnd: (_job, result) => {
+          if (!result.ok) failures.push(result.error ?? 'unknown')
+        },
+      })
+
+      expect(failures).toHaveLength(1)
+      expect(failures[0]).toContain('model exploded')
+    })
+
+    it('merges per-job agent config overrides', async () => {
+      let capturedModel = ''
+      const provider: IProvider = {
+        name: 'mock',
+        chat: async () => { throw new Error('not implemented') },
+        async *stream(req) {
+          capturedModel = req.model
+          yield { type: 'text', delta: 'ok' }
+          yield { type: 'done' }
+        },
+      }
+
+      const { app } = makeApp({ provider })
+      app.storage = await makeStorage('ra-cron-merge')
+
+      const jobs: CronJob[] = [{
         name: 'override-job',
         schedule: '* * * * *',
         prompt: 'check',
         agent: { model: 'claude-haiku-4-5', maxIterations: 3 },
-      },
-    ]
+      }]
 
-    await runCron({
-      app,
-      jobs,
-      signal: controller.signal,
-      runImmediately: true,
-      onJobEnd: () => { controller.abort() },
+      await runOnce(app, jobs)
+
+      expect(capturedModel).toBe('claude-haiku-4-5')
     })
-
-    expect(capturedModel).toBe('claude-haiku-4-5')
   })
 
-  it('logs scheduler lifecycle events', async () => {
-    const storage = await makeStorage('ra-cron-logs')
-    const { app, logs } = makeApp({})
-    app.storage = storage
+  describe('logging', () => {
+    it('emits structured logs for the full scheduler lifecycle', async () => {
+      const { app, logs } = makeApp()
+      app.storage = await makeStorage('ra-cron-logs')
 
-    const controller = new AbortController()
-    const jobs: CronJob[] = [
-      { name: 'log-job', schedule: '* * * * *', prompt: 'test' },
-    ]
+      const jobs: CronJob[] = [
+        { name: 'log-job', schedule: '* * * * *', prompt: 'test' },
+      ]
 
-    await runCron({
-      app,
-      jobs,
-      signal: controller.signal,
-      runImmediately: true,
-      onJobEnd: () => { controller.abort() },
+      await runOnce(app, jobs)
+
+      // Scheduler lifecycle
+      expect(findLog(logs, 'cron scheduler starting', { jobCount: 1 })).toBeDefined()
+      expect(findLog(logs, 'cron job scheduled', { job: 'log-job' })).toBeDefined()
+      expect(findLog(logs, 'cron scheduler stopped')).toBeDefined()
+
+      // Job lifecycle
+      expect(findLog(logs, 'cron job starting', { job: 'log-job' })).toBeDefined()
+      expect(findLog(logs, 'cron job executing', { job: 'log-job' })).toBeDefined()
+      expect(findLog(logs, 'cron job session created', { job: 'log-job' })).toBeDefined()
+      expect(findLog(logs, 'cron job completed', { job: 'log-job' })).toBeDefined()
+      expect(findLog(logs, 'cron job rescheduled', { job: 'log-job' })).toBeDefined()
     })
 
-    // Scheduler lifecycle logs
-    expect(logs.some(l => l.message === 'cron scheduler starting' && l.data?.jobCount === 1)).toBe(true)
-    expect(logs.some(l => l.message === 'cron job scheduled' && l.data?.name === 'log-job')).toBe(true)
-    expect(logs.some(l => l.message === 'cron job starting' && l.data?.name === 'log-job')).toBe(true)
-    expect(logs.some(l => l.message === 'cron job executing' && l.data?.job === 'log-job')).toBe(true)
-    expect(logs.some(l => l.message === 'cron job session created' && l.data?.job === 'log-job')).toBe(true)
-    expect(logs.some(l => l.message === 'cron job completed' && l.data?.job === 'log-job')).toBe(true)
-    expect(logs.some(l => l.message === 'cron job rescheduled' && l.data?.name === 'log-job')).toBe(true)
-    expect(logs.some(l => l.message === 'cron scheduler stopped')).toBe(true)
+    it('logs failure details when a job errors', async () => {
+      const provider: IProvider = {
+        name: 'mock',
+        chat: async () => { throw new Error('not implemented') },
+        async *stream() { throw new Error('boom') },
+      }
+
+      const { app, logs } = makeApp({ provider })
+      app.storage = await makeStorage('ra-cron-log-err')
+
+      await runOnce(app, [
+        { name: 'error-job', schedule: '* * * * *', prompt: 'crash' },
+      ])
+
+      const failLog = findLog(logs, 'cron job failed', { job: 'error-job' })
+      expect(failLog).toBeDefined()
+      expect(failLog!.data?.error).toContain('boom')
+    })
   })
 
-  it('creates tracer spans for scheduler and jobs', async () => {
-    const storage = await makeStorage('ra-cron-traces')
-    const { app, spans } = makeApp({})
-    app.storage = storage
+  describe('tracing', () => {
+    it('creates spans for the scheduler and each job', async () => {
+      const { app, spans } = makeApp()
+      app.storage = await makeStorage('ra-cron-traces')
 
-    const controller = new AbortController()
-    const jobs: CronJob[] = [
-      { name: 'traced-job', schedule: '* * * * *', prompt: 'test' },
-    ]
+      await runOnce(app, [
+        { name: 'traced-job', schedule: '* * * * *', prompt: 'test' },
+      ])
 
-    await runCron({
-      app,
-      jobs,
-      signal: controller.signal,
-      runImmediately: true,
-      onJobEnd: () => { controller.abort() },
+      // Scheduler span
+      const scheduler = spans.find(s => s.name === 'cron.scheduler')
+      expect(scheduler).toBeDefined()
+      expect(scheduler!.status).toBe('ok')
+      expect(scheduler!.attributes.jobCount).toBe(1)
+      expect(scheduler!.attributes.jobsRun).toBe(1)
+      expect(scheduler!.attributes.jobsFailed).toBe(0)
+
+      // Job span
+      const job = spans.find(s => s.name === 'cron.job')
+      expect(job).toBeDefined()
+      expect(job!.status).toBe('ok')
+      expect(job!.attributes.job).toBe('traced-job')
+      expect(job!.attributes.sessionId).toBeDefined()
     })
 
-    // Scheduler span
-    const schedulerSpan = spans.find(s => s.name === 'cron.scheduler')
-    expect(schedulerSpan).toBeDefined()
-    expect(schedulerSpan!.status).toBe('ok')
-    expect(schedulerSpan!.attributes.jobCount).toBe(1)
-    expect(schedulerSpan!.attributes.jobsRun).toBe(1)
-    expect(schedulerSpan!.attributes.jobsFailed).toBe(0)
+    it('marks job span as error on failure', async () => {
+      const provider: IProvider = {
+        name: 'mock',
+        chat: async () => { throw new Error('not implemented') },
+        async *stream() { throw new Error('boom') },
+      }
 
-    // Job span
-    const jobSpan = spans.find(s => s.name === 'cron.job')
-    expect(jobSpan).toBeDefined()
-    expect(jobSpan!.status).toBe('ok')
-    expect(jobSpan!.attributes.job).toBe('traced-job')
-    expect(jobSpan!.attributes.sessionId).toBeDefined()
-  })
+      const { app, spans } = makeApp({ provider })
+      app.storage = await makeStorage('ra-cron-trace-err')
 
-  it('creates error tracer span on job failure', async () => {
-    const storage = await makeStorage('ra-cron-trace-err')
-    const provider: IProvider = {
-      name: 'mock',
-      chat: async () => { throw new Error() },
-      async *stream() {
-        throw new Error('boom')
-      },
-    }
+      await runOnce(app, [
+        { name: 'error-traced', schedule: '* * * * *', prompt: 'crash' },
+      ])
 
-    const { app, spans, logs } = makeApp({ provider })
-    app.storage = storage
-
-    const controller = new AbortController()
-    const jobs: CronJob[] = [
-      { name: 'error-traced', schedule: '* * * * *', prompt: 'crash' },
-    ]
-
-    await runCron({
-      app,
-      jobs,
-      signal: controller.signal,
-      runImmediately: true,
-      onJobEnd: () => { controller.abort() },
+      const job = spans.find(s => s.name === 'cron.job')
+      expect(job).toBeDefined()
+      expect(job!.status).toBe('error')
+      expect(job!.attributes.error).toContain('boom')
     })
 
-    // Job span should be marked as error
-    const jobSpan = spans.find(s => s.name === 'cron.job')
-    expect(jobSpan).toBeDefined()
-    expect(jobSpan!.status).toBe('error')
-    expect(jobSpan!.attributes.error).toContain('boom')
+    it('marks scheduler span as error when no jobs are valid', async () => {
+      const { app, spans } = makeApp()
 
-    // App-level logger should record the failure (logged from executeJob with `job` key)
-    expect(logs.some(l => l.message === 'cron job failed' && l.data?.job === 'error-traced')).toBe(true)
-  })
+      await runCron({
+        app,
+        jobs: [{ name: 'invalid', schedule: 'bad', prompt: 'hello' }],
+        runImmediately: true,
+      })
 
-  it('logs include job metadata for invalid schedule errors', async () => {
-    const { app, spans } = makeApp({ jobs: [] })
-
-    const jobs: CronJob[] = [
-      { name: 'invalid-schedule', schedule: 'bad', prompt: 'hello' },
-    ]
-
-    await runCron({ app, jobs, runImmediately: true })
-
-    // Scheduler span should be marked error when no valid jobs
-    const schedulerSpan = spans.find(s => s.name === 'cron.scheduler')
-    expect(schedulerSpan).toBeDefined()
-    expect(schedulerSpan!.status).toBe('error')
-    expect(schedulerSpan!.attributes.reason).toBe('no_valid_jobs')
+      const scheduler = spans.find(s => s.name === 'cron.scheduler')
+      expect(scheduler).toBeDefined()
+      expect(scheduler!.status).toBe('error')
+      expect(scheduler!.attributes.reason).toBe('no_valid_jobs')
+    })
   })
 })
