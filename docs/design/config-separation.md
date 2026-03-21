@@ -97,41 +97,15 @@ Same pattern extends to future sections (`webhook:`, `watch:`, etc.).
 
 ## Config Discovery
 
-### Global: `~/.ra/config.yaml`
-
-User-level defaults. Good for default provider, credentials, personal preferences.
-
-### Local: `.ra/config.yaml` (discovered by upward search)
-
-Project-level config. Discovered by searching upward from cwd for a `.ra/` directory.
+Existing `ra.config.yml` discovery is unchanged. The app walks upward from cwd looking for `ra.config.{json,yaml,yml,toml}`, stopping at the first match. The file is now expected to have named sections (`app:`, `agent:`) instead of flat top-level fields.
 
 ```
 project/
-  .ra/
-    config.yaml   # project config
-    sessions/     # data (unchanged)
-    memory/       # data (unchanged)
+  ra.config.yml   # app: + agent: sections
+  src/
 ```
 
-### Explicit: `--config <path>`
-
-Overrides local. Points to a config file or directory.
-
-```bash
-bun run ra --config ./recipes/coding-agent/
-```
-
-### Merge order
-
-```
-global (~/.ra/config.yaml)
-  → local (.ra/config.yaml, discovered upward)
-    → explicit (--config)
-      → env vars (RA_*)
-        → CLI flags (--model, --provider, etc.)
-```
-
-Each layer merges per-section: `app:` fields merge with `app:`, `agent:` fields merge with `agent:`.
+Merge order remains: config file → env vars (`RA_*`) → CLI flags (`--model`, `--provider`, etc.).
 
 ## Type Design
 
