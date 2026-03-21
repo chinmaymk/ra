@@ -57,7 +57,7 @@ describe('SessionStorage', () => {
       await new Promise(r => setTimeout(r, 10))
     }
     const latest = await storage.latest()
-    expect(latest!.id).toBe(ids[4])
+    expect(latest!.id).toBe(ids[ids.length - 1]!)
   })
 
   it('latest() reflects pruned state', async () => {
@@ -69,7 +69,7 @@ describe('SessionStorage', () => {
     }
     await storage.prune({ maxSessions: 2 })
     const latest = await storage.latest()
-    expect(latest!.id).toBe(ids[4])
+    expect(latest!.id).toBe(ids[ids.length - 1]!)
     const list = await storage.list()
     expect(list).toHaveLength(2)
   })
