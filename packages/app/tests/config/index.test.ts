@@ -474,3 +474,78 @@ describe('config edge cases', () => {
     expect(c.agent.model).toBe('gpt-4o-mini') // CLI wins over env
   })
 })
+
+describe('legacy flat config migration', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-flat-config-test-${Date.now()}`)
+    mkdirSync(tmp, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('migrates flat providers with apiKey into agent.providers', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'provider: anthropic',
+      'providers:',
+      '  anthropic:',
+      '    apiKey: "sk-ant-flat-key"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('anthropic')
+    expect(c.agent.providers.anthropic.apiKey).toBe('sk-ant-flat-key')
+  })
+
+  it('migrates flat provider, model, and interface keys', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      provider: 'openai',
+      model: 'gpt-4o',
+      interface: 'cli',
+      maxIterations: 100,
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('openai')
+    expect(c.agent.model).toBe('gpt-4o')
+    expect(c.app.interface).toBe('cli')
+    expect(c.agent.maxIterations).toBe(100)
+  })
+
+  it('nested agent section takes priority over flat keys', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'provider: google',
+      'agent:',
+      '  provider: openai',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('openai')
+  })
+
+  it('migrates flat openai apiKey from YAML', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'provider: openai',
+      'model: gpt-4o',
+      'providers:',
+      '  openai:',
+      '    apiKey: "sk-oai-flat"',
+      '    baseURL: "https://my-proxy/"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.providers.openai.apiKey).toBe('sk-oai-flat')
+    expect(c.agent.providers.openai.baseURL).toBe('https://my-proxy/')
+  })
+
+  it('migrates flat app keys: skillDirs, permissions, storage', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      skillDirs: ['/custom/skills'],
+      logsEnabled: false,
+      storage: { format: 'jsonl', maxSessions: 10, ttlDays: 5 },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.skillDirs).toEqual(['/custom/skills'])
+    expect(c.app.logsEnabled).toBe(false)
+    expect(c.app.storage.maxSessions).toBe(10)
+  })
+})

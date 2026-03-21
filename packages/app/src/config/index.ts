@@ -118,6 +118,49 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
   return r
 }
 
+// Keys that belong under `agent` when found at the top level (legacy flat config)
+const AGENT_KEYS = new Set([
+  'provider', 'model', 'thinking', 'systemPrompt', 'providers',
+  'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
+  'tools', 'middleware', 'context', 'compaction', 'memory',
+])
+
+// Keys that belong under `app` when found at the top level (legacy flat config)
+const APP_KEYS = new Set([
+  'interface', 'dataDir', 'http', 'inspector', 'storage',
+  'skillDirs', 'skills', 'mcp', 'permissions',
+  'logsEnabled', 'logLevel', 'tracesEnabled',
+])
+
+/**
+ * Migrate legacy flat config keys into their `app`/`agent` sections.
+ * Before the app/agent split, all keys lived at the top level.
+ * This shim lets old configs (e.g. `providers.anthropic.apiKey`) keep working.
+ */
+function normalizeFlatConfig(raw: Record<string, unknown>): void {
+  for (const key of Object.keys(raw)) {
+    if (AGENT_KEYS.has(key)) {
+      if (!isPlainObject(raw.agent)) raw.agent = {}
+      const agent = raw.agent as Record<string, unknown>
+      if (!(key in agent)) {
+        agent[key] = raw[key]
+      } else if (isPlainObject(raw[key]) && isPlainObject(agent[key])) {
+        agent[key] = deepMerge(raw[key] as Record<string, unknown>, agent[key] as Record<string, unknown>)
+      }
+      delete raw[key]
+    } else if (APP_KEYS.has(key)) {
+      if (!isPlainObject(raw.app)) raw.app = {}
+      const app = raw.app as Record<string, unknown>
+      if (!(key in app)) {
+        app[key] = raw[key]
+      } else if (isPlainObject(raw[key]) && isPlainObject(app[key])) {
+        app[key] = deepMerge(raw[key] as Record<string, unknown>, app[key] as Record<string, unknown>)
+      }
+      delete raw[key]
+    }
+  }
+}
+
 /**
  * Normalize the `tools` config section. Supports three shapes:
  *   1. `builtinTools: true/false` (legacy boolean flag)
@@ -173,9 +216,12 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   const envConfig = loadEnvVars(env)
   const cliArgs = options.cliArgs ?? {}
 
-  // Normalize tools config on each layer before merging
+  // Migrate legacy flat config keys into app/agent sections, then normalize tools
   const layers = [fileConfig, envConfig, cliArgs] as Record<string, unknown>[]
-  for (const layer of layers) normalizeToolsConfig(layer)
+  for (const layer of layers) {
+    normalizeFlatConfig(layer)
+    normalizeToolsConfig(layer)
+  }
 
   // defaults < file < env < CLI
   // Deep clone defaults to prevent mutation of the shared defaultConfig object
