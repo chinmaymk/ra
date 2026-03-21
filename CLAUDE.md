@@ -1,6 +1,6 @@
 # ra
 
-Agentic loop framework. One binary, multiple interfaces (CLI/REPL/HTTP/MCP), portable across LLM backends.
+The predictable, observable agent harness.
 
 ## Quick Reference
 
