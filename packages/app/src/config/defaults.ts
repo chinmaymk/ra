@@ -13,6 +13,15 @@ export const defaultConfig: RaConfig = {
       ttlDays: 30,
     },
     skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
+    providers: {
+      anthropic: { apiKey: '' },
+      openai: { apiKey: '' },
+      'openai-completions': { apiKey: '' },
+      google: { apiKey: '' },
+      ollama: { host: 'http://localhost:11434' },
+      bedrock: { region: 'us-east-1' },
+      azure: { endpoint: '', deployment: '', apiKey: '' },
+    },
     mcp: {
       client: [],
       server: {
@@ -34,15 +43,6 @@ export const defaultConfig: RaConfig = {
     provider: 'anthropic',
     model: 'claude-sonnet-4-6',
     systemPrompt: 'You are a helpful AI assistant.',
-    providers: {
-      anthropic: { apiKey: '' },
-      openai: { apiKey: '' },
-      'openai-completions': { apiKey: '' },
-      google: { apiKey: '' },
-      ollama: { host: 'http://localhost:11434' },
-      bedrock: { region: 'us-east-1' },
-      azure: { endpoint: '', deployment: '', apiKey: '' },
-    },
     maxIterations: 50,
     maxRetries: 3,
     toolTimeout: 30000,

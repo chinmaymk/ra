@@ -54,12 +54,14 @@ Non-sensitive options can also be set via CLI:
 ## Config file
 
 ```yaml
-provider: azure
-providers:
-  azure:
-    endpoint: https://myresource.openai.azure.com/
-    deployment: my-gpt4o
-    apiVersion: 2024-12-01-preview
+app:
+  providers:
+    azure:
+      endpoint: https://myresource.openai.azure.com/
+      deployment: my-gpt4o
+      apiVersion: 2024-12-01-preview
+agent:
+  provider: azure
 ```
 
 ## Deployment vs model

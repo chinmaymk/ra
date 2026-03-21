@@ -166,7 +166,7 @@ export async function bootstrap(
   }
 
   // ── Provider ───────────────────────────────────────────────────────
-  const provider = createProvider(buildProviderConfig(agent.provider, agent.providers[agent.provider]))
+  const provider = createProvider(buildProviderConfig(agent.provider, app.providers[agent.provider]))
   logger.info('provider initialized', { provider: agent.provider, model: agent.model })
 
   // ── Tools ──────────────────────────────────────────────────────────
