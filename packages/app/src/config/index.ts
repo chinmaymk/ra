@@ -128,34 +128,16 @@ const AGENT_KEYS = new Set([
 // Keys that belong under `app` when found at the top level (legacy flat config)
 const APP_KEYS = new Set([
   'interface', 'dataDir', 'http', 'inspector', 'storage',
-  'skillDirs', 'skills', 'mcp', 'providers', 'permissions',
+  'skillDirs', 'skills', 'mcp', 'permissions',
   'logsEnabled', 'logLevel', 'tracesEnabled',
 ])
 
 /**
  * Migrate legacy flat config keys into their `app`/`agent` sections.
  * Before the app/agent split, all keys lived at the top level.
- * This shim lets old configs (e.g. `providers.anthropic.apiKey`) keep working.
- *
- * Also migrates `agent.providers` → `app.providers` since provider credentials
- * are an app-level concern (the agent just selects which provider to use).
+ * This shim lets old configs (e.g. `provider: anthropic`) keep working.
  */
 function normalizeFlatConfig(raw: Record<string, unknown>): void {
-  // Migrate agent.providers → app.providers (providers belong under app)
-  if (isPlainObject(raw.agent)) {
-    const agent = raw.agent as Record<string, unknown>
-    if ('providers' in agent) {
-      if (!isPlainObject(raw.app)) raw.app = {}
-      const app = raw.app as Record<string, unknown>
-      if (!('providers' in app)) {
-        app.providers = agent.providers
-      } else if (isPlainObject(agent.providers) && isPlainObject(app.providers)) {
-        app.providers = deepMerge(agent.providers as Record<string, unknown>, app.providers as Record<string, unknown>)
-      }
-      delete agent.providers
-    }
-  }
-
   // Migrate top-level flat keys into their respective sections
   for (const key of Object.keys(raw)) {
     if (AGENT_KEYS.has(key)) {

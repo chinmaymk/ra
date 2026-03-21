@@ -487,18 +487,6 @@ describe('legacy flat config migration', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
-  it('migrates flat providers with apiKey into app.providers', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'provider: anthropic',
-      'providers:',
-      '  anthropic:',
-      '    apiKey: "sk-ant-flat-key"',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('anthropic')
-    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-flat-key')
-  })
-
   it('migrates flat provider, model, and interface keys', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       provider: 'openai',
@@ -523,20 +511,6 @@ describe('legacy flat config migration', () => {
     expect(c.agent.provider).toBe('openai')
   })
 
-  it('migrates flat openai apiKey from YAML', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'provider: openai',
-      'model: gpt-4o',
-      'providers:',
-      '  openai:',
-      '    apiKey: "sk-oai-flat"',
-      '    baseURL: "https://my-proxy/"',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.providers.openai.apiKey).toBe('sk-oai-flat')
-    expect(c.app.providers.openai.baseURL).toBe('https://my-proxy/')
-  })
-
   it('migrates flat app keys: skillDirs, permissions, storage', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       skillDirs: ['/custom/skills'],
@@ -547,19 +521,6 @@ describe('legacy flat config migration', () => {
     expect(c.app.skillDirs).toEqual(['/custom/skills'])
     expect(c.app.logsEnabled).toBe(false)
     expect(c.app.storage.maxSessions).toBe(10)
-  })
-
-  it('migrates agent.providers to app.providers', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'agent:',
-      '  provider: anthropic',
-      '  providers:',
-      '    anthropic:',
-      '      apiKey: "sk-ant-under-agent"',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('anthropic')
-    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-under-agent')
   })
 
   it('app.providers in YAML works directly', async () => {
