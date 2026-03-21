@@ -25,13 +25,7 @@ cd /path/to/autoresearch
 ra --config /path/to/ra/recipes/karpathy-autoresearch/ra.config.yaml
 ```
 
-Then tell the agent to read the skill and begin:
-
-```
-> Read skills/autoresearch/SKILL.md and start a new experiment run
-```
-
-The agent will set up a branch, establish a baseline, and begin autonomous experimentation. Each experiment takes ~5 minutes. Over an 8-hour period, expect ~100 experiments.
+The system prompt tells the agent to `Read /autoresearch and begin` — the context resolver injects the skill body, and the agent kicks off autonomously. Each experiment takes ~5 minutes. Over an 8-hour period, expect ~100 experiments.
 
 ## Configuration
 

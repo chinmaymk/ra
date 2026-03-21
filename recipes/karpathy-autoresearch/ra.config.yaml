@@ -6,7 +6,7 @@ app:
 agent:
   provider: anthropic
   model: claude-sonnet-4-6
-  systemPrompt: You are an autonomous ML research agent. You iteratively modify training code, run experiments, evaluate results, and keep or discard changes without human intervention.
+  systemPrompt: Read /autoresearch and begin.
   maxIterations: 500
   toolTimeout: 900000
   tools:
