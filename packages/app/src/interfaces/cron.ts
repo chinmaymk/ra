@@ -8,16 +8,17 @@ import { Cron } from 'croner'
 import { writeFile, readFile, unlink } from 'node:fs/promises'
 import { unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import type { CronJobConfig } from '../config/types'
-import { loadConfig } from '../config'
+import type { CronJobConfig, AgentConfig, RaConfig } from '../config/types'
 import type { AppContext } from '../bootstrap'
 import { bootstrap } from '../bootstrap'
 import { createSessionMiddleware } from '../agent/session'
 import { buildMessagePrefix } from './messages'
-import { resolvePath } from '../utils/paths'
+
+/** Fields that, when overridden on a job, require a separate bootstrap. */
+const BOOTSTRAP_FIELDS: (keyof AgentConfig)[] = ['provider', 'providers', 'tools', 'mcp', 'memory', 'middleware', 'permissions']
 
 export interface CronSchedulerOptions {
-  /** Parent application context — used for lock path, logger, and as fallback. */
+  /** Base application context — shared by jobs that don't override bootstrap-level fields. */
   app: AppContext
   /** Maximum concurrent job executions. Falls back to app.config.maxConcurrency. */
   maxConcurrency?: number
@@ -25,8 +26,9 @@ export interface CronSchedulerOptions {
 
 /**
  * Cron interface — long-running process that executes agent loops on configurable schedules.
- * Each job references a full ra.config file and gets its own independently bootstrapped AppContext.
- * Multiple jobs can run concurrently.
+ * Each job can override any agent-relevant RaConfig field inline. Jobs that override
+ * bootstrap-level fields (provider, tools, mcp, etc.) get their own independently
+ * bootstrapped AppContext; simple jobs share the base context.
  */
 export class CronScheduler {
   private app: AppContext
@@ -38,7 +40,7 @@ export class CronScheduler {
   private lockPath: string
   private stopped = false
 
-  /** Per-job AppContext, each bootstrapped from its own config file. */
+  /** Per-job AppContext. Jobs needing their own bootstrap are cached here. */
   private jobContexts = new Map<string, AppContext>()
 
   constructor(options: CronSchedulerOptions) {
@@ -63,7 +65,6 @@ export class CronScheduler {
       if (!job.id) throw new Error('cron: every job must have an id')
       if (!job.schedule) throw new Error(`cron: job "${job.id}" missing schedule`)
       if (!job.prompt) throw new Error(`cron: job "${job.id}" missing prompt`)
-      if (!job.config) throw new Error(`cron: job "${job.id}" missing config path`)
       if (ids.has(job.id)) throw new Error(`cron: duplicate job id "${job.id}"`)
       ids.add(job.id)
     }
@@ -71,18 +72,14 @@ export class CronScheduler {
     // Acquire lock
     await this.acquireLock()
 
-    // Bootstrap each job from its own config file
+    // Bootstrap per-job contexts for jobs that override bootstrap-level fields
     for (const job of enabledJobs) {
-      this.app.logger.info('cron: bootstrapping job', { jobId: job.id, config: job.config })
-      const configPath = resolvePath(job.config, this.app.config.configDir)
-      const jobConfig = await loadConfig({
-        cwd: this.app.config.configDir,
-        configPath,
-      })
-      // Force interface to cron
-      jobConfig.interface = 'cron'
-      const ctx = await bootstrap(jobConfig, { skipSession: true })
-      this.jobContexts.set(job.id, ctx)
+      if (this.needsOwnContext(job)) {
+        this.app.logger.info('cron: bootstrapping per-job context', { jobId: job.id })
+        const mergedConfig = this.mergeJobConfig(job)
+        const ctx = await bootstrap(mergedConfig, { skipSession: true })
+        this.jobContexts.set(job.id, ctx)
+      }
     }
 
     // Schedule each job
@@ -97,13 +94,13 @@ export class CronScheduler {
       })
       this.cronInstances.push(cron)
 
-      const ctx = this.jobContexts.get(job.id)!
+      const ctx = this.contextFor(job)
       this.app.logger.info('cron: job scheduled', {
         jobId: job.id,
         schedule: job.schedule,
         timezone: job.timezone,
         provider: ctx.config.provider,
-        model: ctx.config.model,
+        model: job.model ?? ctx.config.model,
         nextRun: cron.nextRun()?.toISOString(),
       })
     }
@@ -160,24 +157,23 @@ export class CronScheduler {
       return
     }
 
-    const ctx = this.jobContexts.get(job.id)!
+    const ctx = this.contextFor(job)
+    const model = job.model ?? ctx.config.model
+    const maxIterations = job.maxIterations ?? ctx.config.maxIterations
+
     this.activeCount++
-    this.app.logger.info('cron: job started', {
-      jobId: job.id,
-      model: ctx.config.model,
-      provider: ctx.config.provider,
-    })
+    this.app.logger.info('cron: job started', { jobId: job.id, model })
 
     try {
       // Session
       const sessionId = await this.ensureSession(job, ctx)
 
-      // Build messages from the job's own config
+      // Build messages
       const prefix = buildMessagePrefix({
-        systemPrompt: ctx.config.systemPrompt,
+        systemPrompt: job.systemPrompt ?? ctx.config.systemPrompt,
         skillMap: ctx.skillMap,
         contextMessages: ctx.contextMessages,
-        activeSkillNames: ctx.config.skills,
+        activeSkillNames: job.skills ?? ctx.config.skills,
       })
       const priorCount = prefix.length
 
@@ -194,24 +190,24 @@ export class CronScheduler {
         storage: ctx.storage,
         sessionId,
         priorCount,
-        logsEnabled: ctx.config.logsEnabled,
-        logLevel: ctx.config.logLevel,
-        tracesEnabled: ctx.config.tracesEnabled,
+        logsEnabled: job.logsEnabled ?? ctx.config.logsEnabled,
+        logLevel: job.logLevel ?? ctx.config.logLevel,
+        tracesEnabled: job.tracesEnabled ?? ctx.config.tracesEnabled,
         logger: ctx.logger,
       })
 
       const loop = new AgentLoop({
         provider: ctx.provider,
         tools: ctx.tools,
-        model: ctx.config.model,
+        model,
         middleware: mergeMiddleware(session.middleware),
-        maxIterations: ctx.config.maxIterations,
-        maxRetries: ctx.config.maxRetries,
-        toolTimeout: ctx.config.toolTimeout,
+        maxIterations,
+        maxRetries: job.maxRetries ?? ctx.config.maxRetries,
+        toolTimeout: job.toolTimeout ?? ctx.config.toolTimeout,
         maxToolResponseSize: ctx.config.tools.maxResponseSize,
         sessionId,
-        thinking: ctx.config.thinking,
-        compaction: ctx.config.compaction,
+        thinking: job.thinking ?? ctx.config.thinking,
+        compaction: job.compaction ?? ctx.config.compaction,
         logger: session.logger,
       })
 
@@ -246,18 +242,56 @@ export class CronScheduler {
     }
   }
 
+  /** Get the AppContext for a job — per-job if bootstrapped, otherwise base. */
+  private contextFor(job: CronJobConfig): AppContext {
+    return this.jobContexts.get(job.id) ?? this.app
+  }
+
+  /** Check whether a job overrides fields that require a separate bootstrap. */
+  private needsOwnContext(job: CronJobConfig): boolean {
+    const jobRecord = job as unknown as Record<string, unknown>
+    return BOOTSTRAP_FIELDS.some(field => jobRecord[field] !== undefined)
+  }
+
+  /** Deep-merge job's RaConfig overrides onto the base config. */
+  private mergeJobConfig(job: CronJobConfig): RaConfig {
+    const base = this.app.config
+    return {
+      ...base,
+      ...(job.provider !== undefined && { provider: job.provider }),
+      ...(job.model !== undefined && { model: job.model }),
+      ...(job.systemPrompt !== undefined && { systemPrompt: job.systemPrompt }),
+      ...(job.maxIterations !== undefined && { maxIterations: job.maxIterations }),
+      ...(job.maxRetries !== undefined && { maxRetries: job.maxRetries }),
+      ...(job.toolTimeout !== undefined && { toolTimeout: job.toolTimeout }),
+      ...(job.thinking !== undefined && { thinking: job.thinking }),
+      ...(job.tools !== undefined && { tools: { ...base.tools, ...job.tools } }),
+      ...(job.providers !== undefined && { providers: { ...base.providers, ...job.providers } }),
+      ...(job.mcp !== undefined && { mcp: { ...base.mcp, ...job.mcp } }),
+      ...(job.middleware !== undefined && { middleware: { ...base.middleware, ...job.middleware } }),
+      ...(job.memory !== undefined && { memory: { ...base.memory, ...job.memory } }),
+      ...(job.compaction !== undefined && { compaction: { ...base.compaction, ...job.compaction } }),
+      ...(job.skills !== undefined && { skills: job.skills }),
+      ...(job.skillDirs !== undefined && { skillDirs: job.skillDirs }),
+      ...(job.permissions !== undefined && { permissions: { ...base.permissions, ...job.permissions } }),
+      ...(job.context !== undefined && { context: { ...base.context, ...job.context } }),
+      // Force interface to cron
+      interface: 'cron',
+    }
+  }
+
   private async ensureSession(job: CronJobConfig, ctx: AppContext): Promise<string> {
     if (job.persistent) {
       const deterministicId = `cron-${job.id}`
       return ctx.storage.ensureSession(deterministicId, {
         provider: ctx.provider.name,
-        model: ctx.config.model,
+        model: job.model ?? ctx.config.model,
         interface: 'cron',
       })
     }
     const session = await ctx.storage.create({
       provider: ctx.provider.name,
-      model: ctx.config.model,
+      model: job.model ?? ctx.config.model,
       interface: 'cron',
     })
     return session.id

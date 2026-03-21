@@ -51,26 +51,14 @@ export interface ToolsConfig {
   maxResponseSize?: number
 }
 
-export interface RaConfig {
+// ── Agent Config ─────────────────────────────────────────────────────
+// How to run an agent: provider, model, tools, middleware, limits, etc.
+// Shared by RaConfig, CronJobConfig, and anything else that creates an AgentLoop.
+
+export interface AgentConfig {
   provider: ProviderName
   model: string
-  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector' | 'cron'
   systemPrompt: string
-  /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
-  configDir: string
-  /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `.ra`. */
-  dataDir: string
-  http: { port: number; token: string }
-  inspector: { port: number }
-  skillDirs: string[]
-  skills: string[]
-  mcp: {
-    client: McpClientConfig[]
-    server: McpServerConfig
-    /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
-     *  First call returns full schema; model retries with correct params. Saves tokens. */
-    lazySchemas: boolean
-  }
   providers: {
     anthropic: AnthropicProviderOptions
     openai: OpenAIProviderOptions
@@ -80,19 +68,23 @@ export interface RaConfig {
     bedrock: BedrockProviderOptions
     azure: AzureProviderOptions
   }
-  storage: {
-    format: 'jsonl'
-    maxSessions: number
-    ttlDays: number
-  }
-  maxIterations: number
-  maxRetries: number
-  toolTimeout: number
   tools: ToolsConfig
   permissions: PermissionsConfig
   middleware: Record<string, string[]>
-  thinking?: 'low' | 'medium' | 'high'
+  mcp: {
+    client: McpClientConfig[]
+    server: McpServerConfig
+    /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
+     *  First call returns full schema; model retries with correct params. Saves tokens. */
+    lazySchemas: boolean
+  }
+  skillDirs: string[]
+  skills: string[]
+  maxIterations: number
+  maxRetries: number
+  toolTimeout: number
   maxConcurrency: number
+  thinking?: 'low' | 'medium' | 'high'
   context: ContextConfig
   compaction: {
     enabled: boolean
@@ -112,6 +104,24 @@ export interface RaConfig {
   logsEnabled: boolean
   logLevel: LogLevel
   tracesEnabled: boolean
+}
+
+// ── App Config ───────────────────────────────────────────────────────
+// How to run the application: interface selection, paths, server ports, cron jobs.
+
+export interface RaConfig extends AgentConfig {
+  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector' | 'cron'
+  /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
+  configDir: string
+  /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `.ra`. */
+  dataDir: string
+  http: { port: number; token: string }
+  inspector: { port: number }
+  storage: {
+    format: 'jsonl'
+    maxSessions: number
+    ttlDays: number
+  }
   cron: {
     jobs: CronJobConfig[]
     /** Max concurrent job executions across all jobs. Falls back to global maxConcurrency. */
@@ -119,16 +129,16 @@ export interface RaConfig {
   }
 }
 
-/** A cron job entry. Each job references a full ra.config file that is independently bootstrapped. */
-export interface CronJobConfig {
+// ── Cron Job Config ──────────────────────────────────────────────────
+
+/** Cron-specific scheduling fields. */
+export interface CronJobFields {
   /** Unique identifier for this job. */
   id: string
   /** Cron expression (5-field standard or 6-field with seconds). */
   schedule: string
   /** The user prompt to send to the agent each tick. */
   prompt: string
-  /** Path to a ra.config.{json,yaml,yml,toml} file. Resolved relative to the parent config's configDir. */
-  config: string
   /** IANA timezone (e.g., 'America/New_York'). Defaults to system timezone. */
   timezone?: string
   /** When true, reuse the same session across runs (accumulating context). Default: false. */
@@ -138,6 +148,11 @@ export interface CronJobConfig {
   /** Disable this job without removing it. Default: true. */
   enabled?: boolean
 }
+
+/** A cron job: scheduling fields + any AgentConfig overrides. */
+export type CronJobConfig = CronJobFields & Partial<AgentConfig>
+
+// ── Supporting Types ─────────────────────────────────────────────────
 
 export interface McpClientConfig {
   name: string
