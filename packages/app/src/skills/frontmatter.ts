@@ -14,6 +14,7 @@ export function extractSkillMetadata(frontmatter: Record<string, unknown>, fallb
   return {
     name: (frontmatter['name'] as string) ?? fallbackName,
     description: (frontmatter['description'] as string) ?? '',
+    disableModelInvocation: frontmatter['disable-model-invocation'] === true ? true : undefined,
     license: frontmatter['license'] as string | undefined,
     compatibility: frontmatter['compatibility'] as string | undefined,
     metadata: frontmatter['metadata'] as Record<string, string> | undefined,

@@ -57,6 +57,7 @@ export function buildAvailableSkillsXml(skills: Map<string, SkillIndex>, exclude
   const entries: string[] = []
   for (const [name, skill] of skills) {
     if (exclude?.has(name)) continue
+    if (skill.metadata.disableModelInvocation) continue
     entries.push(
       `  <skill>\n    <name>${name}</name>\n    <description>${skill.metadata.description}</description>\n    <location>${join(skill.dir, 'SKILL.md')}</location>\n  </skill>`
     )

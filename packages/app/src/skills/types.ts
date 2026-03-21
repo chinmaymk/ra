@@ -1,6 +1,9 @@
 export interface SkillMetadata {
   name: string
   description: string
+  /** When true, the skill is hidden from the model's available skills list.
+   *  It can still be activated by the user via /skill-name in their prompt. */
+  disableModelInvocation?: boolean
   license?: string
   compatibility?: string
   metadata?: Record<string, string>

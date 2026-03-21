@@ -32,31 +32,45 @@ You are a senior code reviewer. Focus on:
 
 Skills follow a progressive disclosure pattern — the model sees just enough to decide whether to use a skill, then loads the full instructions on demand:
 
-1. **Discovery** — Skills found in configured `skillDirs` are presented to the model as `<available_skills>` XML, listing each skill's name, description, and SKILL.md location. The full instructions are not loaded yet.
+1. **Discovery** — Skills found in configured `skillDirs` are indexed at startup (metadata only). Their names and descriptions are presented to the model as `<available_skills>` XML. The full instructions are **not** loaded yet.
 
-2. **Activation** — When the model decides a skill is relevant, it reads the full SKILL.md to get the complete instructions.
+2. **Activation** — When `/skill-name` appears in a prompt, the pattern resolver lazy-loads the full SKILL.md body and injects it as context. This works in any interface (CLI, REPL, HTTP).
 
-3. **Always-on** — Skills named in config (`skills: [name]`) or via CLI (`--skill name`) skip discovery. Their full SKILL.md body is injected directly as `<skill name="...">` XML in a user message.
+3. **REPL shortcut** — In the REPL, typing `/skill-name` as a command queues the skill for injection with your next message.
 
 ## Using skills
 
-**CLI:**
+**CLI** — include `/skill-name` in your prompt:
 ```bash
-ra --skill code-review "Review the latest changes"
+ra "/code-review Review the latest changes"
+ra "Review this file /code-review"
 ```
 
-**REPL:**
+**REPL** — use as a command or inline:
 ```
+› /code-review
+Skill "code-review" will be injected with your next message.
+› Review the latest changes
+
 › /skill code-review
+Skill "code-review" will be injected with your next message.
 ```
 
-**Config (always-on):**
+## Hiding skills from the model
+
+By default, all skills in `skillDirs` are listed in `<available_skills>` XML so the model can discover and suggest them. To hide a skill from the model's view — so it is **only** activated when the user explicitly writes `/skill-name` — set `disable-model-invocation` in the frontmatter:
+
 ```yaml
-skills:
-  - code-review
-skillDirs:
-  - ./skills
+---
+name: internal-deploy
+description: Runs internal deployment checklist
+disable-model-invocation: true
+---
+
+Follow these deployment steps...
 ```
+
+The skill is still indexed and resolvable via `/internal-deploy` in a prompt, but the model won't see it in the available skills list and won't invoke it on its own.
 
 ## Built-in skills
 
@@ -72,8 +86,8 @@ ra ships with six ready-to-use skills:
 | `writer` | Writes clear technical documentation, READMEs, and guides |
 
 ```bash
-ra --skill architect "Design a queue system for email notifications"
-ra --skill debugger --file crash.log "Find the root cause"
+ra "/architect Design a queue system for email notifications"
+ra "/debugger Find the root cause" --file crash.log
 ```
 
 ## On-demand scripts and references
@@ -184,7 +198,6 @@ Use `/skill-ref <skill> <filename>` in the REPL to load a reference into context
 
 ## See also
 
-- [REPL](/modes/repl) — `/skill`, `/skill-run`, `/skill-ref` commands
-- [CLI](/modes/cli) — `--skill` flag usage
+- [REPL](/modes/repl) — `/skill-name`, `/skill-run`, `/skill-ref` commands
 - [Recipes](/recipes/) — pre-built agent configurations using skills
-- [Configuration](/configuration/) — `skills` and `skillDirs` settings
+- [Configuration](/configuration/) — `skillDirs` settings

@@ -87,6 +87,29 @@ describe('buildAvailableSkillsXml', () => {
     expect(xml).not.toContain('<name>greet</name>')
     expect(xml).toContain('<name>review</name>')
   })
+
+  it('excludes skills with disable-model-invocation: true', async () => {
+    mkdirSync(`${TEST_DIR}/visible`, { recursive: true })
+    mkdirSync(`${TEST_DIR}/hidden`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/visible/SKILL.md`, '---\nname: visible\ndescription: Visible skill\n---\nBody')
+    writeFileSync(`${TEST_DIR}/hidden/SKILL.md`, '---\nname: hidden\ndescription: Hidden skill\ndisable-model-invocation: true\n---\nBody')
+    const index = await loadSkillIndex([TEST_DIR])
+    const xml = buildAvailableSkillsXml(index)
+    expect(xml).toContain('<name>visible</name>')
+    expect(xml).not.toContain('<name>hidden</name>')
+  })
+
+  it('disable-model-invocation skills are still in the index for user activation', async () => {
+    mkdirSync(`${TEST_DIR}/hidden`, { recursive: true })
+    writeFileSync(`${TEST_DIR}/hidden/SKILL.md`, '---\nname: hidden\ndescription: Hidden skill\ndisable-model-invocation: true\n---\nSecret body')
+    const index = await loadSkillIndex([TEST_DIR])
+    // Skill exists in index (can be resolved by user via /hidden)
+    expect(index.has('hidden')).toBe(true)
+    expect(index.get('hidden')!.metadata.disableModelInvocation).toBe(true)
+    // Full skill can still be loaded
+    const skill = await loadSkill(index.get('hidden')!)
+    expect(skill.body).toBe('Secret body')
+  })
 })
 
 describe('buildActiveSkillXml', () => {
