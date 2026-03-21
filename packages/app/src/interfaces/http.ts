@@ -13,7 +13,7 @@ import {
   type LogLevel,
 } from '@chinmaymk/ra'
 import type { SessionStorage } from '../storage/sessions'
-import type { Skill } from '../skills/types'
+import type { SkillIndex } from '../skills/types'
 import { createSessionMiddleware } from '../agent/session'
 import { buildMessagePrefix } from './messages'
 import { askUserTool } from '../tools/ask-user'
@@ -30,7 +30,7 @@ export interface HttpOptions {
   tools: ToolRegistry
   storage: SessionStorage
   systemPrompt?: string
-  skillMap?: Map<string, Skill>
+  skillIndex?: Map<string, SkillIndex>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
   maxRetries?: number
@@ -116,7 +116,7 @@ export class HttpServer {
   private prependSystem(messages: IMessage[]): { messages: IMessage[]; priorCount: number } {
     const prefix = buildMessagePrefix({
       systemPrompt: this.options.systemPrompt,
-      skillMap: this.options.skillMap,
+      skillIndex: this.options.skillIndex,
       contextMessages: this.options.contextMessages,
     })
     const priorCount = prefix.length

@@ -17,7 +17,7 @@ import {
 } from '@chinmaymk/ra'
 import { createPermissionsMiddleware } from './agent/permissions'
 import type { RaConfig } from './config/types'
-import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware } from './context'
+import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware, createSkillResolver } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
 import { McpClient } from './mcp/client'
@@ -25,8 +25,8 @@ import { MemoryStore, memorySearchTool, memorySaveTool, memoryForgetTool, create
 import { ScratchpadStore, scratchpadWriteTool, scratchpadDeleteTool, createScratchpadMiddleware } from './scratchpad'
 import { loadMiddleware } from './middleware/loader'
 import { createObservability } from './observability'
-import { loadSkills, buildAvailableSkillsXml } from './skills/loader'
-import type { Skill } from './skills/types'
+import { loadSkillIndex, buildAvailableSkillsXml } from './skills/loader'
+import type { SkillIndex } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath } from './utils/paths'
@@ -47,7 +47,7 @@ export interface AppContext {
   provider: IProvider
   tools: ToolRegistry
   middleware: Partial<MiddlewareConfig>
-  skillMap: Map<string, Skill>
+  skillIndex: Map<string, SkillIndex>
   storage: SessionStorage
   sessionId: string
   contextMessages: IMessage[]
@@ -202,15 +202,20 @@ export async function bootstrap(
 
   // ── Skills ─────────────────────────────────────────────────────────
   const resolvedSkillDirs = app.skillDirs.map(d => resolvePath(d, app.configDir))
-  const skillMap = await loadSkills(resolvedSkillDirs)
-  if (skillMap.size > 0) {
-    const availableXml = buildAvailableSkillsXml(skillMap)
+  const skillIndex = await loadSkillIndex(resolvedSkillDirs)
+  if (skillIndex.size > 0) {
+    const availableXml = buildAvailableSkillsXml(skillIndex)
     const skillTokens = estimateTokens(availableXml)
-    logger.info('skills loaded', {
-      skillCount: skillMap.size,
-      skills: [...skillMap.keys()],
+    logger.info('skills indexed', {
+      skillCount: skillIndex.size,
+      skills: [...skillIndex.keys()],
       estimatedTokens: skillTokens,
     })
+
+    // Skill pattern resolver — lazy-loads full skill on first /skill-name reference
+    const skillResolver = createSkillResolver(skillIndex)
+    const skillResolverMw = createResolverMiddleware([skillResolver], process.cwd())
+    middleware.beforeModelCall = prepend(middleware.beforeModelCall, skillResolverMw)
   }
 
   // ── MCP clients ────────────────────────────────────────────────────
@@ -266,7 +271,7 @@ export async function bootstrap(
   {
     const allRegisteredTools = tools.all()
     const contextTokens = estimateTokens(contextMessages)
-    const skillTokens = estimateTokens(buildAvailableSkillsXml(skillMap))
+    const skillTokens = estimateTokens(buildAvailableSkillsXml(skillIndex))
     const toolSchemaTokens = estimateTokens(allRegisteredTools)
     const totalEstimated = contextTokens + skillTokens + toolSchemaTokens
     logger.info('bootstrap token estimate', {
@@ -297,7 +302,7 @@ export async function bootstrap(
     provider,
     tools,
     middleware,
-    skillMap,
+    skillIndex,
     storage,
     sessionId,
     contextMessages,

@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { firstSegment } from '../utils/paths'
-import { resolveSkillAsset, type Skill, type SkillMetadata } from './types'
+import { resolveSkillAsset, type Skill, type SkillIndex, type SkillMetadata } from './types'
 import { parseFrontmatter, extractSkillMetadata } from './frontmatter'
 
 async function listSubdirFiles(skillDir: string, subdir: string): Promise<string[]> {
@@ -13,24 +13,24 @@ async function listSubdirFiles(skillDir: string, subdir: string): Promise<string
   return files
 }
 
-async function scanSkillDirs<T>(
-  dirs: string[],
-  build: (skillDir: string, metadata: SkillMetadata, body: string) => Promise<T>,
-): Promise<Map<string, T>> {
-  const result = new Map<string, T>()
+/**
+ * Scan skill directories for SKILL.md files and return lightweight index entries.
+ * Only reads frontmatter — does not load bodies, scripts, or references.
+ */
+export async function loadSkillIndex(dirs: string[]): Promise<Map<string, SkillIndex>> {
+  const result = new Map<string, SkillIndex>()
 
   for (const dir of dirs) {
     try {
       for await (const rel of new Bun.Glob('*/SKILL.md').scan({ cwd: dir, onlyFiles: true })) {
         const entry = firstSegment(rel)
         const content = await Bun.file(join(dir, rel)).text()
-        const { frontmatter, body } = parseFrontmatter(content)
+        const { frontmatter } = parseFrontmatter(content)
 
         if (frontmatter['name'] !== entry) continue
 
         const metadata = extractSkillMetadata(frontmatter, entry)
-
-        result.set(entry, await build(join(dir, entry), metadata, body))
+        result.set(entry, { metadata, dir: join(dir, entry) })
       }
     } catch { /* dir doesn't exist */ }
   }
@@ -38,25 +38,26 @@ async function scanSkillDirs<T>(
   return result
 }
 
-export function loadSkills(dirs: string[]): Promise<Map<string, Skill>> {
-  return scanSkillDirs(dirs, async (skillDir, metadata, body) => {
-    const [scripts, references, assets] = await Promise.all([
-      listSubdirFiles(skillDir, 'scripts'),
-      listSubdirFiles(skillDir, 'references'),
-      listSubdirFiles(skillDir, 'assets'),
-    ])
-    return { metadata, body, dir: skillDir, scripts, references, assets }
-  })
+/**
+ * Load a single skill fully from its index entry.
+ * Reads the SKILL.md body and enumerates scripts/, references/, assets/.
+ */
+export async function loadSkill(index: SkillIndex): Promise<Skill> {
+  const content = await Bun.file(join(index.dir, 'SKILL.md')).text()
+  const { body } = parseFrontmatter(content)
+  const [scripts, references, assets] = await Promise.all([
+    listSubdirFiles(index.dir, 'scripts'),
+    listSubdirFiles(index.dir, 'references'),
+    listSubdirFiles(index.dir, 'assets'),
+  ])
+  return { ...index, body, scripts, references, assets }
 }
 
-export function loadSkillMetadata(dirs: string[]): Promise<Map<string, SkillMetadata>> {
-  return scanSkillDirs(dirs, async (_, metadata) => metadata)
-}
-
-export function buildAvailableSkillsXml(skills: Map<string, Skill>, exclude?: Set<string>): string {
+export function buildAvailableSkillsXml(skills: Map<string, SkillIndex>, exclude?: Set<string>): string {
   const entries: string[] = []
   for (const [name, skill] of skills) {
     if (exclude?.has(name)) continue
+    if (skill.metadata.disableModelInvocation) continue
     entries.push(
       `  <skill>\n    <name>${name}</name>\n    <description>${skill.metadata.description}</description>\n    <location>${join(skill.dir, 'SKILL.md')}</location>\n  </skill>`
     )

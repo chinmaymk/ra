@@ -11,7 +11,6 @@ export interface ParsedArgsMeta {
   help: boolean
   version: boolean
   files: string[]
-  skills: string[]
   prompt?: string
   resume?: string
   configPath?: string
@@ -81,7 +80,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
         runImmediately: false,
         listMemories: false,
         files: [],
-        skills: [],
         skillCommand: { action, args: subArgs },
       },
     }
@@ -93,7 +91,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
       // Meta (not mapped to RaConfig)
       exec:                          { type: 'string' },
       config:                        { type: 'string' },
-      skill:                         { type: 'string', multiple: true },
       file:                          { type: 'string', multiple: true },
       resume:                        { type: 'string' },
       help:                          { type: 'boolean', short: 'h' },
@@ -180,7 +177,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
       memories:      values.memories as string | undefined,
       forget:        values.forget as string | undefined,
       files:      (values.file as string[] | undefined) ?? [],
-      skills:     (values.skill as string[] | undefined) ?? [],
       prompt:     positionals.join(' ') || undefined,
       resume:     values.resume as string | undefined,
       configPath: values.config as string | undefined,
