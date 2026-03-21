@@ -35,6 +35,7 @@ Each layer overrides the previous:
 | `app.skills` | `[]` | Active skill names |
 | `app.mcp` | `{ client: [], server: {...} }` | MCP client/server config |
 | `app.permissions` | `{}` | Tool permission rules |
+| `app.providers` | `{ anthropic: {...}, ... }` | Per-provider credentials and connection options |
 | `app.logsEnabled` | `true` | Enable session logs |
 | `app.logLevel` | `'info'` | Minimum log level |
 | `app.tracesEnabled` | `true` | Enable session traces |
@@ -43,11 +44,10 @@ Each layer overrides the previous:
 
 | Field | Default | Purpose |
 |-------|---------|---------|
-| `agent.provider` | `'anthropic'` | LLM backend |
+| `agent.provider` | `'anthropic'` | Which provider to use (references `app.providers`) |
 | `agent.model` | `'claude-sonnet-4-6'` | Model ID |
 | `agent.thinking` | — | Extended thinking: low, medium, high |
 | `agent.systemPrompt` | `'You are a helpful AI assistant.'` | System prompt |
-| `agent.providers` | `{ anthropic: {...}, ... }` | Per-provider credentials |
 | `agent.maxIterations` | `50` | Loop iteration limit |
 | `agent.maxRetries` | `3` | Retry limit for model calls |
 | `agent.toolTimeout` | `30000` | Tool execution timeout (ms) |
@@ -61,9 +61,9 @@ Each layer overrides the previous:
 
 ## Provider Options
 
-Each provider has its own options block under `agent.providers`:
+Each provider has its own options block under `app.providers`. The agent selects which one to use via `agent.provider`:
 ```yaml
-agent:
+app:
   providers:
     anthropic: { apiKey: "" }
     openai: { apiKey: "" }
@@ -71,6 +71,8 @@ agent:
     ollama: { host: "http://localhost:11434" }
     bedrock: { region: "us-east-1" }
     azure: { endpoint: "", deployment: "", apiKey: "" }
+agent:
+  provider: anthropic
 ```
 
 ## Env Var Convention

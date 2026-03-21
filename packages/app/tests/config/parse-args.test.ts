@@ -119,13 +119,13 @@ describe('parseArgs', () => {
 
   describe('provider connection flags', () => {
     it('--anthropic-base-url', () => {
-      expect(parseArgs(dev('--anthropic-base-url', 'https://proxy/')).config.agent?.providers?.anthropic.baseURL).toBe('https://proxy/')
+      expect(parseArgs(dev('--anthropic-base-url', 'https://proxy/')).config.app?.providers?.anthropic.baseURL).toBe('https://proxy/')
     })
     it('--openai-base-url', () => {
-      expect(parseArgs(dev('--openai-base-url', 'https://proxy/')).config.agent?.providers?.openai.baseURL).toBe('https://proxy/')
+      expect(parseArgs(dev('--openai-base-url', 'https://proxy/')).config.app?.providers?.openai.baseURL).toBe('https://proxy/')
     })
     it('--ollama-host', () => {
-      expect(parseArgs(dev('--ollama-host', 'http://localhost:11434')).config.agent?.providers?.ollama.host).toBe('http://localhost:11434')
+      expect(parseArgs(dev('--ollama-host', 'http://localhost:11434')).config.app?.providers?.ollama.host).toBe('http://localhost:11434')
     })
   })
 
@@ -196,12 +196,12 @@ describe('parseArgs', () => {
   describe('Azure provider flags', () => {
     it('--azure-endpoint sets providers.azure.endpoint', () => {
       const r = parseArgs(dev('--azure-endpoint', 'https://myresource.openai.azure.com/'))
-      expect((r.config as any).agent?.providers?.azure?.endpoint).toBe('https://myresource.openai.azure.com/')
+      expect((r.config as any).app?.providers?.azure?.endpoint).toBe('https://myresource.openai.azure.com/')
     })
 
     it('--azure-deployment sets providers.azure.deployment', () => {
       const r = parseArgs(dev('--azure-deployment', 'my-gpt4o'))
-      expect((r.config as any).agent?.providers?.azure?.deployment).toBe('my-gpt4o')
+      expect((r.config as any).app?.providers?.azure?.deployment).toBe('my-gpt4o')
     })
   })
 

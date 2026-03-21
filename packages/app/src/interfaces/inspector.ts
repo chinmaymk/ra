@@ -285,8 +285,8 @@ export class InspectorServer {
 
 function sanitizeConfig(config: unknown): unknown {
   const copy = JSON.parse(JSON.stringify(config))
-  if (copy.agent?.providers) {
-    for (const p of Object.values(copy.agent.providers)) {
+  if (copy.app?.providers) {
+    for (const p of Object.values(copy.app.providers)) {
       if (p && typeof p === 'object' && 'apiKey' in (p as Record<string, unknown>)) {
         (p as Record<string, unknown>).apiKey = '***'
       }

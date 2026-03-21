@@ -92,21 +92,21 @@ const ENV_RULES: Record<string, CoercionRule> = {
   RA_MEMORY_TTL_DAYS:     { type: 'int',    path: ['agent', 'memory', 'ttlDays'] },
   RA_MEMORY_INJECT_LIMIT: { type: 'int',    path: ['agent', 'memory', 'injectLimit'] },
   // Provider credentials (env-only — not CLI flags, to avoid leaking in process list/shell history)
-  RA_ANTHROPIC_API_KEY:  { type: 'string', path: ['agent', 'providers', 'anthropic', 'apiKey'] },
-  RA_ANTHROPIC_BASE_URL: { type: 'string', path: ['agent', 'providers', 'anthropic', 'baseURL'] },
-  RA_OPENAI_API_KEY:     { type: 'string', path: ['agent', 'providers', 'openai', 'apiKey'] },
-  RA_OPENAI_BASE_URL:    { type: 'string', path: ['agent', 'providers', 'openai', 'baseURL'] },
-  RA_OPENAI_COMPLETIONS_API_KEY:  { type: 'string', path: ['agent', 'providers', 'openai-completions', 'apiKey'] },
-  RA_OPENAI_COMPLETIONS_BASE_URL: { type: 'string', path: ['agent', 'providers', 'openai-completions', 'baseURL'] },
-  RA_GOOGLE_API_KEY:     { type: 'string', path: ['agent', 'providers', 'google', 'apiKey'] },
-  RA_GOOGLE_BASE_URL:    { type: 'string', path: ['agent', 'providers', 'google', 'baseURL'] },
-  RA_OLLAMA_HOST:        { type: 'string', path: ['agent', 'providers', 'ollama', 'host'] },
-  RA_BEDROCK_REGION:     { type: 'string', path: ['agent', 'providers', 'bedrock', 'region'] },
-  RA_BEDROCK_API_KEY:    { type: 'string', path: ['agent', 'providers', 'bedrock', 'apiKey'] },
-  RA_AZURE_API_KEY:      { type: 'string', path: ['agent', 'providers', 'azure', 'apiKey'] },
-  RA_AZURE_ENDPOINT:     { type: 'string', path: ['agent', 'providers', 'azure', 'endpoint'] },
-  RA_AZURE_DEPLOYMENT:   { type: 'string', path: ['agent', 'providers', 'azure', 'deployment'] },
-  RA_AZURE_API_VERSION:  { type: 'string', path: ['agent', 'providers', 'azure', 'apiVersion'] },
+  RA_ANTHROPIC_API_KEY:  { type: 'string', path: ['app', 'providers', 'anthropic', 'apiKey'] },
+  RA_ANTHROPIC_BASE_URL: { type: 'string', path: ['app', 'providers', 'anthropic', 'baseURL'] },
+  RA_OPENAI_API_KEY:     { type: 'string', path: ['app', 'providers', 'openai', 'apiKey'] },
+  RA_OPENAI_BASE_URL:    { type: 'string', path: ['app', 'providers', 'openai', 'baseURL'] },
+  RA_OPENAI_COMPLETIONS_API_KEY:  { type: 'string', path: ['app', 'providers', 'openai-completions', 'apiKey'] },
+  RA_OPENAI_COMPLETIONS_BASE_URL: { type: 'string', path: ['app', 'providers', 'openai-completions', 'baseURL'] },
+  RA_GOOGLE_API_KEY:     { type: 'string', path: ['app', 'providers', 'google', 'apiKey'] },
+  RA_GOOGLE_BASE_URL:    { type: 'string', path: ['app', 'providers', 'google', 'baseURL'] },
+  RA_OLLAMA_HOST:        { type: 'string', path: ['app', 'providers', 'ollama', 'host'] },
+  RA_BEDROCK_REGION:     { type: 'string', path: ['app', 'providers', 'bedrock', 'region'] },
+  RA_BEDROCK_API_KEY:    { type: 'string', path: ['app', 'providers', 'bedrock', 'apiKey'] },
+  RA_AZURE_API_KEY:      { type: 'string', path: ['app', 'providers', 'azure', 'apiKey'] },
+  RA_AZURE_ENDPOINT:     { type: 'string', path: ['app', 'providers', 'azure', 'endpoint'] },
+  RA_AZURE_DEPLOYMENT:   { type: 'string', path: ['app', 'providers', 'azure', 'deployment'] },
+  RA_AZURE_API_VERSION:  { type: 'string', path: ['app', 'providers', 'azure', 'apiVersion'] },
 }
 
 function loadEnvVars(env: Record<string, string | undefined>): Record<string, unknown> {
@@ -120,7 +120,7 @@ function loadEnvVars(env: Record<string, string | undefined>): Record<string, un
 
 // Keys that belong under `agent` when found at the top level (legacy flat config)
 const AGENT_KEYS = new Set([
-  'provider', 'model', 'thinking', 'systemPrompt', 'providers',
+  'provider', 'model', 'thinking', 'systemPrompt',
   'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
   'tools', 'middleware', 'context', 'compaction', 'memory',
 ])
@@ -128,7 +128,7 @@ const AGENT_KEYS = new Set([
 // Keys that belong under `app` when found at the top level (legacy flat config)
 const APP_KEYS = new Set([
   'interface', 'dataDir', 'http', 'inspector', 'storage',
-  'skillDirs', 'skills', 'mcp', 'permissions',
+  'skillDirs', 'skills', 'mcp', 'providers', 'permissions',
   'logsEnabled', 'logLevel', 'tracesEnabled',
 ])
 
@@ -136,8 +136,27 @@ const APP_KEYS = new Set([
  * Migrate legacy flat config keys into their `app`/`agent` sections.
  * Before the app/agent split, all keys lived at the top level.
  * This shim lets old configs (e.g. `providers.anthropic.apiKey`) keep working.
+ *
+ * Also migrates `agent.providers` → `app.providers` since provider credentials
+ * are an app-level concern (the agent just selects which provider to use).
  */
 function normalizeFlatConfig(raw: Record<string, unknown>): void {
+  // Migrate agent.providers → app.providers (providers belong under app)
+  if (isPlainObject(raw.agent)) {
+    const agent = raw.agent as Record<string, unknown>
+    if ('providers' in agent) {
+      if (!isPlainObject(raw.app)) raw.app = {}
+      const app = raw.app as Record<string, unknown>
+      if (!('providers' in app)) {
+        app.providers = agent.providers
+      } else if (isPlainObject(agent.providers) && isPlainObject(app.providers)) {
+        app.providers = deepMerge(agent.providers as Record<string, unknown>, app.providers as Record<string, unknown>)
+      }
+      delete agent.providers
+    }
+  }
+
+  // Migrate top-level flat keys into their respective sections
   for (const key of Object.keys(raw)) {
     if (AGENT_KEYS.has(key)) {
       if (!isPlainObject(raw.agent)) raw.agent = {}

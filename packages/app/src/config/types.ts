@@ -66,6 +66,16 @@ export interface AppConfig {
     ttlDays: number
   }
   skillDirs: string[]
+  /** Provider credentials and connection options. Agent selects which one to use via `agent.provider`. */
+  providers: {
+    anthropic: AnthropicProviderOptions
+    openai: OpenAIProviderOptions
+    'openai-completions': OpenAIProviderOptions
+    google: GoogleProviderOptions
+    ollama: OllamaProviderOptions
+    bedrock: BedrockProviderOptions
+    azure: AzureProviderOptions
+  }
   mcp: {
     client: McpClientConfig[]
     server: McpServerConfig
@@ -85,15 +95,6 @@ export interface AgentConfig {
   model: string
   thinking?: 'low' | 'medium' | 'high'
   systemPrompt: string
-  providers: {
-    anthropic: AnthropicProviderOptions
-    openai: OpenAIProviderOptions
-    'openai-completions': OpenAIProviderOptions
-    google: GoogleProviderOptions
-    ollama: OllamaProviderOptions
-    bedrock: BedrockProviderOptions
-    azure: AzureProviderOptions
-  }
   maxIterations: number
   maxRetries: number
   toolTimeout: number

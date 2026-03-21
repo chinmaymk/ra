@@ -26,9 +26,9 @@ describe('loadConfig', () => {
 
   it('includes azure provider defaults', async () => {
     const c = await loadConfig({ cwd: tmp })
-    expect(c.agent.providers.azure).toBeDefined()
-    expect(c.agent.providers.azure.endpoint).toBe('')
-    expect(c.agent.providers.azure.deployment).toBe('')
+    expect(c.app.providers.azure).toBeDefined()
+    expect(c.app.providers.azure.endpoint).toBe('')
+    expect(c.app.providers.azure.deployment).toBe('')
   })
 
   it('resolves systemPrompt from file when path exists', async () => {
@@ -161,22 +161,22 @@ describe('loadConfig', () => {
   describe('azure env vars', () => {
     it('RA_AZURE_API_KEY sets providers.azure.apiKey', async () => {
       const c = await loadConfig({ cwd: tmp, env: { RA_AZURE_API_KEY: 'my-key' } })
-      expect(c.agent.providers.azure.apiKey).toBe('my-key')
+      expect(c.app.providers.azure.apiKey).toBe('my-key')
     })
 
     it('RA_AZURE_ENDPOINT sets providers.azure.endpoint', async () => {
       const c = await loadConfig({ cwd: tmp, env: { RA_AZURE_ENDPOINT: 'https://myresource.openai.azure.com/' } })
-      expect(c.agent.providers.azure.endpoint).toBe('https://myresource.openai.azure.com/')
+      expect(c.app.providers.azure.endpoint).toBe('https://myresource.openai.azure.com/')
     })
 
     it('RA_AZURE_DEPLOYMENT sets providers.azure.deployment', async () => {
       const c = await loadConfig({ cwd: tmp, env: { RA_AZURE_DEPLOYMENT: 'my-gpt4o' } })
-      expect(c.agent.providers.azure.deployment).toBe('my-gpt4o')
+      expect(c.app.providers.azure.deployment).toBe('my-gpt4o')
     })
 
     it('RA_AZURE_API_VERSION sets providers.azure.apiVersion', async () => {
       const c = await loadConfig({ cwd: tmp, env: { RA_AZURE_API_VERSION: '2024-12-01-preview' } })
-      expect(c.agent.providers.azure.apiVersion).toBe('2024-12-01-preview')
+      expect(c.app.providers.azure.apiVersion).toBe('2024-12-01-preview')
     })
   })
 
@@ -208,12 +208,12 @@ describe('loadConfig', () => {
     expect(c.app.storage.maxSessions).toBe(50)
     expect(c.app.storage.ttlDays).toBe(7)
     expect(c.app.skillDirs).toEqual(['/skills/a', '/skills/b'])
-    expect(c.agent.providers.anthropic.apiKey).toBe('sk-ant-123')
-    expect(c.agent.providers.anthropic.baseURL).toBe('https://ant-proxy/')
-    expect(c.agent.providers.openai.apiKey).toBe('sk-oai-123')
-    expect(c.agent.providers.openai.baseURL).toBe('https://oai-proxy/')
-    expect(c.agent.providers.google.apiKey).toBe('goog-123')
-    expect(c.agent.providers.ollama.host).toBe('http://myhost:11434')
+    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-123')
+    expect(c.app.providers.anthropic.baseURL).toBe('https://ant-proxy/')
+    expect(c.app.providers.openai.apiKey).toBe('sk-oai-123')
+    expect(c.app.providers.openai.baseURL).toBe('https://oai-proxy/')
+    expect(c.app.providers.google.apiKey).toBe('goog-123')
+    expect(c.app.providers.ollama.host).toBe('http://myhost:11434')
   })
 })
 
@@ -487,7 +487,7 @@ describe('legacy flat config migration', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
-  it('migrates flat providers with apiKey into agent.providers', async () => {
+  it('migrates flat providers with apiKey into app.providers', async () => {
     writeFileSync(join(tmp, 'ra.config.yaml'), [
       'provider: anthropic',
       'providers:',
@@ -496,7 +496,7 @@ describe('legacy flat config migration', () => {
     ].join('\n'))
     const c = await loadConfig({ cwd: tmp, env: {} })
     expect(c.agent.provider).toBe('anthropic')
-    expect(c.agent.providers.anthropic.apiKey).toBe('sk-ant-flat-key')
+    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-flat-key')
   })
 
   it('migrates flat provider, model, and interface keys', async () => {
@@ -533,8 +533,8 @@ describe('legacy flat config migration', () => {
       '    baseURL: "https://my-proxy/"',
     ].join('\n'))
     const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.providers.openai.apiKey).toBe('sk-oai-flat')
-    expect(c.agent.providers.openai.baseURL).toBe('https://my-proxy/')
+    expect(c.app.providers.openai.apiKey).toBe('sk-oai-flat')
+    expect(c.app.providers.openai.baseURL).toBe('https://my-proxy/')
   })
 
   it('migrates flat app keys: skillDirs, permissions, storage', async () => {
@@ -547,5 +547,31 @@ describe('legacy flat config migration', () => {
     expect(c.app.skillDirs).toEqual(['/custom/skills'])
     expect(c.app.logsEnabled).toBe(false)
     expect(c.app.storage.maxSessions).toBe(10)
+  })
+
+  it('migrates agent.providers to app.providers', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  provider: anthropic',
+      '  providers:',
+      '    anthropic:',
+      '      apiKey: "sk-ant-under-agent"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('anthropic')
+    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-under-agent')
+  })
+
+  it('app.providers in YAML works directly', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'app:',
+      '  providers:',
+      '    anthropic:',
+      '      apiKey: "sk-ant-direct"',
+      'agent:',
+      '  provider: anthropic',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-direct')
   })
 })
