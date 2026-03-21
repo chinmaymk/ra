@@ -1,0 +1,35 @@
+app:
+  interface: repl
+  skills:
+    - claude-code-agent
+    - context-engineer
+    - planner
+    - debugger
+    - git-workflow
+    - code-style
+  skillDirs:
+    - ./skills
+
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+  tools:
+    builtin: true
+  maxIterations: 200
+  thinking: high
+  middleware:
+    afterModelResponse:
+      - ./middleware/token-budget.ts
+  compaction:
+    enabled: true
+    threshold: 0.8
+
+  # Uncomment to add GitHub MCP server for PR/issue context:
+  # mcp:
+  #   client:
+  #     - name: github
+  #       transport: stdio
+  #       command: npx
+  #       args: ["-y", "@modelcontextprotocol/server-github"]
+  #       env:
+  #         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
