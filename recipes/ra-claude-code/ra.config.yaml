@@ -2,13 +2,29 @@ app:
   interface: repl
   skills:
     - claude-code-agent
+    - auto-mode
     - context-engineer
     - planner
     - debugger
+    - verify
     - git-workflow
+    - quick-commit
+    - quick-pr
     - code-style
+    - explore-delegate
+    - stuck-recovery
   skillDirs:
     - ./skills
+
+  # Uncomment to add GitHub MCP server for PR/issue context:
+  # mcp:
+  #   client:
+  #     - name: github
+  #       transport: stdio
+  #       command: npx
+  #       args: ["-y", "@modelcontextprotocol/server-github"]
+  #       env:
+  #         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
 
 agent:
   provider: anthropic
@@ -23,13 +39,19 @@ agent:
   compaction:
     enabled: true
     threshold: 0.8
+    prompt: |
+      Summarize the conversation so far. This summary will REPLACE the original messages, so it must preserve everything needed to continue working.
 
-  # Uncomment to add GitHub MCP server for PR/issue context:
-  # mcp:
-  #   client:
-  #     - name: github
-  #       transport: stdio
-  #       command: npx
-  #       args: ["-y", "@modelcontextprotocol/server-github"]
-  #       env:
-  #         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+      You MUST preserve:
+      1. The original task/goal and any clarifications from the user
+      2. All key decisions made and their rationale
+      3. Current state of work — what's done, what's in progress, what's remaining
+      4. File paths that were read or modified, and what was changed
+      5. Errors encountered and how they were resolved (or remain unresolved)
+      6. Test results and verification status
+      7. Any project conventions or rules discovered (from CLAUDE.md, AGENTS.md, etc.)
+      8. Git state — branch, commits made, uncommitted changes
+
+      Format as a structured summary with clear sections. Be concise but complete — losing context here means losing work.
+  memory:
+    enabled: true
