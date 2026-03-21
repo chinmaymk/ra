@@ -1,118 +1,136 @@
-# Config Separation: Independent `app.yml` + `agent.yml`
+# Config Separation: Named Sections in One File
 
 ## Context
 
-`RaConfig` is a flat interface mixing app deployment, agent behavior, and credentials. No composable agent config type exists in the core library. Recipes mix concerns. We want clean separation with independent files.
+`RaConfig` is a flat interface mixing app deployment, agent behavior, and credentials. No composable agent config type exists in the core library. Recipes mix concerns. We want clean separation with composability.
 
 ## What We're Doing
 
-1. **`agent.yml`** — agent behavior config. Owned by `packages/ra` as `AgentConfig` type. Portable, composable. A recipe IS an agent.yml.
-2. **`app.yml`** — deployment config. Owned by `packages/app` as `AppConfig` type. Environment-specific.
-3. **Global + local config roots** — layered config loading from well-known directories.
-4. **`mergeAgentConfig()`** — compose agent configs for layering/overrides.
-5. Remove `skills` from config (loaded from prompt).
+1. **`AgentConfig` type** in `packages/ra` — portable, composable agent behavior config.
+2. **`AppConfig` type** in `packages/app` — deployment/environment config.
+3. **One config file**, named sections — `app:`, `agent:`, `cron:` (future). No loose top-level fields.
+4. **`mergeAgentConfig()`** — compose base + overrides for layered configs.
+5. **`agent:` can be a path** — reference a standalone recipe file.
+6. Remove `skills` from config (loaded from prompt).
 
-## Config Roots — Global + Local
+## Config File Format
 
-Two config root levels, merged in order (later wins):
+One file (`ra.config.yaml`), everything under named keys:
 
-### Global config root: `~/.ra/`
-
-User-level defaults across all projects. Good for default provider, credentials, personal preferences.
-
-```
-~/.ra/
-  agent.yml       # default agent behavior
-  app.yml         # default app settings (provider credentials, log level, etc.)
-```
-
-### Local config root: `.ra/config/` (discovered by upward search)
-
-Project-level config. Discovered by searching upward from cwd for a `.ra/` directory, then loading from `.ra/config/` inside it.
-
-```
-project/
-  .ra/
-    config/
-      agent.yml   # project-specific agent config
-      app.yml     # project-specific app settings
-    sessions/     # data (unchanged)
-    memory/       # data (unchanged)
-```
-
-### Explicit override: `--config <dir>`
-
-Overrides both global and local. Points to any directory containing config files.
-
-```bash
-bun run ra --config ./recipes/coding-agent/    # use recipe's config dir
-```
-
-Or env var: `RA_CONFIG_DIR=./recipes/coding-agent/`
-
-### Merge order
-
-```
-global (~/.ra/)
-  → local (.ra/config/, discovered upward)
-    → explicit (--config dir)
-      → env vars (RA_*)
-        → CLI flags (--model, --provider, etc.)
-```
-
-Each layer only overrides fields it sets. Missing files at any layer = skip that layer.
-
-### Discovery algorithm
-
-```
-1. Load global: ~/.ra/{agent,app}.yml
-2. Search upward from cwd for .ra/ directory
-   - If found: load .ra/config/{agent,app}.yml
-3. If --config flag: load <dir>/{agent,app}.yml (overrides local)
-4. Apply env vars
-5. Apply CLI flags
-6. Return merged RaConfig { app, agent }
-```
-
-## File Format
-
-**`agent.yml`** (this IS a recipe):
 ```yaml
+app:
+  interface: repl
+  dataDir: .ra
+  skillDirs: [./skills]
+  logsEnabled: true
+  logLevel: info
+  http:
+    port: 3001
+
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+  thinking: high
+  maxIterations: 200
+  tools:
+    builtin: true
+  compaction:
+    enabled: true
+    threshold: 0.8
+```
+
+### Referencing a recipe
+
+`agent:` can be a path to a standalone agent config file:
+
+```yaml
+app:
+  interface: repl
+
+agent: ./recipes/coding-agent.yml
+```
+
+The referenced file contains just `AgentConfig` fields (no `agent:` wrapper — it IS the agent config):
+
+```yaml
+# recipes/coding-agent.yml
 provider: anthropic
 model: claude-opus-4-6
 thinking: high
 maxIterations: 200
-
 tools:
   builtin: true
-
-middleware:
-  afterModelResponse:
-    - ./middleware/token-budget.ts
-
-compaction:
-  enabled: true
-  threshold: 0.8
-
-mcp:
-  client:
-    - name: github
-      transport: stdio
-      command: npx
-      args: ["-y", "@modelcontextprotocol/server-github"]
 ```
 
-**`app.yml`**:
+### Cron — composable via base `agent:`
+
+Top-level `agent:` is the base config. Each cron job inherits from it and can override:
+
 ```yaml
-interface: repl
-dataDir: .ra
-skillDirs:
-  - ./skills
-logsEnabled: true
-logLevel: info
-http:
-  port: 3001
+app:
+  interface: cron
+
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+  tools: { builtin: true }
+  compaction: { enabled: true, threshold: 0.8 }
+
+cron:
+  - name: pr-review
+    schedule: "0 9 * * 1-5"
+    agent: ./recipes/code-review.yml   # standalone recipe, replaces base
+    prompt: "Review all open PRs"
+
+  - name: quick-check
+    schedule: "*/30 * * * *"
+    agent:                              # partial override, merged with base
+      model: claude-haiku-4-5
+      maxIterations: 5
+    prompt: "Check build status"
 ```
+
+Effective config for quick-check: `mergeAgentConfig(base, { model: 'haiku', maxIterations: 5 })`.
+
+Same pattern extends to future sections (`webhook:`, `watch:`, etc.).
+
+## Config Discovery
+
+### Global: `~/.ra/config.yaml`
+
+User-level defaults. Good for default provider, credentials, personal preferences.
+
+### Local: `.ra/config.yaml` (discovered by upward search)
+
+Project-level config. Discovered by searching upward from cwd for a `.ra/` directory.
+
+```
+project/
+  .ra/
+    config.yaml   # project config
+    sessions/     # data (unchanged)
+    memory/       # data (unchanged)
+```
+
+### Explicit: `--config <path>`
+
+Overrides local. Points to a config file or directory.
+
+```bash
+bun run ra --config ./recipes/coding-agent/
+```
+
+### Merge order
+
+```
+global (~/.ra/config.yaml)
+  → local (.ra/config.yaml, discovered upward)
+    → explicit (--config)
+      → env vars (RA_*)
+        → CLI flags (--model, --provider, etc.)
+```
+
+Each layer merges per-section: `app:` fields merge with `app:`, `agent:` fields merge with `agent:`.
 
 ## Type Design
 
@@ -192,7 +210,7 @@ export interface RaConfig {
 }
 ```
 
-### Merge Strategy
+### Merge Strategy for `mergeAgentConfig()`
 
 | Field | Strategy |
 |-------|----------|
@@ -203,26 +221,6 @@ export interface RaConfig {
 | `mcp.client` | Array concat, dedupe by `name` |
 | Objects (`compaction`, `memory`) | Shallow merge |
 
-## Extension: Cron
-
-With independent files, cron is natural. A cron config references agent configs:
-
-**`cron.yml`** (in any config root):
-```yaml
-jobs:
-  - name: pr-review
-    schedule: "0 9 * * 1-5"
-    agent: ./recipes/code-review.yml    # standalone agent file
-    prompt: "Review all open PRs"
-
-  - name: quick-check
-    schedule: "*/30 * * * *"
-    agent: ./recipes/quick-check.yml
-    prompt: "Check build status"
-```
-
-Each job references its own agent config file. No ambiguity — each file has one purpose. Same pattern works for `webhook.yml`, `watch.yml` later.
-
 ## Files to Modify
 
 | File | Change |
@@ -231,24 +229,25 @@ Each job references its own agent config file. No ambiguity — each file has on
 | `packages/ra/src/index.ts` | Export new types and functions |
 | `packages/app/src/config/types.ts` | `AppConfig` + `RaConfig { app, agent }`, remove `skills` |
 | `packages/app/src/config/defaults.ts` | Split defaults, import `defaultAgentConfig` from core |
-| `packages/app/src/config/index.ts` | Load from global + local + explicit config roots; merge layers; update env/CLI paths |
+| `packages/app/src/config/index.ts` | Load `config.yaml` from global/local/explicit; parse `app:` + `agent:` sections; handle `agent:` as path |
 | `packages/app/src/bootstrap.ts` | `config.agent.*` and `config.app.*` instead of flat `config.*` |
 | `packages/app/src/interfaces/cli.ts` | Update config access |
 | `packages/app/src/interfaces/repl.ts` | Update config access |
 | `packages/app/src/interfaces/http.ts` | Update config access |
-| `packages/app/src/interfaces/parse-args.ts` | Route flags to `agent.*` or `app.*`; add `--config` dir flag |
+| `packages/app/src/interfaces/parse-args.ts` | Route flags to `agent.*` or `app.*`; add `--config` flag |
 | `packages/app/src/skills/loader.ts` | Remove `skills` config usage |
 | `packages/app/src/tools/index.ts` | Read from `config.agent.tools` |
-| `recipes/coding-agent/ra.config.yaml` | Replace with `agent.yml` (agent fields only) + `app.yml` if needed |
-| `recipes/code-review-agent/ra.config.yaml` | Same |
+| `recipes/coding-agent/` | Restructure: `config.yaml` with `app:` + `agent:` sections |
+| `recipes/code-review-agent/` | Same |
 
 ## Verification
 
 1. `bun tsc` — zero errors
 2. `bun test` — all tests pass
-3. Global config in `~/.ra/agent.yml` applies to `bun run ra` from any directory
-4. Local `.ra/config/agent.yml` overrides global
-5. `--config ./recipes/coding-agent/` overrides local
-6. Missing files at any layer → defaults for that part
-7. `import { AgentConfig, mergeAgentConfig } from '@chinmaymk/ra'` works
-8. `mergeAgentConfig(base, { model: 'sonnet' })` correctly overrides
+3. Global `~/.ra/config.yaml` applies as base
+4. Local `.ra/config.yaml` overrides global per-section
+5. `--config` overrides local
+6. `agent: ./path/to/recipe.yml` loads external agent config
+7. Cron jobs inherit from base `agent:` and can override
+8. `import { AgentConfig, mergeAgentConfig } from '@chinmaymk/ra'` works
+9. `mergeAgentConfig(base, { model: 'sonnet' })` correctly overrides
