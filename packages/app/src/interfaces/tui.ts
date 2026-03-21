@@ -217,7 +217,7 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
       const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
       state.streamBuf = new StreamBuffer(contentWidth)
     }
-    if (delta) process.stdout.write(state.streamBuf!.write(delta))
+    if (delta && state.streamBuf) process.stdout.write(state.streamBuf.write(delta))
   }
 }
 

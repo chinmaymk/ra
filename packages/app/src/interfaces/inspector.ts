@@ -189,15 +189,15 @@ export class InspectorServer {
         const sessionMatch = path.match(/^\/api\/sessions\/([^/]+)\/(\w+)$/)
         if (sessionMatch) {
           const [, id, view] = sessionMatch
-          const dir = storage.sessionDir(id!)
+          const dir = storage.sessionDir(id as string)
           try {
             switch (view) {
-              case 'messages': return json(await storage.readMessages(id!))
+              case 'messages': return json(await storage.readMessages(id as string))
               case 'logs':     return json(await parseJsonlFile(join(dir, 'logs.jsonl')))
               case 'traces':   return json(await parseJsonlFile(join(dir, 'traces.jsonl')))
               case 'stats': {
                 const traces = await parseJsonlFile(join(dir, 'traces.jsonl')) as TraceSpan[]
-                const messages = await storage.readMessages(id!) as Array<{ role?: string; toolCalls?: unknown[]; isError?: boolean; content?: unknown }>
+                const messages = await storage.readMessages(id as string) as Array<{ role?: string; toolCalls?: unknown[]; isError?: boolean; content?: unknown }>
                 return json(buildStats(traces, messages))
               }
               case 'timeline': {

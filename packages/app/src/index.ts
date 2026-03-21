@@ -164,7 +164,7 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
   await runCli({
-    prompt: parsed.meta.prompt!,
+    prompt: parsed.meta.prompt as string,
     files: parsed.meta.files,
     systemPrompt: app.config.agent.systemPrompt,
     model: app.config.agent.model,
