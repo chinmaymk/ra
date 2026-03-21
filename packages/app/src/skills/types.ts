@@ -6,10 +6,15 @@ export interface SkillMetadata {
   metadata?: Record<string, string>
 }
 
-export interface Skill {
+/** Lightweight skill index entry — loaded eagerly during bootstrap. */
+export interface SkillIndex {
   metadata: SkillMetadata
-  body: string          // markdown body from SKILL.md (after frontmatter)
   dir: string           // absolute path to skill directory
+}
+
+/** Full skill — loaded lazily on first reference. */
+export interface Skill extends SkillIndex {
+  body: string          // markdown body from SKILL.md (after frontmatter)
   scripts: string[]     // relative paths like 'scripts/run.ts'
   references: string[]  // relative paths like 'references/REFERENCE.md'
   assets: string[]      // relative paths like 'assets/template.json'

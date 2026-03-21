@@ -11,7 +11,7 @@ import {
   type Logger,
   type LogLevel,
 } from '@chinmaymk/ra'
-import type { Skill } from '../skills/types'
+import type { SkillIndex } from '../skills/types'
 import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
 import { buildMessagePrefix } from './messages'
@@ -24,7 +24,7 @@ export interface CliOptions {
   model: string
   provider: IProvider
   tools: ToolRegistry
-  skillMap?: Map<string, Skill>
+  skillIndex?: Map<string, SkillIndex>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
   maxRetries?: number
@@ -49,10 +49,10 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], systemPrompt, model, provider, tools, skillMap, middleware, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
+  const { prompt, files = [], systemPrompt, model, provider, tools, skillIndex, middleware, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
 
   const initialMessages = buildMessagePrefix({
-    systemPrompt, skillMap, contextMessages,
+    systemPrompt, skillIndex, contextMessages,
   })
   initialMessages.push(...sessionMessages)
 

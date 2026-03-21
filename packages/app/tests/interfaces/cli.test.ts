@@ -51,15 +51,15 @@ describe('runCli', () => {
         yield { type: 'done' }
       },
     }
-    const skill = { metadata: { name: 'test-skill', description: 'A test skill' }, body: 'Do this task', scripts: [], dir: '/tmp', references: [], assets: [] }
-    const skillMap = new Map([['test-skill', skill]])
+    const skillEntry = { metadata: { name: 'test-skill', description: 'A test skill' }, dir: '/tmp' }
+    const skillIndex = new Map([['test-skill', skillEntry]])
 
     await runCli({
       prompt: 'go',
       model: 'x',
       provider,
       tools: new ToolRegistry(),
-      skillMap,
+      skillIndex,
     })
 
     // Should have available skills XML as a user message

@@ -1,8 +1,8 @@
 import { errorMessage } from '@chinmaymk/ra'
 import { resolve, relative } from 'path'
 import type { PatternResolver } from './resolvers'
-import type { Skill } from '../skills/types'
-import { buildActiveSkillXml } from '../skills/loader'
+import type { SkillIndex } from '../skills/types'
+import { loadSkill, buildActiveSkillXml } from '../skills/loader'
 
 /**
  * File resolver — matches @path/to/file references.
@@ -85,17 +85,20 @@ export const urlResolver: PatternResolver = {
 
 /**
  * Skill resolver — matches /skill-name references in prompts.
- * Resolves to the full skill XML body when the name matches a loaded skill.
+ * Lazy-loads the full skill on first reference and caches it.
  */
-export function createSkillResolver(skillMap: Map<string, Skill>): PatternResolver {
+export function createSkillResolver(skillIndex: Map<string, SkillIndex>): PatternResolver {
+  const cache = new Map<string, ReturnType<typeof loadSkill>>()
   return {
     name: 'skill',
     // Matches /word at start of string or after whitespace, not followed by /
     // (avoids matching file paths like /usr/bin).
     pattern: /(?<=^|\s)\/([\w][\w-]*)(?=\s|$)/gm,
     async resolve(ref: string): Promise<string | null> {
-      const skill = skillMap.get(ref)
-      if (!skill) return null
+      const index = skillIndex.get(ref)
+      if (!index) return null
+      if (!cache.has(ref)) cache.set(ref, loadSkill(index))
+      const skill = await cache.get(ref)!
       return buildActiveSkillXml(skill)
     },
   }

@@ -4,10 +4,22 @@ import { Repl } from '../../src/interfaces/repl'
 import { ToolRegistry } from '@chinmaymk/ra'
 import { SessionStorage } from '../../src/storage/sessions'
 import type { IProvider, IMessage } from '@chinmaymk/ra'
+import type { SkillIndex } from '../../src/skills/types'
+import { mkdirSync, writeFileSync } from 'fs'
+import { join } from 'path'
 import { tmpdir } from '../tmpdir'
 import { mockProvider, mockProviderWithThinking } from '../fixtures'
 
 const TEST_STORAGE = tmpdir('ra-repl-test')
+
+/** Create a skill dir on disk and return a SkillIndex entry. */
+function createTestSkill(name: string, body: string, dir?: string): { index: SkillIndex; skillIndex: Map<string, SkillIndex> } {
+  const skillDir = dir ?? join(TEST_STORAGE, 'skills', name)
+  mkdirSync(skillDir, { recursive: true })
+  writeFileSync(join(skillDir, 'SKILL.md'), `---\nname: ${name}\ndescription: Test skill ${name}\n---\n${body}`)
+  const index: SkillIndex = { metadata: { name, description: `Test skill ${name}` }, dir: skillDir }
+  return { index, skillIndex: new Map([[name, index]]) }
+}
 
 async function makeStorage(): Promise<SessionStorage> {
   const storage = new SessionStorage(TEST_STORAGE)
@@ -121,9 +133,8 @@ describe('Repl', () => {
   it('clears pending state on /resume', async () => {
     const storage = await makeStorage()
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'repl' })
-    const skill = { metadata: { name: 'test-skill', description: '' }, body: 'skill body', scripts: [], dir: '/tmp', references: [], assets: [] }
-    const skillMap = new Map([['test-skill', skill]])
-    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillMap })
+    const { skillIndex } = createTestSkill('test-skill', 'skill body')
+    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillIndex })
 
     // Set pending skill and an attachment via the public /attach command
     await repl.handleCommand('/skill test-skill')
@@ -148,8 +159,8 @@ describe('Repl', () => {
 
   it('handleCommand /skill with unknown name returns error', async () => {
     const storage = await makeStorage()
-    const skillMap = new Map()
-    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillMap })
+    const skillIndex = new Map()
+    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillIndex })
 
     const response = await repl.handleCommand('/skill unknown')
     expect(response).toBe('Skill not found: unknown')
@@ -157,9 +168,8 @@ describe('Repl', () => {
 
   it('handleCommand /skill with valid name sets pending skill', async () => {
     const storage = await makeStorage()
-    const skill = { metadata: { name: 'test-skill', description: '' }, body: 'skill body', scripts: [], dir: '/tmp', references: [], assets: [] }
-    const skillMap = new Map([['test-skill', skill]])
-    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillMap })
+    const { skillIndex } = createTestSkill('test-skill', 'skill body')
+    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillIndex })
 
     const response = await repl.handleCommand('/skill test-skill')
     expect(response).toContain('Skill "test-skill" will be injected')
@@ -201,9 +211,8 @@ describe('Repl', () => {
       },
     }
     const storage = await makeStorage()
-    const skill = { metadata: { name: 'test-skill', description: '' }, body: 'skill content', scripts: [], dir: '/tmp', references: [], assets: [] }
-    const skillMap = new Map([['test-skill', skill]])
-    const repl = new Repl({ model: 'test', provider, tools: new ToolRegistry(), storage, skillMap })
+    const { skillIndex } = createTestSkill('test-skill', 'skill content')
+    const repl = new Repl({ model: 'test', provider, tools: new ToolRegistry(), storage, skillIndex })
 
     // Set pending skill
     await repl.handleCommand('/skill test-skill')

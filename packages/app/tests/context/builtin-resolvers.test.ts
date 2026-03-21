@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'bun:test'
 import { fileResolver, createSkillResolver } from '../../src/context/builtin-resolvers'
-import type { Skill } from '../../src/skills/types'
+import type { SkillIndex } from '../../src/skills/types'
 import { join } from 'path'
 import { mkdtemp, writeFile, mkdir } from 'fs/promises'
+import { mkdirSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 
 describe('fileResolver', () => {
@@ -103,14 +104,13 @@ describe('fileResolver', () => {
 })
 
 describe('createSkillResolver', () => {
-  const makeSkill = (name: string, body: string): Skill => ({
-    metadata: { name, description: `${name} skill` },
-    body,
-    dir: '/tmp',
-    scripts: [],
-    references: [],
-    assets: [],
-  })
+  function makeSkillIndex(name: string, body: string): { index: SkillIndex; skillIndex: Map<string, SkillIndex> } {
+    const dir = join(tmpdir(), `ra-test-skill-${name}-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name} skill\n---\n${body}`)
+    const index: SkillIndex = { metadata: { name, description: `${name} skill` }, dir }
+    return { index, skillIndex: new Map([[name, index]]) }
+  }
 
   it('has name "skill"', () => {
     const resolver = createSkillResolver(new Map())
@@ -154,10 +154,9 @@ describe('createSkillResolver', () => {
     expect(matches.length).toBeLessThanOrEqual(1)
   })
 
-  it('resolves a known skill to active XML', async () => {
-    const skill = makeSkill('verify', 'Run verification steps')
-    const skillMap = new Map([['verify', skill]])
-    const resolver = createSkillResolver(skillMap)
+  it('resolves a known skill to active XML (lazy-loaded)', async () => {
+    const { skillIndex } = makeSkillIndex('verify', 'Run verification steps')
+    const resolver = createSkillResolver(skillIndex)
     const result = await resolver.resolve('verify', '/tmp')
     expect(result).not.toBeNull()
     expect(result).toContain('<skill name="verify">')

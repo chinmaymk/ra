@@ -1,5 +1,5 @@
 import type { IMessage } from '@chinmaymk/ra'
-import type { Skill } from '../skills/types'
+import type { SkillIndex } from '../skills/types'
 import { buildAvailableSkillsXml } from '../skills/loader'
 
 /**
@@ -15,7 +15,7 @@ import { buildAvailableSkillsXml } from '../skills/loader'
  */
 export function buildMessagePrefix(options: {
   systemPrompt?: string
-  skillMap?: Map<string, Skill>
+  skillIndex?: Map<string, SkillIndex>
   contextMessages?: IMessage[]
 }): IMessage[] {
   const messages: IMessage[] = []
@@ -25,8 +25,8 @@ export function buildMessagePrefix(options: {
   }
 
   // Available skills — summary XML so the model knows what skills can be activated via /skill-name
-  if (options.skillMap && options.skillMap.size > 0) {
-    const xml = buildAvailableSkillsXml(options.skillMap)
+  if (options.skillIndex && options.skillIndex.size > 0) {
+    const xml = buildAvailableSkillsXml(options.skillIndex)
     if (xml) messages.push({ role: 'user', content: xml })
   }
 

@@ -19,8 +19,8 @@ import {
 import { fileToContentPart } from '../utils/files'
 import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
-import type { Skill } from '../skills/types'
-import { buildActiveSkillXml, readSkillReference } from '../skills/loader'
+import type { Skill, SkillIndex } from '../skills/types'
+import { loadSkill, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import { buildMessagePrefix } from './messages'
 import type { MemoryStore } from '../memory/store'
 import { askUserTool } from '../tools/ask-user'
@@ -34,7 +34,7 @@ export interface ReplOptions {
   tools: ToolRegistry
   storage: SessionStorage
   systemPrompt?: string
-  skillMap?: Map<string, Skill>
+  skillIndex?: Map<string, SkillIndex>
   middleware?: Partial<MiddlewareConfig>
   maxIterations?: number
   maxRetries?: number
@@ -62,10 +62,19 @@ export class Repl {
   private askUserResolve: ((answer: string) => void) | undefined
   private activeLoop: AgentLoop | null = null
   private lastInterruptTime = 0
+  private skillCache = new Map<string, Promise<Skill>>()
 
   constructor(options: ReplOptions) {
     this.options = options
     this.sessionId = options.sessionId
+  }
+
+  /** Lazy-load a full skill by name, caching the result. */
+  private async getSkill(name: string): Promise<Skill | undefined> {
+    const index = this.options.skillIndex?.get(name)
+    if (!index) return undefined
+    if (!this.skillCache.has(name)) this.skillCache.set(name, loadSkill(index))
+    return this.skillCache.get(name)!
   }
 
   private async newSession(): Promise<string> {
@@ -184,7 +193,7 @@ export class Repl {
     const isFirstTurn = this.messages.length === 0
     const initialMessages = buildMessagePrefix({
       systemPrompt: this.options.systemPrompt,
-      skillMap: isFirstTurn ? this.options.skillMap : undefined,
+      skillIndex: isFirstTurn ? this.options.skillIndex : undefined,
       contextMessages: this.options.contextMessages,
     })
     initialMessages.push(...this.messages)
@@ -289,7 +298,7 @@ export class Repl {
       case '/skill': {
         const name = parts[1]
         if (!name) return 'Usage: /skill <name>  (or just /<skill-name>)'
-        const skill = this.options.skillMap?.get(name)
+        const skill = await this.getSkill(name)
         if (!skill) return `Skill not found: ${name}`
         this.pendingSkill = skill
         return `Skill "${name}" will be injected with your next message.`
@@ -300,7 +309,7 @@ export class Repl {
         const skillName = parts[1]
         const targetName = parts[2]
         if (!skillName || !targetName) return `Usage: ${cmd} <skill> <${isRun ? 'script' : 'reference'}>`
-        const skill = this.options.skillMap?.get(skillName)
+        const skill = await this.getSkill(skillName)
         if (!skill) return `Skill not found: ${skillName}`
         const output = isRun
           ? await runSkillScriptByName(skill, targetName, {})
@@ -355,7 +364,7 @@ export class Repl {
       default: {
         // Check if the command matches a skill name (e.g. /verify → skill "verify")
         const skillName = cmd!.slice(1) // strip leading /
-        const skill = this.options.skillMap?.get(skillName)
+        const skill = await this.getSkill(skillName)
         if (skill) {
           this.pendingSkill = skill
           return `Skill "${skillName}" will be injected with your next message.`
