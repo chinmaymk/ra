@@ -6,6 +6,7 @@ app:
 agent:
   provider: anthropic
   model: claude-sonnet-4-6
+  systemPrompt: ./skills/autoresearch/SKILL.md
   maxIterations: 500
   toolTimeout: 900000
   tools:
