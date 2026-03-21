@@ -168,13 +168,13 @@ export class InspectorServer {
     this.app = app
   }
 
-  get port(): number { return (this.server?.port ?? this.app.config.inspector.port) as number }
+  get port(): number { return (this.server?.port ?? this.app.config.app.inspector.port) as number }
 
   async start(): Promise<void> {
     const { config, storage, memoryStore } = this.app
 
     this.server = Bun.serve({
-      port: config.inspector.port,
+      port: config.app.inspector.port,
       fetch: async (req: Request): Promise<Response> => {
         const url = new URL(req.url)
         const path = url.pathname
@@ -242,10 +242,10 @@ export class InspectorServer {
         }
 
         if (path === '/api/context') {
-          const files = config.context.enabled
-            ? await discoverContextFiles({ cwd: config.configDir, patterns: config.context.patterns })
+          const files = config.agent.context.enabled
+            ? await discoverContextFiles({ cwd: config.app.configDir, patterns: config.agent.context.patterns })
             : []
-          return json({ patterns: config.context.patterns, files })
+          return json({ patterns: config.agent.context.patterns, files })
         }
 
         if (path === '/api/middleware') {
@@ -255,7 +255,7 @@ export class InspectorServer {
               hooks[name] = fns.map(fn => fn.name || '(anonymous)')
             }
           }
-          return json({ hooks, configMiddleware: config.middleware })
+          return json({ hooks, configMiddleware: config.agent.middleware })
         }
 
         // ── Static assets ──
@@ -285,13 +285,13 @@ export class InspectorServer {
 
 function sanitizeConfig(config: unknown): unknown {
   const copy = JSON.parse(JSON.stringify(config))
-  if (copy.providers) {
-    for (const p of Object.values(copy.providers)) {
+  if (copy.agent?.providers) {
+    for (const p of Object.values(copy.agent.providers)) {
       if (p && typeof p === 'object' && 'apiKey' in (p as Record<string, unknown>)) {
         (p as Record<string, unknown>).apiKey = '***'
       }
     }
   }
-  if (copy.http?.token) copy.http.token = '***'
+  if (copy.app?.http?.token) copy.app.http.token = '***'
   return copy
 }

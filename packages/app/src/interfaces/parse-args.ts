@@ -31,31 +31,33 @@ export interface ParsedArgs {
 
 // Maps CLI flag names to config paths with type coercion
 const FLAG_RULES: Record<string, CoercionRule> = {
-  provider:                      { type: 'string', path: ['provider'] },
-  model:                         { type: 'string', path: ['model'] },
-  'system-prompt':               { type: 'string', path: ['systemPrompt'] },
-  'max-iterations':              { type: 'int',    path: ['maxIterations'] },
-  thinking:                      { type: 'string', path: ['thinking'] },
-  'tool-timeout':                { type: 'int',    path: ['toolTimeout'] },
-  'max-tool-response-size':      { type: 'int',    path: ['tools', 'maxResponseSize'] },
-  'tools-builtin':               { type: 'bool',   path: ['tools', 'builtin'], value: true },
-  'http-port':                   { type: 'int',    path: ['http', 'port'] },
-  'http-token':                  { type: 'string', path: ['http', 'token'] },
-  'inspector-port':              { type: 'int',    path: ['inspector', 'port'] },
-  'mcp-server-enabled':          { type: 'bool',   path: ['mcp', 'server', 'enabled'], value: true },
-  'mcp-server-port':             { type: 'int',    path: ['mcp', 'server', 'port'] },
-  'mcp-server-tool-name':        { type: 'string', path: ['mcp', 'server', 'tool', 'name'] },
-  'mcp-server-tool-description': { type: 'string', path: ['mcp', 'server', 'tool', 'description'] },
-  'data-dir':                    { type: 'string', path: ['dataDir'] },
-  'storage-max-sessions':        { type: 'int',    path: ['storage', 'maxSessions'] },
-  'storage-ttl-days':            { type: 'int',    path: ['storage', 'ttlDays'] },
-  'skill-dir':                   { type: 'string', path: ['skillDirs'] },
-  'anthropic-base-url':          { type: 'string', path: ['providers', 'anthropic', 'baseURL'] },
-  'openai-base-url':             { type: 'string', path: ['providers', 'openai', 'baseURL'] },
-  'google-base-url':             { type: 'string', path: ['providers', 'google', 'baseURL'] },
-  'ollama-host':                 { type: 'string', path: ['providers', 'ollama', 'host'] },
-  'azure-endpoint':              { type: 'string', path: ['providers', 'azure', 'endpoint'] },
-  'azure-deployment':            { type: 'string', path: ['providers', 'azure', 'deployment'] },
+  // ── agent section ────────────────────────────────────────────────────
+  provider:                      { type: 'string', path: ['agent', 'provider'] },
+  model:                         { type: 'string', path: ['agent', 'model'] },
+  'system-prompt':               { type: 'string', path: ['agent', 'systemPrompt'] },
+  'max-iterations':              { type: 'int',    path: ['agent', 'maxIterations'] },
+  thinking:                      { type: 'string', path: ['agent', 'thinking'] },
+  'tool-timeout':                { type: 'int',    path: ['agent', 'toolTimeout'] },
+  'max-tool-response-size':      { type: 'int',    path: ['agent', 'tools', 'maxResponseSize'] },
+  'tools-builtin':               { type: 'bool',   path: ['agent', 'tools', 'builtin'], value: true },
+  'anthropic-base-url':          { type: 'string', path: ['agent', 'providers', 'anthropic', 'baseURL'] },
+  'openai-base-url':             { type: 'string', path: ['agent', 'providers', 'openai', 'baseURL'] },
+  'google-base-url':             { type: 'string', path: ['agent', 'providers', 'google', 'baseURL'] },
+  'ollama-host':                 { type: 'string', path: ['agent', 'providers', 'ollama', 'host'] },
+  'azure-endpoint':              { type: 'string', path: ['agent', 'providers', 'azure', 'endpoint'] },
+  'azure-deployment':            { type: 'string', path: ['agent', 'providers', 'azure', 'deployment'] },
+  // ── app section ──────────────────────────────────────────────────────
+  'http-port':                   { type: 'int',    path: ['app', 'http', 'port'] },
+  'http-token':                  { type: 'string', path: ['app', 'http', 'token'] },
+  'inspector-port':              { type: 'int',    path: ['app', 'inspector', 'port'] },
+  'mcp-server-enabled':          { type: 'bool',   path: ['app', 'mcp', 'server', 'enabled'], value: true },
+  'mcp-server-port':             { type: 'int',    path: ['app', 'mcp', 'server', 'port'] },
+  'mcp-server-tool-name':        { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'name'] },
+  'mcp-server-tool-description': { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'description'] },
+  'data-dir':                    { type: 'string', path: ['app', 'dataDir'] },
+  'storage-max-sessions':        { type: 'int',    path: ['app', 'storage', 'maxSessions'] },
+  'storage-ttl-days':            { type: 'int',    path: ['app', 'storage', 'ttlDays'] },
+  'skill-dir':                   { type: 'string', path: ['app', 'skillDirs'] },
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -150,7 +152,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // Interface selection (first match wins, order matters: mcp-stdio before mcp)
   const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'repl', 'cli'] as const
   for (const flag of interfaceFlags) {
-    if (values[flag]) { setPath(r, ['interface'], flag); break }
+    if (values[flag]) { setPath(r, ['app', 'interface'], flag); break }
   }
 
   // Apply declarative flag rules
@@ -160,7 +162,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   // Memory — --memories, --list-memories, and --forget imply --memory
-  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) setPath(r, ['memory', 'enabled'], true)
+  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) setPath(r, ['agent', 'memory', 'enabled'], true)
 
   return {
     config: r as Partial<RaConfig>,

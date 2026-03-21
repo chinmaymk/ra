@@ -38,7 +38,7 @@ export async function loadMiddleware(
 ): Promise<Partial<MiddlewareConfig>> {
   const result: Partial<MiddlewareConfig> = {}
 
-  for (const [hook, entries] of Object.entries(config.middleware ?? {})) {
+  for (const [hook, entries] of Object.entries(config.agent.middleware ?? {})) {
     if (!VALID_HOOKS.has(hook as keyof MiddlewareConfig)) {
       console.warn('[ra] Unknown middleware hook — skipping', hook)
       continue

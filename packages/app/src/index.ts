@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { AgentLoop, serializeContent, errorMessage, type IMessage } from '@chinmaymk/ra'
 import { loadConfig } from './config'
+import type { RaConfig } from './config/types'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { HELP } from './interfaces/help'
@@ -79,11 +80,11 @@ function createMcpHandler(app: AppContext) {
   return async (input: unknown) => {
     const session = await app.storage.create({
       provider: app.provider.name,
-      model: app.config.model,
+      model: app.config.agent.model,
       interface: 'mcp',
     })
     const messages: IMessage[] = []
-    if (app.config.systemPrompt) messages.push({ role: 'system', content: app.config.systemPrompt })
+    if (app.config.agent.systemPrompt) messages.push({ role: 'system', content: app.config.agent.systemPrompt })
     messages.push(...app.contextMessages)
     const priorCount = messages.length
 
@@ -94,21 +95,21 @@ function createMcpHandler(app: AppContext) {
       storage: app.storage,
       sessionId: session.id,
       priorCount,
-      logsEnabled: app.config.logsEnabled,
-      logLevel: app.config.logLevel,
-      tracesEnabled: app.config.tracesEnabled,
+      logsEnabled: app.config.app.logsEnabled,
+      logLevel: app.config.app.logLevel,
+      tracesEnabled: app.config.app.tracesEnabled,
       logger: app.logger,
     })
     const loop = new AgentLoop({
       provider: app.provider,
       tools: app.tools,
-      model: app.config.model,
-      maxIterations: app.config.maxIterations,
-      maxRetries: app.config.maxRetries,
-      toolTimeout: app.config.toolTimeout,
-      maxToolResponseSize: app.config.tools.maxResponseSize,
+      model: app.config.agent.model,
+      maxIterations: app.config.agent.maxIterations,
+      maxRetries: app.config.agent.maxRetries,
+      toolTimeout: app.config.agent.toolTimeout,
+      maxToolResponseSize: app.config.agent.tools.maxResponseSize,
       middleware: loopSession.middleware,
-      compaction: app.config.compaction,
+      compaction: app.config.agent.compaction,
       logger: loopSession.logger,
       sessionId: session.id,
     })
@@ -119,21 +120,21 @@ function createMcpHandler(app: AppContext) {
 }
 
 function mcpToolsFor(app: AppContext) {
-  return app.config.tools.builtin ? app.tools : undefined
+  return app.config.agent.tools.builtin ? app.tools : undefined
 }
 
 async function startSidecarMcp(app: AppContext): Promise<(() => Promise<void>) | null> {
-  if (!app.config.mcp.server?.enabled) return null
+  if (!app.config.app.mcp.server?.enabled) return null
   const handler = createMcpHandler(app)
-  const stop = await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
-  console.error('MCP server (http) listening on port', app.config.mcp.server.port)
+  const stop = await startMcpHttp(app.config.app.mcp.server, handler, mcpToolsFor(app))
+  console.error('MCP server (http) listening on port', app.config.app.mcp.server.port)
   return stop
 }
 
 async function launchMcpHttp(app: AppContext): Promise<void> {
   const handler = createMcpHandler(app)
-  await startMcpHttp(app.config.mcp.server, handler, mcpToolsFor(app))
-  console.error('MCP server (http) listening on port', app.config.mcp.server.port)
+  await startMcpHttp(app.config.app.mcp.server, handler, mcpToolsFor(app))
+  console.error('MCP server (http) listening on port', app.config.app.mcp.server.port)
   await new Promise(() => {}) // keep alive
 }
 
@@ -148,7 +149,7 @@ async function launchMcpStdio(app: AppContext): Promise<void> {
     'Cursor — .cursor/mcp.json:\n' + mcpConfig + '\n\n' +
     'Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n' + mcpConfig + '\n\n'
   )
-  await startMcpStdio(app.config.mcp.server, handler, mcpToolsFor(app))
+  await startMcpStdio(app.config.app.mcp.server, handler, mcpToolsFor(app))
   await app.shutdown()
 }
 
@@ -161,28 +162,28 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
   if (parsed.meta.resume) {
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
-  const activeSkills = app.config.skills.concat(parsed.meta.skills)
+  const activeSkills = app.config.app.skills.concat(parsed.meta.skills)
   await runCli({
     prompt: parsed.meta.prompt!,
     files: parsed.meta.files,
     skills: activeSkills,
-    systemPrompt: app.config.systemPrompt,
-    model: app.config.model,
+    systemPrompt: app.config.agent.systemPrompt,
+    model: app.config.agent.model,
     provider: app.provider,
     tools: app.tools,
     skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    maxRetries: app.config.maxRetries,
-    maxToolResponseSize: app.config.tools.maxResponseSize,
+    maxIterations: app.config.agent.maxIterations,
+    maxRetries: app.config.agent.maxRetries,
+    maxToolResponseSize: app.config.agent.tools.maxResponseSize,
     middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
+    thinking: app.config.agent.thinking,
+    compaction: app.config.agent.compaction,
     contextMessages: app.contextMessages,
     sessionMessages,
     logger: app.logger,
-    logsEnabled: app.config.logsEnabled,
-    logLevel: app.config.logLevel,
-    tracesEnabled: app.config.tracesEnabled,
+    logsEnabled: app.config.app.logsEnabled,
+    logLevel: app.config.app.logLevel,
+    tracesEnabled: app.config.app.tracesEnabled,
     storage: app.storage,
     sessionId: app.sessionId,
   })
@@ -194,26 +195,26 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
   const stopMcpHttp = await startSidecarMcp(app)
 
   const httpServer = new HttpServer({
-    port: app.config.http.port,
-    token: app.config.http.token || undefined,
-    model: app.config.model,
+    port: app.config.app.http.port,
+    token: app.config.app.http.token || undefined,
+    model: app.config.agent.model,
     provider: app.provider,
     tools: app.tools,
     storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
+    systemPrompt: app.config.agent.systemPrompt,
     skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    maxRetries: app.config.maxRetries,
-    toolTimeout: app.config.toolTimeout,
-    maxToolResponseSize: app.config.tools.maxResponseSize,
+    maxIterations: app.config.agent.maxIterations,
+    maxRetries: app.config.agent.maxRetries,
+    toolTimeout: app.config.agent.toolTimeout,
+    maxToolResponseSize: app.config.agent.tools.maxResponseSize,
     middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
+    thinking: app.config.agent.thinking,
+    compaction: app.config.agent.compaction,
     contextMessages: app.contextMessages,
     logger: app.logger,
-    logsEnabled: app.config.logsEnabled,
-    logLevel: app.config.logLevel,
-    tracesEnabled: app.config.tracesEnabled,
+    logsEnabled: app.config.app.logsEnabled,
+    logLevel: app.config.app.logLevel,
+    tracesEnabled: app.config.app.tracesEnabled,
   })
   await httpServer.start()
   console.error('HTTP server listening on port', httpServer.port)
@@ -232,26 +233,26 @@ async function launchRepl(app: AppContext): Promise<void> {
   const stopMcpHttp = await startSidecarMcp(app)
 
   const repl = new Repl({
-    model: app.config.model,
+    model: app.config.agent.model,
     provider: app.provider,
     tools: app.tools,
     storage: app.storage,
-    systemPrompt: app.config.systemPrompt,
+    systemPrompt: app.config.agent.systemPrompt,
     skillMap: app.skillMap,
-    maxIterations: app.config.maxIterations,
-    maxRetries: app.config.maxRetries,
-    toolTimeout: app.config.toolTimeout,
-    maxToolResponseSize: app.config.tools.maxResponseSize,
+    maxIterations: app.config.agent.maxIterations,
+    maxRetries: app.config.agent.maxRetries,
+    toolTimeout: app.config.agent.toolTimeout,
+    maxToolResponseSize: app.config.agent.tools.maxResponseSize,
     sessionId: app.sessionId,
     middleware: app.middleware,
-    thinking: app.config.thinking,
-    compaction: app.config.compaction,
+    thinking: app.config.agent.thinking,
+    compaction: app.config.agent.compaction,
     contextMessages: app.contextMessages,
     memoryStore: app.memoryStore,
     logger: app.logger,
-    logsEnabled: app.config.logsEnabled,
-    logLevel: app.config.logLevel,
-    tracesEnabled: app.config.tracesEnabled,
+    logsEnabled: app.config.app.logsEnabled,
+    logLevel: app.config.app.logLevel,
+    tracesEnabled: app.config.app.tracesEnabled,
   })
   await repl.start()
   try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }
@@ -271,21 +272,24 @@ async function main(): Promise<void> {
 
   await handleEarlyExits(parsed)
 
+  // Ensure parsed.config.app exists for interface assignment
+  const parsedApp = (parsed.config.app ??= {} as Partial<RaConfig>['app'] & Record<string, unknown>) as Partial<RaConfig['app']>
+
   // Read piped stdin (only for CLI / unspecified mode)
-  const isNonCliInterface = parsed.config.interface && parsed.config.interface !== 'cli'
+  const isNonCliInterface = parsedApp.interface && parsedApp.interface !== 'cli'
   if (!isNonCliInterface) {
     const stdinContent = await readStdin()
     if (stdinContent) {
       parsed.meta.prompt = parsed.meta.prompt
         ? `${parsed.meta.prompt}\n\n${stdinContent}`
         : stdinContent
-      parsed.config.interface = 'cli' as const
+      parsedApp.interface = 'cli' as const
     }
   }
 
   // Infer CLI mode when a prompt is given without an explicit interface flag
-  if (parsed.meta.prompt && !parsed.config.interface) {
-    parsed.config.interface = 'cli' as const
+  if (parsed.meta.prompt && !parsedApp.interface) {
+    parsedApp.interface = 'cli' as const
   }
 
   const config = await loadConfig({
@@ -297,8 +301,8 @@ async function main(): Promise<void> {
 
   if (parsed.meta.showConfig || parsed.meta.showContext) {
     const { discoverContextFiles, buildContextMessages } = await import('./context')
-    const contextFiles = config.context.enabled
-      ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
+    const contextFiles = config.agent.context.enabled
+      ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.agent.context.patterns })
       : []
 
     if (parsed.meta.showConfig) {
@@ -310,15 +314,15 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  const isInspector = config.interface === 'inspector'
+  const isInspector = config.app.interface === 'inspector'
   const app = await bootstrap(config, { sessionId: parsed.meta.resume, skipSession: isInspector })
 
   const signals = onSignals(app.shutdown)
   if (!isInspector) await handleStandaloneCommands(parsed, app)
 
-  app.logger.info('starting interface', { interface: config.interface })
+  app.logger.info('starting interface', { interface: config.app.interface })
 
-  switch (config.interface) {
+  switch (config.app.interface) {
     case 'mcp':       return launchMcpHttp(app)
     case 'mcp-stdio': return launchMcpStdio(app)
     case 'http':      return launchHttp(app, signals)

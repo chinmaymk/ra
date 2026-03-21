@@ -51,17 +51,20 @@ export interface ToolsConfig {
   maxResponseSize?: number
 }
 
-export interface RaConfig {
-  provider: ProviderName
-  model: string
+/** Application-level settings — how the app runs, infrastructure, observability. */
+export interface AppConfig {
   interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector'
-  systemPrompt: string
   /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
   configDir: string
   /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `.ra`. */
   dataDir: string
   http: { port: number; token: string }
   inspector: { port: number }
+  storage: {
+    format: 'jsonl'
+    maxSessions: number
+    ttlDays: number
+  }
   skillDirs: string[]
   skills: string[]
   mcp: {
@@ -71,6 +74,18 @@ export interface RaConfig {
      *  First call returns full schema; model retries with correct params. Saves tokens. */
     lazySchemas: boolean
   }
+  permissions: PermissionsConfig
+  logsEnabled: boolean
+  logLevel: LogLevel
+  tracesEnabled: boolean
+}
+
+/** Agent behavior settings — LLM config, tools, context, memory. */
+export interface AgentConfig {
+  provider: ProviderName
+  model: string
+  thinking?: 'low' | 'medium' | 'high'
+  systemPrompt: string
   providers: {
     anthropic: AnthropicProviderOptions
     openai: OpenAIProviderOptions
@@ -80,19 +95,12 @@ export interface RaConfig {
     bedrock: BedrockProviderOptions
     azure: AzureProviderOptions
   }
-  storage: {
-    format: 'jsonl'
-    maxSessions: number
-    ttlDays: number
-  }
   maxIterations: number
   maxRetries: number
   toolTimeout: number
-  tools: ToolsConfig
-  permissions: PermissionsConfig
-  middleware: Record<string, string[]>
-  thinking?: 'low' | 'medium' | 'high'
   maxConcurrency: number
+  tools: ToolsConfig
+  middleware: Record<string, string[]>
   context: ContextConfig
   compaction: {
     enabled: boolean
@@ -109,9 +117,11 @@ export interface RaConfig {
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
   }
-  logsEnabled: boolean
-  logLevel: LogLevel
-  tracesEnabled: boolean
+}
+
+export interface RaConfig {
+  app: AppConfig
+  agent: AgentConfig
 }
 
 export interface McpClientConfig {

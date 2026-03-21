@@ -1,19 +1,17 @@
-provider: anthropic
-model: claude-opus-4-6
-interface: repl
+app:
+  interface: repl
+  skills:
+    - coding-agent
+  skillDirs:
+    - ./skills
 
-skills:
-  - coding-agent
-skillDirs:
-  - ./skills
-
-tools:
-  builtin: true
-
-maxIterations: 200
-
-thinking: high
-
-compaction:
-  enabled: true
-  threshold: 0.8
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+  tools:
+    builtin: true
+  maxIterations: 200
+  thinking: high
+  compaction:
+    enabled: true
+    threshold: 0.8
