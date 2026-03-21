@@ -20,7 +20,6 @@ Built-in tools, each in its own file. `index.ts` registers them all.
 | `web-fetch.ts` | `WebFetch` | Network |
 | `ask-user.ts` | `AskUserQuestion` | Agent interaction |
 | `subagent.ts` | `Agent` | Agent interaction (exported separately, not auto-registered) |
-| `managed-agents.ts` | `CreateAgent`, `MessageAgent`, `ListAgents`, `DestroyAgent` | Managed agents (persistent ra child processes) |
 
 ## Tool Pattern
 

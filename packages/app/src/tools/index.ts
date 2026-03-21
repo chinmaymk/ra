@@ -15,7 +15,6 @@ import { webFetchTool } from './web-fetch'
 import { subagentTool, type SubagentToolOptions } from './subagent'
 
 export { subagentTool, type SubagentToolOptions } from './subagent'
-export { managedAgentTools, type ManagedAgentOptions } from './managed-agents'
 
 /** Conditionally register a tool if enabled in config. */
 function maybeRegister(registry: ToolRegistry, tool: ITool, config: ToolsConfig): void {
