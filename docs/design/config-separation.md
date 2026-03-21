@@ -79,12 +79,13 @@ agent:
 cron:
   - name: pr-review
     schedule: "0 9 * * 1-5"
-    agent: ./recipes/code-review.yml   # standalone recipe, replaces base
+    agent:
+      model: claude-sonnet-4-6
     prompt: "Review all open PRs"
 
   - name: quick-check
     schedule: "*/30 * * * *"
-    agent:                              # partial override, merged with base
+    agent:
       model: claude-haiku-4-5
       maxIterations: 5
     prompt: "Check build status"
