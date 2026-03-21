@@ -13,7 +13,8 @@ OPTIONS
   --skill <name>                      Skill to activate for this run (repeatable)
   --skill-dir <path>                  Directory to load skills from (repeatable)
   --file <path>                       File to attach (repeatable)
-  --resume <session-id>               Resume a previous session
+  --resume                            Resume the most recent session
+  --resume=<session-id>               Resume a specific session by ID
 
 INTERFACE
   --cli                               Oneshot mode: run prompt and exit

@@ -50,10 +50,16 @@ See [File Attachments](/core/file-attachments) for supported formats and provide
 
 ## Resuming sessions
 
-When the agent calls `AskUserQuestion`, the session ID is printed to stderr so you can resume later:
+Resume the most recent session:
 
 ```bash
-ra --resume <session-id> "Continue from where we left off"
+ra --resume "Continue from where we left off"
+```
+
+Resume a specific session by ID (useful when the agent calls `AskUserQuestion` and prints the session ID to stderr):
+
+```bash
+ra --resume=<session-id> "Continue from where we left off"
 ```
 
 See [Sessions](/core/sessions) for more on session persistence.

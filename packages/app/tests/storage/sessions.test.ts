@@ -49,6 +49,31 @@ describe('SessionStorage', () => {
     expect(latest).toBeUndefined()
   })
 
+  it('latest() returns correct session among many', async () => {
+    const ids: string[] = []
+    for (let i = 0; i < 5; i++) {
+      const s = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+      ids.push(s.id)
+      await new Promise(r => setTimeout(r, 10))
+    }
+    const latest = await storage.latest()
+    expect(latest!.id).toBe(ids[4])
+  })
+
+  it('latest() reflects pruned state', async () => {
+    const ids: string[] = []
+    for (let i = 0; i < 5; i++) {
+      const s = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+      ids.push(s.id)
+      await new Promise(r => setTimeout(r, 10))
+    }
+    await storage.prune({ maxSessions: 2 })
+    const latest = await storage.latest()
+    expect(latest!.id).toBe(ids[4])
+    const list = await storage.list()
+    expect(list).toHaveLength(2)
+  })
+
   it('prunes sessions over maxSessions', async () => {
     for (let i = 0; i < 5; i++) {
       await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })

@@ -13,7 +13,7 @@ You get a `›` prompt. Type a message and ra streams the response, runs tools a
 | Command | Description |
 |---------|-------------|
 | `/clear` | Clear history and start a fresh session |
-| `/resume <session-id>` | Load and continue a previous session |
+| `/resume [session-id]` | Resume a session (latest if no ID given) |
 | `/skill <name>` | Activate a skill for the next message |
 | `/skill-run <skill> <script>` | Run a skill script and attach output to the next message |
 | `/skill-ref <skill> <file>` | Load a skill reference into context |
@@ -31,16 +31,18 @@ ra
 › Review the login handler for security issues
 › /attach src/auth.ts
 › What changes would you make to this file?
-› /resume abc-123           # resume a previous session
+› /resume                   # resume the latest session
+› /resume abc-123           # resume a specific session
 › /clear                    # start fresh
 ```
 
 ## Sessions
 
-Conversations are saved automatically after each turn. Resume with `/resume` inside the REPL, or start in a resumed state from the shell:
+Conversations are saved automatically after each turn. Resume with `/resume` inside the REPL (resumes the latest session), or start in a resumed state from the shell:
 
 ```bash
-ra --resume abc-123
+ra --resume              # resume the latest session
+ra --resume=abc-123      # resume a specific session
 ```
 
 Sessions are pruned automatically after the configured retention period. See [Sessions](/core/sessions) for configuration.

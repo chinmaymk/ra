@@ -148,6 +148,20 @@ describe('parseArgs', () => {
     it('--resume defaults to undefined', () => {
       expect(parseArgs(dev()).meta.resume).toBeUndefined()
     })
+    it('--resume does not consume the next positional as session id', () => {
+      const result = parseArgs(dev('--cli', '--resume', 'my prompt'))
+      expect(result.meta.resume).toBe(true)
+      expect(result.meta.prompt).toBe('my prompt')
+    })
+    it('--resume=<id> preserves the prompt', () => {
+      const result = parseArgs(dev('--cli', '--resume=sess-456', 'my prompt'))
+      expect(result.meta.resume).toBe('sess-456')
+      expect(result.meta.prompt).toBe('my prompt')
+    })
+    it('--resume works from compiled binary', () => {
+      expect(parseArgs(bin('--resume')).meta.resume).toBe(true)
+      expect(parseArgs(bin('--resume=abc')).meta.resume).toBe('abc')
+    })
     it('--help → meta.help', () => expect(parseArgs(dev('--help')).meta.help).toBe(true))
     it('-h → meta.help',     () => expect(parseArgs(dev('-h')).meta.help).toBe(true))
     it('defaults meta.help to false', () => expect(parseArgs(dev()).meta.help).toBe(false))

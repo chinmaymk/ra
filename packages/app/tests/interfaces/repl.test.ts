@@ -114,6 +114,20 @@ describe('Repl', () => {
     expect(response).toContain('1 messages loaded')
   })
 
+  it('handleCommand /resume without id picks most recent among multiple sessions', async () => {
+    const storage = await makeStorage()
+    const s1 = await storage.create({ provider: 'mock', model: 'test', interface: 'repl' })
+    await storage.appendMessage(s1.id, { role: 'user', content: 'old session' })
+    await new Promise(r => setTimeout(r, 10))
+    const s2 = await storage.create({ provider: 'mock', model: 'test', interface: 'repl' })
+    await storage.appendMessage(s2.id, { role: 'user', content: 'new session' })
+
+    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
+    const response = await repl.handleCommand('/resume')
+    expect(response).toContain(s2.id)
+    expect(response).toContain('1 messages loaded')
+  })
+
   it('handleCommand /resume without id and no sessions returns message', async () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
