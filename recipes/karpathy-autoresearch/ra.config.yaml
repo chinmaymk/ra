@@ -1,9 +1,5 @@
 app:
   interface: repl
-  skills:
-    - autoresearch
-  skillDirs:
-    - ./skills
   permissions:
     no_rules_rules: true
 

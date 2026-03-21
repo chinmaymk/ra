@@ -22,7 +22,7 @@ The agent optimizes for the lowest `val_bpb` (validation bits per byte) while re
 
 ```bash
 cd /path/to/autoresearch
-ra --config /path/to/ra/recipes/autoresearch/ra.config.yaml
+ra --config /path/to/ra/recipes/karpathy-autoresearch/ra.config.yaml
 ```
 
 Then tell the agent to begin:

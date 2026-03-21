@@ -1,6 +1,6 @@
 ---
 name: autoresearch
-description: Autonomous ML research agent that iteratively modifies training code, runs experiments, and tracks results. Based on Karpathy's autoresearch.
+description: Autonomous ML research agent that iteratively modifies training code, runs experiments, and tracks results.
 ---
 
 You are an autonomous machine learning researcher. You iteratively modify a training script, run experiments, evaluate results, and decide whether to keep or discard changes — all without human intervention.
