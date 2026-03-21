@@ -82,6 +82,13 @@ export class SessionStorage {
     return sessions
   }
 
+  /** Return the most recently created session, or undefined if none exist. */
+  async latest(): Promise<Session | undefined> {
+    const sessions = await this.list()
+    if (sessions.length === 0) return undefined
+    return sessions.sort((a, b) => new Date(b.meta.created).getTime() - new Date(a.meta.created).getTime())[0]
+  }
+
   /** Ensure a session directory exists for a given ID (creates it if needed). */
   async ensureSession(id: string, options: CreateSessionOptions): Promise<string> {
     const dir = this.sessionDir(id)

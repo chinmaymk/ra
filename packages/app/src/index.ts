@@ -159,8 +159,8 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     console.error('Error: --cli requires a prompt argument')
     process.exit(1)
   }
-  const sessionMessages = parsed.meta.resume ? await app.storage.readMessages(app.sessionId) : []
-  if (parsed.meta.resume) {
+  const sessionMessages = app.resumed ? await app.storage.readMessages(app.sessionId) : []
+  if (app.resumed) {
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
   await runCli({
@@ -243,6 +243,7 @@ async function launchRepl(app: AppContext): Promise<void> {
     toolTimeout: app.config.agent.toolTimeout,
     maxToolResponseSize: app.config.agent.tools.maxResponseSize,
     sessionId: app.sessionId,
+    resumed: app.resumed,
     middleware: app.middleware,
     thinking: app.config.agent.thinking,
     compaction: app.config.agent.compaction,
@@ -348,7 +349,7 @@ async function main(): Promise<void> {
   }
 
   const isInspector = config.app.interface === 'inspector'
-  const app = await bootstrap(config, { sessionId: parsed.meta.resume, skipSession: isInspector })
+  const app = await bootstrap(config, { resume: parsed.meta.resume, skipSession: isInspector })
 
   const signals = onSignals(app.shutdown)
   if (!isInspector) await handleStandaloneCommands(parsed, app)

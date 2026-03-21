@@ -4,13 +4,25 @@ ra persists every conversation as JSONL. Resume any session from any interface �
 
 ## Resuming a session
 
-**CLI:**
+**CLI — resume the latest session:**
 
 ```bash
-ra --resume <session-id> "Continue with the next step"
+ra --resume "Continue with the next step"
 ```
 
-**REPL:**
+**CLI — resume a specific session by ID:**
+
+```bash
+ra --resume=<session-id> "Continue with the next step"
+```
+
+**REPL — resume the latest session:**
+
+```
+› /resume
+```
+
+**REPL — resume a specific session by ID:**
 
 ```
 › /resume abc-123
@@ -32,8 +44,10 @@ Sessions are saved automatically after each turn. You never need to explicitly s
 When `AskUserQuestion` suspends a CLI run, the session ID is printed to stderr so you can resume later:
 
 ```
-Session suspended. Resume with: ra --resume ses_abc123
+Session suspended. Resume with: ra --resume
 ```
+
+To resume that specific session later (if newer sessions exist), use `ra --resume=ses_abc123`.
 
 ## Listing sessions
 

@@ -12,7 +12,7 @@ export interface ParsedArgsMeta {
   version: boolean
   files: string[]
   prompt?: string
-  resume?: string
+  resume?: string | true
   configPath?: string
   exec?: string
   showContext: boolean
@@ -85,14 +85,27 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
   }
 
+  // Extract --resume manually: supports `--resume` (latest) and `--resume=<id>`.
+  // Node's parseArgs doesn't support optional string values, so we handle it here.
+  let resumeValue: string | true | undefined
+  const filteredArgs: string[] = []
+  for (const arg of userArgs) {
+    if (arg === '--resume') {
+      resumeValue = true
+    } else if (arg.startsWith('--resume=')) {
+      resumeValue = arg.slice('--resume='.length)
+    } else {
+      filteredArgs.push(arg)
+    }
+  }
+
   const { values, positionals } = utilParseArgs({
-    args: userArgs,
+    args: filteredArgs,
     options: {
       // Meta (not mapped to RaConfig)
       exec:                          { type: 'string' },
       config:                        { type: 'string' },
       file:                          { type: 'string', multiple: true },
-      resume:                        { type: 'string' },
       help:                          { type: 'boolean', short: 'h' },
       version:                       { type: 'boolean', short: 'v' },
       'show-context':                { type: 'boolean' },
@@ -178,7 +191,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       forget:        values.forget as string | undefined,
       files:      (values.file as string[] | undefined) ?? [],
       prompt:     positionals.join(' ') || undefined,
-      resume:     values.resume as string | undefined,
+      resume:     resumeValue,
       configPath: values.config as string | undefined,
       exec:       values.exec as string | undefined,
     },

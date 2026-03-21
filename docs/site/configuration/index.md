@@ -252,7 +252,7 @@ See [Cron](/modes/cron) for details.
 | — | — | `--interface` | auto | `cli`, `repl`, `http`, `cron` |
 | — | — | `--mcp-stdio` | — | Start as MCP server (stdio) |
 | — | — | `--mcp` | — | Start as MCP server (HTTP) |
-| — | — | `--resume` | — | Resume a previous session |
+| — | — | `--resume` | — | Resume the latest session (or `--resume=<id>` for a specific one) |
 | — | — | `--file` | — | Attach files to the prompt |
 | — | — | `--exec` | — | Run a script file |
 | — | — | `--show-config` | — | Show resolved configuration and exit |

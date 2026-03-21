@@ -142,8 +142,28 @@ describe('parseArgs', () => {
     it('--config → meta.configPath', () => {
       expect(parseArgs(dev('--config', '/etc/ra.yaml')).meta.configPath).toBe('/etc/ra.yaml')
     })
-    it('--resume → meta.resume', () => {
-      expect(parseArgs(dev('--resume', 'sess-123')).meta.resume).toBe('sess-123')
+    it('--resume without id → meta.resume is true', () => {
+      expect(parseArgs(dev('--resume')).meta.resume).toBe(true)
+    })
+    it('--resume=<id> → meta.resume is the id', () => {
+      expect(parseArgs(dev('--resume=sess-123')).meta.resume).toBe('sess-123')
+    })
+    it('--resume defaults to undefined', () => {
+      expect(parseArgs(dev()).meta.resume).toBeUndefined()
+    })
+    it('--resume does not consume the next positional as session id', () => {
+      const result = parseArgs(dev('--cli', '--resume', 'my prompt'))
+      expect(result.meta.resume).toBe(true)
+      expect(result.meta.prompt).toBe('my prompt')
+    })
+    it('--resume=<id> preserves the prompt', () => {
+      const result = parseArgs(dev('--cli', '--resume=sess-456', 'my prompt'))
+      expect(result.meta.resume).toBe('sess-456')
+      expect(result.meta.prompt).toBe('my prompt')
+    })
+    it('--resume works from compiled binary', () => {
+      expect(parseArgs(bin('--resume')).meta.resume).toBe(true)
+      expect(parseArgs(bin('--resume=abc')).meta.resume).toBe('abc')
     })
     it('--help → meta.help', () => expect(parseArgs(dev('--help')).meta.help).toBe(true))
     it('-h → meta.help',     () => expect(parseArgs(dev('-h')).meta.help).toBe(true))
