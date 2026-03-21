@@ -523,6 +523,18 @@ describe('legacy flat config migration', () => {
     expect(c.app.storage.maxSessions).toBe(10)
   })
 
+  it('migrates flat providers into app.providers', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'provider: anthropic',
+      'providers:',
+      '  anthropic:',
+      '    apiKey: "sk-ant-flat-key"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('anthropic')
+    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-flat-key')
+  })
+
   it('app.providers in YAML works directly', async () => {
     writeFileSync(join(tmp, 'ra.config.yaml'), [
       'app:',

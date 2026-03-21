@@ -128,7 +128,7 @@ const AGENT_KEYS = new Set([
 // Keys that belong under `app` when found at the top level (legacy flat config)
 const APP_KEYS = new Set([
   'interface', 'dataDir', 'http', 'inspector', 'storage',
-  'skillDirs', 'skills', 'mcp', 'permissions',
+  'skillDirs', 'skills', 'mcp', 'permissions', 'providers',
   'logsEnabled', 'logLevel', 'tracesEnabled',
 ])
 
@@ -138,7 +138,6 @@ const APP_KEYS = new Set([
  * This shim lets old configs (e.g. `provider: anthropic`) keep working.
  */
 function normalizeFlatConfig(raw: Record<string, unknown>): void {
-  // Migrate top-level flat keys into their respective sections
   for (const key of Object.keys(raw)) {
     if (AGENT_KEYS.has(key)) {
       if (!isPlainObject(raw.agent)) raw.agent = {}
