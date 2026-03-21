@@ -106,6 +106,7 @@ async function executeJob(
     contextMessages: app.contextMessages,
     activeSkillNames: config.app.skills,
   })
+  const priorCount = initialMessages.length
   initialMessages.push({ role: 'user', content: job.prompt })
 
   const session = await app.storage.create({
@@ -122,7 +123,7 @@ async function executeJob(
   const loopSession = createSessionMiddleware(app.middleware, {
     storage: app.storage,
     sessionId: session.id,
-    priorCount: initialMessages.length - 1,
+    priorCount,
     logsEnabled: config.app.logsEnabled,
     logLevel: config.app.logLevel,
     tracesEnabled: config.app.tracesEnabled,
@@ -173,6 +174,8 @@ async function executeJob(
     logger.error('cron job failed', { job: job.name, sessionId: session.id, error })
     tracer.endSpan(jobSpan, 'error', { sessionId: session.id, error })
 
+    // Middleware hooks also flush, but explicit flush ensures the
+    // 'cron job failed' entry above is written before re-throwing
     await loopSession.logger.flush()
     throw err
   }

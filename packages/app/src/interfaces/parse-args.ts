@@ -18,6 +18,7 @@ export interface ParsedArgsMeta {
   exec?: string
   showContext: boolean
   showConfig: boolean
+  runImmediately: boolean
   listMemories: boolean
   memories?: string
   forget?: string
@@ -77,6 +78,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         version: false,
         showContext: false,
         showConfig: false,
+        runImmediately: false,
         listMemories: false,
         files: [],
         skills: [],
@@ -106,6 +108,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'mcp-stdio':                   { type: 'boolean' },
       inspector:                     { type: 'boolean' },
       cron:                            { type: 'boolean' },
+      'run-immediately':                 { type: 'boolean' },
       // Top-level config
       provider:                      { type: 'string' },
       model:                         { type: 'string' },
@@ -172,6 +175,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       version:      (values.version as boolean | undefined) ?? false,
       showContext:   (values['show-context'] as boolean | undefined) ?? false,
       showConfig:  (values['show-config'] as boolean | undefined) ?? false,
+      runImmediately: (values['run-immediately'] as boolean | undefined) ?? false,
       listMemories:  (values['list-memories'] as boolean | undefined) ?? false,
       memories:      values.memories as string | undefined,
       forget:        values.forget as string | undefined,

@@ -260,7 +260,7 @@ async function launchRepl(app: AppContext): Promise<void> {
   await app.shutdown()
 }
 
-async function launchCron(app: AppContext): Promise<void> {
+async function launchCron(app: AppContext, runImmediately: boolean): Promise<void> {
   const jobs = app.config.cron ?? []
   if (jobs.length === 0) {
     console.error('Error: no cron jobs defined in config')
@@ -277,6 +277,7 @@ async function launchCron(app: AppContext): Promise<void> {
     app,
     jobs,
     signal: controller.signal,
+    runImmediately,
     onJobStart: (job) => {
       process.stderr.write(`\n[cron] Running "${job.name}" (${new Date().toISOString()})\n`)
     },
@@ -361,7 +362,7 @@ async function main(): Promise<void> {
     case 'mcp-stdio': return launchMcpStdio(app)
     case 'http':      return launchHttp(app, signals)
     case 'inspector': return launchInspector(app)
-    case 'cron':      return launchCron(app)
+    case 'cron':      return launchCron(app, parsed.meta.runImmediately)
     case 'cli':       return launchCli(parsed, app)
     default:          return launchRepl(app)
   }
