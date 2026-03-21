@@ -46,20 +46,22 @@ The config lives in your repo — skills, permissions, middleware — versioned 
 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
-provider: anthropic
-model: claude-sonnet-4-6
-maxIterations: 50
-thinking: medium
-skills:
-  - code-review
-  - architect
+app:
+  skills:
+    - code-review
+    - architect
+  permissions:
+    rules:
+      - tool: execute_bash
+        command:
+          allow: ["^git ", "^bun "]
+          deny: ["--force", "--hard"]
 
-permissions:
-  rules:
-    - tool: execute_bash
-      command:
-        allow: ["^git ", "^bun "]
-        deny: ["--force", "--hard"]
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  maxIterations: 50
+  thinking: medium
 ```
 
 Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](https://chinmaymk.github.io/ra/middleware/) intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](https://chinmaymk.github.io/ra/observability/).
@@ -145,30 +147,32 @@ Ra ships with built-in tools for filesystem operations (`Read`, `Write`, `Edit`,
 Each tool can be independently configured, constrained, or disabled:
 
 ```yaml
-tools:
-  builtin: true
-  Read:
-    rootDir: "./src"      # restrict reads to src/
-  Write:
-    rootDir: "./src"      # restrict writes to src/
-  WebFetch:
-    enabled: false        # disable web access
-  Agent:
-    maxConcurrency: 2     # limit parallel agents
+agent:
+  tools:
+    builtin: true
+    Read:
+      rootDir: "./src"      # restrict reads to src/
+    Write:
+      rootDir: "./src"      # restrict writes to src/
+    WebFetch:
+      enabled: false        # disable web access
+    Agent:
+      maxConcurrency: 2     # limit parallel agents
 ```
 
 Control what tools can do with regex-based [allow/deny rules](https://chinmaymk.github.io/ra/permissions/):
 
 ```yaml
-permissions:
-  rules:
-    - tool: execute_bash
-      command:
-        allow: ["^git ", "^bun "]
-        deny: ["--force", "--hard", "--no-verify"]
-    - tool: write_file
-      path:
-        deny: ["\\.env"]
+app:
+  permissions:
+    rules:
+      - tool: execute_bash
+        command:
+          allow: ["^git ", "^bun "]
+          deny: ["--force", "--hard", "--no-verify"]
+      - tool: write_file
+        path:
+          deny: ["\\.env"]
 ```
 
 ## [Skills](https://chinmaymk.github.io/ra/skills/)
@@ -215,10 +219,11 @@ The built-in `Agent` tool spawns parallel copies of the agent loop to work on in
 
 ```yaml
 # allow the model to spawn up to 4 parallel agents
-tools:
-  builtin: true
-  Agent:
-    maxConcurrency: 4
+agent:
+  tools:
+    builtin: true
+    Agent:
+      maxConcurrency: 4
 ```
 
 ## [Observability](https://chinmaymk.github.io/ra/observability/)
@@ -246,10 +251,12 @@ ra "What's our API rate limit?"   # recalls from memory
 Ra automatically discovers and loads project context at startup. It finds `CLAUDE.md` files, `ra.config.yml`, and any files matching configured glob patterns — so the agent starts every session already knowing your repo's conventions, architecture, and rules.
 
 ```yaml
-context:
-  - "CLAUDE.md"
-  - "docs/architecture.md"
-  - "src/**/*.prompt.md"
+agent:
+  context:
+    patterns:
+      - "CLAUDE.md"
+      - "docs/architecture.md"
+      - "src/**/*.prompt.md"
 ```
 
 No manual copy-pasting of instructions. Check your context files into the repo and every engineer — and every agent session — gets the same baseline.
@@ -307,15 +314,18 @@ defaults → config file → env vars → CLI flags
 
 ```yaml
 # ra.config.yml — all sections are optional
-provider: anthropic
-model: claude-sonnet-4-6
-systemPrompt: You are a helpful coding assistant.
-maxIterations: 50
-thinking: medium
-skills: [code-review]
+app:
+  skills: [code-review]
+
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  systemPrompt: You are a helpful coding assistant.
+  maxIterations: 50
+  thinking: medium
 ```
 
-Every option shown in the sections above (`compaction`, `permissions`, `memory`, `mcp`, `middleware`, etc.) goes in this file. Environment variables use the `RA_` prefix (`RA_PROVIDER`, `RA_MODEL`, `RA_ANTHROPIC_API_KEY`), and CLI flags override everything:
+Config is organized into `app` (infrastructure) and `agent` (LLM behavior) sections. Every option shown above goes in this file. Environment variables use the `RA_` prefix (`RA_PROVIDER`, `RA_MODEL`, `RA_ANTHROPIC_API_KEY`), and CLI flags override everything:
 
 ```bash
 ra --provider openai --model gpt-4.1 --thinking high --max-iterations 10 "Review this"

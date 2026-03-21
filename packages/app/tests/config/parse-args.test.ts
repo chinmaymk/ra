@@ -25,113 +25,113 @@ describe('parseArgs', () => {
     })
   })
 
-  describe('interface flags → config.interface', () => {
-    it('--http sets http', () => expect(parseArgs(dev('--http')).config.interface).toBe('http'))
-    it('--repl sets repl', () => expect(parseArgs(dev('--repl')).config.interface).toBe('repl'))
+  describe('interface flags → config.app.interface', () => {
+    it('--http sets http', () => expect(parseArgs(dev('--http')).config.app?.interface).toBe('http'))
+    it('--repl sets repl', () => expect(parseArgs(dev('--repl')).config.app?.interface).toBe('repl'))
     it('--repl with positional prompt preserves repl interface', () => {
       const result = parseArgs(['bun', 'src/index.ts', '--repl', 'hello world'])
-      expect(result.config.interface).toBe('repl')
+      expect(result.config.app?.interface).toBe('repl')
       expect(result.meta.prompt).toBe('hello world')
     })
-    it('--cli sets cli',   () => expect(parseArgs(dev('--cli', 'x')).config.interface).toBe('cli'))
-    it('--mcp sets mcp',   () => expect(parseArgs(dev('--mcp')).config.interface).toBe('mcp'))
+    it('--cli sets cli',   () => expect(parseArgs(dev('--cli', 'x')).config.app?.interface).toBe('cli'))
+    it('--mcp sets mcp',   () => expect(parseArgs(dev('--mcp')).config.app?.interface).toBe('mcp'))
     it('mcp takes precedence over http when both given', () => {
-      expect(parseArgs(dev('--mcp', '--http')).config.interface).toBe('mcp')
+      expect(parseArgs(dev('--mcp', '--http')).config.app?.interface).toBe('mcp')
     })
     it('no flag leaves interface undefined', () => {
-      expect(parseArgs(dev('--model', 'x')).config.interface).toBeUndefined()
+      expect(parseArgs(dev('--model', 'x')).config.app?.interface).toBeUndefined()
     })
   })
 
   describe('top-level config flags', () => {
-    it('--provider', () => expect(parseArgs(dev('--provider', 'openai')).config.provider).toBe('openai'))
-    it('--model',    () => expect(parseArgs(dev('--model', 'gpt-4o')).config.model).toBe('gpt-4o'))
-    it('--system-prompt', () => expect(parseArgs(dev('--system-prompt', 'Be helpful')).config.systemPrompt).toBe('Be helpful'))
-    it('--max-iterations', () => expect(parseArgs(dev('--max-iterations', '20')).config.maxIterations).toBe(20))
-    it('--tool-timeout', () => expect(parseArgs(dev('--tool-timeout', '15000')).config.toolTimeout).toBe(15000))
+    it('--provider', () => expect(parseArgs(dev('--provider', 'openai')).config.agent?.provider).toBe('openai'))
+    it('--model',    () => expect(parseArgs(dev('--model', 'gpt-4o')).config.agent?.model).toBe('gpt-4o'))
+    it('--system-prompt', () => expect(parseArgs(dev('--system-prompt', 'Be helpful')).config.agent?.systemPrompt).toBe('Be helpful'))
+    it('--max-iterations', () => expect(parseArgs(dev('--max-iterations', '20')).config.agent?.maxIterations).toBe(20))
+    it('--tool-timeout', () => expect(parseArgs(dev('--tool-timeout', '15000')).config.agent?.toolTimeout).toBe(15000))
     it('parses --tools-builtin flag', () => {
       const result = parseArgs(['node', 'ra.ts', '--tools-builtin'])
-      expect(result.config.tools?.builtin).toBe(true)
+      expect(result.config.agent?.tools?.builtin).toBe(true)
     })
     it('parses --thinking flag', () => {
       const result = parseArgs(['node', 'ra.ts', '--thinking', 'high'])
-      expect(result.config.thinking).toBe('high')
+      expect(result.config.agent?.thinking).toBe('high')
     })
   })
 
   describe('HTTP server flags', () => {
-    it('--http-port sets config.http.port', () => {
-      expect(parseArgs(dev('--http-port', '4000')).config.http?.port).toBe(4000)
+    it('--http-port sets config.app.http.port', () => {
+      expect(parseArgs(dev('--http-port', '4000')).config.app?.http?.port).toBe(4000)
     })
-    it('--http-token sets config.http.token', () => {
-      expect(parseArgs(dev('--http-token', 'secret')).config.http?.token).toBe('secret')
+    it('--http-token sets config.app.http.token', () => {
+      expect(parseArgs(dev('--http-token', 'secret')).config.app?.http?.token).toBe('secret')
     })
     it('--http-port does not set token', () => {
-      expect(parseArgs(dev('--http-port', '4000')).config.http?.token).toBeUndefined()
+      expect(parseArgs(dev('--http-port', '4000')).config.app?.http?.token).toBeUndefined()
     })
     it('--http-token does not set port', () => {
-      expect(parseArgs(dev('--http-token', 'secret')).config.http?.port).toBeUndefined()
+      expect(parseArgs(dev('--http-token', 'secret')).config.app?.http?.port).toBeUndefined()
     })
   })
 
   describe('MCP server flags', () => {
     it('--mcp-server-enabled', () => {
-      expect(parseArgs(dev('--mcp-server-enabled')).config.mcp?.server.enabled).toBe(true)
+      expect(parseArgs(dev('--mcp-server-enabled')).config.app?.mcp?.server.enabled).toBe(true)
     })
     it('--mcp-server-port', () => {
-      expect(parseArgs(dev('--mcp-server-port', '4001')).config.mcp?.server.port).toBe(4001)
+      expect(parseArgs(dev('--mcp-server-port', '4001')).config.app?.mcp?.server.port).toBe(4001)
     })
     it('--mcp-stdio sets mcp-stdio', () => {
-      expect(parseArgs(dev('--mcp-stdio')).config.interface).toBe('mcp-stdio')
+      expect(parseArgs(dev('--mcp-stdio')).config.app?.interface).toBe('mcp-stdio')
     })
     it('--mcp-server-tool-name', () => {
-      expect(parseArgs(dev('--mcp-server-tool-name', 'mybot')).config.mcp?.server.tool.name).toBe('mybot')
+      expect(parseArgs(dev('--mcp-server-tool-name', 'mybot')).config.app?.mcp?.server.tool.name).toBe('mybot')
     })
     it('--mcp-server-tool-description', () => {
-      expect(parseArgs(dev('--mcp-server-tool-description', 'A bot')).config.mcp?.server.tool.description).toBe('A bot')
+      expect(parseArgs(dev('--mcp-server-tool-description', 'A bot')).config.app?.mcp?.server.tool.description).toBe('A bot')
     })
     it('individual MCP flags do not clobber siblings', () => {
       const r = parseArgs(dev('--mcp-server-port', '5000'))
-      expect(r.config.mcp?.server.port).toBe(5000)
-      expect(r.config.mcp?.server.enabled).toBeUndefined()
+      expect(r.config.app?.mcp?.server.port).toBe(5000)
+      expect(r.config.app?.mcp?.server.enabled).toBeUndefined()
     })
   })
 
   describe('data-dir and storage flags', () => {
     it('--data-dir', () => {
-      expect(parseArgs(dev('--data-dir', '/tmp/data')).config.dataDir).toBe('/tmp/data')
+      expect(parseArgs(dev('--data-dir', '/tmp/data')).config.app?.dataDir).toBe('/tmp/data')
     })
     it('--storage-max-sessions', () => {
-      expect(parseArgs(dev('--storage-max-sessions', '50')).config.storage?.maxSessions).toBe(50)
+      expect(parseArgs(dev('--storage-max-sessions', '50')).config.app?.storage?.maxSessions).toBe(50)
     })
     it('--storage-ttl-days', () => {
-      expect(parseArgs(dev('--storage-ttl-days', '7')).config.storage?.ttlDays).toBe(7)
+      expect(parseArgs(dev('--storage-ttl-days', '7')).config.app?.storage?.ttlDays).toBe(7)
     })
     it('individual storage flags do not clobber siblings', () => {
       const r = parseArgs(dev('--storage-max-sessions', '50'))
-      expect(r.config.storage?.maxSessions).toBe(50)
-      expect(r.config.storage?.ttlDays).toBeUndefined()
+      expect(r.config.app?.storage?.maxSessions).toBe(50)
+      expect(r.config.app?.storage?.ttlDays).toBeUndefined()
     })
   })
 
   describe('provider connection flags', () => {
     it('--anthropic-base-url', () => {
-      expect(parseArgs(dev('--anthropic-base-url', 'https://proxy/')).config.providers?.anthropic.baseURL).toBe('https://proxy/')
+      expect(parseArgs(dev('--anthropic-base-url', 'https://proxy/')).config.agent?.providers?.anthropic.baseURL).toBe('https://proxy/')
     })
     it('--openai-base-url', () => {
-      expect(parseArgs(dev('--openai-base-url', 'https://proxy/')).config.providers?.openai.baseURL).toBe('https://proxy/')
+      expect(parseArgs(dev('--openai-base-url', 'https://proxy/')).config.agent?.providers?.openai.baseURL).toBe('https://proxy/')
     })
     it('--ollama-host', () => {
-      expect(parseArgs(dev('--ollama-host', 'http://localhost:11434')).config.providers?.ollama.host).toBe('http://localhost:11434')
+      expect(parseArgs(dev('--ollama-host', 'http://localhost:11434')).config.agent?.providers?.ollama.host).toBe('http://localhost:11434')
     })
   })
 
   describe('skills flags', () => {
-    it('--skill-dir sets config.skillDirs', () => {
-      expect(parseArgs(dev('--skill-dir', '/skills/a')).config.skillDirs).toEqual(['/skills/a'])
+    it('--skill-dir sets config.app.skillDirs', () => {
+      expect(parseArgs(dev('--skill-dir', '/skills/a')).config.app?.skillDirs).toEqual(['/skills/a'])
     })
     it('--skill-dir is repeatable', () => {
-      expect(parseArgs(dev('--skill-dir', '/a', '--skill-dir', '/b')).config.skillDirs).toEqual(['/a', '/b'])
+      expect(parseArgs(dev('--skill-dir', '/a', '--skill-dir', '/b')).config.app?.skillDirs).toEqual(['/a', '/b'])
     })
     it('--skill sets meta.skills (not config.skills)', () => {
       const r = parseArgs(dev('--skill', 'code'))
@@ -181,12 +181,12 @@ describe('parseArgs', () => {
   describe('Azure provider flags', () => {
     it('--azure-endpoint sets providers.azure.endpoint', () => {
       const r = parseArgs(dev('--azure-endpoint', 'https://myresource.openai.azure.com/'))
-      expect((r.config as any).providers?.azure?.endpoint).toBe('https://myresource.openai.azure.com/')
+      expect((r.config as any).agent?.providers?.azure?.endpoint).toBe('https://myresource.openai.azure.com/')
     })
 
     it('--azure-deployment sets providers.azure.deployment', () => {
       const r = parseArgs(dev('--azure-deployment', 'my-gpt4o'))
-      expect((r.config as any).providers?.azure?.deployment).toBe('my-gpt4o')
+      expect((r.config as any).agent?.providers?.azure?.deployment).toBe('my-gpt4o')
     })
   })
 
@@ -223,28 +223,28 @@ describe('parseArgs', () => {
       const r = parseArgs(['ra'])
       expect(r.meta.prompt).toBeUndefined()
       expect(r.meta.help).toBe(false)
-      expect(r.config.interface).toBeUndefined()
+      expect(r.config.app?.interface).toBeUndefined()
     })
 
     it('flags after prompt', () => {
       const r = parseArgs(dev('my prompt', '--provider', 'openai'))
       expect(r.meta.prompt).toBe('my prompt')
-      expect(r.config.provider).toBe('openai')
+      expect(r.config.agent?.provider).toBe('openai')
     })
 
     it('ignores non-numeric --max-iterations', () => {
       const r = parseArgs(dev('--max-iterations', 'abc'))
-      expect(r.config.maxIterations).toBeUndefined()
+      expect(r.config.agent?.maxIterations).toBeUndefined()
     })
 
     it('ignores non-numeric --http-port', () => {
       const r = parseArgs(dev('--http-port', 'not-a-number'))
-      expect(r.config.http?.port).toBeUndefined()
+      expect(r.config.app?.http?.port).toBeUndefined()
     })
 
     it('ignores non-numeric --storage-max-sessions', () => {
       const r = parseArgs(dev('--storage-max-sessions', 'xyz'))
-      expect(r.config.storage?.maxSessions).toBeUndefined()
+      expect(r.config.app?.storage?.maxSessions).toBeUndefined()
     })
 
     it('all MCP server fields together', () => {
@@ -254,10 +254,10 @@ describe('parseArgs', () => {
         '--mcp-server-tool-name', 'ra',
         '--mcp-server-tool-description', 'My agent',
       ))
-      expect(r.config.mcp?.server.enabled).toBe(true)
-      expect(r.config.mcp?.server.port).toBe(5000)
-      expect(r.config.mcp?.server.tool.name).toBe('ra')
-      expect(r.config.mcp?.server.tool.description).toBe('My agent')
+      expect(r.config.app?.mcp?.server.enabled).toBe(true)
+      expect(r.config.app?.mcp?.server.port).toBe(5000)
+      expect(r.config.app?.mcp?.server.tool.name).toBe('ra')
+      expect(r.config.app?.mcp?.server.tool.description).toBe('My agent')
     })
   })
 })

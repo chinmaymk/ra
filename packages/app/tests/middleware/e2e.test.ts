@@ -2,7 +2,13 @@ import { test, expect } from 'bun:test'
 import { loadMiddleware } from '../../src/middleware/loader'
 import { AgentLoop, ToolRegistry } from '@chinmaymk/ra'
 import { defaultConfig } from '../../src/config/defaults'
+import type { RaConfig } from '../../src/config/types'
 import type { IProvider, ChatRequest } from '@chinmaymk/ra'
+
+/** Build a config with custom middleware entries under agent.middleware. */
+function withMiddleware(middleware: Record<string, string[]>): RaConfig {
+  return { ...defaultConfig, agent: { ...defaultConfig.agent, middleware } }
+}
 
 const mockProvider: IProvider = {
   name: 'mock',
@@ -14,12 +20,9 @@ const mockProvider: IProvider = {
 }
 
 test('inline middleware is called during loop run', async () => {
-  const config = {
-    ...defaultConfig,
-    middleware: {
-      beforeLoopBegin: [`async (ctx) => { globalThis.__mwE2eTest = 'hit' }`],
-    },
-  }
+  const config = withMiddleware({
+    beforeLoopBegin: [`async (ctx) => { globalThis.__mwE2eTest = 'hit' }`],
+  })
   const mw = await loadMiddleware(config, process.cwd())
   const loop = new AgentLoop({
     provider: mockProvider,
@@ -32,12 +35,9 @@ test('inline middleware is called during loop run', async () => {
 })
 
 test('inline middleware ctx.stop() halts the loop', async () => {
-  const config = {
-    ...defaultConfig,
-    middleware: {
-      beforeModelCall: [`async (ctx) => { ctx.stop() }`],
-    },
-  }
+  const config = withMiddleware({
+    beforeModelCall: [`async (ctx) => { ctx.stop() }`],
+  })
   const mw = await loadMiddleware(config, process.cwd())
   const loop = new AgentLoop({
     provider: mockProvider,

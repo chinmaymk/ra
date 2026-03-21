@@ -16,205 +16,210 @@ Place in your project root. Supports JSON, YAML, or TOML.
 - `ra.config.yaml` / `ra.config.yml`
 - `ra.config.toml`
 
+Config is organized into two sections: `app` (application infrastructure) and `agent` (LLM behavior).
+
 Full example:
 
 ```yaml
 # ra.config.yml
-provider: anthropic
-model: claude-sonnet-4-6
-systemPrompt: You are a helpful coding assistant.
-maxIterations: 50
-thinking: medium
-toolTimeout: 30000
+app:
+  dataDir: .ra              # root for all runtime data
+  skills:
+    - code-review
+  skillDirs:
+    - ./skills
 
-skills:
-  - code-review
-skillDirs:
-  - ./skills
+  storage:
+    maxSessions: 100
+    ttlDays: 30
 
-compaction:
-  enabled: true
-  threshold: 0.8
-  model: claude-haiku-4-5-20251001
+  mcp:
+    client:
+      - name: filesystem
+        transport: stdio
+        command: npx
+        args: ["-y", "@anthropic/mcp-filesystem"]
 
-context:
-  enabled: true
-  patterns:
-    - "CLAUDE.md"
-    - "AGENTS.md"
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  systemPrompt: You are a helpful coding assistant.
+  maxIterations: 50
+  thinking: medium
+  toolTimeout: 30000
 
-dataDir: .ra              # root for all runtime data
+  compaction:
+    enabled: true
+    threshold: 0.8
+    model: claude-haiku-4-5-20251001
 
-storage:
-  maxSessions: 100
-  ttlDays: 30
+  context:
+    enabled: true
+    patterns:
+      - "CLAUDE.md"
+      - "AGENTS.md"
 
-tools:
-  builtin: true
-  # Per-tool overrides (optional)
-  # Agent:
-  #   maxConcurrency: 2
+  tools:
+    builtin: true
+    # Per-tool overrides (optional)
+    # Agent:
+    #   maxConcurrency: 2
 
-middleware:
-  beforeModelCall:
-    - "./middleware/budget.ts"
-  afterToolExecution:
-    - "./middleware/audit.ts"
+  middleware:
+    beforeModelCall:
+      - "./middleware/budget.ts"
+    afterToolExecution:
+      - "./middleware/audit.ts"
 
-memory:
-  enabled: true
-  maxMemories: 1000
-  ttlDays: 90
-  injectLimit: 5
-
-mcp:
-  client:
-    - name: filesystem
-      transport: stdio
-      command: npx
-      args: ["-y", "@anthropic/mcp-filesystem"]
+  memory:
+    enabled: true
+    maxMemories: 1000
+    ttlDays: 90
+    injectLimit: 5
 ```
 
 ## All fields
 
-### Core
+### Agent — Core
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `provider` | `RA_PROVIDER` | `--provider` | `anthropic` | LLM provider |
-| `model` | `RA_MODEL` | `--model` | provider default | Model name |
-| `systemPrompt` | `RA_SYSTEM_PROMPT` | `--system-prompt` | — | System prompt text |
-| `maxIterations` | `RA_MAX_ITERATIONS` | `--max-iterations` | `50` | Max agent loop iterations |
-| `thinking` | `RA_THINKING` | `--thinking` | — | Extended thinking: `low`, `medium`, `high` |
-| `toolTimeout` | — | — | `30000` | Per-tool and middleware timeout (ms) |
-| `tools.builtin` | `RA_TOOLS_BUILTIN` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
+| `agent.provider` | `RA_PROVIDER` | `--provider` | `anthropic` | LLM provider |
+| `agent.model` | `RA_MODEL` | `--model` | provider default | Model name |
+| `agent.systemPrompt` | `RA_SYSTEM_PROMPT` | `--system-prompt` | — | System prompt text |
+| `agent.maxIterations` | `RA_MAX_ITERATIONS` | `--max-iterations` | `50` | Max agent loop iterations |
+| `agent.thinking` | `RA_THINKING` | `--thinking` | — | Extended thinking: `low`, `medium`, `high` |
+| `agent.toolTimeout` | — | — | `30000` | Per-tool and middleware timeout (ms) |
+| `agent.tools.builtin` | `RA_TOOLS_BUILTIN` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
 
-### Permissions
+### App — Permissions
 
 Regex-based rules controlling what tools can do. See the [Permissions guide](/permissions/) for full details and examples.
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `permissions.no_rules_rules` | — | — | `false` | Disable all permission checks |
-| `permissions.default_action` | — | — | `allow` | Action when no rule matches: `allow` or `deny` |
-| `permissions.rules` | — | — | `[]` | Array of per-tool regex rules |
+| `app.permissions.no_rules_rules` | — | — | `false` | Disable all permission checks |
+| `app.permissions.default_action` | — | — | `allow` | Action when no rule matches: `allow` or `deny` |
+| `app.permissions.rules` | — | — | `[]` | Array of per-tool regex rules |
 
 ```yaml
-permissions:
-  rules:
-    - tool: execute_bash
-      command:
-        allow: ["^git ", "^bun "]
-        deny: ["--force", "--hard"]
-    - tool: write_file
-      path:
-        allow: ["^src/", "^tests/"]
+app:
+  permissions:
+    rules:
+      - tool: execute_bash
+        command:
+          allow: ["^git ", "^bun "]
+          deny: ["--force", "--hard"]
+      - tool: write_file
+        path:
+          allow: ["^src/", "^tests/"]
 ```
 
-### Skills
+### App — Skills
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `skills` | — | `--skill` | `[]` | Skills to activate (always-on) |
-| `skillDirs` | — | — | `["./skills"]` | Directories to scan for skills |
+| `app.skills` | — | `--skill` | `[]` | Skills to activate (always-on) |
+| `app.skillDirs` | — | — | `["./skills"]` | Directories to scan for skills |
 
-### Compaction
-
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `compaction.enabled` | — | — | `true` | Enable automatic context compaction |
-| `compaction.threshold` | — | — | `0.8` | Trigger at this fraction of context window |
-| `compaction.model` | — | — | provider default | Model for summarization |
-
-### Context
+### Agent — Compaction
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `context.enabled` | — | — | `true` | Enable context file discovery |
-| `context.patterns` | — | — | `[]` | Glob patterns for context files |
-| `context.resolvers` | — | — | built-in | Pattern resolvers for `@file` and `url:` |
+| `agent.compaction.enabled` | — | — | `true` | Enable automatic context compaction |
+| `agent.compaction.threshold` | — | — | `0.8` | Trigger at this fraction of context window |
+| `agent.compaction.model` | — | — | provider default | Model for summarization |
 
-### Tools
+### Agent — Context
 
-The `tools` section controls which built-in tools are registered and their per-tool settings. See [Built-in Tools](/tools/#configuring-tools) for full details.
+| Field | Env var | CLI flag | Default | Description |
+|-------|---------|----------|---------|-------------|
+| `agent.context.enabled` | — | — | `true` | Enable context file discovery |
+| `agent.context.patterns` | — | — | `[]` | Glob patterns for context files |
+| `agent.context.resolvers` | — | — | built-in | Pattern resolvers for `@file` and `url:` |
+
+### Agent — Tools
+
+The `agent.tools` section controls which built-in tools are registered and their per-tool settings. See [Built-in Tools](/tools/#configuring-tools) for full details.
 
 ```yaml
-tools:
-  builtin: true            # master switch (default: true)
-  Read:
-    rootDir: "./src"        # constrain reads to this directory
-  Write:
-    rootDir: "./src"
-  WebFetch:
-    enabled: false          # disable a specific tool
-  Agent:
-    maxConcurrency: 2       # limit parallel subagent tasks
+agent:
+  tools:
+    builtin: true            # master switch (default: true)
+    Read:
+      rootDir: "./src"        # constrain reads to this directory
+    Write:
+      rootDir: "./src"
+    WebFetch:
+      enabled: false          # disable a specific tool
+    Agent:
+      maxConcurrency: 2       # limit parallel subagent tasks
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `tools.builtin` | boolean | `true` | Master switch: register all built-in tools unless individually disabled |
-| `tools.<ToolName>.enabled` | boolean | `true` | Enable or disable a specific tool |
-| `tools.<ToolName>.rootDir` | string | — | Restrict filesystem tools to this directory |
-| `tools.<ToolName>.maxConcurrency` | number | `4` | Max parallel tasks (Agent tool) |
+| `agent.tools.builtin` | boolean | `true` | Master switch: register all built-in tools unless individually disabled |
+| `agent.tools.<ToolName>.enabled` | boolean | `true` | Enable or disable a specific tool |
+| `agent.tools.<ToolName>.rootDir` | string | — | Restrict filesystem tools to this directory |
+| `agent.tools.<ToolName>.maxConcurrency` | number | `4` | Max parallel tasks (Agent tool) |
 
-### Subagent
+### Agent — Subagent
 
-The `Agent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`. Concurrency can be set via `tools.Agent.maxConcurrency` (see above) or the top-level `maxConcurrency` as a fallback.
-
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `maxConcurrency` | — | — | `4` | Fallback max parallel subagent tasks (overridden by `tools.Agent.maxConcurrency`) |
-
-### Data directory
+The `Agent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`. Concurrency can be set via `agent.tools.Agent.maxConcurrency` (see above) or the top-level `agent.maxConcurrency` as a fallback.
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `dataDir` | `RA_DATA_DIR` | `--data-dir` | `.ra` | Root directory for all runtime data (sessions, memory, etc.) |
+| `agent.maxConcurrency` | — | — | `4` | Fallback max parallel subagent tasks (overridden by `agent.tools.Agent.maxConcurrency`) |
+
+### App — Data directory
+
+| Field | Env var | CLI flag | Default | Description |
+|-------|---------|----------|---------|-------------|
+| `app.dataDir` | `RA_DATA_DIR` | `--data-dir` | `.ra` | Root directory for all runtime data (sessions, memory, etc.) |
 
 All runtime data is organized under `dataDir`: sessions in `{dataDir}/sessions/`, memory in `{dataDir}/memory.db`.
 
-### Storage
+### App — Storage
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `storage.maxSessions` | `RA_STORAGE_MAX_SESSIONS` | `--storage-max-sessions` | `100` | Max sessions before auto-pruning |
-| `storage.ttlDays` | `RA_STORAGE_TTL_DAYS` | `--storage-ttl-days` | `30` | Auto-expire sessions older than this |
+| `app.storage.maxSessions` | `RA_STORAGE_MAX_SESSIONS` | `--storage-max-sessions` | `100` | Max sessions before auto-pruning |
+| `app.storage.ttlDays` | `RA_STORAGE_TTL_DAYS` | `--storage-ttl-days` | `30` | Auto-expire sessions older than this |
 
-### Memory
+### Agent — Memory
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `memory.enabled` | `RA_MEMORY_ENABLED` | `--memory` | `false` | Enable persistent memory |
-| `memory.maxMemories` | `RA_MEMORY_MAX_MEMORIES` | — | `1000` | Max stored memories (oldest trimmed) |
-| `memory.ttlDays` | `RA_MEMORY_TTL_DAYS` | — | `90` | Auto-prune memories older than this |
-| `memory.injectLimit` | `RA_MEMORY_INJECT_LIMIT` | — | `5` | Memories to inject as context per loop (0 to disable) |
+| `agent.memory.enabled` | `RA_MEMORY_ENABLED` | `--memory` | `false` | Enable persistent memory |
+| `agent.memory.maxMemories` | `RA_MEMORY_MAX_MEMORIES` | — | `1000` | Max stored memories (oldest trimmed) |
+| `agent.memory.ttlDays` | `RA_MEMORY_TTL_DAYS` | — | `90` | Auto-prune memories older than this |
+| `agent.memory.injectLimit` | `RA_MEMORY_INJECT_LIMIT` | — | `5` | Memories to inject as context per loop (0 to disable) |
 
-### Observability
+### App — Observability
 
 | Field | Env var | Default | Description |
 |-------|---------|---------|-------------|
-| `logsEnabled` | `RA_LOGS_ENABLED` | `true` | Enable session logs |
-| `logLevel` | `RA_LOG_LEVEL` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
-| `tracesEnabled` | `RA_TRACES_ENABLED` | `true` | Enable session traces |
+| `app.logsEnabled` | `RA_LOGS_ENABLED` | `true` | Enable session logs |
+| `app.logLevel` | `RA_LOG_LEVEL` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
+| `app.tracesEnabled` | `RA_TRACES_ENABLED` | `true` | Enable session traces |
 
-### MCP
+### App — MCP
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| `mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
+| `app.mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
 
 See [MCP](/modes/mcp#lazy-schema-loading) for details.
 
-### HTTP
+### App — HTTP
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
 | — | — | `--http` | — | Start HTTP server |
-| `http.port` | — | `--http-port` | `3000` | Server port |
-| `http.token` | — | `--http-token` | — | Bearer token for authentication |
+| `app.http.port` | — | `--http-port` | `3000` | Server port |
+| `app.http.token` | — | `--http-token` | — | Bearer token for authentication |
 
-### Interface
+### App — Interface
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|

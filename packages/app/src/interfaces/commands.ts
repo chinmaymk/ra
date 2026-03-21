@@ -127,7 +127,7 @@ export function showConfig(config: RaConfig, contextFiles: string[] = []): void 
     return value
   }))
   // Drop non-serializable fields (callbacks)
-  delete redacted.compaction?.onCompact
-  if (contextFiles.length > 0) redacted.context.files = contextFiles
+  delete redacted.agent?.compaction?.onCompact
+  if (contextFiles.length > 0) redacted.agent.context.files = contextFiles
   console.log(JSON.stringify(redacted, null, 2))
 }

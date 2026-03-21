@@ -85,7 +85,7 @@ export default async function(_ctx: unknown) {
     env.mock.enqueue([{ type: 'text', content: 'done' }])
 
     const configFile = join(tmpDir, 'ra-mw.config.json')
-    writeFileSync(configFile, JSON.stringify({ middleware: { beforeLoopBegin: [mwFile] } }))
+    writeFileSync(configFile, JSON.stringify({ agent: { middleware: { beforeLoopBegin: [mwFile] } } }))
 
     const { exitCode } = await runBinary(
       ['--cli', '--config', configFile, 'test middleware'],
@@ -110,9 +110,11 @@ export default async function(_ctx: unknown) {
 
     const configFile = join(tmpDir, 'ra-compact.config.json')
     writeFileSync(configFile, JSON.stringify({
-      compaction: { enabled: true, maxTokens: 1000, contextWindow: 5000 },
-      context: { enabled: false },
-      skillDirs: [],
+      agent: {
+        compaction: { enabled: true, maxTokens: 1000, contextWindow: 5000 },
+        context: { enabled: false },
+      },
+      app: { skillDirs: [] },
     }))
 
     const { stdout, exitCode } = await runBinary(

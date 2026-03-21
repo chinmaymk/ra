@@ -63,10 +63,12 @@ export async function bootstrap(
   config: RaConfig,
   opts: { sessionId?: string; skipSession?: boolean },
 ): Promise<AppContext> {
+  const { app, agent } = config
+
   // ── Paths derived from dataDir ───────────────────────────────────
   const { join } = await import('path')
-  const storagePath = join(config.dataDir, 'sessions')
-  const memoryPath = join(config.dataDir, 'memory.db')
+  const storagePath = join(app.dataDir, 'sessions')
+  const memoryPath = join(app.dataDir, 'memory.db')
 
   // ── Storage & session ──────────────────────────────────────────────
   const storage = new SessionStorage(storagePath)
@@ -78,9 +80,9 @@ export async function bootstrap(
     sessionId = 'none'
   } else {
     sessionId = opts.sessionId ?? (await storage.create({
-      provider: config.provider,
-      model: config.model,
-      interface: config.interface,
+      provider: agent.provider,
+      model: agent.model,
+      interface: app.interface,
     })).id
     sessionDir = storage.sessionDir(sessionId)
     await mkdir(sessionDir, { recursive: true })
@@ -88,23 +90,23 @@ export async function bootstrap(
 
   // ── Observability ──────────────────────────────────────────────────
   const { logger, tracer } = createObservability({
-    enabled: !opts.skipSession && (config.logsEnabled || config.tracesEnabled),
-    logs: { enabled: config.logsEnabled, level: config.logLevel, output: 'session' },
-    traces: { enabled: config.tracesEnabled, output: 'session' },
+    enabled: !opts.skipSession && (app.logsEnabled || app.tracesEnabled),
+    logs: { enabled: app.logsEnabled, level: app.logLevel, output: 'session' },
+    traces: { enabled: app.tracesEnabled, output: 'session' },
   }, { sessionId, sessionDir })
 
   const bootstrapTokenSpan = tracer.startSpan('bootstrap.tokenBudget')
 
   // ── Compaction model default ───────────────────────────────────────
-  if (!config.compaction.model) {
-    config.compaction.model = getDefaultCompactionModel(config.provider) || undefined
+  if (!agent.compaction.model) {
+    agent.compaction.model = getDefaultCompactionModel(agent.provider) || undefined
   }
-  config.compaction.onCompact = (info) => logger.info('context compacted', info)
+  agent.compaction.onCompact = (info) => logger.info('context compacted', info)
 
   // ── Context files ──────────────────────────────────────────────────
-  const contextSpan = tracer.startSpan('context.discovery', { patterns: config.context.patterns })
-  const contextFiles = config.context.enabled
-    ? await discoverContextFiles({ cwd: process.cwd(), patterns: config.context.patterns })
+  const contextSpan = tracer.startSpan('context.discovery', { patterns: agent.context.patterns })
+  const contextFiles = agent.context.enabled
+    ? await discoverContextFiles({ cwd: process.cwd(), patterns: agent.context.patterns })
     : []
   const contextMessages = buildContextMessages(contextFiles)
 
@@ -112,7 +114,7 @@ export async function bootstrap(
     const contextTokens = estimateTokens(contextMessages)
     logger.info('context files discovered', {
       fileCount: contextFiles.length,
-      patterns: config.context.patterns,
+      patterns: agent.context.patterns,
       files: contextFiles.map(f => f.relativePath),
       estimatedTokens: contextTokens,
     })
@@ -126,15 +128,15 @@ export async function bootstrap(
   }
 
   // ── Middleware ──────────────────────────────────────────────────────
-  const middleware: Partial<MiddlewareConfig> = await loadMiddleware(config, config.configDir)
+  const middleware: Partial<MiddlewareConfig> = await loadMiddleware(config, app.configDir)
   const userHookCount = Object.values(middleware).reduce((n, hooks) => n + (hooks?.length ?? 0), 0)
   if (userHookCount > 0) {
     logger.info('custom middleware loaded', { hookCount: userHookCount })
   }
 
   // Pattern resolvers (e.g. @file, url:)
-  if (config.context.resolvers?.length) {
-    const resolvers = await loadResolvers(config.context.resolvers, config.configDir)
+  if (agent.context.resolvers?.length) {
+    const resolvers = await loadResolvers(agent.context.resolvers, app.configDir)
     if (resolvers.length > 0) {
       const resolverMw = createResolverMiddleware(resolvers, process.cwd())
       middleware.beforeModelCall = prepend(middleware.beforeModelCall, resolverMw)
@@ -142,20 +144,20 @@ export async function bootstrap(
   }
 
   // Dynamic context discovery — picks up context files from directories the agent touches
-  if (config.context.enabled) {
+  if (agent.context.enabled) {
     const root = (await findGitRoot(process.cwd())) ?? process.cwd()
-    const discoveryMw = createDiscoveryMiddleware(config.context.patterns, root, new Set(contextFiles.map(f => f.path)))
+    const discoveryMw = createDiscoveryMiddleware(agent.context.patterns, root, new Set(contextFiles.map(f => f.path)))
     middleware.afterToolExecution = append(middleware.afterToolExecution, discoveryMw)
   }
 
   // ── Provider ───────────────────────────────────────────────────────
-  const provider = createProvider(buildProviderConfig(config.provider, config.providers[config.provider]))
-  logger.info('provider initialized', { provider: config.provider, model: config.model })
+  const provider = createProvider(buildProviderConfig(agent.provider, agent.providers[agent.provider]))
+  logger.info('provider initialized', { provider: agent.provider, model: agent.model })
 
   // ── Tools ──────────────────────────────────────────────────────────
   const tools = new ToolRegistry()
-  if (config.tools.builtin || Object.keys(config.tools.overrides).length > 0) {
-    registerBuiltinTools(tools, config.tools)
+  if (agent.tools.builtin || Object.keys(agent.tools.overrides).length > 0) {
+    registerBuiltinTools(tools, agent.tools)
   }
 
   const allTools = tools.all()
@@ -167,17 +169,17 @@ export async function bootstrap(
 
   // ── Memory ─────────────────────────────────────────────────────────
   let memoryStore: MemoryStore | undefined
-  if (config.memory.enabled) {
+  if (agent.memory.enabled) {
     memoryStore = new MemoryStore({
       path: memoryPath,
-      maxMemories: config.memory.maxMemories,
-      ttlDays: config.memory.ttlDays,
+      maxMemories: agent.memory.maxMemories,
+      ttlDays: agent.memory.ttlDays,
     })
     tools.register(memorySearchTool(memoryStore))
     tools.register(memorySaveTool(memoryStore))
     tools.register(memoryForgetTool(memoryStore))
 
-    const memMw = createMemoryMiddleware({ store: memoryStore, injectLimit: config.memory.injectLimit })
+    const memMw = createMemoryMiddleware({ store: memoryStore, injectLimit: agent.memory.injectLimit })
     middleware.beforeLoopBegin = prepend(middleware.beforeLoopBegin, memMw.beforeLoopBegin)
     logger.info('memory store initialized', { path: memoryPath, memoriesStored: memoryStore.count() })
   }
@@ -185,8 +187,8 @@ export async function bootstrap(
   // ── Scratchpad ───────────────────────────────────────────────────
   // Enabled by default when builtin tools are on; disable via tools.overrides.scratchpad.enabled: false
   const scratchpadEnabled =
-    config.tools.overrides.scratchpad?.enabled !== false &&
-    config.tools.builtin
+    agent.tools.overrides.scratchpad?.enabled !== false &&
+    agent.tools.builtin
   let scratchpadStore: ScratchpadStore | undefined
   if (scratchpadEnabled) {
     scratchpadStore = new ScratchpadStore()
@@ -199,7 +201,7 @@ export async function bootstrap(
   }
 
   // ── Skills ─────────────────────────────────────────────────────────
-  const resolvedSkillDirs = config.skillDirs.map(d => resolvePath(d, config.configDir))
+  const resolvedSkillDirs = app.skillDirs.map(d => resolvePath(d, app.configDir))
   const skillMap = await loadSkills(resolvedSkillDirs)
   if (skillMap.size > 0) {
     const availableXml = buildAvailableSkillsXml(skillMap)
@@ -213,48 +215,48 @@ export async function bootstrap(
 
   // ── MCP clients ────────────────────────────────────────────────────
   const mcpClient = new McpClient()
-  if (config.mcp.client?.length) {
-    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: config.mcp.client.length })
-    logger.info('connecting to MCP servers', { serverCount: config.mcp.client.length, servers: config.mcp.client.map(c => c.name) })
+  if (app.mcp.client?.length) {
+    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: app.mcp.client.length })
+    logger.info('connecting to MCP servers', { serverCount: app.mcp.client.length, servers: app.mcp.client.map(c => c.name) })
     const knownToolNames = new Set(tools.all().map(t => t.name))
-    await mcpClient.connect(config.mcp.client, tools, { lazySchemas: config.mcp.lazySchemas })
+    await mcpClient.connect(app.mcp.client, tools, { lazySchemas: app.mcp.lazySchemas })
     const mcpTools = tools.all().filter(t => !knownToolNames.has(t.name))
     const mcpToolTokens = estimateTokens(mcpTools)
     logger.info('MCP servers connected', {
       totalTools: tools.all().length,
       mcpToolCount: mcpTools.length,
-      lazySchemas: config.mcp.lazySchemas,
+      lazySchemas: app.mcp.lazySchemas,
       estimatedMcpToolTokens: mcpToolTokens,
     })
     tracer.endSpan(mcpSpan, 'ok', {
       mcpToolCount: mcpTools.length,
       estimatedTokens: mcpToolTokens,
-      lazySchemas: config.mcp.lazySchemas,
+      lazySchemas: app.mcp.lazySchemas,
     })
   }
 
   // ── Permissions middleware ─────────────────────────────────────────
-  if (config.permissions.rules?.length && !config.permissions.no_rules_rules) {
-    const permMw = createPermissionsMiddleware(config.permissions)
+  if (app.permissions.rules?.length && !app.permissions.no_rules_rules) {
+    const permMw = createPermissionsMiddleware(app.permissions)
     middleware.beforeToolExecution = prepend(middleware.beforeToolExecution, permMw)
-    logger.info('permissions middleware loaded', { ruleCount: config.permissions.rules.length })
+    logger.info('permissions middleware loaded', { ruleCount: app.permissions.rules.length })
   }
 
   // ── Subagent tool (registered last — child registry built lazily) ──
-  const agentSettings = config.tools.overrides.Agent ?? {}
-  const agentEnabled = agentSettings.enabled !== false && config.tools.builtin
+  const agentSettings = agent.tools.overrides.Agent ?? {}
+  const agentEnabled = agentSettings.enabled !== false && agent.tools.builtin
   if (agentEnabled) {
-    const agentMaxConcurrency = (agentSettings.maxConcurrency as number | undefined) ?? config.maxConcurrency
+    const agentMaxConcurrency = (agentSettings.maxConcurrency as number | undefined) ?? agent.maxConcurrency
     tools.register(subagentTool({
       provider,
       tools,
-      model: config.model,
-      systemPrompt: config.systemPrompt,
+      model: agent.model,
+      systemPrompt: agent.systemPrompt,
       middleware,
-      thinking: config.thinking,
-      compaction: config.compaction,
-      toolTimeout: config.toolTimeout,
-      maxIterations: config.maxIterations,
+      thinking: agent.thinking,
+      compaction: agent.compaction,
+      toolTimeout: agent.toolTimeout,
+      maxIterations: agent.maxIterations,
       maxConcurrency: agentMaxConcurrency,
       logger,
     }))

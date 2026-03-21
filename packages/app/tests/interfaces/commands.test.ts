@@ -19,19 +19,19 @@ describe('showConfig', () => {
   it('prints valid JSON', () => {
     const output = captureLog(() => showConfig(defaultConfig as RaConfig))
     const parsed = JSON.parse(output)
-    expect(parsed.provider).toBe('anthropic')
+    expect(parsed.agent.provider).toBe('anthropic')
   })
 
   it('reflects overridden values', () => {
-    const config = { ...defaultConfig, provider: 'openai', model: 'gpt-4.1' } as RaConfig
+    const config = { ...defaultConfig, agent: { ...defaultConfig.agent, provider: 'openai', model: 'gpt-4.1' } } as RaConfig
     const output = captureLog(() => showConfig(config))
     const parsed = JSON.parse(output)
-    expect(parsed.provider).toBe('openai')
-    expect(parsed.model).toBe('gpt-4.1')
+    expect(parsed.agent.provider).toBe('openai')
+    expect(parsed.agent.model).toBe('gpt-4.1')
   })
 
   it('redacts http.token', () => {
-    const config = { ...defaultConfig, http: { port: 3000, token: 'secret-token' } } as RaConfig
+    const config = { ...defaultConfig, app: { ...defaultConfig.app, http: { port: 3000, token: 'secret-token' } } } as RaConfig
     const output = captureLog(() => showConfig(config))
     expect(output).not.toContain('secret-token')
     expect(output).toContain('***')
@@ -40,16 +40,16 @@ describe('showConfig', () => {
   it('includes all config sections', () => {
     const output = captureLog(() => showConfig(defaultConfig as RaConfig))
     const parsed = JSON.parse(output)
-    expect(parsed.compaction).toBeDefined()
-    expect(parsed.memory).toBeDefined()
-    expect(parsed.mcp).toBeDefined()
-    expect(parsed.context).toBeDefined()
-    expect(parsed.permissions).toBeDefined()
+    expect(parsed.agent.compaction).toBeDefined()
+    expect(parsed.agent.memory).toBeDefined()
+    expect(parsed.app.mcp).toBeDefined()
+    expect(parsed.agent.context).toBeDefined()
+    expect(parsed.app.permissions).toBeDefined()
   })
 
   it('includes context files when provided', () => {
     const output = captureLog(() => showConfig(defaultConfig as RaConfig, ['CLAUDE.md', '.cursorrules']))
     const parsed = JSON.parse(output)
-    expect(parsed.context.files).toEqual(['CLAUDE.md', '.cursorrules'])
+    expect(parsed.agent.context.files).toEqual(['CLAUDE.md', '.cursorrules'])
   })
 })
