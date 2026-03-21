@@ -40,13 +40,13 @@ const FLAG_RULES: Record<string, CoercionRule> = {
   'tool-timeout':                { type: 'int',    path: ['agent', 'toolTimeout'] },
   'max-tool-response-size':      { type: 'int',    path: ['agent', 'tools', 'maxResponseSize'] },
   'tools-builtin':               { type: 'bool',   path: ['agent', 'tools', 'builtin'], value: true },
+  // ── app section ──────────────────────────────────────────────────────
   'anthropic-base-url':          { type: 'string', path: ['app', 'providers', 'anthropic', 'baseURL'] },
   'openai-base-url':             { type: 'string', path: ['app', 'providers', 'openai', 'baseURL'] },
   'google-base-url':             { type: 'string', path: ['app', 'providers', 'google', 'baseURL'] },
   'ollama-host':                 { type: 'string', path: ['app', 'providers', 'ollama', 'host'] },
   'azure-endpoint':              { type: 'string', path: ['app', 'providers', 'azure', 'endpoint'] },
   'azure-deployment':            { type: 'string', path: ['app', 'providers', 'azure', 'deployment'] },
-  // ── app section ──────────────────────────────────────────────────────
   'http-port':                   { type: 'int',    path: ['app', 'http', 'port'] },
   'http-token':                  { type: 'string', path: ['app', 'http', 'token'] },
   'inspector-port':              { type: 'int',    path: ['app', 'inspector', 'port'] },
