@@ -171,8 +171,10 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const { messages, priorCount } = this.prependSystem(body.messages ?? [])
+    const { messages, priorCount: prefixCount } = this.prependSystem(body.messages ?? [])
     const sessionId = await this.ensureSession(body.sessionId)
+    const storedCount = await this.options.storage.messageCount(sessionId)
+    const priorCount = prefixCount + storedCount
     const loop = this.createLoop(sessionId, priorCount)
 
     try {
@@ -192,8 +194,10 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const { messages, priorCount } = this.prependSystem(body.messages ?? [])
+    const { messages, priorCount: prefixCount } = this.prependSystem(body.messages ?? [])
     const sessionId = await this.ensureSession(body.sessionId)
+    const storedCount = await this.options.storage.messageCount(sessionId)
+    const priorCount = prefixCount + storedCount
 
     const self = this
     const stream = new ReadableStream({

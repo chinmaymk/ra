@@ -72,6 +72,15 @@ export class SessionStorage {
     return parseJsonlFile<IMessage>(join(this.sessionDir(id), 'messages.jsonl'))
   }
 
+  /** Count messages stored on disk without fully parsing them. */
+  async messageCount(id: string): Promise<number> {
+    const file = Bun.file(join(this.sessionDir(id), 'messages.jsonl'))
+    if (!(await file.exists())) return 0
+    const text = await file.text()
+    if (!text.trim()) return 0
+    return text.trimEnd().split('\n').length
+  }
+
   async list(): Promise<Session[]> {
     const glob = new Bun.Glob('*/meta.json')
     const sessions: Session[] = []
