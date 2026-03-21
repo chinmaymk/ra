@@ -8,32 +8,71 @@
 
 1. **`agent.yml`** — agent behavior config. Owned by `packages/ra` as `AgentConfig` type. Portable, composable. A recipe IS an agent.yml.
 2. **`app.yml`** — deployment config. Owned by `packages/app` as `AppConfig` type. Environment-specific.
-3. **Config directory** — one `--config` flag points to a directory containing `agent.yml`, `app.yml`, etc. No magic discovery. Missing files = defaults.
+3. **Global + local config roots** — layered config loading from well-known directories.
 4. **`mergeAgentConfig()`** — compose agent configs for layering/overrides.
 5. Remove `skills` from config (loaded from prompt).
 
-## Config Directory — One Flag, Multiple Files
+## Config Roots — Global + Local
 
-No magic discovery. One `--config` flag points to a directory:
+Two config root levels, merged in order (later wins):
+
+### Global config root: `~/.config/ra/`
+
+User-level defaults across all projects. Good for default provider, credentials, personal preferences.
+
+```
+~/.config/ra/
+  agent.yml       # default agent behavior
+  app.yml         # default app settings (provider credentials, log level, etc.)
+```
+
+### Local config root: `.ra/config/` (discovered by upward search)
+
+Project-level config. Discovered by searching upward from cwd for a `.ra/` directory, then loading from `.ra/config/` inside it.
+
+```
+project/
+  .ra/
+    config/
+      agent.yml   # project-specific agent config
+      app.yml     # project-specific app settings
+    sessions/     # data (unchanged)
+    memory/       # data (unchanged)
+```
+
+### Explicit override: `--config <dir>`
+
+Overrides both global and local. Points to any directory containing config files.
 
 ```bash
-bun run ra --config ./recipes/coding-agent/    # load config from directory
-bun run ra --config ./.ra/                     # or any directory
-bun run ra                                      # all defaults, no config dir
+bun run ra --config ./recipes/coding-agent/    # use recipe's config dir
 ```
 
 Or env var: `RA_CONFIG_DIR=./recipes/coding-agent/`
 
-Inside the config dir, known filenames are loaded:
+### Merge order
+
 ```
-config-dir/
-  agent.yml     # AgentConfig — agent behavior
-  app.yml       # AppConfig — deployment settings
-  cron.yml      # (future) scheduled tasks
-  watch.yml     # (future) file watchers
+global (~/.config/ra/)
+  → local (.ra/config/, discovered upward)
+    → explicit (--config dir)
+      → env vars (RA_*)
+        → CLI flags (--model, --provider, etc.)
 ```
 
-Missing files = defaults apply. Extensible to new config types without new flags. A recipe IS a config directory (with at minimum an `agent.yml`).
+Each layer only overrides fields it sets. Missing files at any layer = skip that layer.
+
+### Discovery algorithm
+
+```
+1. Load global: ~/.config/ra/{agent,app}.yml
+2. Search upward from cwd for .ra/ directory
+   - If found: load .ra/config/{agent,app}.yml
+3. If --config flag: load <dir>/{agent,app}.yml (overrides local)
+4. Apply env vars
+5. Apply CLI flags
+6. Return merged RaConfig { app, agent }
+```
 
 ## File Format
 
@@ -168,7 +207,7 @@ export interface RaConfig {
 
 With independent files, cron is natural. A cron config references agent configs:
 
-**`cron.yml`** (discovered alongside app.yml + agent.yml):
+**`cron.yml`** (in any config root):
 ```yaml
 jobs:
   - name: pr-review
@@ -192,7 +231,7 @@ Each job references its own agent config file. No ambiguity — each file has on
 | `packages/ra/src/index.ts` | Export new types and functions |
 | `packages/app/src/config/types.ts` | `AppConfig` + `RaConfig { app, agent }`, remove `skills` |
 | `packages/app/src/config/defaults.ts` | Split defaults, import `defaultAgentConfig` from core |
-| `packages/app/src/config/index.ts` | Load from `--config` dir (agent.yml + app.yml); update env/CLI paths; remove `ra.config.*` discovery |
+| `packages/app/src/config/index.ts` | Load from global + local + explicit config roots; merge layers; update env/CLI paths |
 | `packages/app/src/bootstrap.ts` | `config.agent.*` and `config.app.*` instead of flat `config.*` |
 | `packages/app/src/interfaces/cli.ts` | Update config access |
 | `packages/app/src/interfaces/repl.ts` | Update config access |
@@ -207,8 +246,9 @@ Each job references its own agent config file. No ambiguity — each file has on
 
 1. `bun tsc` — zero errors
 2. `bun test` — all tests pass
-3. `bun run ra --config ./recipes/coding-agent/` loads from config dir
-4. `bun run ra` with no flags uses all defaults
-5. Missing `agent.yml` or `app.yml` in config dir → defaults for that part
+3. Global config in `~/.config/ra/agent.yml` applies to `bun run ra` from any directory
+4. Local `.ra/config/agent.yml` overrides global
+5. `--config ./recipes/coding-agent/` overrides local
+6. Missing files at any layer → defaults for that part
 7. `import { AgentConfig, mergeAgentConfig } from '@chinmaymk/ra'` works
 8. `mergeAgentConfig(base, { model: 'sonnet' })` correctly overrides
