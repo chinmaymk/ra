@@ -23,8 +23,8 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
 
   // Shebang takes precedence
   if (content.startsWith('#!')) {
-    const parts = content.split('\n')[0]!.slice(2).trim().split(/\s+/)
-    const interpreter = parts[0]?.endsWith('/env') && parts[1] ? parts[1] : parts[0]!
+    const parts = (content.split('\n')[0] ?? '').slice(2).trim().split(/\s+/)
+    const interpreter = parts[0]?.endsWith('/env') && parts[1] ? parts[1] : (parts[0] ?? 'sh')
     return [interpreter, scriptPath]
   }
 

@@ -142,8 +142,8 @@ async function launchMcpHttp(app: AppContext): Promise<void> {
 async function launchMcpStdio(app: AppContext): Promise<void> {
   const handler = createMcpHandler(app)
   const isDevMode = /\.(ts|js|mjs|cjs)$/.test(process.argv[1] ?? '')
-  const mcpCommand = isDevMode ? 'bun' : process.argv[0]!
-  const mcpArgs = isDevMode ? [process.argv[1]!, '--mcp-stdio'] : ['--mcp-stdio']
+  const mcpCommand = isDevMode ? 'bun' : (process.argv[0] ?? 'ra')
+  const mcpArgs = isDevMode ? [process.argv[1] ?? '', '--mcp-stdio'] : ['--mcp-stdio']
   const mcpConfig = JSON.stringify({ mcpServers: { ra: { command: mcpCommand, args: mcpArgs } } }, null, 2)
   process.stderr.write(
     'MCP stdio server starting.\n\n' +

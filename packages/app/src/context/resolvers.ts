@@ -62,8 +62,8 @@ export async function resolvePatterns(
     let match: RegExpExecArray | null
     while ((match = re.exec(text)) !== null) {
       // Guard against zero-length matches that would loop forever
-      if (match[0]!.length === 0) { re.lastIndex++; continue }
-      const original = match[0]!
+      if ((match[0] ?? '').length === 0) { re.lastIndex++; continue }
+      const original = match[0] as string
       const ref = match[1]
       if (!ref || seen.has(original)) continue
       seen.add(original)
@@ -84,13 +84,15 @@ export async function resolvePatterns(
   const references: ResolvedReference[] = []
 
   for (let i = 0; i < pending.length; i++) {
-    const result = settled[i]!
+    const result = settled[i]
+    const entry = pending[i]
+    if (!result || !entry) continue
     if (result.status === 'fulfilled' && result.value !== null) {
       references.push({
-        original: pending[i]!.original,
-        ref: pending[i]!.ref,
+        original: entry.original,
+        ref: entry.ref,
         resolved: result.value,
-        resolver: pending[i]!.resolverName,
+        resolver: entry.resolverName,
       })
     }
   }

@@ -48,7 +48,7 @@ function tagline(sessionId: string): string {
   // deterministic per session so it doesn't flicker on resume
   let hash = 0
   for (let i = 0; i < sessionId.length; i++) hash = (hash * 31 + sessionId.charCodeAt(i)) >>> 0
-  return TAGLINES[hash % TAGLINES.length]!
+  return TAGLINES[hash % TAGLINES.length] ?? ''
 }
 
 export function printHeader(model: string, sessionId: string): void {

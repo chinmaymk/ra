@@ -243,7 +243,7 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
 
   while (!signal?.aborted) {
     scheduled.sort((a, b) => a.nextRun.getTime() - b.nextRun.getTime())
-    const next = scheduled[0]!
+    const next = scheduled[0] as ScheduledJob
     const delay = Math.max(0, next.nextRun.getTime() - Date.now())
 
     if (delay > 0) {

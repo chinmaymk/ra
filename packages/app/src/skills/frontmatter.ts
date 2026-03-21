@@ -5,7 +5,7 @@ import type { SkillMetadata } from './types'
 export function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
   if (!match) return { frontmatter: {}, body: content }
-  const frontmatter = (yaml.load(match[1]!) as Record<string, unknown>) ?? {}
+  const frontmatter = (yaml.load(match[1] as string) as Record<string, unknown>) ?? {}
   return { frontmatter, body: match[2] ?? '' }
 }
 

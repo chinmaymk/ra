@@ -23,14 +23,15 @@ export function createResolverMiddleware(
     // Find the last user message
     let lastUserIdx = -1
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i]!.role === 'user') {
+      if (messages[i]?.role === 'user') {
         lastUserIdx = i
         break
       }
     }
     if (lastUserIdx === -1) return
 
-    const msg = messages[lastUserIdx]!
+    const msg = messages[lastUserIdx]
+    if (!msg) return
     const text = typeof msg.content === 'string' ? msg.content : null
     if (!text || text.includes(RESOLVED_MARKER)) return
 

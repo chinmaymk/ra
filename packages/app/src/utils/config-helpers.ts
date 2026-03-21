@@ -2,11 +2,11 @@
 export function setPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
   let cur = obj
   for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i]!
+    const key = path[i] as string
     if (cur[key] === undefined || typeof cur[key] !== 'object') cur[key] = {}
     cur = cur[key] as Record<string, unknown>
   }
-  cur[path[path.length - 1]!] = value
+  cur[path[path.length - 1] as string] = value
 }
 
 /** Parse an integer from a string, returning undefined on failure. */

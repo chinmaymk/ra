@@ -230,7 +230,7 @@ export class InspectorServer {
         const memoryIdMatch = path.match(/^\/api\/memory\/(\d+)$/)
         if (memoryIdMatch && req.method === 'DELETE') {
           if (!memoryStore) return json({ error: 'Memory is not enabled.' }, 400)
-          const id = parseInt(memoryIdMatch[1]!, 10)
+          const id = parseInt(memoryIdMatch[1] as string, 10)
           const deleted = memoryStore.deleteById(id)
           return deleted ? json({ ok: true }) : json({ error: 'Not found' }, 404)
         }

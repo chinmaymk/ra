@@ -42,7 +42,8 @@ export function registerBuiltinTools(registry: ToolRegistry, config?: ToolsConfi
 
   for (const name of fsNames) {
     const rootDir = cfg.overrides[name]?.rootDir as string | undefined
-    maybeRegister(registry, fsFactories[name]!(rootDir ? { rootDir } : {}), cfg)
+    const factory = fsFactories[name]
+    if (factory) maybeRegister(registry, factory(rootDir ? { rootDir } : {}), cfg)
   }
 
   // Shell — platform-specific

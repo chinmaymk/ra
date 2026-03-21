@@ -19,7 +19,8 @@ export function createHistoryMiddleware(storage: SessionStorage, priorCount = 0)
     beforeLoopBegin: [async (ctx: LoopContext) => {
       // Mark prior messages (system, context, session history) as already saved
       for (let i = 0; i < priorCount && i < ctx.messages.length; i++) {
-        saved.add(ctx.messages[i]!)
+        const msg = ctx.messages[i]
+        if (msg) saved.add(msg)
       }
       // Save any new initial messages (e.g. user message, skill injections)
       const newInitial = ctx.messages.slice(priorCount).filter(m => !saved.has(m))

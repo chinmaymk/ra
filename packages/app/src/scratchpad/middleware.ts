@@ -33,14 +33,14 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
     // It may be a standalone message or embedded inside another (after compaction
     // merges consecutive user messages). Content may be string or ContentPart[].
     for (let i = messages.length - 1; i >= 0; i--) {
-      const content = messages[i]!.content
+      const content = messages[i]?.content
 
       if (typeof content === 'string') {
         const stripped = stripBlock(content)
         if (stripped === null) continue
         // Standalone scratchpad message (nothing left after stripping)
         if (!stripped) { messages.splice(i, 1); break }
-        messages[i] = { ...messages[i]!, content: stripped }
+        messages[i] = { ...messages[i] as typeof messages[number], content: stripped }
         break
       }
 
@@ -55,7 +55,7 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
       const newParts = !stripped
         ? content.filter((_, idx) => idx !== partIdx)
         : content.map((p, idx) => idx === partIdx ? { type: 'text' as const, text: stripped } : p)
-      messages[i] = { ...messages[i]!, content: newParts }
+      messages[i] = { ...messages[i] as typeof messages[number], content: newParts }
       break
     }
 
@@ -78,7 +78,7 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
     let insertIdx = 0
     for (let i = 0; i < messages.length; i++) {
       insertIdx = i + 1
-      if (messages[i]!.role === 'user') break
+      if (messages[i]?.role === 'user') break
     }
 
     messages.splice(insertIdx, 0, { role: 'user', content: block })
