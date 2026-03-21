@@ -8,7 +8,6 @@ import { CronExpressionParser } from 'cron-parser'
 import { AgentLoop, mergeMiddleware, type StreamChunkContext, type MiddlewareConfig, type Logger } from '@chinmaymk/ra'
 import type { AppContext } from '../bootstrap'
 import type { CronJob, AgentConfig } from '../config/types'
-import type { Tracer } from '../observability/tracer'
 import { buildMessagePrefix } from './messages'
 import { createSessionMiddleware } from '../agent/session'
 
@@ -189,6 +188,12 @@ async function executeJob(
       error: errorMsg,
     })
 
+    logger.error('cron job failed', {
+      job: job.name,
+      sessionId: session.id,
+      error: errorMsg,
+    })
+
     tracer.endSpan(jobSpan, 'error', {
       sessionId: session.id,
       error: errorMsg,
@@ -205,11 +210,9 @@ async function executeJob(
   await flushSessionLogger(loopSession.logger)
 }
 
-/** Flush a session logger (the per-session logger created by createSessionMiddleware). */
+/** Flush the per-session logger created by createSessionMiddleware. */
 async function flushSessionLogger(sessionLogger: Logger): Promise<void> {
-  if ('flush' in sessionLogger && typeof sessionLogger.flush === 'function') {
-    await sessionLogger.flush()
-  }
+  await sessionLogger.flush()
 }
 
 /** Start the cron scheduler. Runs until the signal is aborted. */
@@ -302,10 +305,9 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
       jobsRun++
       onJobEnd?.(job, { ok: true })
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      logger.error('cron job failed', { name: job.name, error: errorMsg })
       jobsRun++
       jobsFailed++
+      const errorMsg = err instanceof Error ? err.message : String(err)
       onJobEnd?.(job, { ok: false, error: errorMsg })
     }
 

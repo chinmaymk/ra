@@ -369,8 +369,8 @@ describe('runCron', () => {
     expect(jobSpan!.status).toBe('error')
     expect(jobSpan!.attributes.error).toContain('boom')
 
-    // App-level logger should record the failure
-    expect(logs.some(l => l.message === 'cron job failed' && l.data?.name === 'error-traced')).toBe(true)
+    // App-level logger should record the failure (logged from executeJob with `job` key)
+    expect(logs.some(l => l.message === 'cron job failed' && l.data?.job === 'error-traced')).toBe(true)
   })
 
   it('logs include job metadata for invalid schedule errors', async () => {
