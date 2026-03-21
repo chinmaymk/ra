@@ -208,6 +208,73 @@ describe('SessionHistoryMiddleware', () => {
     expect(stored.length).toBeGreaterThan(0)
   })
 
+  it('stores prefix messages when priorCount is 0 (new session)', async () => {
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
+
+    // priorCount=0 means nothing is on disk yet — everything should be saved
+    const loop = new AgentLoop({
+      provider: mockProvider('response'),
+      tools: new ToolRegistry(),
+      model: 'test',
+      sessionId: session.id,
+      middleware: createHistoryMiddleware(storage, 0),
+    })
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'you are helpful' },
+      { role: 'user', content: 'context info' },
+      { role: 'user', content: 'hello' },
+    ]
+    await loop.run(messages)
+
+    const stored = await storage.readMessages(session.id)
+    // All initial messages + assistant response
+    expect(stored).toHaveLength(4)
+    expect(stored[0]?.role).toBe('system')
+    expect(stored[0]?.content).toBe('you are helpful')
+    expect(stored[1]?.role).toBe('user')
+    expect(stored[1]?.content).toBe('context info')
+    expect(stored[2]?.role).toBe('user')
+    expect(stored[2]?.content).toBe('hello')
+    expect(stored[3]?.role).toBe('assistant')
+  })
+
+  it('does not re-store prefix when resuming (priorCount = stored count)', async () => {
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
+
+    // Simulate first turn storing prefix + user + assistant
+    await storage.appendMessages(session.id, [
+      { role: 'system', content: 'you are helpful' },
+      { role: 'user', content: 'hello' },
+      { role: 'assistant', content: 'hi there' },
+    ])
+
+    // Second turn: priorCount=3 (everything on disk), only new user message saved
+    const loop = new AgentLoop({
+      provider: mockProvider('second response'),
+      tools: new ToolRegistry(),
+      model: 'test',
+      sessionId: session.id,
+      middleware: createHistoryMiddleware(storage, 3),
+    })
+
+    const messages: IMessage[] = [
+      { role: 'system', content: 'you are helpful' },
+      { role: 'user', content: 'hello' },
+      { role: 'assistant', content: 'hi there' },
+      { role: 'user', content: 'follow up' },
+    ]
+    await loop.run(messages)
+
+    const stored = await storage.readMessages(session.id)
+    // Original 3 + new user + new assistant
+    expect(stored).toHaveLength(5)
+    expect(stored[0]?.content).toBe('you are helpful')
+    expect(stored[3]?.role).toBe('user')
+    expect(stored[3]?.content).toBe('follow up')
+    expect(stored[4]?.role).toBe('assistant')
+  })
+
   it('skips initial messages with priorCount and saves new ones', async () => {
     const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
 

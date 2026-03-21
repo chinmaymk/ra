@@ -21,7 +21,7 @@ import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
 import type { Skill, SkillIndex } from '../skills/types'
 import { loadSkill, buildActiveSkillXml, readSkillReference } from '../skills/loader'
-import { buildMessagePrefix } from './messages'
+import { buildThreadMessages } from './messages'
 import type { MemoryStore } from '../memory/store'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
@@ -190,15 +190,12 @@ export class Repl {
 
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
 
-    // Include skills XML only on first turn (avoids repetition in ongoing sessions)
-    const isFirstTurn = this.messages.length === 0
-    const initialMessages = buildMessagePrefix({
+    const { messages: initialMessages, priorCount } = buildThreadMessages({
+      storedMessages: this.messages,
       systemPrompt: this.options.systemPrompt,
-      skillIndex: isFirstTurn ? this.options.skillIndex : undefined,
+      skillIndex: this.options.skillIndex,
       contextMessages: this.options.contextMessages,
     })
-    initialMessages.push(...this.messages)
-    const priorCount = initialMessages.length
     initialMessages.push(userMessage)
 
     const tuiState = tui.createStreamState()
@@ -255,7 +252,7 @@ export class Repl {
     try {
       const result = await loop.run(initialMessages)
       tui.flushStreamState(tuiState)
-      this.messages.push(...result.messages.slice(priorCount))
+      this.messages = result.messages
     } catch (err) {
       tui.flushStreamState(tuiState)
       if (err instanceof DOMException && err.name === 'AbortError') {

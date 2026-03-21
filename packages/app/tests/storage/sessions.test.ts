@@ -213,7 +213,9 @@ describe('SessionStorage', () => {
 
   it('ensureSession creates new session if none exists', async () => {
     const id = 'custom-session-id'
-    await storage.ensureSession(id, { provider: 'openai', model: 'gpt-4o', interface: 'http' })
+    const result = await storage.ensureSession(id, { provider: 'openai', model: 'gpt-4o', interface: 'http' })
+    expect(result.isNew).toBe(true)
+    expect(result.id).toBe(id)
     const { join } = await import('path')
     const metaPath = join(TEST_PATH, id, 'meta.json')
     const meta = JSON.parse(await Bun.file(metaPath).text())
@@ -224,7 +226,8 @@ describe('SessionStorage', () => {
   it('ensureSession does not overwrite existing meta', async () => {
     const session = await storage.create({ provider: 'anthropic', model: 'claude', interface: 'cli' })
     // Call ensureSession with different options — should not overwrite
-    await storage.ensureSession(session.id, { provider: 'openai', model: 'gpt-4o', interface: 'http' })
+    const result = await storage.ensureSession(session.id, { provider: 'openai', model: 'gpt-4o', interface: 'http' })
+    expect(result.isNew).toBe(false)
     const { join } = await import('path')
     const metaPath = join(TEST_PATH, session.id, 'meta.json')
     const meta = JSON.parse(await Bun.file(metaPath).text())

@@ -15,7 +15,7 @@ import {
 import type { SessionStorage } from '../storage/sessions'
 import type { SkillIndex } from '../skills/types'
 import { createSessionMiddleware } from '../agent/session'
-import { buildMessagePrefix } from './messages'
+import { buildMessagePrefix, buildThreadMessages } from './messages'
 import { askUserTool } from '../tools/ask-user'
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -113,31 +113,56 @@ export class HttpServer {
     return jsonResponse({ error: 'Invalid JSON' }, 400)
   }
 
-  private prependSystem(messages: IMessage[]): { messages: IMessage[]; priorCount: number } {
-    const prefix = buildMessagePrefix({
+  /**
+   * Build the full message array for a loop invocation.
+   *
+   * New sessions: buildThreadMessages returns the prefix with priorCount=0.
+   * Existing sessions: loads stored thread, appends only unseen client messages.
+   */
+  private async buildMessages(
+    clientMessages: IMessage[],
+    sessionId: string,
+    isNew: boolean,
+  ): Promise<{ messages: IMessage[]; priorCount: number }> {
+    if (isNew) {
+      const { messages, priorCount } = buildThreadMessages({
+        storedMessages: [],
+        systemPrompt: this.options.systemPrompt,
+        skillIndex: this.options.skillIndex,
+        contextMessages: this.options.contextMessages,
+      })
+      messages.push(...clientMessages)
+      return { messages, priorCount }
+    }
+
+    // Existing session — prefix is already on disk.
+    const stored = await this.options.storage.readMessages(sessionId)
+    const prefixLen = buildMessagePrefix({
       systemPrompt: this.options.systemPrompt,
       skillIndex: this.options.skillIndex,
       contextMessages: this.options.contextMessages,
-    })
-    const priorCount = prefix.length
-    prefix.push(...messages)
-    return { messages: prefix, priorCount }
+    }).length
+    const storedConversationLen = Math.max(0, stored.length - prefixLen)
+    const newClientMessages = clientMessages.slice(storedConversationLen)
+    stored.push(...newClientMessages)
+    return { messages: stored, priorCount: stored.length - newClientMessages.length }
   }
 
-  private async ensureSession(clientSessionId?: string): Promise<string> {
+  private async ensureSession(clientSessionId?: string): Promise<{ sessionId: string; isNew: boolean }> {
     if (clientSessionId) {
-      return this.options.storage.ensureSession(clientSessionId, {
+      const result = await this.options.storage.ensureSession(clientSessionId, {
         provider: this.options.provider.name,
         model: this.options.model,
         interface: 'http',
       })
+      return { sessionId: result.id, isNew: result.isNew }
     }
     const session = await this.options.storage.create({
       provider: this.options.provider.name,
       model: this.options.model,
       interface: 'http',
     })
-    return session.id
+    return { sessionId: session.id, isNew: true }
   }
 
   /** Create a session-scoped AgentLoop. */
@@ -171,8 +196,8 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const { messages, priorCount } = this.prependSystem(body.messages ?? [])
-    const sessionId = await this.ensureSession(body.sessionId)
+    const { sessionId, isNew } = await this.ensureSession(body.sessionId)
+    const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId, isNew)
     const loop = this.createLoop(sessionId, priorCount)
 
     try {
@@ -192,8 +217,8 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const { messages, priorCount } = this.prependSystem(body.messages ?? [])
-    const sessionId = await this.ensureSession(body.sessionId)
+    const { sessionId, isNew } = await this.ensureSession(body.sessionId)
+    const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId, isNew)
 
     const self = this
     const stream = new ReadableStream({

@@ -90,15 +90,16 @@ export class SessionStorage {
   }
 
   /** Ensure a session directory exists for a given ID (creates it if needed). */
-  async ensureSession(id: string, options: CreateSessionOptions): Promise<string> {
+  async ensureSession(id: string, options: CreateSessionOptions): Promise<{ id: string; isNew: boolean }> {
     const dir = this.sessionDir(id)
     await mkdir(dir, { recursive: true })
     const metaPath = join(dir, 'meta.json')
-    if (!(await Bun.file(metaPath).exists())) {
+    const isNew = !(await Bun.file(metaPath).exists())
+    if (isNew) {
       const meta: SessionMeta = { id, created: new Date().toISOString(), ...options }
       await Bun.write(metaPath, JSON.stringify(meta, null, 2))
     }
-    return id
+    return { id, isNew }
   }
 
   async prune(options: PruneOptions): Promise<void> {
