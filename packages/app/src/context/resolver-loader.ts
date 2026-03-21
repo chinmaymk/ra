@@ -18,7 +18,7 @@ export async function loadResolvers(
 
     // Built-in resolver
     if (config.name in builtinResolvers && !config.path) {
-      resolvers.push(builtinResolvers[config.name]!)
+      resolvers.push(builtinResolvers[config.name] as PatternResolver)
       continue
     }
 

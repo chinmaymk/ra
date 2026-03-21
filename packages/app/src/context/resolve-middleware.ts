@@ -13,7 +13,8 @@ async function resolveMessage(
   resolvers: PatternResolver[],
   cwd: string,
 ): Promise<{ resolved: boolean; refCount: number }> {
-  const msg = messages[idx]!
+  const msg = messages[idx]
+  if (!msg) return { resolved: false, refCount: 0 }
   const text = typeof msg.content === 'string' ? msg.content : null
   if (!text || text.includes(RESOLVED_MARKER)) return { resolved: false, refCount: 0 }
 
@@ -47,7 +48,7 @@ export function createResolverMiddleware(
 
     // Resolve system prompt messages
     for (let i = 0; i < messages.length; i++) {
-      if (messages[i]!.role === 'system') {
+      if (messages[i]?.role === 'system') {
         const { resolved, refCount } = await resolveMessage(messages, i, resolvers, cwd)
         if (resolved) {
           logger.info('context resolver resolved markers in system prompt', {
@@ -61,7 +62,7 @@ export function createResolverMiddleware(
     // Find and resolve the last user message
     let lastUserIdx = -1
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i]!.role === 'user') {
+      if (messages[i]?.role === 'user') {
         lastUserIdx = i
         break
       }

@@ -12,7 +12,8 @@ export function estimateTokens(input: string | IMessage[] | ITool[]): number {
   if (input.length === 0) return 0
 
   // Distinguish ITool[] vs IMessage[] by checking for 'inputSchema'
-  if ('inputSchema' in input[0]!) {
+  const firstItem = input[0]
+  if (firstItem && 'inputSchema' in firstItem) {
     return estimateToolArrayTokens(input as ITool[])
   }
   return estimateMessageArrayTokens(input as IMessage[])

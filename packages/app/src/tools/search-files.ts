@@ -34,7 +34,7 @@ export function searchFilesTool(options?: GrepToolOptions): ITool {
           const content = await readFile(join(path, rel), 'utf-8')
           const lines = content.split('\n')
           for (let i = 0; i < lines.length; i++) {
-            if (lines[i]!.includes(pattern)) {
+            if (lines[i]?.includes(pattern)) {
               results.push(`${rel}:${i + 1}:${lines[i]}`)
             }
           }

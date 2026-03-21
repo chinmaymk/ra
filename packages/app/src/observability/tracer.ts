@@ -74,8 +74,10 @@ export class Tracer {
   }
 
   endSpan(span: Span, status?: 'ok' | 'error', attributes?: Record<string, unknown>): void {
-    span.endTime = performance.now()
-    span.durationMs = Math.round((span.endTime! - span.startTime) * 100) / 100
+    const endTime = performance.now()
+    span.endTime = endTime
+    const durationMs = Math.round((endTime - span.startTime) * 100) / 100
+    span.durationMs = durationMs
     if (status) span.status = status
     if (attributes) Object.assign(span.attributes, attributes)
     this.activeSpans.delete(span.spanId)
@@ -87,7 +89,7 @@ export class Tracer {
       spanId: span.spanId,
       ...(span.parentSpanId && { parentSpanId: span.parentSpanId }),
       name: span.name,
-      durationMs: span.durationMs!,
+      durationMs,
       status: span.status,
       attributes: { ...(this.sessionId && { sessionId: this.sessionId }), ...span.attributes },
       ...(span.events.length > 0 && { events: span.events }),

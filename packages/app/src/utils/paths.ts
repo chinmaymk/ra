@@ -43,7 +43,7 @@ export function looksLikePath(s: string, extraExtensions?: string[]): boolean {
  * Handles both forward and back slashes.
  */
 export function firstSegment(relPath: string): string {
-  return relPath.split(/[/\\]/)[0]!
+  return relPath.split(/[/\\]/)[0] ?? ''
 }
 
 export { isAbsolute, join, basename, normalize, sep, resolve }

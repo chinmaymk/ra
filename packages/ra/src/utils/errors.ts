@@ -109,7 +109,7 @@ export async function withRetry<T>(
         throw providerError
       }
 
-      const baseDelay = delays[Math.min(attempt, delays.length - 1)] ?? delays[0]!
+      const baseDelay = delays[Math.min(attempt, delays.length - 1)] ?? delays[0] ?? 1000
       const delay = providerError.retryAfterMs ?? baseDelay
       options?.onRetry?.(providerError, attempt + 1)
       await sleep(delay, options?.signal)

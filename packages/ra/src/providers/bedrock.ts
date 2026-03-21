@@ -66,8 +66,8 @@ export class BedrockProvider implements IProvider {
     for await (const event of response.stream) {
       if (event.contentBlockStart?.start?.toolUse) {
         const { toolUseId, name } = event.contentBlockStart.start.toolUse
-        currentToolCallId = toolUseId!
-        yield { type: 'tool_call_start', id: toolUseId!, name: name! }
+        currentToolCallId = toolUseId ?? ''
+        yield { type: 'tool_call_start', id: toolUseId ?? '', name: name ?? '' }
       } else if (event.contentBlockDelta?.delta?.text) {
         yield { type: 'text', delta: event.contentBlockDelta.delta.text }
       } else if (event.contentBlockDelta?.delta?.toolUse?.input) {
@@ -87,7 +87,7 @@ export class BedrockProvider implements IProvider {
       if (msg.role === 'tool') {
         return {
           role: 'user',
-          content: [{ toolResult: { toolUseId: msg.toolCallId!, content: [{ text: serializeContent(msg.content) }] } }],
+          content: [{ toolResult: { toolUseId: msg.toolCallId ?? '', content: [{ text: serializeContent(msg.content) }] } }],
         }
       }
       if (msg.role === 'assistant' && msg.toolCalls?.length) {
@@ -148,7 +148,7 @@ export class BedrockProvider implements IProvider {
     let textContent = ''
     for (const block of message?.content ?? []) {
       if (block.text) textContent += block.text
-      else if (block.toolUse) toolCalls.push({ id: block.toolUse.toolUseId!, name: block.toolUse.name!, arguments: JSON.stringify(block.toolUse.input) })
+      else if (block.toolUse) toolCalls.push({ id: block.toolUse.toolUseId ?? '', name: block.toolUse.name ?? '', arguments: JSON.stringify(block.toolUse.input) })
     }
     return { role: 'assistant', content: textContent, ...(toolCalls.length && { toolCalls }) }
   }

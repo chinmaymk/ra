@@ -19,7 +19,7 @@ export function splitMessageZones(messages: IMessage[], recentBudgetTokens: numb
   // If no user message exists, pin only the leading system block.
   let pinnedEnd = 0
   for (let i = 0; i < messages.length; i++) {
-    const role = messages[i]!.role
+    const role = messages[i]?.role
     if (role === 'user') { pinnedEnd = i + 1; break }
     if (role === 'system') { pinnedEnd = i + 1 } else { break }
   }
@@ -34,7 +34,9 @@ export function splitMessageZones(messages: IMessage[], recentBudgetTokens: numb
   let recentStart = rest.length
   let recentTokens = 0
   for (let i = rest.length - 1; i >= 0; i--) {
-    const msgTokens = estimateTokens([rest[i]!])
+    const msg = rest[i]
+    if (!msg) break
+    const msgTokens = estimateTokens([msg])
     if (recentTokens + msgTokens > recentBudgetTokens && recentStart < rest.length) break
     recentTokens += msgTokens
     recentStart = i
@@ -52,15 +54,18 @@ export function splitMessageZones(messages: IMessage[], recentBudgetTokens: numb
 function adjustToolCallBoundary(messages: IMessage[], boundary: number): number {
   if (boundary <= 0 || boundary >= messages.length) return boundary
 
-  const firstRecent = messages[boundary]!
+  const firstRecent = messages[boundary]
+  if (!firstRecent) return boundary
   // If the boundary lands on a tool result, move backward to include its assistant message
   if (firstRecent.role === 'tool') {
     for (let i = boundary - 1; i >= 0; i--) {
-      if (messages[i]!.role === 'assistant' && messages[i]!.toolCalls) {
+      const m = messages[i]
+      if (!m) break
+      if (m.role === 'assistant' && m.toolCalls) {
         return i
       }
       // Stop searching if we hit a non-tool, non-assistant message (avoid matching unrelated tool groups)
-      if (messages[i]!.role !== 'tool') break
+      if (m.role !== 'tool') break
     }
   }
 
@@ -205,8 +210,8 @@ async function _runCompaction(
     let extraText = summaryText
     const nonTextParts: ContentPart[] = []
 
-    if (recent.length > 0 && recent[0]!.role === 'user') {
-      const { content } = recent[0]!
+    if (recent.length > 0 && recent[0]?.role === 'user') {
+      const { content } = recent[0]
       if (typeof content === 'string') {
         extraText += `\n\n${content}`
       } else {
@@ -218,7 +223,7 @@ async function _runCompaction(
       recentStart = 1
     }
 
-    pinned[userIdx] = appendToMessage(pinned[userIdx]!, extraText, nonTextParts)
+    pinned[userIdx] = appendToMessage(pinned[userIdx] as IMessage, extraText, nonTextParts)
   }
   const originalCount = messages.length
   ctx.request.messages.length = 0

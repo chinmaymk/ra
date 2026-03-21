@@ -78,7 +78,7 @@ export class AnthropicProvider implements IProvider {
       if (msg.role === 'tool') {
         return {
           role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: msg.toolCallId!, content: serializeContent(msg.content) }],
+          content: [{ type: 'tool_result', tool_use_id: msg.toolCallId ?? '', content: serializeContent(msg.content) }],
         }
       }
       if (msg.role === 'assistant' && msg.toolCalls?.length) {

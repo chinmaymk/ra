@@ -106,7 +106,7 @@ export class GoogleProvider implements IProvider {
   mapMessages(messages: IMessage[]): Content[] {
     const mapped = messages.map((msg): Content => {
       if (msg.role === 'tool') {
-        const toolName = parseToolCallId(msg.toolCallId!)
+        const toolName = parseToolCallId(msg.toolCallId ?? '')
         return {
           role: 'user',
           parts: [{ functionResponse: { name: toolName, response: { content: serializeContent(msg.content) } } }],

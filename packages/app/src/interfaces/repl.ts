@@ -90,9 +90,9 @@ export class Repl {
       this.sessionId = await this.newSession()
     }
 
-    tui.printHeader(this.options.model, this.sessionId!)
+    tui.printHeader(this.options.model, this.sessionId as string)
     if (this.options.resumed) {
-      tui.printResumeHeader(this.sessionId!, this.messages.length)
+      tui.printResumeHeader(this.sessionId as string, this.messages.length)
     }
 
     // Register AskUserQuestion to read inline from the terminal
@@ -205,7 +205,7 @@ export class Repl {
     tui.startSpinner()
     const session = createSessionMiddleware(this.options.middleware, {
       storage: this.options.storage,
-      sessionId: this.sessionId!,
+      sessionId: this.sessionId as string,
       priorCount,
       logsEnabled: this.options.logsEnabled,
       logLevel: this.options.logLevel,
@@ -368,7 +368,7 @@ export class Repl {
       }
       default: {
         // Check if the command matches a skill name (e.g. /verify → skill "verify")
-        const skillName = cmd!.slice(1) // strip leading /
+        const skillName = (cmd ?? '').slice(1) // strip leading /
         const skill = await this.getSkill(skillName)
         if (skill) {
           this.pendingSkill = skill

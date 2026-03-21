@@ -167,7 +167,7 @@ async function installFromGithub(repo: string, installDir: string): Promise<stri
     for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
       if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
     }
-    const repoDir = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
+    const repoDir = entries.length === 1 ? join(tmpDir, entries[0] as string) : tmpDir
 
     const installed = await installSkillDirs(repoDir, installDir, source, fallbackName)
     if (installed.length === 0) throw new Error(`github: no skills found in "${repo}"`)
@@ -184,7 +184,7 @@ async function installFromUrl(url: string, installDir: string): Promise<string[]
     for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
       if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
     }
-    const extractedRoot = entries.length === 1 ? join(tmpDir, entries[0]!) : tmpDir
+    const extractedRoot = entries.length === 1 ? join(tmpDir, entries[0] as string) : tmpDir
 
     const installed = await installSkillDirs(extractedRoot, installDir, source, undefined)
     if (installed.length === 0) throw new Error(`url: no skills found at "${url}"`)

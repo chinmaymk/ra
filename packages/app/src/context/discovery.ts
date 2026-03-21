@@ -80,9 +80,11 @@ export function createDiscoveryMiddleware(
     const msgs = buildContextMessages(files)
     const messages = ctx.loop.messages
     let idx = 0
-    for (let i = 0; i < messages.length; i++)
-      if (typeof messages[i]!.content === 'string' && (messages[i]!.content as string).includes('<context-file '))
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (msg && typeof msg.content === 'string' && (msg.content as string).includes('<context-file '))
         idx = i + 1
+    }
     messages.splice(idx, 0, ...msgs)
   }
 }
