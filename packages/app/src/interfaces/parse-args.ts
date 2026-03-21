@@ -105,6 +105,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       mcp:                           { type: 'boolean' },
       'mcp-stdio':                   { type: 'boolean' },
       inspector:                     { type: 'boolean' },
+      cron:                            { type: 'boolean' },
       // Top-level config
       provider:                      { type: 'string' },
       model:                         { type: 'string' },
@@ -150,7 +151,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const r: Record<string, unknown> = {}
 
   // Interface selection (first match wins, order matters: mcp-stdio before mcp)
-  const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'repl', 'cli'] as const
+  const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'cron', 'repl', 'cli'] as const
   for (const flag of interfaceFlags) {
     if (values[flag]) { setPath(r, ['app', 'interface'], flag); break }
   }

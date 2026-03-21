@@ -33,6 +33,7 @@ describe('parseArgs', () => {
       expect(result.config.app?.interface).toBe('repl')
       expect(result.meta.prompt).toBe('hello world')
     })
+    it('--cron sets cron', () => expect(parseArgs(dev('--cron')).config.app?.interface).toBe('cron'))
     it('--cli sets cli',   () => expect(parseArgs(dev('--cli', 'x')).config.app?.interface).toBe('cli'))
     it('--mcp sets mcp',   () => expect(parseArgs(dev('--mcp')).config.app?.interface).toBe('mcp'))
     it('mcp takes precedence over http when both given', () => {
