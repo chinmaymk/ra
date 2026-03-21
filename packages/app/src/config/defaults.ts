@@ -75,4 +75,7 @@ export const defaultConfig: RaConfig = {
   logsEnabled: true,
   logLevel: 'info',
   tracesEnabled: true,
+  cron: {
+    jobs: [],
+  },
 }

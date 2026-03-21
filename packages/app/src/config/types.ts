@@ -54,7 +54,7 @@ export interface ToolsConfig {
 export interface RaConfig {
   provider: ProviderName
   model: string
-  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector'
+  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector' | 'cron'
   systemPrompt: string
   /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
   configDir: string
@@ -112,7 +112,33 @@ export interface RaConfig {
   logsEnabled: boolean
   logLevel: LogLevel
   tracesEnabled: boolean
+  cron: {
+    jobs: CronJobConfig[]
+    /** Max concurrent job executions across all jobs. Falls back to global maxConcurrency. */
+    maxConcurrency?: number
+  }
 }
+
+/** Cron-specific fields that don't exist on RaConfig. */
+export interface CronJobFields {
+  /** Unique identifier for this job. */
+  id: string
+  /** Cron expression (5-field standard or 6-field with seconds). */
+  schedule: string
+  /** The user prompt to send to the agent each tick. */
+  prompt: string
+  /** IANA timezone (e.g., 'America/New_York'). Defaults to system timezone. */
+  timezone?: string
+  /** When true, reuse the same session across runs (accumulating context). Default: false. */
+  persistent?: boolean
+  /** What to do when a tick fires while the job is still running. Default: 'skip'. */
+  overlapPolicy?: 'skip' | 'queue'
+  /** Disable this job without removing it. Default: true. */
+  enabled?: boolean
+}
+
+/** A cron job: cron-specific scheduling fields + any RaConfig overrides. */
+export type CronJobConfig = CronJobFields & Partial<RaConfig>
 
 export interface McpClientConfig {
   name: string

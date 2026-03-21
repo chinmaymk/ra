@@ -9,6 +9,7 @@ import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { InspectorServer } from './interfaces/inspector'
+import { CronScheduler } from './interfaces/cron'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { createSessionMiddleware } from './agent/session'
 
@@ -258,6 +259,24 @@ async function launchRepl(app: AppContext): Promise<void> {
   await app.shutdown()
 }
 
+async function launchCron(app: AppContext, signals: { remove: () => void }): Promise<void> {
+  const scheduler = new CronScheduler({
+    app,
+    maxConcurrency: app.config.cron.maxConcurrency ?? app.config.maxConcurrency,
+  })
+
+  await scheduler.start()
+  console.error('Cron scheduler started with', app.config.cron.jobs.filter(j => j.enabled !== false).length, 'jobs')
+
+  const cronShutdown = async () => {
+    try { await scheduler.stop() } catch { /* best-effort */ }
+    await app.shutdown()
+  }
+  signals.remove()
+  onSignals(cronShutdown)
+  await new Promise(() => {}) // keep alive
+}
+
 async function launchInspector(app: AppContext): Promise<void> {
   const inspector = new InspectorServer(app)
   await inspector.start()
@@ -322,6 +341,7 @@ async function main(): Promise<void> {
     case 'mcp':       return launchMcpHttp(app)
     case 'mcp-stdio': return launchMcpStdio(app)
     case 'http':      return launchHttp(app, signals)
+    case 'cron':      return launchCron(app, signals)
     case 'inspector': return launchInspector(app)
     case 'cli':       return launchCli(parsed, app)
     default:          return launchRepl(app)

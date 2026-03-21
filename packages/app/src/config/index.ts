@@ -7,7 +7,7 @@ import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
 export { defaultConfig } from './defaults'
-export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings } from './types'
+export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, CronJobConfig, CronJobFields } from './types'
 
 const CONFIG_FILES = [
   'ra.config.json',
@@ -90,6 +90,7 @@ const ENV_RULES: Record<string, CoercionRule> = {
   RA_MEMORY_MAX_MEMORIES: { type: 'int',    path: ['memory', 'maxMemories'] },
   RA_MEMORY_TTL_DAYS:     { type: 'int',    path: ['memory', 'ttlDays'] },
   RA_MEMORY_INJECT_LIMIT: { type: 'int',    path: ['memory', 'injectLimit'] },
+  RA_CRON_MAX_CONCURRENCY: { type: 'int',  path: ['cron', 'maxConcurrency'] },
   // Provider credentials (env-only — not CLI flags, to avoid leaking in process list/shell history)
   RA_ANTHROPIC_API_KEY:  { type: 'string', path: ['providers', 'anthropic', 'apiKey'] },
   RA_ANTHROPIC_BASE_URL: { type: 'string', path: ['providers', 'anthropic', 'baseURL'] },
