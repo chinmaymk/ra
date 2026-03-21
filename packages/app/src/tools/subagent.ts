@@ -57,7 +57,6 @@ export function subagentTool(options: SubagentToolOptions): ITool {
             type: 'object',
             properties: {
               task: { type: 'string', description: 'The task prompt. Be specific about what to do and return.' },
-              role: { type: 'string', description: 'Optional system prompt override that defines this agent\'s specialized role. When omitted the parent system prompt is inherited.' },
             },
             required: ['task'],
           },
@@ -69,7 +68,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
     },
 
     async execute(input: unknown) {
-      const { tasks } = input as { tasks: { task: string; role?: string }[] }
+      const { tasks } = input as { tasks: { task: string }[] }
       if (!tasks?.length) throw new Error('At least one task is required')
 
       // Build child tool registry lazily so we pick up tools registered
@@ -95,10 +94,9 @@ export function subagentTool(options: SubagentToolOptions): ITool {
         logger: options.logger,
       }
 
-      const results = await Promise.all(tasks.map(async ({ task, role }) => {
+      const results = await Promise.all(tasks.map(async ({ task }) => {
         const messages: IMessage[] = []
-        const systemPrompt = role ?? options.systemPrompt
-        if (systemPrompt) messages.push({ role: 'system', content: systemPrompt })
+        if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt })
         messages.push({ role: 'user', content: task })
 
         try {
