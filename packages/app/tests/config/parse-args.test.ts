@@ -139,8 +139,14 @@ describe('parseArgs', () => {
     it('--config → meta.configPath', () => {
       expect(parseArgs(dev('--config', '/etc/ra.yaml')).meta.configPath).toBe('/etc/ra.yaml')
     })
-    it('--resume → meta.resume', () => {
+    it('--resume without id → meta.resume is true', () => {
       expect(parseArgs(dev('--resume')).meta.resume).toBe(true)
+    })
+    it('--resume=<id> → meta.resume is the id', () => {
+      expect(parseArgs(dev('--resume=sess-123')).meta.resume).toBe('sess-123')
+    })
+    it('--resume defaults to undefined', () => {
+      expect(parseArgs(dev()).meta.resume).toBeUndefined()
     })
     it('--help → meta.help', () => expect(parseArgs(dev('--help')).meta.help).toBe(true))
     it('-h → meta.help',     () => expect(parseArgs(dev('-h')).meta.help).toBe(true))

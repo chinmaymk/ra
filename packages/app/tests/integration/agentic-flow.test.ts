@@ -45,17 +45,18 @@ describe('Agentic flow integration', () => {
   })
 
   it('session persistence: second run with --resume receives prior messages', async () => {
+    const sessionId = `persist-test-${Date.now()}`
     env.mock.enqueue([{ type: 'text', content: 'I remember you said banana.' }])
 
     await runBinary(
-      ['--cli', 'remember banana'],
+      ['--cli', `--resume=${sessionId}`, 'remember banana'],
       env.binaryEnv,
     )
     env.mock.resetRequests()
 
     env.mock.enqueue([{ type: 'text', content: 'You said banana earlier.' }])
     await runBinary(
-      ['--cli', '--resume', 'what did I say?'],
+      ['--cli', `--resume=${sessionId}`, 'what did I say?'],
       env.binaryEnv,
     )
 

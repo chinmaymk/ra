@@ -62,7 +62,7 @@ export interface AppContext {
 
 export async function bootstrap(
   config: RaConfig,
-  opts: { resume?: boolean; skipSession?: boolean },
+  opts: { resume?: string | true; skipSession?: boolean },
 ): Promise<AppContext> {
   const { app, agent } = config
 
@@ -80,9 +80,18 @@ export async function bootstrap(
   if (opts.skipSession) {
     sessionId = 'none'
   } else if (opts.resume) {
-    const latest = await storage.latest()
-    if (!latest) throw new Error('No sessions to resume')
-    sessionId = latest.id
+    if (opts.resume === true) {
+      const latest = await storage.latest()
+      if (!latest) throw new Error('No sessions to resume')
+      sessionId = latest.id
+    } else {
+      await storage.ensureSession(opts.resume, {
+        provider: agent.provider,
+        model: agent.model,
+        interface: app.interface,
+      })
+      sessionId = opts.resume
+    }
     sessionDir = storage.sessionDir(sessionId)
   } else {
     sessionId = (await storage.create({
@@ -311,7 +320,7 @@ export async function bootstrap(
     skillIndex,
     storage,
     sessionId,
-    resumed: opts.resume ?? false,
+    resumed: !!opts.resume,
     contextMessages,
     memoryStore,
     scratchpadStore,
