@@ -37,3 +37,36 @@ export function buildMessagePrefix(options: {
 
   return messages
 }
+
+/**
+ * Build the full message thread for a loop invocation.
+ *
+ * New session (storedMessages is empty): builds the prefix and returns priorCount=0
+ * so the history middleware saves everything.
+ *
+ * Existing session / resume: copies storedMessages (prefix is already there)
+ * and returns priorCount = storedMessages.length so only new messages get saved.
+ *
+ * Callers append their user message(s) to the returned array.
+ */
+export function buildThreadMessages(options: {
+  storedMessages: IMessage[]
+  systemPrompt?: string
+  skillIndex?: Map<string, SkillIndex>
+  contextMessages?: IMessage[]
+}): { messages: IMessage[]; priorCount: number } {
+  if (options.storedMessages.length === 0) {
+    return {
+      messages: buildMessagePrefix({
+        systemPrompt: options.systemPrompt,
+        skillIndex: options.skillIndex,
+        contextMessages: options.contextMessages,
+      }),
+      priorCount: 0,
+    }
+  }
+  return {
+    messages: [...options.storedMessages],
+    priorCount: options.storedMessages.length,
+  }
+}

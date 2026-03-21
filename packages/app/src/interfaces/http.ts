@@ -15,7 +15,7 @@ import {
 import type { SessionStorage } from '../storage/sessions'
 import type { SkillIndex } from '../skills/types'
 import { createSessionMiddleware } from '../agent/session'
-import { buildMessagePrefix } from './messages'
+import { buildMessagePrefix, buildThreadMessages } from './messages'
 import { askUserTool } from '../tools/ask-user'
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -116,11 +116,8 @@ export class HttpServer {
   /**
    * Build the full message array for a loop invocation.
    *
-   * New sessions: prefix (system prompt, skills, context) is prepended and
-   * will be persisted by the history middleware (priorCount = 0).
-   *
-   * Existing sessions: prefix is already on disk.  Load the stored thread
-   * and append only the client messages that aren't stored yet.
+   * New sessions: buildThreadMessages returns the prefix with priorCount=0.
+   * Existing sessions: loads stored thread, appends only unseen client messages.
    */
   private async buildMessages(
     clientMessages: IMessage[],
@@ -128,20 +125,18 @@ export class HttpServer {
     isNew: boolean,
   ): Promise<{ messages: IMessage[]; priorCount: number }> {
     if (isNew) {
-      const prefix = buildMessagePrefix({
+      const { messages, priorCount } = buildThreadMessages({
+        storedMessages: [],
         systemPrompt: this.options.systemPrompt,
         skillIndex: this.options.skillIndex,
         contextMessages: this.options.contextMessages,
       })
-      prefix.push(...clientMessages)
-      return { messages: prefix, priorCount: 0 }
+      messages.push(...clientMessages)
+      return { messages, priorCount }
     }
 
     // Existing session — prefix is already on disk.
     const stored = await this.options.storage.readMessages(sessionId)
-    // The client sends conversation messages (no prefix).  The stored array is
-    // [prefix..., conversation...].  Compute prefix length so we know how many
-    // of the client's messages overlap with the stored conversation portion.
     const prefixLen = buildMessagePrefix({
       systemPrompt: this.options.systemPrompt,
       skillIndex: this.options.skillIndex,
@@ -149,9 +144,8 @@ export class HttpServer {
     }).length
     const storedConversationLen = Math.max(0, stored.length - prefixLen)
     const newClientMessages = clientMessages.slice(storedConversationLen)
-    const priorCount = stored.length
     stored.push(...newClientMessages)
-    return { messages: stored, priorCount }
+    return { messages: stored, priorCount: stored.length - newClientMessages.length }
   }
 
   private async ensureSession(clientSessionId?: string): Promise<{ sessionId: string; isNew: boolean }> {

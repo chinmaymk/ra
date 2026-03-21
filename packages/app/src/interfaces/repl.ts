@@ -21,7 +21,7 @@ import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
 import type { Skill, SkillIndex } from '../skills/types'
 import { loadSkill, buildActiveSkillXml, readSkillReference } from '../skills/loader'
-import { buildMessagePrefix } from './messages'
+import { buildThreadMessages } from './messages'
 import type { MemoryStore } from '../memory/store'
 import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
@@ -190,17 +190,13 @@ export class Repl {
 
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
 
-    // New session: build prefix once (stored by history middleware, loaded on resume).
-    // Subsequent turns / resume: prefix is already in this.messages.
-    const isNewSession = this.messages.length === 0
-    const initialMessages: IMessage[] = isNewSession
-      ? [...buildMessagePrefix({
-          systemPrompt: this.options.systemPrompt,
-          skillIndex: this.options.skillIndex,
-          contextMessages: this.options.contextMessages,
-        }), userMessage]
-      : [...this.messages, userMessage]
-    const priorCount = isNewSession ? 0 : this.messages.length
+    const { messages: initialMessages, priorCount } = buildThreadMessages({
+      storedMessages: this.messages,
+      systemPrompt: this.options.systemPrompt,
+      skillIndex: this.options.skillIndex,
+      contextMessages: this.options.contextMessages,
+    })
+    initialMessages.push(userMessage)
 
     const tuiState = tui.createStreamState()
     tui.startSpinner()

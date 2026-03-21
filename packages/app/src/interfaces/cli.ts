@@ -14,7 +14,7 @@ import {
 import type { SkillIndex } from '../skills/types'
 import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
-import { buildMessagePrefix } from './messages'
+import { buildThreadMessages } from './messages'
 import { fileToContentPart } from '../utils/files'
 
 export interface CliOptions {
@@ -51,15 +51,10 @@ export interface CliResult {
 export async function runCli(options: CliOptions): Promise<CliResult> {
   const { prompt, files = [], systemPrompt, model, provider, tools, skillIndex, middleware, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
 
-  // When resuming a session the prefix (system prompt, skills, context) is
-  // already part of the stored messages — don't re-inject it.
-  // For new sessions, build the prefix and let the history middleware store it.
-  const isResume = sessionMessages.length > 0
-  const initialMessages: IMessage[] = isResume
-    ? [...sessionMessages]
-    : buildMessagePrefix({ systemPrompt, skillIndex, contextMessages })
-
-  const priorCount = isResume ? sessionMessages.length : 0
+  const { messages: initialMessages, priorCount } = buildThreadMessages({
+    storedMessages: sessionMessages,
+    systemPrompt, skillIndex, contextMessages,
+  })
 
   const parts: ContentPart[] = [{ type: 'text', text: prompt }, ...await Promise.all(files.map(fileToContentPart))]
   const content: string | ContentPart[] = parts.length === 1 ? prompt : parts
