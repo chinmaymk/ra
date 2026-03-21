@@ -133,11 +133,6 @@ describe('parseArgs', () => {
     it('--skill-dir is repeatable', () => {
       expect(parseArgs(dev('--skill-dir', '/a', '--skill-dir', '/b')).config.app?.skillDirs).toEqual(['/a', '/b'])
     })
-    it('--skill sets meta.skills (not config.skills)', () => {
-      const r = parseArgs(dev('--skill', 'code'))
-      expect(r.meta.skills).toEqual(['code'])
-      expect((r.config as Record<string, unknown>).skills).toBeUndefined()
-    })
   })
 
   describe('meta fields', () => {
@@ -160,9 +155,6 @@ describe('parseArgs', () => {
     })
     it('defaults showConfig to false', () => {
       expect(parseArgs(dev()).meta.showConfig).toBe(false)
-    })
-    it('multiple --skill flags', () => {
-      expect(parseArgs(dev('--skill', 'code', '--skill', 'search')).meta.skills).toEqual(['code', 'search'])
     })
     it('multiple --file flags', () => {
       expect(parseArgs(dev('--file', 'a.txt', '--file', 'b.pdf')).meta.files).toEqual(['a.txt', 'b.pdf'])

@@ -1,6 +1,8 @@
 import { errorMessage } from '@chinmaymk/ra'
 import { resolve, relative } from 'path'
 import type { PatternResolver } from './resolvers'
+import type { Skill } from '../skills/types'
+import { buildActiveSkillXml } from '../skills/loader'
 
 /**
  * File resolver — matches @path/to/file references.
@@ -79,6 +81,24 @@ export const urlResolver: PatternResolver = {
       return `[${ref}] Error: ${errorMessage(err)}`
     }
   },
+}
+
+/**
+ * Skill resolver — matches /skill-name references in prompts.
+ * Resolves to the full skill XML body when the name matches a loaded skill.
+ */
+export function createSkillResolver(skillMap: Map<string, Skill>): PatternResolver {
+  return {
+    name: 'skill',
+    // Matches /word at start of string or after whitespace, not followed by /
+    // (avoids matching file paths like /usr/bin).
+    pattern: /(?<=^|\s)\/([\w][\w-]*)(?=\s|$)/gm,
+    async resolve(ref: string): Promise<string | null> {
+      const skill = skillMap.get(ref)
+      if (!skill) return null
+      return buildActiveSkillXml(skill)
+    },
+  }
 }
 
 /** All built-in resolvers, keyed by name. */

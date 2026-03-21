@@ -143,7 +143,7 @@ describe('Repl', () => {
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
 
     const response = await repl.handleCommand('/skill')
-    expect(response).toBe('Usage: /skill <name>')
+    expect(response).toBe('Usage: /skill <name>  (or just /<skill-name>)')
   })
 
   it('handleCommand /skill with unknown name returns error', async () => {

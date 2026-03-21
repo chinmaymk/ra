@@ -17,7 +17,7 @@ import {
 } from '@chinmaymk/ra'
 import { createPermissionsMiddleware } from './agent/permissions'
 import type { RaConfig } from './config/types'
-import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware } from './context'
+import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware, createSkillResolver } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
 import { McpClient } from './mcp/client'
@@ -211,6 +211,11 @@ export async function bootstrap(
       skills: [...skillMap.keys()],
       estimatedTokens: skillTokens,
     })
+
+    // Skill pattern resolver — resolves /skill-name references in prompts
+    const skillResolver = createSkillResolver(skillMap)
+    const skillResolverMw = createResolverMiddleware([skillResolver], process.cwd())
+    middleware.beforeModelCall = prepend(middleware.beforeModelCall, skillResolverMw)
   }
 
   // ── MCP clients ────────────────────────────────────────────────────

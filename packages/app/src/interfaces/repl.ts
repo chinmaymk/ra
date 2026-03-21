@@ -288,7 +288,7 @@ export class Repl {
       }
       case '/skill': {
         const name = parts[1]
-        if (!name) return 'Usage: /skill <name>'
+        if (!name) return 'Usage: /skill <name>  (or just /<skill-name>)'
         const skill = this.options.skillMap?.get(name)
         if (!skill) return `Skill not found: ${name}`
         this.pendingSkill = skill
@@ -352,8 +352,16 @@ export class Repl {
         lines.push(`  ── total: ~${totalTokens} tokens`)
         return `Discovered context files:\n${lines.join('\n')}`
       }
-      default:
+      default: {
+        // Check if the command matches a skill name (e.g. /verify → skill "verify")
+        const skillName = cmd!.slice(1) // strip leading /
+        const skill = this.options.skillMap?.get(skillName)
+        if (skill) {
+          this.pendingSkill = skill
+          return `Skill "${skillName}" will be injected with your next message.`
+        }
         return `Unknown command: ${cmd}`
+      }
     }
   }
 }

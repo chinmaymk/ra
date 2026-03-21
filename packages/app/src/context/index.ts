@@ -2,7 +2,7 @@ export { discoverContextFiles, findGitRoot, createDiscoveryMiddleware } from './
 export { buildContextMessages, extractContextFilePath } from './inject'
 export { resolvePatterns, formatResolvedReferences } from './resolvers'
 export { createResolverMiddleware } from './resolve-middleware'
-export { builtinResolvers } from './builtin-resolvers'
+export { builtinResolvers, createSkillResolver } from './builtin-resolvers'
 export type { ContextConfig, ContextFile, ResolverConfig } from './types'
 export type { DiscoverOptions } from './discovery'
 export type { PatternResolver, ResolvedReference, ResolutionResult } from './resolvers'

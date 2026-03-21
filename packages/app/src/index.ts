@@ -162,11 +162,9 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
   if (parsed.meta.resume) {
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
-  const activeSkills = app.config.app.skills.concat(parsed.meta.skills)
   await runCli({
     prompt: parsed.meta.prompt!,
     files: parsed.meta.files,
-    skills: activeSkills,
     systemPrompt: app.config.agent.systemPrompt,
     model: app.config.agent.model,
     provider: app.provider,
