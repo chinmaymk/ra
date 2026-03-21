@@ -70,7 +70,7 @@ export async function runPackageCommand(cmd: PackageCommand): Promise<void> {
     }
     if (configPath) {
       const config = await loadConfig({ configPath })
-      skillDir = defaultSkillInstallDir(config.dataDir)
+      skillDir = defaultSkillInstallDir(config.app.dataDir)
     }
   }
 

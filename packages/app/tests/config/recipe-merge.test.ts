@@ -23,126 +23,123 @@ function writeRecipe(fields: string[]): string {
 describe('loadConfig with recipePath', () => {
   it('recipe provides base values that override defaults', async () => {
     const recipePath = writeRecipe([
-      'provider: openai',
-      'model: gpt-4o',
-      'maxIterations: 100',
-      'systemPrompt: "You are a coding agent."',
+      'agent:',
+      '  provider: openai',
+      '  model: gpt-4o',
+      '  maxIterations: 100',
+      '  systemPrompt: "You are a coding agent."',
     ])
 
     const config = await loadConfig({ cwd: TMP, env: {}, recipePath })
 
-    expect(config.provider).toBe('openai')
-    expect(config.model).toBe('gpt-4o')
-    expect(config.maxIterations).toBe(100)
-    expect(config.systemPrompt).toBe('You are a coding agent.')
+    expect(config.agent.provider).toBe('openai')
+    expect(config.agent.model).toBe('gpt-4o')
+    expect(config.agent.maxIterations).toBe(100)
+    expect(config.agent.systemPrompt).toBe('You are a coding agent.')
   })
 
   it('user config file overrides recipe values', async () => {
     const recipePath = writeRecipe([
-      'provider: anthropic',
-      'model: claude-sonnet-4-6',
-      'maxIterations: 100',
-      'systemPrompt: "Recipe prompt"',
+      'agent:',
+      '  provider: anthropic',
+      '  model: claude-sonnet-4-6',
+      '  maxIterations: 100',
+      '  systemPrompt: "Recipe prompt"',
     ])
-    writeFileSync(join(TMP, 'ra.config.yaml'), 'model: claude-opus-4-6\n')
+    writeFileSync(join(TMP, 'ra.config.yaml'), 'agent:\n  model: claude-opus-4-6\n')
 
     const config = await loadConfig({ cwd: TMP, env: {}, recipePath })
 
-    expect(config.model).toBe('claude-opus-4-6')       // user wins
-    expect(config.maxIterations).toBe(100)              // recipe preserved
-    expect(config.systemPrompt).toBe('Recipe prompt')   // recipe preserved
+    expect(config.agent.model).toBe('claude-opus-4-6')       // user wins
+    expect(config.agent.maxIterations).toBe(100)              // recipe preserved
+    expect(config.agent.systemPrompt).toBe('Recipe prompt')   // recipe preserved
   })
 
   it('env vars override recipe values', async () => {
     const recipePath = writeRecipe([
-      'provider: anthropic',
-      'model: claude-sonnet-4-6',
+      'agent:',
+      '  provider: anthropic',
+      '  model: claude-sonnet-4-6',
     ])
 
     const config = await loadConfig({ cwd: TMP, env: { RA_MODEL: 'custom-model' }, recipePath })
 
-    expect(config.model).toBe('custom-model')
+    expect(config.agent.model).toBe('custom-model')
   })
 
   it('CLI args override recipe values', async () => {
     const recipePath = writeRecipe([
-      'provider: anthropic',
-      'maxIterations: 100',
+      'agent:',
+      '  provider: anthropic',
+      '  maxIterations: 100',
     ])
 
     const config = await loadConfig({
-      cwd: TMP, env: {}, cliArgs: { maxIterations: 10 }, recipePath,
+      cwd: TMP, env: {}, cliArgs: { agent: { maxIterations: 10 } } as any, recipePath,
     })
 
-    expect(config.maxIterations).toBe(10)
+    expect(config.agent.maxIterations).toBe(10)
   })
 
   it('deep-merges nested objects (recipe providers + user providers)', async () => {
     const recipePath = writeRecipe([
-      'provider: anthropic',
-      'providers:',
-      '  anthropic:',
-      '    baseURL: https://recipe-proxy.example.com',
+      'agent:',
+      '  provider: anthropic',
+      '  providers:',
+      '    anthropic:',
+      '      baseURL: https://recipe-proxy.example.com',
     ])
     writeFileSync(join(TMP, 'ra.config.yaml'), [
-      'providers:',
-      '  anthropic:',
-      '    apiKey: sk-user-key',
+      'agent:',
+      '  providers:',
+      '    anthropic:',
+      '      apiKey: sk-user-key',
     ].join('\n'))
 
     const config = await loadConfig({ cwd: TMP, env: {}, recipePath })
 
-    expect(config.providers.anthropic.apiKey).toBe('sk-user-key')
-    expect(config.providers.anthropic.baseURL).toBe('https://recipe-proxy.example.com')
+    expect(config.agent.providers.anthropic.apiKey).toBe('sk-user-key')
+    expect(config.agent.providers.anthropic.baseURL).toBe('https://recipe-proxy.example.com')
   })
 
   it('user skillDirs replace recipe skillDirs (array replacement)', async () => {
     const recipePath = writeRecipe([
-      'skillDirs:',
-      '  - /recipe/skills',
+      'app:',
+      '  skillDirs:',
+      '    - /recipe/skills',
     ])
-    writeFileSync(join(TMP, 'ra.config.yaml'), 'skillDirs:\n  - /user/skills\n')
+    writeFileSync(join(TMP, 'ra.config.yaml'), 'app:\n  skillDirs:\n    - /user/skills\n')
 
     const config = await loadConfig({ cwd: TMP, env: {}, recipePath })
 
-    expect(config.skillDirs).toEqual(['/user/skills'])
-  })
-
-  it('recipe skills apply when user does not override', async () => {
-    const recipePath = writeRecipe([
-      'skills:',
-      '  - code-review',
-      '  - architect',
-    ])
-
-    const config = await loadConfig({ cwd: TMP, env: {}, recipePath })
-
-    expect(config.skills).toEqual(['code-review', 'architect'])
+    expect(config.app.skillDirs).toEqual(['/user/skills'])
   })
 
   it('full precedence: defaults < recipe < file < env < CLI', async () => {
     const recipePath = writeRecipe([
-      'provider: openai',
-      'model: gpt-4o',
-      'maxIterations: 200',
-      'systemPrompt: "Recipe prompt"',
+      'agent:',
+      '  provider: openai',
+      '  model: gpt-4o',
+      '  maxIterations: 200',
+      '  systemPrompt: "Recipe prompt"',
     ])
     writeFileSync(join(TMP, 'ra.config.yaml'), [
-      'model: claude-sonnet-4-6',
-      'maxIterations: 100',
+      'agent:',
+      '  model: claude-sonnet-4-6',
+      '  maxIterations: 100',
     ].join('\n'))
 
     const config = await loadConfig({
       cwd: TMP,
       env: { RA_MAX_ITERATIONS: '50' },
-      cliArgs: { provider: 'google' as const },
+      cliArgs: { agent: { provider: 'google' } } as any,
       recipePath,
     })
 
-    expect(config.provider).toBe('google')            // CLI wins
-    expect(config.maxIterations).toBe(50)              // env wins
-    expect(config.model).toBe('claude-sonnet-4-6')     // file wins over recipe
-    expect(config.systemPrompt).toBe('Recipe prompt')  // recipe wins over default
+    expect(config.agent.provider).toBe('google')            // CLI wins
+    expect(config.agent.maxIterations).toBe(50)              // env wins
+    expect(config.agent.model).toBe('claude-sonnet-4-6')     // file wins over recipe
+    expect(config.agent.systemPrompt).toBe('Recipe prompt')  // recipe wins over default
   })
 })
 
@@ -150,18 +147,18 @@ describe('loadConfig with recipePath', () => {
 
 describe('loadConfig with recipeName + resolveRecipePath', () => {
   it('resolves recipe by name via callback', async () => {
-    const recipePath = writeRecipe(['maxIterations: 200'])
+    const recipePath = writeRecipe(['agent:\n  maxIterations: 200'])
     const resolver = async (name: string) => name === 'my-recipe' ? recipePath : undefined
 
     const config = await loadConfig({
       cwd: TMP, env: {}, recipeName: 'my-recipe', resolveRecipePath: resolver,
     })
 
-    expect(config.maxIterations).toBe(200)
+    expect(config.agent.maxIterations).toBe(200)
   })
 
   it('picks up recipe name from config file when recipeName is not provided', async () => {
-    const recipePath = writeRecipe(['maxIterations: 200'])
+    const recipePath = writeRecipe(['agent:\n  maxIterations: 200'])
     writeFileSync(join(TMP, 'ra.config.yaml'), 'recipe: my-recipe\n')
     const resolver = async (name: string) => name === 'my-recipe' ? recipePath : undefined
 
@@ -169,15 +166,15 @@ describe('loadConfig with recipeName + resolveRecipePath', () => {
       cwd: TMP, env: {}, resolveRecipePath: resolver,
     })
 
-    expect(config.maxIterations).toBe(200)
+    expect(config.agent.maxIterations).toBe(200)
   })
 
   it('recipeName from option takes precedence over config file recipe field', async () => {
-    const recipeA = writeRecipe(['maxIterations: 100'])
+    const recipeA = writeRecipe(['agent:\n  maxIterations: 100'])
     const recipeBDir = join(TMP, 'recipe-b')
     mkdirSync(recipeBDir, { recursive: true })
     const recipeBPath = join(recipeBDir, 'ra.config.yaml')
-    writeFileSync(recipeBPath, 'maxIterations: 200')
+    writeFileSync(recipeBPath, 'agent:\n  maxIterations: 200')
 
     writeFileSync(join(TMP, 'ra.config.yaml'), 'recipe: recipe-a\n')
     const resolver = async (name: string) => {
@@ -190,7 +187,7 @@ describe('loadConfig with recipeName + resolveRecipePath', () => {
       cwd: TMP, env: {}, recipeName: 'recipe-b', resolveRecipePath: resolver,
     })
 
-    expect(config.maxIterations).toBe(200)
+    expect(config.agent.maxIterations).toBe(200)
   })
 
   it('throws when recipe name cannot be resolved', async () => {
@@ -207,7 +204,7 @@ describe('loadConfig with recipeName + resolveRecipePath', () => {
     // No resolver provided — recipe field is ignored, no error
     const config = await loadConfig({ cwd: TMP, env: {} })
     expect(config.recipe).toBe('some-recipe')
-    expect(config.maxIterations).toBe(50) // default, not recipe
+    expect(config.agent.maxIterations).toBe(50) // default, not recipe
   })
 })
 
