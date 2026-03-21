@@ -1,13 +1,13 @@
 app:
   interface: repl
-  skills:
-    - orchestrator
   skillDirs:
     - ./skills
 
 agent:
   provider: anthropic
   model: claude-sonnet-4-6
+  systemPrompt: |
+    You are an orchestrator agent. Use the /orchestrator skill to create and manage persistent specialist agents.
   maxIterations: 50
   thinking: medium
   tools:

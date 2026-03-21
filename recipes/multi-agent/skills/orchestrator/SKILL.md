@@ -155,8 +155,9 @@ Reference in the config:
 app:
   dataDir: ./.ra
   skillDirs: ['./skills']
-  skills: ['owasp']
 ```
+
+The agent can activate the skill by typing `/owasp` in its prompt.
 
 ## Rules
 
