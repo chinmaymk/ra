@@ -140,7 +140,7 @@ describe('parseArgs', () => {
       expect(parseArgs(dev('--config', '/etc/ra.yaml')).meta.configPath).toBe('/etc/ra.yaml')
     })
     it('--resume → meta.resume', () => {
-      expect(parseArgs(dev('--resume', 'sess-123')).meta.resume).toBe('sess-123')
+      expect(parseArgs(dev('--resume')).meta.resume).toBe(true)
     })
     it('--help → meta.help', () => expect(parseArgs(dev('--help')).meta.help).toBe(true))
     it('-h → meta.help',     () => expect(parseArgs(dev('-h')).meta.help).toBe(true))

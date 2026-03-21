@@ -88,13 +88,9 @@ describe('REPL integration', () => {
     const output1 = await proc1.readAvailable()
     proc1.kill()
 
-    const sessionMatch = output1.match(/[0-9a-f-]{36}/)
-    if (!sessionMatch) return
-
-    const sessionId = sessionMatch[0]
     env.mock.enqueue([{ type: 'text', content: 'Second session response.' }])
 
-    const proc2 = spawnBinary(['--repl', '--model', 'claude-sonnet-4-6', '--resume', sessionId], env.binaryEnv)
+    const proc2 = spawnBinary(['--repl', '--model', 'claude-sonnet-4-6', '--resume'], env.binaryEnv)
     await delay(500)
     proc2.write('what did I say to remember?\n')
     await delay(800)

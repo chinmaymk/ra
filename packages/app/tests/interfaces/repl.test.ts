@@ -103,12 +103,23 @@ describe('Repl', () => {
     expect(response).toContain('saved')
   })
 
-  it('handleCommand /resume without id returns usage', async () => {
+  it('handleCommand /resume without id resumes latest session', async () => {
+    const storage = await makeStorage()
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'repl' })
+    await storage.appendMessage(session.id, { role: 'user', content: 'old msg' })
+
+    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
+    const response = await repl.handleCommand('/resume')
+    expect(response).toContain('Resumed session')
+    expect(response).toContain('1 messages loaded')
+  })
+
+  it('handleCommand /resume without id and no sessions returns message', async () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
 
     const response = await repl.handleCommand('/resume')
-    expect(response).toBe('Usage: /resume <session-id>')
+    expect(response).toBe('No sessions to resume.')
   })
 
   it('handleCommand /resume with non-existent id returns error', async () => {

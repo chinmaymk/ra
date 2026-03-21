@@ -41,6 +41,7 @@ export interface ReplOptions {
   toolTimeout?: number
   maxToolResponseSize?: number
   sessionId?: string
+  resumed?: boolean
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
@@ -90,7 +91,7 @@ export class Repl {
     }
 
     tui.printHeader(this.options.model, this.sessionId!)
-    if (this.options.sessionId) {
+    if (this.options.resumed) {
       tui.printResumeHeader(this.sessionId!, this.messages.length)
     }
 
@@ -280,8 +281,12 @@ export class Repl {
       case '/save':
         return `Session ${this.sessionId} saved (auto-saved after each turn).`
       case '/resume': {
-        const id = parts[1]
-        if (!id) return 'Usage: /resume <session-id>'
+        let id = parts[1]
+        if (!id) {
+          const latest = await this.options.storage.latest()
+          if (!latest) return 'No sessions to resume.'
+          id = latest.id
+        }
         const messages = await this.options.storage.readMessages(id)
         if (messages.length === 0) {
           const sessions = await this.options.storage.list()

@@ -35,6 +35,20 @@ describe('SessionStorage', () => {
     expect(list).toHaveLength(2)
   })
 
+  it('returns the most recent session from latest()', async () => {
+    const s1 = await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })
+    await new Promise(r => setTimeout(r, 10))
+    const s2 = await storage.create({ provider: 'openai', model: 'gpt-4o', interface: 'repl' })
+    const latest = await storage.latest()
+    expect(latest).toBeDefined()
+    expect(latest!.id).toBe(s2.id)
+  })
+
+  it('returns undefined from latest() when no sessions exist', async () => {
+    const latest = await storage.latest()
+    expect(latest).toBeUndefined()
+  })
+
   it('prunes sessions over maxSessions', async () => {
     for (let i = 0; i < 5; i++) {
       await storage.create({ provider: 'anthropic', model: 'test', interface: 'cli' })

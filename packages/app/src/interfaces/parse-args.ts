@@ -12,7 +12,7 @@ export interface ParsedArgsMeta {
   version: boolean
   files: string[]
   prompt?: string
-  resume?: string
+  resume: boolean
   configPath?: string
   exec?: string
   showContext: boolean
@@ -90,7 +90,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       exec:                          { type: 'string' },
       config:                        { type: 'string' },
       file:                          { type: 'string', multiple: true },
-      resume:                        { type: 'string' },
+      resume:                        { type: 'boolean' },
       help:                          { type: 'boolean', short: 'h' },
       version:                       { type: 'boolean', short: 'v' },
       'show-context':                { type: 'boolean' },
@@ -173,7 +173,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       forget:        values.forget as string | undefined,
       files:      (values.file as string[] | undefined) ?? [],
       prompt:     positionals.join(' ') || undefined,
-      resume:     values.resume as string | undefined,
+      resume:     (values.resume as boolean | undefined) ?? false,
       configPath: values.config as string | undefined,
       exec:       values.exec as string | undefined,
     },
