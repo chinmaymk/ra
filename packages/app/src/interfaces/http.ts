@@ -116,22 +116,18 @@ export class HttpServer {
   /**
    * Build the full message array for a loop invocation.
    *
-   * New sessions (no stored messages): prefix (system prompt, skills, context)
-   * is prepended and will be persisted by the history middleware (priorCount = 0).
+   * New sessions: prefix (system prompt, skills, context) is prepended and
+   * will be persisted by the history middleware (priorCount = 0).
    *
-   * Existing sessions: prefix is already on disk.  Load the stored thread and
-   * append only the client messages that aren't stored yet.  The prefix length
-   * is derived from the current config so we can tell where the conversation
-   * portion begins in the stored array.
+   * Existing sessions: prefix is already on disk.  Load the stored thread
+   * and append only the client messages that aren't stored yet.
    */
   private async buildMessages(
     clientMessages: IMessage[],
     sessionId: string,
+    isNew: boolean,
   ): Promise<{ messages: IMessage[]; priorCount: number }> {
-    const storedCount = await this.options.storage.messageCount(sessionId)
-
-    if (storedCount === 0) {
-      // New session — prepend prefix, store everything
+    if (isNew) {
       const prefix = buildMessagePrefix({
         systemPrompt: this.options.systemPrompt,
         skillIndex: this.options.skillIndex,
@@ -158,20 +154,21 @@ export class HttpServer {
     return { messages: stored, priorCount }
   }
 
-  private async ensureSession(clientSessionId?: string): Promise<string> {
+  private async ensureSession(clientSessionId?: string): Promise<{ sessionId: string; isNew: boolean }> {
     if (clientSessionId) {
-      return this.options.storage.ensureSession(clientSessionId, {
+      const result = await this.options.storage.ensureSession(clientSessionId, {
         provider: this.options.provider.name,
         model: this.options.model,
         interface: 'http',
       })
+      return { sessionId: result.id, isNew: result.isNew }
     }
     const session = await this.options.storage.create({
       provider: this.options.provider.name,
       model: this.options.model,
       interface: 'http',
     })
-    return session.id
+    return { sessionId: session.id, isNew: true }
   }
 
   /** Create a session-scoped AgentLoop. */
@@ -205,8 +202,8 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const sessionId = await this.ensureSession(body.sessionId)
-    const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId)
+    const { sessionId, isNew } = await this.ensureSession(body.sessionId)
+    const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId, isNew)
     const loop = this.createLoop(sessionId, priorCount)
 
     try {
@@ -226,8 +223,8 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const sessionId = await this.ensureSession(body.sessionId)
-    const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId)
+    const { sessionId, isNew } = await this.ensureSession(body.sessionId)
+    const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId, isNew)
 
     const self = this
     const stream = new ReadableStream({

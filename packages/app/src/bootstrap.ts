@@ -85,12 +85,12 @@ export async function bootstrap(
       if (!latest) throw new Error('No sessions to resume')
       sessionId = latest.id
     } else {
-      await storage.ensureSession(opts.resume, {
+      const ensured = await storage.ensureSession(opts.resume, {
         provider: agent.provider,
         model: agent.model,
         interface: app.interface,
       })
-      sessionId = opts.resume
+      sessionId = ensured.id
     }
     sessionDir = storage.sessionDir(sessionId)
   } else {

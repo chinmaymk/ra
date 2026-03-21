@@ -72,15 +72,6 @@ export class SessionStorage {
     return parseJsonlFile<IMessage>(join(this.sessionDir(id), 'messages.jsonl'))
   }
 
-  /** Count messages stored on disk without fully parsing them. */
-  async messageCount(id: string): Promise<number> {
-    const file = Bun.file(join(this.sessionDir(id), 'messages.jsonl'))
-    if (!(await file.exists())) return 0
-    const text = await file.text()
-    if (!text.trim()) return 0
-    return text.trimEnd().split('\n').length
-  }
-
   async list(): Promise<Session[]> {
     const glob = new Bun.Glob('*/meta.json')
     const sessions: Session[] = []
@@ -99,15 +90,16 @@ export class SessionStorage {
   }
 
   /** Ensure a session directory exists for a given ID (creates it if needed). */
-  async ensureSession(id: string, options: CreateSessionOptions): Promise<string> {
+  async ensureSession(id: string, options: CreateSessionOptions): Promise<{ id: string; isNew: boolean }> {
     const dir = this.sessionDir(id)
     await mkdir(dir, { recursive: true })
     const metaPath = join(dir, 'meta.json')
-    if (!(await Bun.file(metaPath).exists())) {
+    const isNew = !(await Bun.file(metaPath).exists())
+    if (isNew) {
       const meta: SessionMeta = { id, created: new Date().toISOString(), ...options }
       await Bun.write(metaPath, JSON.stringify(meta, null, 2))
     }
-    return id
+    return { id, isNew }
   }
 
   async prune(options: PruneOptions): Promise<void> {
