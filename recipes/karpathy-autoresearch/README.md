@@ -1,4 +1,4 @@
-# autoresearch
+# karpathy-autoresearch
 
 Autonomous ML research agent based on [Karpathy's autoresearch](https://github.com/karpathy/autoresearch). The agent iteratively modifies a training script, runs 5-minute experiments, evaluates results, and keeps or discards changes — all without human intervention.
 
@@ -25,10 +25,10 @@ cd /path/to/autoresearch
 ra --config /path/to/ra/recipes/karpathy-autoresearch/ra.config.yaml
 ```
 
-Then tell the agent to begin:
+Then tell the agent to read the skill and begin:
 
 ```
-> Read program.md and start a new experiment run
+> Read skills/autoresearch/SKILL.md and start a new experiment run
 ```
 
 The agent will set up a branch, establish a baseline, and begin autonomous experimentation. Each experiment takes ~5 minutes. Over an 8-hour period, expect ~100 experiments.
