@@ -119,14 +119,16 @@ export interface RaConfig {
   }
 }
 
-/** Cron-specific fields that don't exist on RaConfig. */
-export interface CronJobFields {
+/** A cron job entry. Each job references a full ra.config file that is independently bootstrapped. */
+export interface CronJobConfig {
   /** Unique identifier for this job. */
   id: string
   /** Cron expression (5-field standard or 6-field with seconds). */
   schedule: string
   /** The user prompt to send to the agent each tick. */
   prompt: string
+  /** Path to a ra.config.{json,yaml,yml,toml} file. Resolved relative to the parent config's configDir. */
+  config: string
   /** IANA timezone (e.g., 'America/New_York'). Defaults to system timezone. */
   timezone?: string
   /** When true, reuse the same session across runs (accumulating context). Default: false. */
@@ -136,9 +138,6 @@ export interface CronJobFields {
   /** Disable this job without removing it. Default: true. */
   enabled?: boolean
 }
-
-/** A cron job: cron-specific scheduling fields + any RaConfig overrides. */
-export type CronJobConfig = CronJobFields & Partial<RaConfig>
 
 export interface McpClientConfig {
   name: string
