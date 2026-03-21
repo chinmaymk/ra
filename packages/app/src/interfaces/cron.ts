@@ -102,9 +102,8 @@ async function executeJob(
 
   const initialMessages = buildMessagePrefix({
     systemPrompt: config.agent.systemPrompt,
-    skillMap: app.skillMap,
+    skillIndex: app.skillIndex,
     contextMessages: app.contextMessages,
-    activeSkillNames: config.app.skills,
   })
   const priorCount = initialMessages.length
   initialMessages.push({ role: 'user', content: job.prompt })

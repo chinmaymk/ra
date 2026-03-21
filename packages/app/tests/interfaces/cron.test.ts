@@ -94,7 +94,6 @@ function makeApp(overrides?: { provider?: IProvider }) {
       inspector: { port: 3002 },
       storage: { format: 'jsonl', maxSessions: 100, ttlDays: 30 },
       skillDirs: [],
-      skills: [],
       mcp: {
         client: [],
         server: { enabled: false, port: 3001, tool: { name: 'ra', description: 'test' } },
@@ -136,7 +135,7 @@ function makeApp(overrides?: { provider?: IProvider }) {
     provider,
     tools: new ToolRegistry(),
     middleware: {},
-    skillMap: new Map(),
+    skillIndex: new Map(),
     storage: undefined!, // set by individual tests
     sessionId: 'test',
     contextMessages: [],
@@ -290,6 +289,40 @@ describe('runCron', () => {
 
       expect(capturedModel).toBe('claude-haiku-4-5')
     })
+
+    it('creates a session per job execution', async () => {
+      const { app } = makeApp()
+      const storage = await makeStorage('ra-cron-session')
+      app.storage = storage
+
+      const before = (await storage.list()).length
+
+      await runOnce(app, [
+        { name: 'session-job', schedule: '* * * * *', prompt: 'test' },
+      ])
+
+      const after = await storage.list()
+      expect(after.length).toBe(before + 1)
+      expect(after.some(s => s.meta.interface === 'cron')).toBe(true)
+    })
+
+    it('stops when abort signal fires during sleep', async () => {
+      const { app } = makeApp()
+      app.storage = await makeStorage('ra-cron-abort')
+
+      const controller = new AbortController()
+      // Job scheduled in the future — scheduler will sleep
+      const promise = runCron({
+        app,
+        jobs: [{ name: 'future-job', schedule: '0 0 1 1 *', prompt: 'test' }],
+        signal: controller.signal,
+      })
+
+      // Abort while sleeping
+      setTimeout(() => controller.abort(), 50)
+      await promise
+      // If we get here, the scheduler stopped correctly
+    })
   })
 
   describe('logging', () => {
@@ -314,6 +347,22 @@ describe('runCron', () => {
       expect(findLog(logs, 'cron job session created', { job: 'log-job' })).toBeDefined()
       expect(findLog(logs, 'cron job completed', { job: 'log-job' })).toBeDefined()
       expect(findLog(logs, 'cron job rescheduled', { job: 'log-job' })).toBeDefined()
+    })
+
+    it('includes usage data in completion log', async () => {
+      const { app, logs } = makeApp()
+      app.storage = await makeStorage('ra-cron-usage-log')
+
+      await runOnce(app, [
+        { name: 'usage-job', schedule: '* * * * *', prompt: 'test' },
+      ])
+
+      const completed = findLog(logs, 'cron job completed', { job: 'usage-job' })
+      expect(completed).toBeDefined()
+      expect(completed!.data?.sessionId).toBeDefined()
+      expect(typeof completed!.data?.iterations).toBe('number')
+      expect(typeof completed!.data?.inputTokens).toBe('number')
+      expect(typeof completed!.data?.outputTokens).toBe('number')
     })
 
     it('logs failure details when a job errors', async () => {
