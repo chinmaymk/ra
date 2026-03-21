@@ -1,6 +1,6 @@
 # Built-in Tools
 
-ra ships with built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. When [memory](/configuration/#memory) is enabled, additional memory tools are registered. All built-in tools are registered by default and can be individually configured or disabled via the [`tools`](/configuration/#tools) config section.
+ra ships with built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. An ephemeral [scratchpad](#scratchpad) is registered by default for compaction-safe note-taking. When [memory](/configuration/#memory) is enabled, additional memory tools are registered for long-term persistence. All built-in tools are registered by default and can be individually configured or disabled via the [`tools`](/configuration/#tools) config section.
 
 Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 
@@ -70,11 +70,17 @@ Append content to the end of a file. Creates the file and parent directories if 
 
 ### `LS`
 
-List files and directories at a path. Directories have a trailing `/`. Does not recurse into subdirectories.
+List files and directories at a path. Directories have a trailing `/`. Set `recursive=true` to list nested contents up to a given depth.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `path` | string | yes | Directory to list |
+| `recursive` | boolean | no | Recurse into subdirectories (default: `false`) |
+| `depth` | number | no | Max recursion depth, 1–5 (default: `3`, only used when `recursive` is `true`) |
+
+```json
+{ "path": "src", "recursive": true, "depth": 2 }
+```
 
 ### `Grep`
 
@@ -166,7 +172,7 @@ Make an HTTP request and return the response as JSON with `status`, `headers`, a
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `url` | string | yes | URL to fetch |
-| `method` | string | no | HTTP method (default: `GET`) |
+| `method` | string | no | HTTP method: `GET`, `POST`, `PUT`, `PATCH`, or `DELETE` (default: `GET`) |
 | `headers` | object | no | Request headers as key-value pairs |
 | `body` | string | no | Request body |
 
@@ -195,29 +201,42 @@ Pause the agent loop and ask the user a question. The loop suspends until the us
 
 This tool is **not exposed via MCP** since MCP clients manage their own user interaction.
 
-### `TodoWrite`
+## Scratchpad
 
-Track tasks with a checklist. The tool description dynamically updates to show remaining items and their indices, keeping the model aware of progress without needing to call `list`.
+When built-in tools are enabled, ra registers an ephemeral key-value scratchpad that survives [context compaction](/core/agent-loop#compaction). Entries are re-injected before every model call via middleware, so the agent never loses them even as older messages are summarized. The scratchpad is **not** persisted across sessions — use [memory tools](#memory) for long-term storage.
 
-**Actions:**
+Disable the scratchpad with:
 
-| Action | Parameters | Description |
-|--------|-----------|-------------|
-| `add` | `item` (string) | Add an item to the checklist |
-| `check` | `index` (number) | Mark an item as done (0-based) |
-| `uncheck` | `index` (number) | Mark an item as not done |
-| `remove` | `index` (number) | Remove an item |
-| `list` | — | Show all items with status |
-
-```json
-{ "action": "add", "item": "Write tests" }
-{ "action": "check", "index": 0 }
-{ "action": "list" }
+```yaml
+tools:
+  scratchpad:
+    enabled: false
 ```
 
-The dynamic description looks like:
+### `scratchpad_write`
 
-> Track tasks with a checklist. Actions: "add" (item text), "check"/"uncheck"/"remove" (by 0-based index), "list" (show all). Remaining (2/3): 1: Fix bug, 2: Deploy
+Store a key-value pair in the scratchpad. Writing to an existing key overwrites the previous value. Use this for checklists, plans, intermediate results, or any state that must outlive compaction.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | yes | Short descriptive identifier, e.g. `"checklist"`, `"plan"` |
+| `value` | string | yes | Content to store (plain text, markdown, JSON, etc.) |
+
+```json
+{ "key": "checklist", "value": "- [x] step 1\n- [ ] step 2\n- [ ] step 3" }
+```
+
+### `scratchpad_delete`
+
+Remove an entry from the scratchpad by key. Use when an entry is no longer needed to keep the scratchpad clean.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | yes | Key of the entry to remove |
+
+```json
+{ "key": "checklist" }
+```
 
 ## Parallelization
 
@@ -318,6 +337,19 @@ tools:
   builtin: true
   Agent:
     maxConcurrency: 2
+```
+
+### Truncate large tool responses
+
+When a tool returns more characters than `maxResponseSize`, the output is truncated at a newline boundary and a notice is appended telling the model to use more targeted queries. Default: `25000`.
+
+```yaml
+tools:
+  maxResponseSize: 50000   # raise the limit
+```
+
+```bash
+RA_MAX_TOOL_RESPONSE_SIZE=50000 ra   # or via env var
 ```
 
 ### Disable all built-in tools
