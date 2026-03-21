@@ -190,25 +190,17 @@ export class Repl {
 
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
 
-    // On a brand-new session, build the prefix (system prompt, skills, context)
-    // and store it as the first messages in the thread.  On subsequent turns or
-    // after a resume the prefix is already in this.messages — never re-inject it.
+    // New session: build prefix once (stored by history middleware, loaded on resume).
+    // Subsequent turns / resume: prefix is already in this.messages.
     const isNewSession = this.messages.length === 0
-    if (isNewSession) {
-      const prefix = buildMessagePrefix({
-        systemPrompt: this.options.systemPrompt,
-        skillIndex: this.options.skillIndex,
-        contextMessages: this.options.contextMessages,
-      })
-      this.messages.push(...prefix)
-    }
-
-    // priorCount = messages already persisted on disk.
-    // New session: nothing on disk yet (0) — prefix + user message will be saved.
-    // Existing session: all of this.messages are on disk — only new messages saved.
+    const initialMessages: IMessage[] = isNewSession
+      ? [...buildMessagePrefix({
+          systemPrompt: this.options.systemPrompt,
+          skillIndex: this.options.skillIndex,
+          contextMessages: this.options.contextMessages,
+        }), userMessage]
+      : [...this.messages, userMessage]
     const priorCount = isNewSession ? 0 : this.messages.length
-    const snapshotLength = this.messages.length
-    const initialMessages = [...this.messages, userMessage]
 
     const tuiState = tui.createStreamState()
     tui.startSpinner()
@@ -264,7 +256,7 @@ export class Repl {
     try {
       const result = await loop.run(initialMessages)
       tui.flushStreamState(tuiState)
-      this.messages.push(...result.messages.slice(snapshotLength))
+      this.messages = result.messages
     } catch (err) {
       tui.flushStreamState(tuiState)
       if (err instanceof DOMException && err.name === 'AbortError') {
