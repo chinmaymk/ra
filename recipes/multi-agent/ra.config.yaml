@@ -1,0 +1,21 @@
+app:
+  interface: repl
+  skills:
+    - orchestrator
+  skillDirs:
+    - ./skills
+
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  maxIterations: 50
+  thinking: medium
+  tools:
+    builtin: true
+    overrides:
+      Agent:
+        maxConcurrency: 4
+        maxDepth: 2
+  compaction:
+    enabled: true
+    threshold: 0.8
