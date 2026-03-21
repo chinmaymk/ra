@@ -87,6 +87,50 @@ describe('createResolverMiddleware', () => {
     expect(ctx.request.messages[0]!.content).toBe('@foo')
   })
 
+  it('resolves references in system prompt messages', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      { role: 'system', content: 'You are helpful. See @config' },
+      { role: 'user', content: 'hello' },
+    ])
+    await mw(ctx)
+    const systemContent = ctx.request.messages[0]!.content as string
+    expect(systemContent).toContain('You are helpful. See @config')
+    expect(systemContent).toContain('<resolved-context ref="@config">')
+    expect(systemContent).toContain('content of config')
+    // User message should be unchanged (no patterns)
+    expect(ctx.request.messages[1]!.content).toBe('hello')
+  })
+
+  it('resolves references in both system prompt and user message', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      { role: 'system', content: 'Use @rules' },
+      { role: 'user', content: 'check @readme' },
+    ])
+    await mw(ctx)
+    const systemContent = ctx.request.messages[0]!.content as string
+    expect(systemContent).toContain('content of rules')
+    const userContent = ctx.request.messages[1]!.content as string
+    expect(userContent).toContain('content of readme')
+  })
+
+  it('skips already-resolved system prompt on subsequent iterations', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      { role: 'system', content: 'See @config' },
+      { role: 'user', content: 'look at @readme' },
+    ])
+    await mw(ctx)
+    const systemAfterFirst = ctx.request.messages[0]!.content as string
+    const userAfterFirst = ctx.request.messages[1]!.content as string
+
+    // Second call — both should be unchanged (markers present)
+    await mw(ctx)
+    expect(ctx.request.messages[0]!.content).toBe(systemAfterFirst)
+    expect(ctx.request.messages[1]!.content).toBe(userAfterFirst)
+  })
+
   it('skips already-resolved messages on subsequent loop iterations', async () => {
     const mw = createResolverMiddleware([echoResolver], '/tmp')
     const ctx = makeCtx([
