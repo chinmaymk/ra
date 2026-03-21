@@ -123,6 +123,27 @@ agent.loop (traceId: abc-123)
       └── agent.model_call (model: claude-sonnet-4-6, 230ms)
 ```
 
+### Cron Spans
+
+When running in cron mode, the scheduler emits additional spans wrapping each job:
+
+```
+cron.scheduler
+  └── cron.job (job: "daily-report", schedule: "0 9 * * 1-5")
+        └── agent.loop
+              └── agent.iteration ...
+  └── cron.job (job: "health-check", schedule: "*/30 * * * *")
+        └── agent.loop
+              └── agent.iteration ...
+```
+
+| Span | Start Attributes | End Attributes |
+|------|-----------------|----------------|
+| `cron.scheduler` | `jobCount`, `jobNames` | `jobsRun`, `jobsFailed`, `stoppedBySignal` |
+| `cron.job` | `job`, `schedule` | `sessionId`, `iterations`, `inputTokens`, `outputTokens`, `messageCount` (or `error`) |
+
+Each cron job creates its own session, so per-job `agent.*` spans and logs are written to that job's session directory.
+
 ### Trace Record Fields
 
 | Field | Description |

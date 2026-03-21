@@ -49,6 +49,7 @@ export default defineConfig({
           { text: 'REPL', link: '/modes/repl' },
           { text: 'HTTP Server', link: '/modes/http' },
           { text: 'MCP', link: '/modes/mcp' },
+          { text: 'Cron', link: '/modes/cron' },
           { text: 'Inspector', link: '/modes/inspector' },
           { text: 'GitHub Actions', link: '/modes/github-actions' },
         ],

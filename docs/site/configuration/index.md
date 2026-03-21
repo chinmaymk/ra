@@ -219,11 +219,37 @@ See [MCP](/modes/mcp#lazy-schema-loading) for details.
 | `app.http.port` | — | `--http-port` | `3000` | Server port |
 | `app.http.token` | — | `--http-token` | — | Bearer token for authentication |
 
+### Cron
+
+Define scheduled agent jobs. Only used when `--interface cron`.
+
+```yaml
+cron:
+  - name: daily-report
+    schedule: "0 9 * * 1-5"
+    prompt: "Summarize yesterday's git activity"
+  - name: health-check
+    schedule: "*/30 * * * *"
+    prompt: "Check API health"
+    agent:
+      model: claude-haiku-4-5-20251001
+      maxIterations: 5
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `cron[].name` | yes | Human-readable job name (used in logs and traces) |
+| `cron[].schedule` | yes | Standard cron expression |
+| `cron[].prompt` | yes | Prompt sent to the agent on each run |
+| `cron[].agent` | no | Per-job agent overrides (object) or path to a recipe YAML file (string) |
+
+See [Cron](/modes/cron) for details.
+
 ### App — Interface
 
 | Field | Env var | CLI flag | Default | Description |
 |-------|---------|----------|---------|-------------|
-| — | — | `--interface` | auto | `cli`, `repl`, `http` |
+| — | — | `--interface` | auto | `cli`, `repl`, `http`, `cron` |
 | — | — | `--mcp-stdio` | — | Start as MCP server (stdio) |
 | — | — | `--mcp` | — | Start as MCP server (HTTP) |
 | — | — | `--resume` | — | Resume a previous session |
