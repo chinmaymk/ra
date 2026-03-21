@@ -28,7 +28,7 @@ import { createObservability } from './observability'
 import { loadSkillIndex, buildAvailableSkillsXml } from './skills/loader'
 import type { SkillIndex } from './skills/types'
 import { SessionStorage } from './storage/sessions'
-import { registerBuiltinTools, subagentTool } from './tools'
+import { registerBuiltinTools, subagentTool, managedAgentTools } from './tools'
 import { resolvePath } from './utils/paths'
 import type { Tracer } from './observability/tracer'
 import type { Middleware } from '@chinmaymk/ra'
@@ -282,6 +282,23 @@ export async function bootstrap(
     }))
   }
 
+  // ── Managed agent tools (persistent child ra processes) ──────────
+  const managedSettings = agent.tools.overrides.CreateAgent ?? {}
+  const managedEnabled = managedSettings.enabled !== false && agent.tools.builtin
+  let managedShutdown: (() => Promise<void>) | undefined
+  if (managedEnabled) {
+    const managed = managedAgentTools({
+      dataDir: app.dataDir,
+      defaultModel: agent.model,
+      defaultProvider: agent.provider,
+      maxAgents: (managedSettings.maxAgents as number | undefined) ?? 4,
+      logger,
+    })
+    for (const tool of managed.tools) tools.register(tool)
+    managedShutdown = managed.shutdown
+    logger.info('managed agent tools registered')
+  }
+
   // ── Token budget summary ─────────────────────────────────────────
   {
     const allRegisteredTools = tools.all()
@@ -306,6 +323,7 @@ export async function bootstrap(
   // ── Shutdown ───────────────────────────────────────────────────────
   const shutdown = async () => {
     logger.info('shutting down')
+    try { if (managedShutdown) await managedShutdown() } catch { /* best-effort */ }
     try { await mcpClient.disconnect() } catch { /* best-effort */ }
     if (memoryStore) memoryStore.close()
     await logger.flush()

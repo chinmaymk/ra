@@ -1,6 +1,8 @@
 # Multi-Agent Orchestrator
 
-An orchestrator agent that dynamically creates and invokes specialized sub-agents to handle complex tasks. The model decides when to fork agents, what role each agent plays, and how to synthesize their results.
+An orchestrator that dynamically creates persistent specialist agents as independent ra processes. The model decides when to spin up agents, what role each plays, and communicates with them over HTTP.
+
+Each agent is a real ra instance with its own `ra.config.yaml`, system prompt, tools, skills, and conversation history.
 
 ## Prerequisites
 
@@ -16,75 +18,77 @@ bun run ra --config recipes/multi-agent/ra.config.yaml
 # One-shot mode
 bun run ra --config recipes/multi-agent/ra.config.yaml \
   --interface cli \
-  --prompt "Review src/ for security and performance issues"
+  --prompt "Review src/ for security and performance issues using dedicated agents"
 ```
 
 ## How It Works
 
 1. You describe a complex task
-2. The orchestrator decomposes it into independent sub-tasks
-3. Each sub-task gets a purpose-built agent with a specialized `role` (system prompt)
-4. Agents run in parallel, each with its own conversation and tool access
-5. The orchestrator synthesizes agent outputs into a unified result
+2. The orchestrator calls **CreateAgent** — writes a `ra.config.yaml`, spawns a new ra process with an HTTP interface
+3. The orchestrator calls **MessageAgent** — sends messages to the agent and receives responses
+4. The agent maintains conversation state across messages (iterative refinement)
+5. When done, the orchestrator calls **DestroyAgent** to stop the process
 
-Each sub-agent inherits all built-in tools (file I/O, shell, search) but gets a custom system prompt that focuses it on a single area of expertise.
-
-## Agent Tool
-
-The `Agent` tool accepts a `tasks` array. Each task has:
-
-- **`task`** — the work to perform (required)
-- **`role`** — a system prompt that specializes the agent (optional, inherits parent prompt if omitted)
-
-```json
-{
-  "tasks": [
-    {
-      "role": "You are a security auditor. Report vulnerabilities only.",
-      "task": "Audit src/auth/ for injection and auth bypass risks."
-    },
-    {
-      "role": "You are a test engineer. Write thorough unit tests.",
-      "task": "Write tests for src/utils/parse.ts covering edge cases."
-    }
-  ]
-}
 ```
+Orchestrator
+  ├── CreateAgent "security-auditor"
+  │     → writes ra.config.yaml + skills
+  │     → spawns ra --interface http
+  │     → waits for HTTP server ready
+  │
+  ├── CreateAgent "perf-reviewer"
+  │     → same process
+  │
+  ├── MessageAgent "security-auditor" → "Audit src/auth/"
+  │     → POST /chat/sync → response
+  │
+  ├── MessageAgent "perf-reviewer" → "Profile src/data/"
+  │     → POST /chat/sync → response
+  │
+  ├── MessageAgent "security-auditor" → "Check the fix I made"
+  │     → conversation continues (same session)
+  │
+  ├── DestroyAgent "security-auditor"
+  └── DestroyAgent "perf-reviewer"
+```
+
+## Available Tools
+
+| Tool | Purpose |
+|------|---------|
+| `CreateAgent` | Spawn a new agent with name, system prompt, optional model/provider/skills |
+| `MessageAgent` | Send a message to a running agent, get response |
+| `ListAgents` | List running agents and their status |
+| `DestroyAgent` | Stop and clean up an agent |
 
 ## Customization
 
 ### Model
 
-Edit `ra.config.yaml` to change the model:
-
 ```yaml
 agent:
-  model: claude-opus-4-6  # more capable orchestration
+  model: claude-opus-4-6  # more capable orchestrator
 ```
 
-### Concurrency and Depth
+### Max Agents
 
 ```yaml
 agent:
   tools:
     overrides:
-      Agent:
-        maxConcurrency: 6  # max parallel agents (default 4)
-        maxDepth: 3        # max nesting depth (default 2)
+      CreateAgent:
+        maxAgents: 6  # default 4
 ```
 
-### Add MCP Servers
+### Provider
 
-Sub-agents inherit MCP tools registered on the parent:
+Child agents default to the parent's provider and model. Override per-agent in the `CreateAgent` call:
 
-```yaml
-app:
-  mcp:
-    client:
-      - name: github
-        transport: stdio
-        command: npx
-        args: ["-y", "@modelcontextprotocol/server-github"]
-        env:
-          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+```json
+{
+  "name": "fast-scanner",
+  "instructions": "...",
+  "model": "claude-haiku-4-5-20251001",
+  "provider": "anthropic"
+}
 ```
