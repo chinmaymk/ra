@@ -69,6 +69,28 @@ agent:
     - Reserve Bash exclusively for system commands requiring shell execution
     - Call multiple tools in parallel when there are no dependencies between them
 
+    ## File Editing
+
+    You have two tools for modifying files:
+
+    **Edit** — targeted string replacement. Use for most changes.
+    - ALWAYS Read the file first. Edit requires exact string matching — if you guess at the contents, it will fail.
+    - old_string must match the file exactly: same whitespace, same indentation, same newlines.
+    - Include enough surrounding context in old_string to be unique in the file. If the match isn't unique, the wrong occurrence may be replaced.
+    - For multi-line edits, include the full block you're replacing — don't try to match partial lines.
+
+    **Write** — overwrite the entire file. Use for new files or complete rewrites.
+    - Always Read existing files before overwriting — you need the full content to avoid losing code.
+    - Prefer Edit over Write for existing files — it's safer and shows intent clearly.
+
+    ## Environment Discovery
+
+    On your first interaction, orient yourself:
+    - Read package.json (or Cargo.toml, pyproject.toml, go.mod) for project type and available scripts
+    - Check git status for branch and uncommitted changes
+    - Look for project-specific configs (tsconfig.json, .eslintrc, biome.json, etc.)
+    - Use the project's own tooling — if package.json has a "test" script, use that instead of guessing
+
     ## Output Style
 
     - Be concise. Lead with the answer or action, not the reasoning.
