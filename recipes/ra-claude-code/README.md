@@ -12,13 +12,13 @@ ra --config recipes/ra-claude-code/ra.config.yaml
 - **Discovers your project.** Reads `package.json`, checks `git status`, finds your test/lint/build commands on first interaction.
 - **Picks up your rules.** Auto-discovers `CLAUDE.md`, `AGENTS.md`, `.cursorrules` from your project.
 - **Stays on track.** Extended thinking (Opus), smart context compaction, session memory, and a token budget that stops runaway loops.
-- **9 on-demand skills.** The agent activates them based on what you're doing — you don't manage them.
+- **10 on-demand skills.** The agent activates them based on what you're doing — you don't manage them.
 
 ## Skills
 
 | Skill | Kicks in when... |
 |-------|-----------------|
-| `planner` | 5+ step tasks, multi-file changes, architectural decisions |
+| `plan` | 5+ step tasks, multi-file changes — plans first, waits for approval |
 | `debugger` | Bug diagnosis — reproduce, isolate, hypothesize, fix, verify |
 | `verify` | After changes — runs type-check, lint, test, build in order |
 | `git-workflow` | Any git operation — safety rules for destructive commands |
@@ -26,6 +26,7 @@ ra --config recipes/ra-claude-code/ra.config.yaml
 | `quick-pr` | "make a PR" — analyzes all branch commits, pushes, creates PR |
 | `code-style` | Writing or reviewing code — correctness, security, simplicity |
 | `explore-delegate` | Broad codebase search — spawns parallel subagents |
+| `todo` | Multi-step work — tracks checklist in scratchpad, survives compaction |
 | `stuck-recovery` | Same error 3+ times — forces a strategy change |
 
 ## Setup
