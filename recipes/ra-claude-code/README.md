@@ -1,100 +1,80 @@
 # ra-claude-code
 
-A coding agent recipe that replicates Claude Code's context engineering and safety-first behavior using ra. Interactive REPL with extended thinking, on-demand skills, and careful execution principles.
-
-## What It Does
-
-- **Always-on system prompt:** Core behavior baked into `systemPrompt` — autonomous execution, read-before-write, minimal changes, over-engineering prevention, safety-first, tool discipline, output efficiency
-- **On-demand skills:** 9 skills discovered automatically from `skillDirs`. The model sees their descriptions and activates them when the task calls for it (e.g., activates `quick-commit` when the user asks to commit)
-- **Full tool access:** Filesystem (Read/Write/Edit/Glob/Grep), shell (Bash), web fetch, user interaction, checklist tracking
-- **Smart compaction:** Custom summarization prompt preserves file paths, decisions, git state, and task progress when context is compressed
-- **Session memory:** Persists knowledge across sessions
-- **Extended thinking:** Opus with high thinking budget for complex reasoning
-- **Token budget:** Configurable hard stop (800k default) to prevent runaway sessions
-
-## Skills (on-demand)
-
-The model sees all skills as available and activates them based on the task. Descriptions are written as triggers.
-
-| Skill | Activates when... |
-|-------|-------------------|
-| `planner` | Task has 5+ steps, spans multiple files, or requires architectural decisions |
-| `debugger` | Diagnosing a bug, test failure, or unexpected behavior |
-| `verify` | After making code changes, before committing, or before claiming done |
-| `git-workflow` | Any git operation — branching, merging, rebasing, conflict resolution |
-| `quick-commit` | User asks to commit changes |
-| `quick-pr` | User asks to create a pull request |
-| `code-style` | Reviewing code, writing new code, or discussing code quality |
-| `explore-delegate` | Need to search broadly, explore multiple areas, or parallelize research |
-| `stuck-recovery` | Same error 3+ times, retrying with minor variations, no progress |
-
-## Prerequisites
-
-- [ra](https://github.com/chinmaymk/ra) installed
-- `ANTHROPIC_API_KEY` environment variable set
-- Optional: `GITHUB_TOKEN` for GitHub MCP integration
-
-## Quick Start
+A coding agent that thinks before it edits. Built on [ra](https://github.com/chinmaymk/ra).
 
 ```bash
-# Interactive REPL (default)
+ra --config recipes/ra-claude-code/ra.config.yaml
+```
+
+## What You Get
+
+- **Reads before it writes.** The agent reads files, matches exact strings, and verifies after editing. No guessing.
+- **Discovers your project.** Reads `package.json`, checks `git status`, finds your test/lint/build commands on first interaction.
+- **Picks up your rules.** Auto-discovers `CLAUDE.md`, `AGENTS.md`, `.cursorrules` from your project.
+- **Stays on track.** Extended thinking (Opus), smart context compaction, session memory, and a token budget that stops runaway loops.
+- **9 on-demand skills.** The agent activates them based on what you're doing — you don't manage them.
+
+## Skills
+
+| Skill | Kicks in when... |
+|-------|-----------------|
+| `planner` | 5+ step tasks, multi-file changes, architectural decisions |
+| `debugger` | Bug diagnosis — reproduce, isolate, hypothesize, fix, verify |
+| `verify` | After changes — runs type-check, lint, test, build in order |
+| `git-workflow` | Any git operation — safety rules for destructive commands |
+| `quick-commit` | "commit this" — parallel status/diff/log, conventional message |
+| `quick-pr` | "make a PR" — analyzes all branch commits, pushes, creates PR |
+| `code-style` | Writing or reviewing code — correctness, security, simplicity |
+| `explore-delegate` | Broad codebase search — spawns parallel subagents |
+| `stuck-recovery` | Same error 3+ times — forces a strategy change |
+
+## Setup
+
+1. Install [ra](https://github.com/chinmaymk/ra)
+2. Set `ANTHROPIC_API_KEY`
+3. Run it:
+
+```bash
+# Interactive REPL
 ra --config recipes/ra-claude-code/ra.config.yaml
 
-# One-shot CLI mode
+# One-shot
 ra --config recipes/ra-claude-code/ra.config.yaml --interface cli "fix the failing tests"
-
-# With custom token budget (default: 800k)
-RA_TOKEN_BUDGET=500000 ra --config recipes/ra-claude-code/ra.config.yaml
 ```
 
-## Customization
+## Configuration
 
-### Change model
+**Switch model:**
 ```yaml
 agent:
-  model: claude-sonnet-4-6     # faster, cheaper
-  thinking: medium              # or remove for no thinking
+  model: claude-sonnet-4-6   # faster, cheaper
+  thinking: medium
 ```
 
-### Add GitHub MCP server
-Uncomment the `mcp` section in `ra.config.yaml` and set `GITHUB_TOKEN`.
-
-### Adjust iterations
-```yaml
-agent:
-  maxIterations: 100   # default 200, reduce for bounded tasks
-```
-
-### Token budget
+**Token budget** (default 800k):
 ```bash
-export RA_TOKEN_BUDGET=1000000  # default 800k tokens
+export RA_TOKEN_BUDGET=500000
 ```
 
-### Disable memory
+**Iteration limit** (default 200):
 ```yaml
 agent:
-  memory:
-    enabled: false
+  maxIterations: 100
 ```
 
-## Architecture
+**GitHub integration** — uncomment the `mcp` section in `ra.config.yaml` and set `GITHUB_TOKEN`.
+
+## How It Works
 
 ```
 ra.config.yaml
-├── systemPrompt          # Always-on: autonomous execution, safety, tool discipline
-├── skills/               # On-demand: model activates based on task
-│   ├── planner/          #   complex task decomposition
-│   ├── debugger/         #   systematic bug diagnosis
-│   ├── verify/           #   post-change type-check/lint/test
-│   ├── git-workflow/     #   git safety rules
-│   ├── quick-commit/     #   commit protocol
-│   ├── quick-pr/         #   PR creation protocol
-│   ├── code-style/       #   code quality + OWASP checklist
-│   ├── explore-delegate/ #   subagent delegation patterns
-│   └── stuck-recovery/   #   loop detection + strategy change
+├── systemPrompt        # Always-on: read-before-write, minimal edits, safety, tool discipline
+├── skills/             # On-demand: model activates based on task
 ├── middleware/
-│   └── token-budget.ts   # Hard stop at configurable token limit
-└── compaction prompt      # Preserves decisions, files, git state in summaries
+│   └── token-budget.ts # Hard stop at token limit
+└── compaction prompt   # Preserves file paths, decisions, git state across summaries
 ```
 
-Inspired by [Claude Code's system prompts](https://github.com/Piebald-AI/claude-code-system-prompts) — distills 110+ conditional prompt components into a focused system prompt + 9 on-demand skills.
+The system prompt handles core editing reliability — exact string matching, reading files before editing, environment discovery. Skills layer on specialized workflows (debugging, git, planning) only when needed. Compaction ensures long sessions don't lose context.
+
+Inspired by [Claude Code's prompt architecture](https://github.com/anthropics/claude-code) — distilled into a focused system prompt + 9 on-demand skills.
