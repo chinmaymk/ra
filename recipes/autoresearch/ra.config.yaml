@@ -1,0 +1,26 @@
+app:
+  interface: repl
+  skills:
+    - autoresearch
+  skillDirs:
+    - ./skills
+  permissions:
+    no_rules_rules: true
+
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  maxIterations: 500
+  toolTimeout: 900000
+  tools:
+    builtin: true
+    overrides:
+      Agent:
+        enabled: false
+      AskUserQuestion:
+        enabled: false
+      WebFetch:
+        enabled: false
+  compaction:
+    enabled: true
+    threshold: 0.8
