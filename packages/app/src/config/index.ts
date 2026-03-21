@@ -69,7 +69,6 @@ const ENV_RULES: Record<string, CoercionRule> = {
   RA_STORAGE_MAX_SESSIONS: { type: 'int',    path: ['app', 'storage', 'maxSessions'] },
   RA_STORAGE_TTL_DAYS:     { type: 'int',    path: ['app', 'storage', 'ttlDays'] },
   RA_SKILL_DIRS:           { type: 'csv',    path: ['app', 'skillDirs'] },
-  RA_SKILLS:               { type: 'csv',    path: ['app', 'skills'] },
   RA_MCP_SERVER_ENABLED:          { type: 'bool',   path: ['app', 'mcp', 'server', 'enabled'] },
   RA_MCP_SERVER_PORT:             { type: 'int',    path: ['app', 'mcp', 'server', 'port'] },
   RA_MCP_SERVER_TOOL_NAME:        { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'name'] },

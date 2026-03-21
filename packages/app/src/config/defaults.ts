@@ -13,7 +13,6 @@ export const defaultConfig: RaConfig = {
       ttlDays: 30,
     },
     skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
-    skills: [],
     mcp: {
       client: [],
       server: {

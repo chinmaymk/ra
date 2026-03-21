@@ -66,7 +66,6 @@ export interface AppConfig {
     ttlDays: number
   }
   skillDirs: string[]
-  skills: string[]
   mcp: {
     client: McpClientConfig[]
     server: McpServerConfig

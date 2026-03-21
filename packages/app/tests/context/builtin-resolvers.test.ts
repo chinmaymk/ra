@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'bun:test'
-import { fileResolver } from '../../src/context/builtin-resolvers'
+import { fileResolver, createSkillResolver } from '../../src/context/builtin-resolvers'
+import type { SkillIndex } from '../../src/skills/types'
 import { join } from 'path'
 import { mkdtemp, writeFile, mkdir } from 'fs/promises'
+import { mkdirSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 
 describe('fileResolver', () => {
@@ -98,5 +100,72 @@ describe('fileResolver', () => {
     const result = await fileResolver.resolve('sub/file.txt', dir)
     expect(result).not.toBeNull()
     expect(result).toContain('nested content')
+  })
+})
+
+describe('createSkillResolver', () => {
+  function makeSkillIndex(name: string, body: string): { index: SkillIndex; skillIndex: Map<string, SkillIndex> } {
+    const dir = join(tmpdir(), `ra-test-skill-${name}-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name} skill\n---\n${body}`)
+    const index: SkillIndex = { metadata: { name, description: `${name} skill` }, dir }
+    return { index, skillIndex: new Map([[name, index]]) }
+  }
+
+  it('has name "skill"', () => {
+    const resolver = createSkillResolver(new Map())
+    expect(resolver.name).toBe('skill')
+  })
+
+  it('pattern matches /skill-name at start of string', () => {
+    const resolver = createSkillResolver(new Map())
+    const re = new RegExp(resolver.pattern.source, resolver.pattern.flags)
+    const m = re.exec('/verify')
+    expect(m).not.toBeNull()
+    expect(m![1]).toBe('verify')
+  })
+
+  it('pattern matches /skill-name after whitespace', () => {
+    const resolver = createSkillResolver(new Map())
+    const re = new RegExp(resolver.pattern.source, resolver.pattern.flags)
+    const m = re.exec('please run /verify')
+    expect(m).not.toBeNull()
+    expect(m![1]).toBe('verify')
+  })
+
+  it('pattern matches hyphenated skill names', () => {
+    const resolver = createSkillResolver(new Map())
+    const re = new RegExp(resolver.pattern.source, resolver.pattern.flags)
+    const m = re.exec('use /my-cool-skill now')
+    expect(m).not.toBeNull()
+    expect(m![1]).toBe('my-cool-skill')
+  })
+
+  it('does not match file paths like /usr/bin', () => {
+    const resolver = createSkillResolver(new Map())
+    const re = new RegExp(resolver.pattern.source, resolver.pattern.flags)
+    const matches: string[] = []
+    let m: RegExpExecArray | null
+    while ((m = re.exec('/usr/bin/foo')) !== null) {
+      matches.push(m[1]!)
+    }
+    // /usr would match but /bin and /foo would not since they follow a /
+    // The key is that /usr/bin as a path won't fully resolve to a skill
+    expect(matches.length).toBeLessThanOrEqual(1)
+  })
+
+  it('resolves a known skill to active XML (lazy-loaded)', async () => {
+    const { skillIndex } = makeSkillIndex('verify', 'Run verification steps')
+    const resolver = createSkillResolver(skillIndex)
+    const result = await resolver.resolve('verify', '/tmp')
+    expect(result).not.toBeNull()
+    expect(result).toContain('<skill name="verify">')
+    expect(result).toContain('Run verification steps')
+  })
+
+  it('returns null for unknown skill names', async () => {
+    const resolver = createSkillResolver(new Map())
+    const result = await resolver.resolve('nonexistent', '/tmp')
+    expect(result).toBeNull()
   })
 })

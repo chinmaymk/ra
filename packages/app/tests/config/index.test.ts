@@ -22,7 +22,6 @@ describe('loadConfig', () => {
     expect(c.app.interface).toBe('repl')
     expect(c.agent.maxIterations).toBe(50)
     expect(c.app.skillDirs).toEqual(['.claude/skills', '.agents/skills', '.opencode/skills'])
-    expect(c.app.skills).toEqual([])
   })
 
   it('includes azure provider defaults', async () => {
@@ -190,7 +189,7 @@ describe('loadConfig', () => {
       RA_MCP_SERVER_TOOL_NAME: 'mybot',
       RA_MCP_SERVER_TOOL_DESCRIPTION: 'A bot',
       RA_STORAGE_MAX_SESSIONS: '50', RA_STORAGE_TTL_DAYS: '7',
-      RA_SKILL_DIRS: '/skills/a,/skills/b', RA_SKILLS: 'code,search',
+      RA_SKILL_DIRS: '/skills/a,/skills/b',
       RA_ANTHROPIC_API_KEY: 'sk-ant-123', RA_ANTHROPIC_BASE_URL: 'https://ant-proxy/',
       RA_OPENAI_API_KEY: 'sk-oai-123', RA_OPENAI_BASE_URL: 'https://oai-proxy/',
       RA_GOOGLE_API_KEY: 'goog-123', RA_OLLAMA_HOST: 'http://myhost:11434',
@@ -209,7 +208,6 @@ describe('loadConfig', () => {
     expect(c.app.storage.maxSessions).toBe(50)
     expect(c.app.storage.ttlDays).toBe(7)
     expect(c.app.skillDirs).toEqual(['/skills/a', '/skills/b'])
-    expect(c.app.skills).toEqual(['code', 'search'])
     expect(c.agent.providers.anthropic.apiKey).toBe('sk-ant-123')
     expect(c.agent.providers.anthropic.baseURL).toBe('https://ant-proxy/')
     expect(c.agent.providers.openai.apiKey).toBe('sk-oai-123')
