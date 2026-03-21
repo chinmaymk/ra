@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test'
 import { createTestEnv, type TestEnv } from './helpers/setup'
 import { runBinary } from './helpers/binary'
-import { writeFileSync, mkdirSync } from 'fs'
+import { writeFileSync, mkdirSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
@@ -83,27 +83,89 @@ describe('Agentic flow integration', () => {
       env.binaryEnv,
     )
 
+    // Anthropic provider extracts system → system param, rest → messages array
     const secondReq = env.mock.requests()[0]?.body as Record<string, unknown>
-    const messages = (secondReq?.messages ?? []) as { role: string; content: string }[]
+    const messages = (secondReq?.messages ?? []) as { role: string; content: unknown; _messageId?: string }[]
+    const system = secondReq?.system
 
-    // System prompt must appear at most once
-    const systemMessages = messages.filter(m => m.role === 'system')
-    expect(systemMessages.length).toBeLessThanOrEqual(1)
+    // System param must be set (extracted from system message)
+    expect(system).toBeDefined()
 
-    // No two consecutive messages should have identical content (duplicate detection)
-    for (let i = 1; i < messages.length; i++) {
-      const prev = messages[i - 1]!
-      const curr = messages[i]!
-      if (prev.role === curr.role && typeof prev.content === 'string' && typeof curr.content === 'string') {
-        expect(prev.content).not.toBe(curr.content)
-      }
+    // No system messages in the messages array (they are extracted to system param)
+    expect(messages.filter(m => m.role === 'system')).toHaveLength(0)
+
+    // _messageId must NOT leak to the provider request
+    for (const msg of messages) {
+      expect(msg._messageId).toBeUndefined()
     }
 
-    // The conversation should flow: ...prior messages → user "hello world" → assistant → user "follow up"
-    const userMessages = messages.filter(m => m.role === 'user')
-    const userTexts = userMessages.map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
-    expect(userTexts.some(t => t.includes('hello world'))).toBe(true)
-    expect(userTexts.some(t => t.includes('follow up'))).toBe(true)
+    // Exact role sequence: user(hello) → assistant(first) → user(follow up)
+    // Anthropic mergeConsecutiveRoles may merge adjacent user messages from
+    // context injection, so extract only assistant messages to check count
+    const roles = messages.map(m => m.role)
+    const assistantCount = roles.filter(r => r === 'assistant').length
+    expect(assistantCount).toBe(1) // exactly one prior assistant turn
+
+    // Both user messages must appear exactly once in the conversation
+    const allContent = JSON.stringify(messages)
+    expect(allContent).toContain('hello world')
+    expect(allContent).toContain('follow up')
+
+    // No role appears more than expected: find duplicate content
+    const contentSet = new Set<string>()
+    for (const msg of messages) {
+      const key = `${msg.role}:${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`
+      expect(contentSet.has(key)).toBe(false)
+      contentSet.add(key)
+    }
+  })
+
+  it('session history is not written twice across turns', async () => {
+    const sessionId = `history-dedup-${Date.now()}`
+
+    // Turn 1: user → assistant
+    env.mock.enqueue([{ type: 'text', content: 'turn one reply' }])
+    await runBinary(
+      ['--cli', `--resume=${sessionId}`, 'first message'],
+      env.binaryEnv,
+    )
+
+    // Read stored messages after turn 1
+    const sessionsDir = join(env.storageDir, 'sessions')
+    const sessionDirs = readdirSync(sessionsDir).filter(d => d.includes(sessionId.replace(/[^a-zA-Z0-9_-]/g, '')))
+    expect(sessionDirs).toHaveLength(1)
+    const messagesFile = join(sessionsDir, sessionDirs[0]!, 'messages.jsonl')
+    const afterTurn1 = readFileSync(messagesFile, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+
+    // Turn 1 should have stored: user + assistant (system/context may vary)
+    const turn1User = afterTurn1.filter((m: any) => m.role === 'user' && m.content === 'first message')
+    const turn1Asst = afterTurn1.filter((m: any) => m.role === 'assistant' && m.content === 'turn one reply')
+    expect(turn1User).toHaveLength(1)
+    expect(turn1Asst).toHaveLength(1)
+
+    // Turn 2: resume, add second user message
+    env.mock.enqueue([{ type: 'text', content: 'turn two reply' }])
+    await runBinary(
+      ['--cli', `--resume=${sessionId}`, 'second message'],
+      env.binaryEnv,
+    )
+
+    // Read stored messages after turn 2
+    const afterTurn2 = readFileSync(messagesFile, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+
+    // Turn 1 messages must not be duplicated — count each unique message
+    const allUser1 = afterTurn2.filter((m: any) => m.role === 'user' && m.content === 'first message')
+    const allAsst1 = afterTurn2.filter((m: any) => m.role === 'assistant' && m.content === 'turn one reply')
+    const allUser2 = afterTurn2.filter((m: any) => m.role === 'user' && m.content === 'second message')
+    const allAsst2 = afterTurn2.filter((m: any) => m.role === 'assistant' && m.content === 'turn two reply')
+
+    expect(allUser1).toHaveLength(1)
+    expect(allAsst1).toHaveLength(1)
+    expect(allUser2).toHaveLength(1)
+    expect(allAsst2).toHaveLength(1)
+
+    // Total messages on disk should be turn1 count + 2 new (user + assistant)
+    expect(afterTurn2.length).toBe(afterTurn1.length + 2)
   })
 
   it('middleware hooks fire: beforeLoopBegin is invoked', async () => {
