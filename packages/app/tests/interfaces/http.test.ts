@@ -362,6 +362,7 @@ describe('HttpServer', () => {
       provider,
       tools: new ToolRegistry(),
       storage,
+      systemPrompt: 'You are helpful',
     })
     await server.start()
 
@@ -375,7 +376,7 @@ describe('HttpServer', () => {
     expect(data1.response).toBe('reply1')
     const sessionId = data1.sessionId
 
-    // Second request — reuses sessionId, includes prior messages
+    // Second request — reuses sessionId, includes prior conversation messages
     const res2 = await fetch(`http://localhost:${TEST_PORT + 20}/chat/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -391,14 +392,17 @@ describe('HttpServer', () => {
     const data2 = await res2.json() as { response: string }
     expect(data2.response).toBe('reply2')
 
-    // Verify messages.jsonl has no duplicates
+    // Verify messages.jsonl: system prompt stored once, no duplicates
     const stored = await storage.readMessages(sessionId)
+    const systemMessages = stored.filter(m => m.role === 'system')
     const userMessages = stored.filter(m => m.role === 'user')
     const assistantMessages = stored.filter(m => m.role === 'assistant')
-    // Should have: hello, reply1, follow up, reply2
+    // Should have: system, hello, reply1, follow up, reply2
+    expect(systemMessages).toHaveLength(1)
+    expect(systemMessages[0]?.content).toBe('You are helpful')
     expect(userMessages).toHaveLength(2)
     expect(assistantMessages).toHaveLength(2)
-    expect(stored).toHaveLength(4)
+    expect(stored).toHaveLength(5)
   })
 
   it('POST /chat/sync returns model response when ask_user is called (no special field)', async () => {

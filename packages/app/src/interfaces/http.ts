@@ -113,15 +113,49 @@ export class HttpServer {
     return jsonResponse({ error: 'Invalid JSON' }, 400)
   }
 
-  private prependSystem(messages: IMessage[]): { messages: IMessage[]; priorCount: number } {
-    const prefix = buildMessagePrefix({
+  /**
+   * Build the full message array for a loop invocation.
+   *
+   * New sessions (no stored messages): prefix (system prompt, skills, context)
+   * is prepended and will be persisted by the history middleware (priorCount = 0).
+   *
+   * Existing sessions: prefix is already on disk.  Load the stored thread and
+   * append only the client messages that aren't stored yet.  The prefix length
+   * is derived from the current config so we can tell where the conversation
+   * portion begins in the stored array.
+   */
+  private async buildMessages(
+    clientMessages: IMessage[],
+    sessionId: string,
+  ): Promise<{ messages: IMessage[]; priorCount: number }> {
+    const storedCount = await this.options.storage.messageCount(sessionId)
+
+    if (storedCount === 0) {
+      // New session — prepend prefix, store everything
+      const prefix = buildMessagePrefix({
+        systemPrompt: this.options.systemPrompt,
+        skillIndex: this.options.skillIndex,
+        contextMessages: this.options.contextMessages,
+      })
+      prefix.push(...clientMessages)
+      return { messages: prefix, priorCount: 0 }
+    }
+
+    // Existing session — prefix is already on disk.
+    const stored = await this.options.storage.readMessages(sessionId)
+    // The client sends conversation messages (no prefix).  The stored array is
+    // [prefix..., conversation...].  Compute prefix length so we know how many
+    // of the client's messages overlap with the stored conversation portion.
+    const prefixLen = buildMessagePrefix({
       systemPrompt: this.options.systemPrompt,
       skillIndex: this.options.skillIndex,
       contextMessages: this.options.contextMessages,
-    })
-    const priorCount = prefix.length
-    prefix.push(...messages)
-    return { messages: prefix, priorCount }
+    }).length
+    const storedConversationLen = Math.max(0, stored.length - prefixLen)
+    const newClientMessages = clientMessages.slice(storedConversationLen)
+    const priorCount = stored.length
+    stored.push(...newClientMessages)
+    return { messages: stored, priorCount }
   }
 
   private async ensureSession(clientSessionId?: string): Promise<string> {
@@ -171,10 +205,8 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const { messages, priorCount: prefixCount } = this.prependSystem(body.messages ?? [])
     const sessionId = await this.ensureSession(body.sessionId)
-    const storedCount = await this.options.storage.messageCount(sessionId)
-    const priorCount = prefixCount + storedCount
+    const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId)
     const loop = this.createLoop(sessionId, priorCount)
 
     try {
@@ -194,10 +226,8 @@ export class HttpServer {
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
-    const { messages, priorCount: prefixCount } = this.prependSystem(body.messages ?? [])
     const sessionId = await this.ensureSession(body.sessionId)
-    const storedCount = await this.options.storage.messageCount(sessionId)
-    const priorCount = prefixCount + storedCount
+    const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId)
 
     const self = this
     const stream = new ReadableStream({

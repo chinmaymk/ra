@@ -190,16 +190,25 @@ export class Repl {
 
     const userMessage: IMessage = { role: 'user', content: parts.length === 1 ? text : parts }
 
-    // Include skills XML only on first turn (avoids repetition in ongoing sessions)
-    const isFirstTurn = this.messages.length === 0
-    const initialMessages = buildMessagePrefix({
-      systemPrompt: this.options.systemPrompt,
-      skillIndex: isFirstTurn ? this.options.skillIndex : undefined,
-      contextMessages: this.options.contextMessages,
-    })
-    initialMessages.push(...this.messages)
-    const priorCount = initialMessages.length
-    initialMessages.push(userMessage)
+    // On a brand-new session, build the prefix (system prompt, skills, context)
+    // and store it as the first messages in the thread.  On subsequent turns or
+    // after a resume the prefix is already in this.messages — never re-inject it.
+    const isNewSession = this.messages.length === 0
+    if (isNewSession) {
+      const prefix = buildMessagePrefix({
+        systemPrompt: this.options.systemPrompt,
+        skillIndex: this.options.skillIndex,
+        contextMessages: this.options.contextMessages,
+      })
+      this.messages.push(...prefix)
+    }
+
+    // priorCount = messages already persisted on disk.
+    // New session: nothing on disk yet (0) — prefix + user message will be saved.
+    // Existing session: all of this.messages are on disk — only new messages saved.
+    const priorCount = isNewSession ? 0 : this.messages.length
+    const snapshotLength = this.messages.length
+    const initialMessages = [...this.messages, userMessage]
 
     const tuiState = tui.createStreamState()
     tui.startSpinner()
@@ -255,7 +264,7 @@ export class Repl {
     try {
       const result = await loop.run(initialMessages)
       tui.flushStreamState(tuiState)
-      this.messages.push(...result.messages.slice(priorCount))
+      this.messages.push(...result.messages.slice(snapshotLength))
     } catch (err) {
       tui.flushStreamState(tuiState)
       if (err instanceof DOMException && err.name === 'AbortError') {
