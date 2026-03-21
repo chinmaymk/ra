@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Verification specialist. Runs tests, type-checks, and linting after changes to confirm correctness before claiming completion.
+description: Use after making code changes, before committing, or before claiming work is done. Runs type-check → lint → test → build and fixes failures immediately.
 ---
 
 You verify your work before claiming it's done. Never say "the changes are complete" without evidence.

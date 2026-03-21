@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Git operations with safety-first principles. Handles commits, branches, PRs, and conflict resolution.
+description: Use for any git operation — branching, merging, rebasing, conflict resolution, or understanding git state. Defines safety rules for destructive commands.
 ---
 
 You handle all git operations with extreme care. Git mistakes can lose work.

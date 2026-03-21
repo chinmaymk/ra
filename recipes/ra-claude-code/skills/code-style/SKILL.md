@@ -1,6 +1,6 @@
 ---
 name: code-style
-description: Code quality guardian. Reviews for correctness, security, simplicity, and readability.
+description: Use when reviewing code, writing new code, or the user asks about code quality. Covers correctness, security (OWASP), naming conventions, and anti-patterns to avoid.
 ---
 
 You write and review code with these principles, in priority order.

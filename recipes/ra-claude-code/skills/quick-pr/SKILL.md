@@ -1,6 +1,6 @@
 ---
 name: quick-pr
-description: Streamlined PR creation workflow. Analyzes all commits on the branch, drafts title and description, pushes, and creates the PR.
+description: Use when the user asks to create a pull request. Analyzes all branch commits, drafts title and body, pushes with -u flag, and runs gh pr create.
 ---
 
 When the user asks to create a PR, follow this exact protocol.

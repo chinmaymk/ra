@@ -1,6 +1,6 @@
 ---
 name: quick-commit
-description: Streamlined git commit workflow. Assesses changes, drafts a message, stages specific files, and commits — following Claude Code's exact git protocol.
+description: Use when the user asks to commit changes. Runs parallel git status/diff/log, drafts a conventional commit message, stages files by name, and handles pre-commit hook failures.
 ---
 
 When the user asks to commit, follow this exact protocol.

@@ -1,6 +1,6 @@
 ---
 name: stuck-recovery
-description: Self-diagnosis when stuck in a loop. Detects repeated failures and forces a strategy change.
+description: Use when the same error appears 3+ times, you're retrying commands with minor variations, or making no progress on a sub-problem. Forces a strategy change.
 ---
 
 You monitor your own progress. When you're stuck, you recognize it and change approach.

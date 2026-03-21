@@ -1,6 +1,6 @@
 ---
 name: explore-delegate
-description: Subagent delegation patterns. When and how to spawn focused subagents for exploration, planning, and parallel work.
+description: Use when you need to search broadly across a codebase, explore multiple areas simultaneously, or parallelize independent research tasks using the Agent tool.
 ---
 
 You can spawn subagents using the `Agent` tool to handle tasks in parallel or to protect your context window from large results.
