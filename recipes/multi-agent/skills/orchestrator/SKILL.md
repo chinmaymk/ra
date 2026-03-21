@@ -51,16 +51,13 @@ ra --config /tmp/ra-agents/security-auditor/ra.config.yaml \
 ### 3. Continue the conversation
 
 ```bash
-# Find the session ID from the first call
-SESSION=$(ls /tmp/ra-agents/security-auditor/.ra/sessions/ | head -1)
-
-# Resume with follow-up — agent has full prior context
+# Resume the latest session — agent has full prior context
 ra --config /tmp/ra-agents/security-auditor/ra.config.yaml \
   --cli "Now check the fix I made to src/auth/login.ts" \
-  --resume "$SESSION"
+  --resume
 ```
 
-The `--resume` flag loads the full conversation history so the agent remembers everything from prior messages.
+The `--resume` flag (without an ID) resumes the latest session, loading the full conversation history so the agent remembers everything from prior messages.
 
 ### 4. Clean up
 
@@ -73,19 +70,18 @@ rm -rf /tmp/ra-agents/security-auditor
 ### Iterative refinement
 
 ```bash
-# Create agent
 # Write config to /tmp/ra-agents/analyst/ra.config.yaml
 
 # First task
 ra --config /tmp/ra-agents/analyst/ra.config.yaml \
   --cli "Read src/data/ and identify the data model"
 
-# Get session for follow-ups
-SESSION=$(ls /tmp/ra-agents/analyst/.ra/sessions/ | head -1)
+# Iterate (--resume continues the conversation)
+ra --config /tmp/ra-agents/analyst/ra.config.yaml \
+  --cli "Find all queries that don't use indexes" --resume
 
-# Iterate
-ra --config ... --cli "Find all queries that don't use indexes" --resume "$SESSION"
-ra --config ... --cli "Write a summary of optimization opportunities" --resume "$SESSION"
+ra --config /tmp/ra-agents/analyst/ra.config.yaml \
+  --cli "Write a summary of optimization opportunities" --resume
 
 # Done
 rm -rf /tmp/ra-agents/analyst
@@ -125,9 +121,9 @@ ra --config /tmp/ra-agents/implementer/ra.config.yaml \
 
 # Review the agent's changes yourself...
 
-# Send feedback
-SESSION=$(ls /tmp/ra-agents/implementer/.ra/sessions/ | head -1)
-ra --config ... --cli "The regex for email is too permissive, fix it" --resume "$SESSION"
+# Send feedback (--resume continues the conversation)
+ra --config /tmp/ra-agents/implementer/ra.config.yaml \
+  --cli "The regex for email is too permissive, fix it" --resume
 
 # Verify and clean up
 rm -rf /tmp/ra-agents/implementer
@@ -168,7 +164,6 @@ app:
 - **Write specific system prompts** — vague prompts produce vague agents
 - **Include context in messages** — file paths, requirements, constraints; the agent has no implicit knowledge of your conversation
 - **Clean up when done** — `rm -rf /tmp/ra-agents/<name>`
-- **Track session IDs** — you need them for `--resume`
 - **Iterate, don't recreate** — use `--resume` to continue conversations instead of starting fresh
 - **Use appropriate models** — lightweight tasks can use cheaper models (haiku), complex reasoning needs stronger ones (sonnet/opus)
 - **Limit to 2–4 agents** — more rarely helps
