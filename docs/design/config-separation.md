@@ -16,12 +16,12 @@
 
 Two config root levels, merged in order (later wins):
 
-### Global config root: `~/.config/ra/`
+### Global config root: `~/.ra/`
 
 User-level defaults across all projects. Good for default provider, credentials, personal preferences.
 
 ```
-~/.config/ra/
+~/.ra/
   agent.yml       # default agent behavior
   app.yml         # default app settings (provider credentials, log level, etc.)
 ```
@@ -53,7 +53,7 @@ Or env var: `RA_CONFIG_DIR=./recipes/coding-agent/`
 ### Merge order
 
 ```
-global (~/.config/ra/)
+global (~/.ra/)
   → local (.ra/config/, discovered upward)
     → explicit (--config dir)
       → env vars (RA_*)
@@ -65,7 +65,7 @@ Each layer only overrides fields it sets. Missing files at any layer = skip that
 ### Discovery algorithm
 
 ```
-1. Load global: ~/.config/ra/{agent,app}.yml
+1. Load global: ~/.ra/{agent,app}.yml
 2. Search upward from cwd for .ra/ directory
    - If found: load .ra/config/{agent,app}.yml
 3. If --config flag: load <dir>/{agent,app}.yml (overrides local)
@@ -246,7 +246,7 @@ Each job references its own agent config file. No ambiguity — each file has on
 
 1. `bun tsc` — zero errors
 2. `bun test` — all tests pass
-3. Global config in `~/.config/ra/agent.yml` applies to `bun run ra` from any directory
+3. Global config in `~/.ra/agent.yml` applies to `bun run ra` from any directory
 4. Local `.ra/config/agent.yml` overrides global
 5. `--config ./recipes/coding-agent/` overrides local
 6. Missing files at any layer → defaults for that part
