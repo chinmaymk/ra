@@ -22,10 +22,10 @@ async function resolveMessage(
   if (result.references.length === 0) return { resolved: false, refCount: 0 }
 
   const resolved = formatResolvedReferences(result.references)
-  messages[idx] = {
-    ...msg,
-    content: `${text}\n\n${resolved}${RESOLVED_MARKER}`,
-  }
+  // Mutate in place so the history middleware's WeakSet still tracks this
+  // object. Creating a new object would break change tracking and cause
+  // duplicate entries in session storage.
+  msg.content = `${text}\n\n${resolved}${RESOLVED_MARKER}`
   return { resolved: true, refCount: result.references.length }
 }
 
