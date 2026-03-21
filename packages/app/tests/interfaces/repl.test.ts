@@ -592,4 +592,111 @@ describe('Repl.start()', () => {
     const finalAssistant = msgs.filter(m => m.role === 'assistant').at(-1)
     expect(finalAssistant?.content).toBe('Hello Alice!')
   })
+
+  it('does not duplicate system prompt across multiple turns', async () => {
+    const requestMessages: IMessage[][] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream(req) {
+        requestMessages.push([...req.messages])
+        yield { type: 'text', delta: 'ok' }
+        yield { type: 'done' }
+      },
+    }
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider, tools: new ToolRegistry(), storage, systemPrompt: 'be helpful' })
+
+    await repl.processInput('turn 1')
+    await repl.processInput('turn 2')
+    await repl.processInput('turn 3')
+
+    // Each turn should have exactly one system message
+    for (let i = 0; i < requestMessages.length; i++) {
+      const systemMsgs = requestMessages[i]!.filter(m => m.role === 'system')
+      expect(systemMsgs.length).toBe(1)
+      expect(systemMsgs[0]?.content).toBe('be helpful')
+    }
+
+    // Turn 3 should have: system + user1 + assistant1 + user2 + assistant2 + user3
+    const turn3 = requestMessages[2]!
+    expect(turn3.length).toBe(6)
+    expect(turn3[0]?.role).toBe('system')
+    const userMsgs = turn3.filter(m => m.role === 'user')
+    expect(userMsgs.map(m => m.content)).toEqual(['turn 1', 'turn 2', 'turn 3'])
+  })
+
+  it('does not duplicate prefix after /resume', async () => {
+    const storage = await makeStorage()
+
+    // Create a session with system prompt + one exchange
+    const provider1: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream() {
+        yield { type: 'text', delta: 'first response' }
+        yield { type: 'done' }
+      },
+    }
+    const repl1 = new Repl({ model: 'test', provider: provider1, tools: new ToolRegistry(), storage, systemPrompt: 'be helpful' })
+    await repl1.processInput('hello')
+    const sessionId = (repl1 as any).sessionId as string
+
+    // Resume the session in a new REPL and capture what goes to the model
+    let resumedMessages: IMessage[] = []
+    const provider2: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream(req) {
+        resumedMessages = [...req.messages]
+        yield { type: 'text', delta: 'resumed response' }
+        yield { type: 'done' }
+      },
+    }
+    const repl2 = new Repl({ model: 'test', provider: provider2, tools: new ToolRegistry(), storage, systemPrompt: 'be helpful' })
+    await repl2.handleCommand(`/resume ${sessionId}`)
+    await repl2.processInput('follow up')
+
+    // Should have exactly one system message (from stored), not two
+    const systemMsgs = resumedMessages.filter(m => m.role === 'system')
+    expect(systemMsgs.length).toBe(1)
+
+    // Should have: system, user(hello), assistant(first response), user(follow up)
+    expect(resumedMessages.length).toBe(4)
+    expect(resumedMessages[0]?.role).toBe('system')
+    expect(resumedMessages[1]?.content).toBe('hello')
+    expect(resumedMessages[2]?.content).toBe('first response')
+    expect(resumedMessages[3]?.content).toBe('follow up')
+  })
+
+  it('persists messages correctly on first turn (no duplicates on disk)', async () => {
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider: mockProvider('response'), tools: new ToolRegistry(), storage, systemPrompt: 'sys' })
+    await repl.processInput('hello')
+
+    const sessionId = (repl as any).sessionId as string
+    const stored = await storage.readMessages(sessionId)
+
+    // Disk: system + user + assistant = 3 messages, each appearing once
+    expect(stored.length).toBe(3)
+    expect(stored.filter(m => m.role === 'system').length).toBe(1)
+    expect(stored.filter(m => m.role === 'user').length).toBe(1)
+    expect(stored.filter(m => m.role === 'assistant').length).toBe(1)
+  })
+
+  it('persists messages correctly across multiple turns (no duplicates on disk)', async () => {
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider: mockProvider('ok'), tools: new ToolRegistry(), storage, systemPrompt: 'sys' })
+    await repl.processInput('turn 1')
+    await repl.processInput('turn 2')
+
+    const sessionId = (repl as any).sessionId as string
+    const stored = await storage.readMessages(sessionId)
+
+    // system + user1 + assistant1 + user2 + assistant2 = 5
+    expect(stored.length).toBe(5)
+    expect(stored.filter(m => m.role === 'system').length).toBe(1)
+    expect(stored.filter(m => m.role === 'user').length).toBe(2)
+    expect(stored.filter(m => m.role === 'assistant').length).toBe(2)
+  })
 })

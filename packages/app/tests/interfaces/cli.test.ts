@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { runCli } from '../../src/interfaces/cli'
 import { ToolRegistry } from '@chinmaymk/ra'
-import type { IProvider } from '@chinmaymk/ra'
+import type { IProvider, IMessage } from '@chinmaymk/ra'
 
 import { tmpdir } from '../tmpdir'
 import { mockProvider } from '../fixtures'
@@ -152,5 +152,68 @@ describe('runCli', () => {
     })
 
     expect(chunks).toEqual(['hello'])
+  })
+
+  it('does not duplicate system prompt when resuming with sessionMessages', async () => {
+    let capturedMessages: IMessage[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream(req) {
+        capturedMessages = [...req.messages]
+        yield { type: 'text', delta: 'ok' }
+        yield { type: 'done' }
+      },
+    }
+
+    // Simulate resuming: sessionMessages already contain the prefix
+    const sessionMessages: IMessage[] = [
+      { role: 'system', content: 'be helpful' },
+      { role: 'user', content: 'first question' },
+      { role: 'assistant', content: 'first answer' },
+    ]
+
+    await runCli({
+      prompt: 'follow up',
+      model: 'x',
+      provider,
+      tools: new ToolRegistry(),
+      systemPrompt: 'be helpful',
+      sessionMessages,
+    })
+
+    const systemMsgs = capturedMessages.filter(m => m.role === 'system')
+    expect(systemMsgs.length).toBe(1)
+    expect(capturedMessages.length).toBe(4) // system + user1 + assistant1 + user2
+    expect(capturedMessages[3]?.content).toBe('follow up')
+  })
+
+  it('builds prefix for new session (no sessionMessages)', async () => {
+    let capturedMessages: IMessage[] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream(req) {
+        capturedMessages = [...req.messages]
+        yield { type: 'text', delta: 'ok' }
+        yield { type: 'done' }
+      },
+    }
+
+    await runCli({
+      prompt: 'hello',
+      model: 'x',
+      provider,
+      tools: new ToolRegistry(),
+      systemPrompt: 'be helpful',
+      contextMessages: [{ role: 'user', content: 'context' }],
+    })
+
+    // system + context + user = 3
+    expect(capturedMessages.length).toBe(3)
+    expect(capturedMessages[0]?.role).toBe('system')
+    expect(capturedMessages[0]?.content).toBe('be helpful')
+    expect(capturedMessages[1]?.content).toBe('context')
+    expect(capturedMessages[2]?.content).toBe('hello')
   })
 })
