@@ -76,6 +76,20 @@ agent.loop
 
 Subagent tool calls include additional attributes: `taskCount`, `tasks`, `tasksCompleted`, `tasksErrored`, `totalInputTokens`, `totalOutputTokens`.
 
+### Cron spans
+
+When running in [cron mode](/modes/cron), the scheduler emits additional spans:
+
+**`cron.scheduler`** — wraps the full scheduler lifecycle:
+- `jobCount`, `jobNames` (start)
+- `jobsRun`, `jobsFailed`, `stoppedBySignal` (end)
+
+**`cron.job`** — wraps each individual job execution:
+- `job`, `schedule` (start)
+- `sessionId`, `iterations`, `inputTokens`, `outputTokens`, `messageCount` (end)
+
+Each cron job creates its own session, so per-job `agent.*` spans are written to that job's session directory.
+
 ## Viewing session logs
 
 When using the default `session` output mode, logs and traces are stored alongside the session data:

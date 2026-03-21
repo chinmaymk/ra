@@ -33,6 +33,9 @@ describe('parseArgs', () => {
       expect(result.config.app?.interface).toBe('repl')
       expect(result.meta.prompt).toBe('hello world')
     })
+    it('--cron sets cron', () => expect(parseArgs(dev('--cron')).config.app?.interface).toBe('cron'))
+    it('--run-immediately sets runImmediately', () => expect(parseArgs(dev('--cron', '--run-immediately')).meta.runImmediately).toBe(true))
+    it('runImmediately defaults to false', () => expect(parseArgs(dev('--cron')).meta.runImmediately).toBe(false))
     it('--cli sets cli',   () => expect(parseArgs(dev('--cli', 'x')).config.app?.interface).toBe('cli'))
     it('--mcp sets mcp',   () => expect(parseArgs(dev('--mcp')).config.app?.interface).toBe('mcp'))
     it('mcp takes precedence over http when both given', () => {

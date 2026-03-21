@@ -11,6 +11,7 @@ import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { InspectorServer } from './interfaces/inspector'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
+import { runCron } from './interfaces/cron'
 import { createSessionMiddleware } from './agent/session'
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -257,6 +258,40 @@ async function launchRepl(app: AppContext): Promise<void> {
   await app.shutdown()
 }
 
+async function launchCron(app: AppContext, runImmediately: boolean): Promise<void> {
+  const jobs = app.config.cron ?? []
+  if (jobs.length === 0) {
+    console.error('Error: no cron jobs defined in config')
+    process.exit(1)
+  }
+
+  const controller = new AbortController()
+  const origSignals = onSignals(async () => {
+    controller.abort()
+    await app.shutdown()
+  })
+
+  await runCron({
+    app,
+    jobs,
+    signal: controller.signal,
+    runImmediately,
+    onJobStart: (job) => {
+      process.stderr.write(`\n[cron] Running "${job.name}" (${new Date().toISOString()})\n`)
+    },
+    onJobEnd: (job, result) => {
+      if (result.ok) {
+        process.stderr.write(`[cron] "${job.name}" completed\n`)
+      } else {
+        process.stderr.write(`[cron] "${job.name}" failed: ${result.error}\n`)
+      }
+    },
+  })
+
+  origSignals.remove()
+  await app.shutdown()
+}
+
 async function launchInspector(app: AppContext): Promise<void> {
   const inspector = new InspectorServer(app)
   await inspector.start()
@@ -325,6 +360,7 @@ async function main(): Promise<void> {
     case 'mcp-stdio': return launchMcpStdio(app)
     case 'http':      return launchHttp(app, signals)
     case 'inspector': return launchInspector(app)
+    case 'cron':      return launchCron(app, parsed.meta.runImmediately)
     case 'cli':       return launchCli(parsed, app)
     default:          return launchRepl(app)
   }

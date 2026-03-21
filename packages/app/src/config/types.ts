@@ -53,7 +53,7 @@ export interface ToolsConfig {
 
 /** Application-level settings — how the app runs, infrastructure, observability. */
 export interface AppConfig {
-  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector'
+  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector' | 'cron'
   /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
   configDir: string
   /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `.ra`. */
@@ -118,9 +118,23 @@ export interface AgentConfig {
   }
 }
 
+/** A single cron job definition. */
+export interface CronJob {
+  /** Human-readable name for this job (used in logs). */
+  name: string
+  /** Cron expression (e.g. "0 9 * * 1-5"). */
+  schedule: string
+  /** Agent config: path to a recipe YAML file, or partial AgentConfig to merge with base. */
+  agent?: string | Partial<AgentConfig>
+  /** Prompt to send to the agent on each run. */
+  prompt: string
+}
+
 export interface RaConfig {
   app: AppConfig
   agent: AgentConfig
+  /** Cron job definitions. Only used when `app.interface` is `'cron'`. */
+  cron?: CronJob[]
 }
 
 export interface McpClientConfig {

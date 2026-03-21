@@ -267,13 +267,38 @@ Same agent, multiple entry points.
 
 | Interface | Flag | Use case |
 |-----------|------|----------|
-| **CLI** | default with a prompt | Pipe it, chain it, cron it |
+| **CLI** | default with a prompt | Pipe it, chain it, script it |
 | **REPL** | default without a prompt | Interactive sessions with slash commands |
 | **HTTP** | `--http` | Streaming SSE or sync JSON |
 | **MCP** | `--mcp-stdio` / `--mcp` | Expose ra as a tool for Cursor, Claude Desktop, other agents |
+| **Cron** | `--interface cron` | Run jobs on a schedule — monitoring, reports, automation |
 | **Inspector** | `--inspector` | Web dashboard for debugging sessions |
 
 Ra also speaks [MCP as a client](https://chinmaymk.github.io/ra/modes/mcp/) — connect to external MCP servers and their tools become available to the model. [Sessions](https://chinmaymk.github.io/ra/core/sessions/) are persisted as JSONL and can be resumed from any interface with `--resume`.
+
+## [Cron](https://chinmaymk.github.io/ra/modes/cron/)
+
+Run agent jobs on a schedule. Define jobs in your config with a name, cron expression, and prompt. Each execution creates its own session with isolated logs and traces.
+
+```yaml
+cron:
+  - name: daily-report
+    schedule: "0 9 * * 1-5"
+    prompt: "Summarize yesterday's git activity"
+
+  - name: health-check
+    schedule: "*/30 * * * *"
+    prompt: "Check API endpoints and report issues"
+    agent:
+      model: claude-haiku-4-5-20251001
+      maxIterations: 5
+```
+
+```bash
+ra --interface cron
+```
+
+Jobs can override the base agent config (model, maxIterations, thinking) or point to a recipe YAML file. The scheduler emits structured logs and tracer spans (`cron.scheduler`, `cron.job`) for full observability.
 
 ## [Configuration](https://chinmaymk.github.io/ra/configuration/)
 

@@ -17,6 +17,7 @@ export interface ParsedArgsMeta {
   exec?: string
   showContext: boolean
   showConfig: boolean
+  runImmediately: boolean
   listMemories: boolean
   memories?: string
   forget?: string
@@ -76,6 +77,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         version: false,
         showContext: false,
         showConfig: false,
+        runImmediately: false,
         listMemories: false,
         files: [],
         skillCommand: { action, args: subArgs },
@@ -102,6 +104,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       mcp:                           { type: 'boolean' },
       'mcp-stdio':                   { type: 'boolean' },
       inspector:                     { type: 'boolean' },
+      cron:                            { type: 'boolean' },
+      'run-immediately':                 { type: 'boolean' },
       // Top-level config
       provider:                      { type: 'string' },
       model:                         { type: 'string' },
@@ -147,7 +151,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const r: Record<string, unknown> = {}
 
   // Interface selection (first match wins, order matters: mcp-stdio before mcp)
-  const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'repl', 'cli'] as const
+  const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'cron', 'repl', 'cli'] as const
   for (const flag of interfaceFlags) {
     if (values[flag]) { setPath(r, ['app', 'interface'], flag); break }
   }
@@ -168,6 +172,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       version:      (values.version as boolean | undefined) ?? false,
       showContext:   (values['show-context'] as boolean | undefined) ?? false,
       showConfig:  (values['show-config'] as boolean | undefined) ?? false,
+      runImmediately: (values['run-immediately'] as boolean | undefined) ?? false,
       listMemories:  (values['list-memories'] as boolean | undefined) ?? false,
       memories:      values.memories as string | undefined,
       forget:        values.forget as string | undefined,
