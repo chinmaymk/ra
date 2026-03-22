@@ -36,17 +36,17 @@ echo "Latest version: ${LATEST:-<none>}"
 # ── Build root docs (latest release label, or dev) ────────────────────
 echo "Building root docs..."
 rm -rf "$DIST_DIR"
-DOCS_VERSION="${LATEST:-dev}" bun vitepress build "$SITE_DIR"
+(cd "$SITE_DIR" && DOCS_VERSION="${LATEST:-dev}" bunx vitepress build)
 
 # ── Build dev docs ────────────────────────────────────────────────────
 echo "Building dev docs..."
 DEV_DIST=$(mktemp -d)
-DOCS_VERSION="dev" DOCS_BASE="/ra/dev/" bun vitepress build "$SITE_DIR"
+(cd "$SITE_DIR" && DOCS_VERSION="dev" DOCS_BASE="/ra/dev/" bunx vitepress build)
 cp -r "$DIST_DIR/"* "$DEV_DIST/"
 rm -rf "$DIST_DIR"
 
 # Restore root build, then add dev under /dev/
-DOCS_VERSION="${LATEST:-dev}" bun vitepress build "$SITE_DIR"
+(cd "$SITE_DIR" && DOCS_VERSION="${LATEST:-dev}" bunx vitepress build)
 mkdir -p "$DIST_DIR/dev"
 cp -r "$DEV_DIST/"* "$DIST_DIR/dev/"
 rm -rf "$DEV_DIST"
@@ -105,7 +105,7 @@ export default defineConfig({
 })
 WCONF
 
-  if (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" DOCS_BASE="/ra/v/${version}/" bun vitepress build); then
+  if (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" DOCS_BASE="/ra/v/${version}/" bunx vitepress build); then
     mkdir -p "$DIST_DIR/v/$version"
     cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* "$DIST_DIR/v/$version/"
     echo "  Done: v$version"
@@ -132,5 +132,5 @@ echo "Build complete: $DIST_DIR"
 # ── Optional preview ──────────────────────────────────────────────────
 if [ "${1:-}" = "preview" ]; then
   echo "Starting preview server..."
-  bun vitepress preview "$SITE_DIR"
+  (cd "$SITE_DIR" && bunx vitepress preview)
 fi

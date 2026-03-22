@@ -1,0 +1,30 @@
+name: Docs CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/site/**'
+      - '.github/workflows/docs*.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/site/**'
+      - '.github/workflows/docs*.yml'
+
+jobs:
+  build:
+    name: Docs build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install docs dependencies
+        run: cd docs/site && bun install
+
+      - name: Build docs
+        run: cd docs/site && bun run build
