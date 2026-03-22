@@ -247,17 +247,14 @@ function preResolveRecipePaths(agent: Record<string, unknown>, recipeDir: string
 /** Saved recipe arrays to prepend after all merges complete. */
 interface RecipeArrays {
   skillDirs: string[]
-  mcpServers: unknown[]
   middleware: Record<string, string[]>
 }
 
 /** Extract array fields from a recipe config (they'd be lost by deepMerge). */
 function extractRecipeArrays(config: Record<string, unknown>): RecipeArrays {
-  const result: RecipeArrays = { skillDirs: [], mcpServers: [], middleware: {} }
+  const result: RecipeArrays = { skillDirs: [], middleware: {} }
   const agent = (config.agent ?? config) as Record<string, unknown>
-  const app = config.app as Record<string, unknown> | undefined
   if (Array.isArray(agent.skillDirs)) result.skillDirs = agent.skillDirs as string[]
-  if (isPlainObject(app) && Array.isArray(app.mcpServers)) result.mcpServers = app.mcpServers as unknown[]
   if (isPlainObject(agent.middleware)) {
     for (const [hook, entries] of Object.entries(agent.middleware as Record<string, unknown>)) {
       if (Array.isArray(entries)) result.middleware[hook] = entries as string[]
@@ -270,9 +267,6 @@ function extractRecipeArrays(config: Record<string, unknown>): RecipeArrays {
 function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
   if (arrays.skillDirs.length > 0) {
     config.agent.skillDirs = [...arrays.skillDirs, ...config.agent.skillDirs]
-  }
-  if (arrays.mcpServers.length > 0) {
-    config.app.mcpServers = [...arrays.mcpServers as typeof config.app.mcpServers, ...config.app.mcpServers]
   }
   for (const [hook, entries] of Object.entries(arrays.middleware)) {
     const existing = config.agent.middleware[hook] ?? []
