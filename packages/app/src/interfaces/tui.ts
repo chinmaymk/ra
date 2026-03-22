@@ -1,5 +1,4 @@
 // Pure ANSI TUI utilities — no external dependencies
-import wrapAnsi from 'wrap-ansi'
 
 export const ansi = {
   reset: '\x1b[0m',
@@ -79,17 +78,12 @@ export function startSpinner(): void {
 }
 
 export function stopSpinner(silent = false): void {
-  const wasRunning = !!spinnerTimer
   if (spinnerTimer) {
     clearInterval(spinnerTimer)
     spinnerTimer = null
+    process.stdout.write('\r\x1b[K')
   }
-  if (silent) {
-    if (wasRunning) process.stdout.write('\r\x1b[K')
-  } else {
-    // Clear spinner/current line then indent prefix for model response
-    process.stdout.write(`\r\x1b[K${RESPONSE_PREFIX}`)
-  }
+  if (!silent) process.stdout.write(RESPONSE_PREFIX)
 }
 
 export function closeAssistantBox(): void {
@@ -101,45 +95,20 @@ export const RESPONSE_PREFIX = `  `
 /** Visible column width of RESPONSE_PREFIX. */
 export const RESPONSE_PREFIX_LEN = 2
 
-/** Streaming line-buffer that wraps completed logical lines with wrap-ansi.
- *
- * Text is accumulated until a `\n` is received; each complete line is then
- * word-wrapped at `contentWidth` (hard-breaking any word that exceeds the
- * limit) and re-prefixed with RESPONSE_PREFIX on every visual sub-line.
- *
- * The in-progress (last, incomplete) line is held in the buffer and only
- * output when `end()` is called or the next `\n` arrives. */
+/** Pass-through stream writer that outputs text immediately for responsive
+ * token display. Newlines are re-prefixed with RESPONSE_PREFIX so each new
+ * line retains the proper indent. No buffering — tokens appear as they arrive. */
 export class StreamBuffer {
-  private buf = ''
-
   constructor(private readonly contentWidth: number) {}
 
+  /** Write text immediately, replacing newlines with newline + indent prefix. */
   write(text: string): string {
-    this.buf += text
-    const parts = this.buf.split('\n')
-    this.buf = parts.pop() ?? ''   // keep last incomplete line
-    if (parts.length === 0) return ''
-
-    // Each complete line → wrap → re-prefix continuation sub-lines
-    const formatted = parts.map(l => this._wrapLine(l))
-    // Join with newline+prefix (next line starts with prefix already on screen
-    // from the previous continuation, so we just need \n + prefix between lines)
-    return formatted.join('\n' + RESPONSE_PREFIX) + '\n' + RESPONSE_PREFIX
+    return text.replaceAll('\n', '\n' + RESPONSE_PREFIX)
   }
 
-  /** Flush the buffered incomplete line — call once when streaming ends. */
+  /** No-op — all content was already written during streaming. */
   end(): string {
-    const out = this._wrapLine(this.buf)
-    this.buf = ''
-    return out
-  }
-
-  private _wrapLine(line: string): string {
-    if (!line) return ''
-    const wrapped = wrapAnsi(line, this.contentWidth, { hard: true, trim: false })
-    // trim: false preserves leading whitespace (code indents) but leaves trailing
-    // spaces at word-break points — remove those.
-    return wrapped.split('\n').map(l => l.trimEnd()).join('\n' + RESPONSE_PREFIX)
+    return ''
   }
 }
 
@@ -195,6 +164,8 @@ export interface TuiStreamState {
   streamBuf: StreamBuffer | null
   thinkingBuf: StreamBuffer | null
   toolStartTimes: Map<string, number>
+  /** Tool names shown during streaming (before execution starts). */
+  pendingToolNames: string[]
 }
 
 /** Create a new TUI streaming state for a single agent loop run. */
@@ -203,6 +174,7 @@ export function createStreamState(): TuiStreamState {
     boxOpened: false, thinkingOpened: false, thinkingCollapsed: false,
     thinkingLines: 0, thinkingStartTime: 0,
     streamBuf: null, thinkingBuf: null, toolStartTimes: new Map(),
+    pendingToolNames: [],
   }
 }
 
@@ -213,12 +185,12 @@ function countNewlines(s: string): number {
 }
 
 /** Handle a stream chunk for TUI display. */
-export function handleStreamChunk(state: TuiStreamState, chunkType: string, delta?: string): void {
+export function handleStreamChunk(state: TuiStreamState, chunkType: string, delta?: string, toolName?: string): void {
   if (chunkType === 'thinking') {
     if (state.thinkingCollapsed) return
     if (!state.thinkingOpened) {
       stopSpinner(true)
-      printThinkingStart()
+      process.stdout.write(`  ${ansi.dim}╌╌ thinking ╌╌${ansi.reset}\n  ${ansi.dim}`)
       state.thinkingOpened = true
       state.thinkingStartTime = Date.now()
       state.thinkingLines = 1 // printThinkingStart writes 1 \n
@@ -241,6 +213,29 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
       state.streamBuf = new StreamBuffer(contentWidth)
     }
     if (delta && state.streamBuf) process.stdout.write(state.streamBuf.write(delta))
+  } else if (chunkType === 'tool_call_start' && toolName) {
+    // Show tool names immediately so users see activity during arg streaming
+    if (state.thinkingOpened) collapseThinking(state)
+    if (state.boxOpened) {
+      const out = state.streamBuf?.end(); if (out) process.stdout.write(out)
+      process.stdout.write('\n')
+      state.boxOpened = false
+      state.streamBuf = null
+    }
+    stopSpinner(true)
+    state.pendingToolNames.push(toolName)
+    process.stdout.write(`  ${ansi.yellow}◆ ${toolName}${ansi.reset}\n`)
+  }
+}
+
+/** Reposition cursor to overwrite pending tool preview lines.
+ *  Called once before tool execution begins — cursor moves up so
+ *  printToolCall/printToolResult naturally overwrite each preview line. */
+export function clearPendingTools(state: TuiStreamState): void {
+  if (state.pendingToolNames.length > 0) {
+    // Move cursor up to the first pending line (no erase — execution will overwrite)
+    process.stdout.write(`\x1b[${state.pendingToolNames.length}A\r`)
+    state.pendingToolNames = []
   }
 }
 
@@ -266,6 +261,7 @@ export function collapseThinking(state: TuiStreamState): void {
 /** Flush TUI state at end of loop run (success or error). */
 export function flushStreamState(state: TuiStreamState): void {
   if (state.thinkingOpened) collapseThinking(state)
+  clearPendingTools(state)
   stopSpinner(true)
   const out = state.streamBuf?.end()
   if (out) process.stdout.write(out)
@@ -273,6 +269,3 @@ export function flushStreamState(state: TuiStreamState): void {
   else process.stdout.write('\n\n')
 }
 
-function printThinkingStart(): void {
-  process.stdout.write(`  ${ansi.dim}╌╌ thinking ╌╌${ansi.reset}\n  ${ansi.dim}`)
-}

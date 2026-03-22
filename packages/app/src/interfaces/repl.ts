@@ -177,11 +177,15 @@ export class Repl {
     const tuiHooks: Partial<MiddlewareConfig> = {
       onStreamChunk: [
         async (ctx: StreamChunkContext) => {
-          tui.handleStreamChunk(tuiState, ctx.chunk.type, 'delta' in ctx.chunk ? ctx.chunk.delta : undefined)
+          const chunk = ctx.chunk
+          const delta = 'delta' in chunk ? chunk.delta : undefined
+          const toolName = chunk.type === 'tool_call_start' ? chunk.name : undefined
+          tui.handleStreamChunk(tuiState, chunk.type, delta, toolName)
         },
       ],
       beforeToolExecution: [
         async (ctx: ToolExecutionContext) => {
+          tui.clearPendingTools(tuiState)
           if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
           const out = tuiState.streamBuf?.end(); if (out) process.stdout.write(out)
           if (tuiState.boxOpened) process.stdout.write('\n')

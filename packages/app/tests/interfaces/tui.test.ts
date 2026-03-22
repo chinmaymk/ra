@@ -3,7 +3,7 @@ import {
   ansi, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
   printCommandResponse, printError, collapseThinking, createStreamState,
-  handleStreamChunk, StreamBuffer, RESPONSE_PREFIX,
+  handleStreamChunk, clearPendingTools, StreamBuffer, RESPONSE_PREFIX,
 } from '../../src/interfaces/tui'
 import { captureStdout } from '../fixtures'
 
@@ -57,11 +57,11 @@ describe('spinner', () => {
     expect(output).toContain('\x1b[K')
   })
 
-  it('stopSpinner clears line even when no spinner running', () => {
+  it('stopSpinner writes prefix even when no spinner running', () => {
     const output = captureStdout(() => {
-      stopSpinner() // no spinner running, should still clear and add blank line
+      stopSpinner() // no spinner running, just writes response prefix
     })
-    expect(output).toContain('\x1b[K')
+    expect(output).toBe('  ')
   })
 })
 
@@ -136,64 +136,97 @@ describe('collapseThinking', () => {
   })
 })
 
+describe('handleStreamChunk text', () => {
+  it('outputs each text chunk immediately to stdout', () => {
+    const state = createStreamState()
+    // First text chunk should open the box AND output the text
+    const out1 = captureStdout(() => handleStreamChunk(state, 'text', 'Hello'))
+    expect(out1).toContain('Hello')
+    expect(state.boxOpened).toBe(true)
+
+    // Subsequent chunks also appear immediately (no buffering until newline)
+    const out2 = captureStdout(() => handleStreamChunk(state, 'text', ' world'))
+    expect(out2).toContain(' world')
+
+    // Newline chunk also appears immediately
+    const out3 = captureStdout(() => handleStreamChunk(state, 'text', '\nline two'))
+    expect(out3).toContain('\n')
+    expect(out3).toContain('line two')
+  })
+})
+
+describe('handleStreamChunk tool_call_start', () => {
+  it('shows tool name immediately when tool_call_start arrives', () => {
+    const state = createStreamState()
+    const output = captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    expect(output).toContain('◆')
+    expect(output).toContain('Read')
+    expect(state.pendingToolNames).toEqual(['Read'])
+  })
+
+  it('shows each tool name on its own line', () => {
+    const state = createStreamState()
+    const out1 = captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    expect(out1).toContain('Read')
+    expect(out1).toContain('\n')
+    const out2 = captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Grep'))
+    expect(out2).toContain('Grep')
+    expect(out2).toContain('\n')
+    expect(state.pendingToolNames).toEqual(['Read', 'Grep'])
+  })
+
+  it('closes text box before showing tool names', () => {
+    const state = createStreamState()
+    captureStdout(() => handleStreamChunk(state, 'text', 'some text'))
+    expect(state.boxOpened).toBe(true)
+    captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    expect(state.boxOpened).toBe(false)
+    expect(state.pendingToolNames).toEqual(['Read'])
+  })
+
+  it('clearPendingTools resets state', () => {
+    const state = createStreamState()
+    captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    expect(state.pendingToolNames).toEqual(['Read'])
+    captureStdout(() => clearPendingTools(state))
+    expect(state.pendingToolNames).toEqual([])
+  })
+})
+
 describe('StreamBuffer', () => {
-  // Helper: strip ANSI codes for readable assertions
-  const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
-  const P = strip(RESPONSE_PREFIX)  // e.g. "  │ "
+  const P = RESPONSE_PREFIX
 
-  it('passes short text through unchanged (no newline yet)', () => {
+  it('outputs text immediately without buffering', () => {
     const b = new StreamBuffer(40)
-    // No newline → nothing output yet (buffered)
-    expect(b.write('hello world')).toBe('')
-    // end() flushes it
-    expect(b.end()).toBe('hello world')
+    expect(b.write('hello world')).toBe('hello world')
+    // end() is a no-op since everything was already written
+    expect(b.end()).toBe('')
   })
 
-  it('outputs a complete line when \\n arrives', () => {
+  it('replaces newlines with newline + prefix', () => {
     const b = new StreamBuffer(40)
     const out = b.write('hello world\n')
-    // Complete line → formatted and flushed, prefix for the next line appended
-    expect(strip(out)).toBe('hello world\n' + P)
+    expect(out).toBe('hello world\n' + P)
   })
 
-  it('wraps long lines at contentWidth', () => {
-    const b = new StreamBuffer(10)
-    // "hello world" is 11 chars — wider than contentWidth 10
-    const out = b.write('hello world\n')
-    const stripped = strip(out)
-    // wrap-ansi should break at word boundary: "hello" and "world"
-    expect(stripped).toBe('hello\n' + P + 'world\n' + P)
-  })
-
-  it('hard-breaks a word longer than contentWidth', () => {
-    const b = new StreamBuffer(8)
-    const out = b.write('abcdefghijkl\n')
-    const stripped = strip(out)
-    // 12-char word hard-broken into 8 + 4
-    expect(stripped).toBe('abcdefgh\n' + P + 'ijkl\n' + P)
-  })
-
-  it('buffers across chunks and flushes at newline', () => {
+  it('streams each chunk immediately', () => {
     const b = new StreamBuffer(40)
-    expect(b.write('hel')).toBe('')    // buffered
-    expect(b.write('lo ')).toBe('')    // buffered
-    expect(b.write('world')).toBe('')  // buffered
-    const out = b.write('\n')
-    expect(strip(out)).toBe('hello world\n' + P)
+    expect(b.write('hel')).toBe('hel')
+    expect(b.write('lo ')).toBe('lo ')
+    expect(b.write('world')).toBe('world')
+    expect(b.write('\n')).toBe('\n' + P)
   })
 
   it('handles multiple lines in one chunk', () => {
     const b = new StreamBuffer(40)
     const out = b.write('line one\nline two\n')
-    const stripped = strip(out)
-    expect(stripped).toBe('line one\n' + P + 'line two\n' + P)
+    expect(out).toBe('line one\n' + P + 'line two\n' + P)
   })
 
   it('handles blank lines (paragraph breaks)', () => {
     const b = new StreamBuffer(40)
     const out = b.write('para one\n\npara two\n')
-    const stripped = strip(out)
-    expect(stripped).toBe('para one\n' + P + '\n' + P + 'para two\n' + P)
+    expect(out).toBe('para one\n' + P + '\n' + P + 'para two\n' + P)
   })
 })
 
