@@ -13,6 +13,7 @@ import {
   type IProvider,
   type ContentPart,
   type CompactionConfig,
+  type ContextClearingConfig,
   type Logger,
   type LogLevel,
 } from '@chinmaymk/ra'
@@ -42,7 +43,9 @@ export interface ReplOptions {
   sessionId?: string
   resumed?: boolean
   thinking?: 'low' | 'medium' | 'high'
+  thinkingBudget?: number
   compaction?: CompactionConfig
+  contextClearing?: ContextClearingConfig
   contextMessages?: IMessage[]
   memoryStore?: MemoryStore
   logger?: Logger
@@ -210,7 +213,9 @@ export class Repl {
       maxToolResponseSize: this.options.maxToolResponseSize,
       sessionId: this.sessionId,
       thinking: this.options.thinking,
+      thinkingBudget: this.options.thinkingBudget,
       compaction: this.options.compaction,
+      contextClearing: this.options.contextClearing,
       logger: session.logger,
       middleware: mergeMiddleware(tuiHooks, session.middleware),
       resumed: priorCount > 0,

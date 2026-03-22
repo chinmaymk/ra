@@ -59,6 +59,8 @@ export interface ChatRequest {
   messages: IMessage[]
   tools?: ITool[]
   thinking?: 'low' | 'medium' | 'high'
+  /** Absolute cap on thinking/reasoning tokens. Overrides the budget derived from `thinking` level. */
+  thinkingBudget?: number
   providerOptions?: Record<string, unknown>
   signal?: AbortSignal
 }

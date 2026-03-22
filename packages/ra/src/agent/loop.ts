@@ -4,6 +4,7 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
+import { createContextClearingMiddleware, type ContextClearingConfig } from './context-clearing'
 import { accumulateUsage, parseToolArguments } from '../providers/utils'
 import { getContextWindowSize } from './model-registry'
 import { estimateTokens } from './token-estimator'
@@ -19,6 +20,8 @@ export interface AgentLoopOptions {
   middleware?: Partial<MiddlewareConfig>
   sessionId?: string
   thinking?: 'low' | 'medium' | 'high'
+  /** Absolute cap on thinking/reasoning tokens per model call. Overrides the budget from `thinking` level. */
+  thinkingBudget?: number
   compaction?: CompactionConfig
   toolTimeout?: number
   logger?: Logger
@@ -30,6 +33,8 @@ export interface AgentLoopOptions {
   resumed?: boolean
   /** When true, reduce maxToolResponseSize as context usage grows. Default false. */
   adaptiveToolResponseSize?: boolean
+  /** Context clearing config for dropping old tool results and thinking blocks. */
+  contextClearing?: import('./context-clearing').ContextClearingConfig
 }
 
 export interface LoopResult {
@@ -89,6 +94,7 @@ export class AgentLoop {
   private resumed: boolean
   private adaptiveToolResponseSize: boolean
 
+  private thinkingBudget: number | undefined
   private externalAbort: AbortController | null = null
 
   constructor(options: AgentLoopOptions) {
@@ -99,6 +105,7 @@ export class AgentLoop {
     this.sessionId = options.sessionId ?? randomUUID()
     this.middleware = { ...emptyMiddleware(), ...options.middleware }
     this.thinking = options.thinking
+    this.thinkingBudget = options.thinkingBudget
     this.toolTimeout = options.toolTimeout ?? 0
     this.logger = options.logger ?? new NoopLogger()
     this.resumed = options.resumed ?? false
@@ -106,6 +113,16 @@ export class AgentLoop {
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
     this.adaptiveToolResponseSize = options.adaptiveToolResponseSize ?? false
+
+    // Context clearing runs before compaction — it's lighter and preserves message structure
+    if (options.contextClearing) {
+      const hasEnabled = options.contextClearing.toolResults?.enabled || options.contextClearing.thinking?.enabled
+      if (hasEnabled) {
+        this.middleware.beforeModelCall.unshift(
+          createContextClearingMiddleware(options.contextClearing),
+        )
+      }
+    }
 
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
@@ -157,7 +174,8 @@ export class AgentLoop {
           this.logger.info('proactive compaction on resume', { estimatedTokens: estimated, threshold: triggerThreshold })
           const compactCtx: ModelCallContext = {
             ...stoppable,
-            request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }), signal },
+            request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }),
+          ...(this.thinkingBudget && { thinkingBudget: this.thinkingBudget }), signal },
             loop: loopCtx(),
           }
           await forceCompact(this.provider, this.compactionConfig, compactCtx)
@@ -174,6 +192,7 @@ export class AgentLoop {
           messages,
           tools: this.tools.all(),
           ...(this.thinking && { thinking: this.thinking }),
+          ...(this.thinkingBudget && { thinkingBudget: this.thinkingBudget }),
           signal,
         }
         const modelCallCtx: ModelCallContext = { ...stoppable, request, loop: loopCtx() }
@@ -289,7 +308,8 @@ export class AgentLoop {
         this.logger.info('context length exceeded, attempting compaction recovery', { attempt: _compactionRetries + 1, maxRetries: MAX_COMPACTION_RETRIES })
         const modelCallCtx: ModelCallContext = {
           ...stoppable,
-          request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }), signal },
+          request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }),
+          ...(this.thinkingBudget && { thinkingBudget: this.thinkingBudget }), signal },
           loop: loopCtx(),
         }
         const compacted = await forceCompact(this.provider, this.compactionConfig, modelCallCtx)

@@ -57,7 +57,8 @@ export { runMiddlewareChain, mergeMiddleware } from './agent/middleware'
 export { createCompactionMiddleware, forceCompact, isContextLengthError, splitMessageZones, type CompactionConfig, type MessageZones } from './agent/context-compaction'
 export { withTimeout, TimeoutError } from './agent/timeout'
 export { estimateTokens } from './agent/token-estimator'
-export { createToolFilterMiddleware, createRecentlyUsedFilter, type ToolFilterFn, type RecentlyUsedFilterOptions } from './agent/tool-filter'
+export { createToolFilterMiddleware, createRecentlyUsedFilter, createLazyToolFilter, type ToolFilterFn, type RecentlyUsedFilterOptions, type LazyToolLoadingOptions } from './agent/tool-filter'
+export { createContextClearingMiddleware, clearOldToolResults, clearOldThinking, type ContextClearingConfig, type ToolResultClearingConfig, type ThinkingClearingConfig } from './agent/context-clearing'
 export { getContextWindowSize, getDefaultCompactionModel } from './agent/model-registry'
 
 // ── Observability ───────────────────────────────────────────────────

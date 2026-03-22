@@ -100,14 +100,32 @@ export interface CompactionConfig {
   onCompact?: (info: { originalMessages: number; compactedMessages: number; estimatedTokens: number; threshold: number }) => void
 }
 
-const DEFAULT_SUMMARIZATION_PROMPT = `Summarize the conversation in <conversation> concisely. This summary will replace the original messages in the conversation context.
+const DEFAULT_SUMMARIZATION_PROMPT = `Summarize the conversation in <conversation> using the structured format below. This summary will replace the original messages as a context handoff.
+
+<format>
+## Current Task
+One-line description of the active task.
+
+## Key Decisions
+- Bullet list of decisions made and their rationale.
+
+## Completed Work
+- What has been done, including file paths and tool outcomes.
+
+## Active Context
+- Critical facts, constraints, and configuration established.
+- Important variable values, API responses, or error states.
+
+## Next Steps
+- What remains to be done.
+</format>
 
 <instructions>
-<rule>Preserve key decisions made</rule>
-<rule>Preserve important facts and context established</rule>
-<rule>Preserve current state of the task being worked on</rule>
-<rule>Preserve relevant tool results and their outcomes</rule>
-<rule>Be concise but complete</rule>
+<rule>Use the exact format above — it will be parsed by downstream systems</rule>
+<rule>Reference specific file paths, function names, and values — not vague descriptions</rule>
+<rule>Never summarize a previous summary — always derive from the original conversation</rule>
+<rule>Omit sections that have no content rather than writing "None"</rule>
+<rule>Be concise but preserve all information needed to continue the task</rule>
 </instructions>`
 
 // Patterns matched against err.message from each provider's SDK.

@@ -72,6 +72,18 @@ export const defaultConfig: RaConfig = {
       enabled: true,
       threshold: 0.80,
     },
+    contextClearing: {
+      toolResults: {
+        enabled: true,
+        keep: 6,
+        clearAtLeast: 500,
+      },
+      thinking: {
+        enabled: true,
+        keepRecent: 2,
+      },
+      triggerThreshold: 0.60,
+    },
     memory: {
       enabled: false,
       maxMemories: 1000,

@@ -37,7 +37,7 @@ export class BedrockProvider implements IProvider {
       inferenceConfig: { maxTokens: (request.providerOptions?.maxTokens as number) ?? DEFAULT_MAX_TOKENS },
       ...(request.thinking && {
         additionalModelRequestFields: {
-          thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[request.thinking] }
+          thinking: { type: 'enabled', budget_tokens: request.thinkingBudget ?? THINKING_BUDGETS[request.thinking] }
         }
       }),
     }

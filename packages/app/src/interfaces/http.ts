@@ -9,6 +9,7 @@ import {
   type StreamChunkContext,
   type ToolRegistry,
   type CompactionConfig,
+  type ContextClearingConfig,
   type Logger,
   type LogLevel,
 } from '@chinmaymk/ra'
@@ -36,7 +37,9 @@ export interface HttpOptions {
   toolTimeout?: number
   maxToolResponseSize?: number
   thinking?: 'low' | 'medium' | 'high'
+  thinkingBudget?: number
   compaction?: CompactionConfig
+  contextClearing?: ContextClearingConfig
   contextMessages?: IMessage[]
   logger?: Logger
   logsEnabled?: boolean
@@ -185,7 +188,9 @@ export class HttpServer {
       maxToolResponseSize: this.options.maxToolResponseSize,
       sessionId,
       thinking: this.options.thinking,
+      thinkingBudget: this.options.thinkingBudget,
       compaction: this.options.compaction,
+      contextClearing: this.options.contextClearing,
       logger: session.logger,
       resumed,
     })

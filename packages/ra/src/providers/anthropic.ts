@@ -24,7 +24,7 @@ export class AnthropicProvider implements IProvider {
       messages: this.mapMessages(filtered),
       ...(system && { system: [{ type: 'text' as const, text: system, cache_control: { type: 'ephemeral' as const } }] }),
       ...(request.tools?.length && { tools: this.mapTools(request.tools) }),
-      ...(request.thinking && { thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[request.thinking] } }),
+      ...(request.thinking && { thinking: { type: 'enabled', budget_tokens: request.thinkingBudget ?? THINKING_BUDGETS[request.thinking] } }),
     }
   }
 

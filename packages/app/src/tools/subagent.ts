@@ -12,6 +12,7 @@ import {
   type MiddlewareConfig,
   type AgentLoopOptions,
   type CompactionConfig,
+  type ContextClearingConfig,
   type Logger,
 } from '@chinmaymk/ra'
 
@@ -25,7 +26,9 @@ export interface SubagentToolOptions {
   systemPrompt?: string
   middleware?: Partial<MiddlewareConfig>
   thinking?: 'low' | 'medium' | 'high'
+  thinkingBudget?: number
   compaction?: CompactionConfig
+  contextClearing?: ContextClearingConfig
   toolTimeout?: number
   maxIterations?: number
   maxConcurrency?: number
@@ -94,7 +97,9 @@ export function subagentTool(options: SubagentToolOptions): ITool {
         maxIterations,
         middleware: options.middleware,
         thinking: options.thinking,
+        thinkingBudget: options.thinkingBudget,
         compaction: options.compaction,
+        contextClearing: options.contextClearing,
         toolTimeout: options.toolTimeout,
         logger: options.logger,
       }

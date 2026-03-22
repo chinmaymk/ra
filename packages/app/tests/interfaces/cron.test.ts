@@ -122,6 +122,7 @@ function makeApp(overrides?: { provider?: IProvider }) {
       middleware: {},
       context: { enabled: false, patterns: [], resolvers: [], subdirectoryWalk: true },
       compaction: { enabled: false, threshold: 0.8 },
+      contextClearing: { toolResults: { enabled: false }, thinking: { enabled: false } },
       memory: { enabled: false, maxMemories: 100, ttlDays: 30, injectLimit: 5 },
     },
     cron: [],

@@ -87,6 +87,8 @@ export interface AgentConfig {
   provider: ProviderName
   model: string
   thinking?: 'low' | 'medium' | 'high'
+  /** Absolute cap on thinking/reasoning tokens per model call. Overrides the budget from `thinking` level. */
+  thinkingBudget?: number
   systemPrompt: string
   maxIterations: number
   maxRetries: number
@@ -112,6 +114,27 @@ export interface AgentConfig {
     model?: string         // cheaper model for summarization, defaults per provider
     prompt?: string        // custom summarization prompt, overrides default
     onCompact?: (info: { originalMessages: number; compactedMessages: number; estimatedTokens: number; threshold: number }) => void
+  }
+  /** Automatic clearing of old tool results and thinking blocks to save tokens. Lighter than compaction. */
+  contextClearing: {
+    toolResults: {
+      enabled: boolean
+      /** Number of recent tool results to keep intact. Default 6. */
+      keep?: number
+      /** Minimum tokens to free when clearing. Default 500. */
+      clearAtLeast?: number
+      /** Tool names to never clear. */
+      excludeTools?: string[]
+      /** Placeholder text for cleared results. Default "[tool result cleared]". */
+      placeholder?: string
+    }
+    thinking: {
+      enabled: boolean
+      /** Number of recent assistant messages whose thinking to preserve. Default 2. */
+      keepRecent?: number
+    }
+    /** Context usage ratio (0-1) at which clearing activates. Default 0.60. */
+    triggerThreshold?: number
   }
   memory: {
     enabled: boolean

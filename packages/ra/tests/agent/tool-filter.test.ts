@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { createToolFilterMiddleware, createRecentlyUsedFilter } from '@chinmaymk/ra'
+import { createToolFilterMiddleware, createRecentlyUsedFilter, createLazyToolFilter } from '@chinmaymk/ra'
 import type { ITool, ModelCallContext } from '@chinmaymk/ra'
 import { makeModelCallCtx } from './test-utils'
 
@@ -83,5 +83,74 @@ describe('createRecentlyUsedFilter', () => {
     ctx.loop.iteration = 1
 
     expect(filter(makeTool('anything'), ctx)).toBe(true)
+  })
+})
+
+describe('createLazyToolFilter', () => {
+  it('always includes eager tools', () => {
+    const filter = createLazyToolFilter({ eagerTools: ['Read', 'Write'] })
+    const ctx = makeModelCallCtx([{ role: 'user', content: 'hi' }])
+    ctx.loop.iteration = 2
+
+    expect(filter(makeTool('Read'), ctx)).toBe(true)
+    expect(filter(makeTool('Write'), ctx)).toBe(true)
+  })
+
+  it('hides non-eager tools by default', () => {
+    const filter = createLazyToolFilter({ eagerTools: ['Read'] })
+    const ctx = makeModelCallCtx([{ role: 'user', content: 'hi' }])
+    ctx.loop.iteration = 2
+
+    expect(filter(makeTool('Bash'), ctx)).toBe(false)
+  })
+
+  it('loads deferred tools after they appear in conversation', () => {
+    const filter = createLazyToolFilter({
+      eagerTools: ['Read'],
+      deferredTools: ['Bash', 'Write'],
+    })
+    const messages = [
+      { role: 'user' as const, content: 'hi' },
+      { role: 'assistant' as const, content: '', toolCalls: [{ id: 'tc1', name: 'Bash', arguments: '{}' }] },
+      { role: 'tool' as const, content: 'ok', toolCallId: 'tc1' },
+    ]
+    const ctx = makeModelCallCtx(messages)
+    ctx.loop.iteration = 2
+    ctx.loop.messages = messages
+
+    expect(filter(makeTool('Bash'), ctx)).toBe(true) // used, so loaded
+    expect(filter(makeTool('Write'), ctx)).toBe(false) // deferred but not yet used
+  })
+
+  it('loads tools mentioned in tool_search results', () => {
+    const filter = createLazyToolFilter({
+      eagerTools: ['Read'],
+      deferredTools: ['Bash', 'Grep'],
+    })
+    const messages = [
+      { role: 'user' as const, content: 'hi' },
+      { role: 'assistant' as const, content: '', toolCalls: [{ id: 'tc1', name: 'tool_search', arguments: '{}' }] },
+      { role: 'tool' as const, content: 'Found tools: Bash, Grep', toolCallId: 'tc1' },
+    ]
+    const ctx = makeModelCallCtx(messages)
+    ctx.loop.iteration = 2
+    ctx.loop.messages = messages
+
+    expect(filter(makeTool('Bash'), ctx)).toBe(true)
+    expect(filter(makeTool('Grep'), ctx)).toBe(true)
+  })
+
+  it('allows non-deferred, non-eager tools through when deferredTools is specified', () => {
+    const filter = createLazyToolFilter({
+      eagerTools: ['Read'],
+      deferredTools: ['Bash'],
+    })
+    const ctx = makeModelCallCtx([{ role: 'user', content: 'hi' }])
+    ctx.loop.iteration = 2
+
+    // 'Write' is not in eager or deferred — should pass through
+    expect(filter(makeTool('Write'), ctx)).toBe(true)
+    // 'Bash' is deferred and not yet used — hidden
+    expect(filter(makeTool('Bash'), ctx)).toBe(false)
   })
 })

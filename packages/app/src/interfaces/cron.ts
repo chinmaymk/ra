@@ -72,10 +72,14 @@ function resolveJobConfig(baseCfg: AgentConfig, overrides: Partial<AgentConfig> 
     maxRetries: overrides?.maxRetries ?? baseCfg.maxRetries,
     toolTimeout: overrides?.toolTimeout ?? baseCfg.toolTimeout,
     thinking: overrides?.thinking ?? baseCfg.thinking,
+    thinkingBudget: overrides?.thinkingBudget ?? baseCfg.thinkingBudget,
     maxToolResponseSize: overrides?.tools?.maxResponseSize ?? baseCfg.tools.maxResponseSize,
     compaction: overrides?.compaction
       ? { ...baseCfg.compaction, ...overrides.compaction }
       : baseCfg.compaction,
+    contextClearing: overrides?.contextClearing
+      ? { ...baseCfg.contextClearing, ...overrides.contextClearing }
+      : baseCfg.contextClearing,
   }
 }
 
