@@ -1,6 +1,6 @@
 # Built-in Tools
 
-ra ships with built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. An ephemeral [scratchpad](#scratchpad) is registered by default for compaction-safe note-taking. When [memory](/configuration/#memory) is enabled, additional memory tools are registered for long-term persistence. All built-in tools are registered by default and can be individually configured or disabled via the [`tools`](/configuration/#tools) config section.
+ra ships with built-in tools that give the agent the ability to interact with the filesystem, run shell commands, make HTTP requests, spawn parallel sub-agents, and communicate with the user. An ephemeral [scratchpad](#scratchpad) is registered by default for compaction-safe note-taking. When [memory](/configuration/#agent-memory) is enabled, additional memory tools are registered for long-term persistence. All built-in tools are registered by default and can be individually configured or disabled via the [`tools`](/configuration/#agent-tools) config section.
 
 Tools are self-describing — each includes a detailed schema and description so the model knows when and how to use them. You can further guide tool usage through system prompts or [middleware](/middleware/).
 
@@ -188,7 +188,7 @@ Make an HTTP request and return the response as JSON with `status`, `headers`, a
 
 ## Scratchpad
 
-When built-in tools are enabled, ra registers an ephemeral key-value scratchpad that survives [context compaction](/core/agent-loop#compaction). Entries are re-injected before every model call via middleware, so the agent never loses them even as older messages are summarized. The scratchpad is **not** persisted across sessions — use [memory tools](#memory) for long-term storage.
+When built-in tools are enabled, ra registers an ephemeral key-value scratchpad that survives [context compaction](/core/context-control#smart-context-compaction). Entries are re-injected before every model call via middleware, so the agent never loses them even as older messages are summarized. The scratchpad is **not** persisted across sessions — use [memory tools](#memory) for long-term storage.
 
 Disable the scratchpad with:
 
@@ -253,11 +253,11 @@ Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to c
 
 ## MCP
 
-When [MCP clients](/modes/mcp) are configured, all MCP tools are registered with server-prefixed names (`github__search`) to avoid conflicts. When `mcp.lazySchemas` is enabled (the default), schemas are additionally stripped — on the first call to each tool, ra returns the full schema as an error, and the model retries with correct parameters. See [MCP](/modes/mcp#server-prefixed-tool-names) for details.
+When [MCP clients](/modes/mcp) are configured, all MCP tools are registered with server-prefixed names (`github__search`) to avoid conflicts. When `mcpLazySchemas` is enabled (the default), schemas are additionally stripped — on the first call to each tool, ra returns the full schema as an error, and the model retries with correct parameters. See [MCP](/modes/mcp#server-prefixed-tool-names) for details.
 
 ## Memory
 
-When [memory](/configuration/#memory) is enabled, three additional tools are registered.
+When [memory](/configuration/#agent-memory) is enabled, three additional tools are registered.
 
 ### `memory_save`
 

@@ -6,7 +6,7 @@ It doesn't ship with a system prompt. Every part of the loop is exposed via conf
 
 It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease.
 
-It comes with [built-in tools](/tools/) for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent [sessions](/core/sessions) via JSONL. An FTS5 [memory](/configuration/#memory) backed by SQLite.
+It comes with [built-in tools](/tools/) for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent [sessions](/core/sessions) via JSONL. An FTS5 [memory](/configuration/#agent-memory) backed by SQLite.
 
 It speaks [MCP](/modes/mcp) both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol.
 
@@ -47,7 +47,7 @@ Drop a `ra.config.yml` in a repo and that directory becomes a project-specific a
 | [Middleware](/middleware/) | Hooks at every loop stage — intercept, modify, or stop the loop |
 | [Sessions](/core/sessions) | Persist conversations as JSONL, resume from any interface, auto-prune |
 | [File Attachments](/core/file-attachments) | Images, PDFs, text files — auto-detected and sent in the right format |
-| [Memory](/configuration/#memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
+| [Memory](/configuration/#agent-memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
 | [Configuration](/configuration/) | Layered: CLI > env > file. The config is the agent |
 
 ## Use cases

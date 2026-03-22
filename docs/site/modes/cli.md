@@ -81,7 +81,7 @@ ra --show-config --provider openai --model gpt-4.1
 ra --show-context
 ```
 
-See [Configuration](/configuration/#show-config) for details.
+See [Configuration](/configuration/#inspect) for details.
 
 ## See also
 

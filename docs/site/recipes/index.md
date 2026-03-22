@@ -53,7 +53,7 @@ Recipes act as a base config layer. The merge order is:
 defaults < recipe < file config < CLI flags
 ```
 
-Your local `ra.config.yaml` and CLI flags always override recipe values. Array fields like `skillDirs`, `middleware`, and `mcp.servers` are prepended from the recipe rather than replaced, so you can extend a recipe without losing its defaults.
+Your local `ra.config.yaml` and CLI flags always override recipe values. Array fields like `skillDirs`, `middleware`, and `mcpServers` are prepended from the recipe rather than replaced, so you can extend a recipe without losing its defaults.
 
 ### Local recipes
 
