@@ -70,6 +70,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
     provider, tools, model, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, thinking, compaction, sessionId,
     logger: session.logger,
     middleware: mergeMiddleware(streamHook, session.middleware),
+    resumed: sessionMessages.length > 0,
   })
 
   const result = await loop.run(initialMessages)

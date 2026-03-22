@@ -40,11 +40,13 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     loopSpan = tracer.startSpan('agent.loop', {
       maxIterations: ctx.maxIterations,
       initialMessageCount: ctx.messages.length,
+      resumed: ctx.resumed,
     })
 
     logger.info('agent loop starting', {
       maxIterations: ctx.maxIterations,
       messageCount: ctx.messages.length,
+      resumed: ctx.resumed,
     })
   }
 

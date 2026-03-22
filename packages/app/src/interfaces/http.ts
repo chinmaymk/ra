@@ -166,7 +166,7 @@ export class HttpServer {
   }
 
   /** Create a session-scoped AgentLoop. */
-  private createLoop(sessionId: string, priorCount: number, extraMiddleware?: Partial<MiddlewareConfig>): AgentLoop {
+  private createLoop(sessionId: string, priorCount: number, extraMiddleware?: Partial<MiddlewareConfig>, resumed = false): AgentLoop {
     const session = createSessionMiddleware(this.options.middleware, {
       storage: this.options.storage,
       sessionId,
@@ -189,6 +189,7 @@ export class HttpServer {
       thinking: this.options.thinking,
       compaction: this.options.compaction,
       logger: session.logger,
+      resumed,
     })
   }
 
@@ -198,7 +199,7 @@ export class HttpServer {
 
     const { sessionId, isNew } = await this.ensureSession(body.sessionId)
     const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId, isNew)
-    const loop = this.createLoop(sessionId, priorCount)
+    const loop = this.createLoop(sessionId, priorCount, undefined, !isNew)
 
     try {
       const result = await loop.run(messages)
@@ -241,7 +242,7 @@ export class HttpServer {
           }
         }
 
-        const loop = self.createLoop(sessionId, priorCount, { onStreamChunk: [onStreamChunk] })
+        const loop = self.createLoop(sessionId, priorCount, { onStreamChunk: [onStreamChunk] }, !isNew)
 
         try {
           await loop.run(messages)

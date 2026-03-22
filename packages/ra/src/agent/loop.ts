@@ -24,6 +24,8 @@ export interface AgentLoopOptions {
   maxRetries?: number
   /** Max characters for a single tool response. Responses exceeding this are truncated with a notice. Default 25000. */
   maxToolResponseSize?: number
+  /** True when the loop is running against a resumed session (prior messages loaded from storage). */
+  resumed?: boolean
 }
 
 export interface LoopResult {
@@ -71,6 +73,7 @@ export class AgentLoop {
   private compactionConfig: CompactionConfig | undefined
   private maxRetries: number
   private maxToolResponseSize: number
+  private resumed: boolean
   private externalAbort: AbortController | null = null
 
   constructor(options: AgentLoopOptions) {
@@ -86,6 +89,7 @@ export class AgentLoop {
     this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
+    this.resumed = options.resumed ?? false
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
@@ -117,7 +121,7 @@ export class AgentLoop {
     const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
     let lastUsage: TokenUsage | undefined
 
-    const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId, usage, lastUsage })
+    const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId, usage, lastUsage, resumed: this.resumed })
 
     let currentPhase: 'model_call' | 'tool_execution' | 'stream' = 'model_call'
 
