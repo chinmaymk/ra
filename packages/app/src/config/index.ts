@@ -10,7 +10,7 @@ import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
 export { defaultConfig } from './defaults'
-export type { RaConfig, LoadConfigOptions, McpServerEntry, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
+export type { RaConfig, LoadConfigOptions, McpServerEntry, RaMcpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -67,14 +67,14 @@ const AGENT_KEYS = new Set([
 // Keys that belong under `app` when found at the top level (legacy flat config)
 const APP_KEYS = new Set([
   'interface', 'dataDir', 'http', 'inspector', 'storage',
-  'mcpServers', 'mcpLazySchemas', 'mcpServer', 'providers',
+  'mcpServers', 'mcpLazySchemas', 'raMcpServer', 'providers',
   'logsEnabled', 'logLevel', 'tracesEnabled',
 ])
 
 /**
  * Normalize MCP config from legacy shapes into the new layout.
  * Handles:
- *   - `app.mcp: { client, server, lazySchemas }` → split to `app.mcpServers` + `app.mcpServer`
+ *   - `app.mcp: { client, server, lazySchemas }` → split to `app.mcpServers` + `app.raMcpServer`
  *   - `app.mcp.client` → `app.mcpServers` (rename client→mcpServers)
  *   - `agent.mcp.servers` → `app.mcpServers` (move from agent to app)
  *   - `agent.mcp.client` → `app.mcpServers` (rename + move)
@@ -95,10 +95,16 @@ function normalizeMcpConfig(raw: Record<string, unknown>): void {
     if (mcp.lazySchemas !== undefined && app.mcpLazySchemas === undefined) {
       app.mcpLazySchemas = mcp.lazySchemas
     }
-    if (isPlainObject(mcp.server) && app.mcpServer === undefined) {
-      app.mcpServer = mcp.server
+    if (isPlainObject(mcp.server) && app.raMcpServer === undefined) {
+      app.raMcpServer = mcp.server
     }
     delete app.mcp
+  }
+
+  // Legacy: app.mcpServer → app.raMcpServer
+  if (isPlainObject(app.mcpServer) && app.raMcpServer === undefined) {
+    app.raMcpServer = app.mcpServer
+    delete app.mcpServer
   }
 
   // Legacy: agent.mcp.servers / agent.mcp.client → app.mcpServers

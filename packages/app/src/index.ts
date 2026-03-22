@@ -125,17 +125,17 @@ function mcpToolsFor(app: AppContext) {
 }
 
 async function startSidecarMcp(app: AppContext): Promise<(() => Promise<void>) | null> {
-  if (!app.config.app.mcpServer?.enabled) return null
+  if (!app.config.app.raMcpServer?.enabled) return null
   const handler = createMcpHandler(app)
-  const stop = await startMcpHttp(app.config.app.mcpServer, handler, mcpToolsFor(app))
-  console.error('MCP server (http) listening on port', app.config.app.mcpServer.port)
+  const stop = await startMcpHttp(app.config.app.raMcpServer, handler, mcpToolsFor(app))
+  console.error('MCP server (http) listening on port', app.config.app.raMcpServer.port)
   return stop
 }
 
 async function launchMcpHttp(app: AppContext): Promise<void> {
   const handler = createMcpHandler(app)
-  await startMcpHttp(app.config.app.mcpServer, handler, mcpToolsFor(app))
-  console.error('MCP server (http) listening on port', app.config.app.mcpServer.port)
+  await startMcpHttp(app.config.app.raMcpServer, handler, mcpToolsFor(app))
+  console.error('MCP server (http) listening on port', app.config.app.raMcpServer.port)
   await new Promise(() => {}) // keep alive
 }
 
@@ -150,7 +150,7 @@ async function launchMcpStdio(app: AppContext): Promise<void> {
     'Cursor — .cursor/mcp.json:\n' + mcpConfig + '\n\n' +
     'Claude Desktop — ~/Library/Application Support/Claude/claude_desktop_config.json:\n' + mcpConfig + '\n\n'
   )
-  await startMcpStdio(app.config.app.mcpServer, handler, mcpToolsFor(app))
+  await startMcpStdio(app.config.app.raMcpServer, handler, mcpToolsFor(app))
   await app.shutdown()
 }
 

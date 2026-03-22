@@ -47,7 +47,7 @@ Infrastructure, deployment, and observability. Recipes typically don't set these
 | `app.providers` | `{ anthropic: {...}, ... }` | Per-provider credentials and connection options |
 | `app.mcpServers` | `[]` | External MCP servers to connect to |
 | `app.mcpLazySchemas` | `true` | Register MCP tools with minimal schemas (saves tokens) |
-| `app.mcpServer` | `{ enabled: false, port: 3001, ... }` | Ra's own MCP server endpoint |
+| `app.raMcpServer` | `{ enabled: false, port: 3001, ... }` | Ra's own MCP server endpoint |
 | `app.logsEnabled` | `true` | Enable session logs |
 | `app.logLevel` | `'info'` | Minimum log level |
 | `app.tracesEnabled` | `true` | Enable session traces |

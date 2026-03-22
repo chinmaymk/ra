@@ -104,7 +104,7 @@ function makeApp(overrides?: { provider?: IProvider }) {
       },
       mcpServers: [],
       mcpLazySchemas: false,
-      mcpServer: { enabled: false, port: 3001, tool: { name: 'ra', description: 'test' } },
+      raMcpServer: { enabled: false, port: 3001, tool: { name: 'ra', description: 'test' } },
       logsEnabled: false,
       logLevel: 'error',
       tracesEnabled: false,

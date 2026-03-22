@@ -6,12 +6,12 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
-import type { McpServerConfig } from '../config/types'
+import type { RaMcpServerConfig } from '../config/types'
 import type { ToolRegistry } from '@chinmaymk/ra'
 
 export type McpToolHandler = (input: unknown) => Promise<string>
 
-function buildServer(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): McpServer {
+function buildServer(config: RaMcpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): McpServer {
   const server = new McpServer({ name: config.tool.name, version: '1.0.0' })
   server.tool(
     config.tool.name,
@@ -39,7 +39,7 @@ function buildServer(config: McpServerConfig, handler: McpToolHandler, builtinTo
   return server
 }
 
-export async function startMcpStdio(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry, logger?: Logger): Promise<void> {
+export async function startMcpStdio(config: RaMcpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry, logger?: Logger): Promise<void> {
   const log = logger ?? new NoopLogger()
   const server = buildServer(config, handler, builtinTools)
   log.info('MCP server starting', { transport: 'stdio', tool: config.tool.name })
@@ -47,7 +47,7 @@ export async function startMcpStdio(config: McpServerConfig, handler: McpToolHan
   log.info('MCP server connected', { transport: 'stdio' })
 }
 
-export async function startMcpHttp(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry, logger?: Logger): Promise<() => Promise<void>> {
+export async function startMcpHttp(config: RaMcpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry, logger?: Logger): Promise<() => Promise<void>> {
   const log = logger ?? new NoopLogger()
   const server = buildServer(config, handler, builtinTools)
   const transports = new Map<string, StreamableHTTPServerTransport>()

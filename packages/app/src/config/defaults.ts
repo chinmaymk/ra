@@ -23,7 +23,7 @@ export const defaultConfig: RaConfig = {
     },
     mcpServers: [],
     mcpLazySchemas: true,
-    mcpServer: {
+    raMcpServer: {
       enabled: false,
       port: 3001,
       tool: {

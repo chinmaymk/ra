@@ -38,7 +38,7 @@ When `app.mcpLazySchemas` is enabled (default: `true`), MCP tools are additional
 
 ## MCP Server
 
-Configured via `app.mcpServer` in config. Exposes:
+Configured via `app.raMcpServer` in config. Exposes:
 - The agent itself as a single MCP tool (name + description configurable)
 - All built-in tools as individual MCP tools
 - Supports stdio (long-lived child process) and HTTP (per-session with `mcp-session-id` header) transports

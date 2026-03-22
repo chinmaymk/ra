@@ -82,7 +82,7 @@ export interface AppConfig {
    *  First call returns full schema; model retries with correct params. Saves tokens. */
   mcpLazySchemas: boolean
   /** Ra's own MCP server endpoint configuration. */
-  mcpServer: McpServerConfig
+  raMcpServer: RaMcpServerConfig
   logsEnabled: boolean
   logLevel: LogLevel
   tracesEnabled: boolean
@@ -153,7 +153,7 @@ export interface McpServerEntry {
   url?: string
 }
 
-export interface McpServerConfig {
+export interface RaMcpServerConfig {
   enabled: boolean
   port: number
   tool: {
