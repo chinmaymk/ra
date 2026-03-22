@@ -162,7 +162,7 @@ export function printToolCall(name: string, args: string): void {
 }
 
 export function printToolResult(name: string, ms: number): void {
-  process.stdout.write(`\r  ${ansi.greenBright}✔ ${name}${ansi.dim} (${ms}ms)${ansi.reset}\n`)
+  process.stdout.write(`\r\x1b[K  ${ansi.greenBright}✔ ${name}${ansi.dim} (${ms}ms)${ansi.reset}\n`)
 }
 
 export function printStatus(msg: string): void {
