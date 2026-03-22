@@ -19,6 +19,7 @@ export type {
 // ── Provider utilities ──────────────────────────────────────────────
 export {
   accumulateUsage,
+  cacheHitPercent,
   parseToolArguments,
   mergeConsecutiveRoles,
   mergeConsecutive,

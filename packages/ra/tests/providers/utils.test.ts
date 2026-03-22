@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, extractTextContent, serializeContent, parseToolArguments, resolveThinkingBudget, THINKING_BUDGETS } from '@chinmaymk/ra'
+import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, cacheHitPercent, extractTextContent, serializeContent, parseToolArguments, resolveThinkingBudget, THINKING_BUDGETS } from '@chinmaymk/ra'
 import type { TokenUsage, ContentPart } from '@chinmaymk/ra'
 
 describe('mergeConsecutiveRoles', () => {
@@ -170,6 +170,23 @@ describe('accumulateUsage', () => {
     accumulateUsage(target, { inputTokens: 1, outputTokens: 1 })
     expect(target.cacheReadTokens).toBeUndefined()
     expect(target.cacheCreationTokens).toBeUndefined()
+  })
+})
+
+describe('cacheHitPercent', () => {
+  it('returns percentage with one decimal place', () => {
+    expect(cacheHitPercent(100, 80)).toBe(80)
+    expect(cacheHitPercent(200, 150)).toBe(75)
+    expect(cacheHitPercent(300, 100)).toBe(33.3)
+  })
+
+  it('returns null when no cache reads', () => {
+    expect(cacheHitPercent(100, 0)).toBeNull()
+    expect(cacheHitPercent(100, undefined)).toBeNull()
+  })
+
+  it('returns null when input is zero', () => {
+    expect(cacheHitPercent(0, 50)).toBeNull()
   })
 })
 

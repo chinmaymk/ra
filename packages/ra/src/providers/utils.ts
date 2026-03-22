@@ -43,6 +43,13 @@ export function accumulateUsage(target: TokenUsage, source: TokenUsage): void {
   }
 }
 
+/** Compute cache hit percentage (one decimal place), or null if not applicable. */
+export function cacheHitPercent(inputTokens: number, cacheReadTokens: number | undefined): number | null {
+  return inputTokens > 0 && cacheReadTokens
+    ? Math.round((cacheReadTokens / inputTokens) * 1000) / 10
+    : null
+}
+
 /** Extract text from string or ContentPart[] content. */
 export function extractTextContent(content: string | ContentPart[]): string {
   if (typeof content === 'string') return content
