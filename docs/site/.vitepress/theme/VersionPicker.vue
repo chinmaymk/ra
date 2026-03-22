@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { withBase } from 'vitepress'
 
 declare const __DOCS_VERSION__: string
 
@@ -8,6 +7,10 @@ interface VersionsData {
   latest: string
   versions: string[]
 }
+
+// All version URLs are relative to the site root /ra/, not the current
+// build's base (which may be /ra/dev/ or /ra/v/0.0.5/).
+const SITE_ROOT = '/ra/'
 
 const currentVersion = ref(__DOCS_VERSION__)
 const versions = ref<VersionsData | null>(null)
@@ -29,18 +32,17 @@ const filteredVersions = computed(() => {
 })
 
 function versionUrl(version: string): string {
-  if (version === 'dev') return withBase('/dev/')
-  return withBase(`/v/${version}/`)
+  if (version === 'dev') return `${SITE_ROOT}dev/`
+  return `${SITE_ROOT}v/${version}/`
 }
 
 function onChange() {
-  const path = versionUrl(currentVersion.value)
-  window.location.href = window.location.origin + path
+  window.location.href = window.location.origin + versionUrl(currentVersion.value)
 }
 
 onMounted(async () => {
   try {
-    const res = await fetch(withBase('/versions.json'))
+    const res = await fetch(`${SITE_ROOT}versions.json`)
     if (res.ok) versions.value = await res.json()
   } catch {
     // versions.json unavailable — picker shows current version only
