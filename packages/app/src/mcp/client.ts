@@ -20,6 +20,7 @@ export class McpClient {
 
   async connect(configs: McpClientConfig[], registry: ToolRegistry, options?: McpConnectOptions): Promise<void> {
     const logger = options?.logger ?? new NoopLogger()
+
     try {
       const mcpTools: McpToolEntry[] = []
 
@@ -60,6 +61,7 @@ export class McpClient {
         for (const { tool, serverName } of mcpTools) {
           registry.register({ ...tool, name: prefixToolName(serverName, tool.name) })
         }
+        logger.debug('mcp tools registered', { toolCount: mcpTools.length })
       }
     } catch (err) {
       logger.error('MCP connection failed, cleaning up', { error: err instanceof Error ? err.message : String(err) })

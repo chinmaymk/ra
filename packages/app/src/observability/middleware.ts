@@ -1,4 +1,4 @@
-import type { MiddlewareConfig, LoopContext, ModelCallContext, ToolExecutionContext, ToolResultContext, ErrorContext, Logger } from '@chinmaymk/ra'
+import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, Logger } from '@chinmaymk/ra'
 import type { Tracer, Span } from './tracer'
 
 /**
@@ -12,6 +12,19 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
   let modelSpan: Span | undefined
   const toolSpans = new Map<string, Span>()
   let iterationStartMessageCount = 0
+
+  // Stream metrics — reset per iteration
+  let streamChunkCount = 0
+  let streamTextLength = 0
+  let streamFirstTokenTime: number | undefined
+  let streamStartTime: number | undefined
+
+  function resetStreamMetrics(): void {
+    streamChunkCount = 0
+    streamTextLength = 0
+    streamFirstTokenTime = undefined
+    streamStartTime = undefined
+  }
 
   /** End all open child spans with error status and clear state for reuse. */
   function drainOpenSpans(status: 'ok' | 'error', attrs?: Record<string, unknown>): void {
@@ -52,22 +65,45 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
 
   const beforeModelCall = async (ctx: ModelCallContext): Promise<void> => {
     iterationStartMessageCount = ctx.request.messages.length
+    resetStreamMetrics()
 
     iterationSpan = tracer.startSpan('agent.iteration', {
       iteration: ctx.loop.iteration,
       messageCount: ctx.request.messages.length,
+      model: ctx.request.model,
     }, loopSpan?.spanId)
 
     modelSpan = tracer.startSpan('agent.model_call', {
       model: ctx.request.model,
       messageCount: ctx.request.messages.length,
+      toolCount: ctx.request.tools?.length ?? 0,
     }, iterationSpan.spanId)
+
+    streamStartTime = performance.now()
 
     logger.debug('calling model', {
       iteration: ctx.loop.iteration,
       model: ctx.request.model,
       messageCount: ctx.request.messages.length,
+      toolCount: ctx.request.tools?.length ?? 0,
     })
+  }
+
+  const onStreamChunk = async (ctx: StreamChunkContext): Promise<void> => {
+    streamChunkCount++
+
+    if (ctx.chunk.type === 'text') {
+      // Track first-token latency
+      if (streamFirstTokenTime === undefined) {
+        streamFirstTokenTime = performance.now()
+      }
+      streamTextLength += ctx.chunk.delta.length
+    } else if (ctx.chunk.type === 'tool_call_start') {
+      // First tool call also counts as "first token" if no text preceded it
+      if (streamFirstTokenTime === undefined) {
+        streamFirstTokenTime = performance.now()
+      }
+    }
   }
 
   const afterModelResponse = async (ctx: ModelCallContext): Promise<void> => {
@@ -77,6 +113,11 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     const toolNames = toolCalls?.map(t => t.name) ?? []
     const responseText = typeof lastMsg?.content === 'string' ? lastMsg.content : ''
 
+    // Compute time-to-first-token (TTFT)
+    const ttftMs = (streamFirstTokenTime !== undefined && streamStartTime !== undefined)
+      ? Math.round((streamFirstTokenTime - streamStartTime) * 100) / 100
+      : undefined
+
     if (modelSpan) {
       tracer.endSpan(modelSpan, 'ok', {
         inputTokens: usage?.inputTokens,
@@ -85,6 +126,9 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
         toolCallCount: toolNames.length,
         toolNames,
         responseLength: responseText.length,
+        streamChunkCount,
+        streamTextLength,
+        ...(ttftMs !== undefined && { ttftMs }),
       })
       modelSpan = undefined
     }
@@ -93,9 +137,11 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       iteration: ctx.loop.iteration,
       inputTokens: usage?.inputTokens,
       outputTokens: usage?.outputTokens,
+      thinkingTokens: usage?.thinkingTokens ?? null,
       toolCallCount: toolNames.length,
       toolNames,
       responseLength: responseText.length,
+      ...(ttftMs !== undefined && { ttftMs }),
     })
   }
 
@@ -207,6 +253,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
         iterations: ctx.iteration,
         inputTokens: ctx.usage.inputTokens,
         outputTokens: ctx.usage.outputTokens,
+        thinkingTokens: ctx.usage.thinkingTokens ?? null,
         totalMessages: ctx.messages.length,
       })
       loopSpan = undefined
@@ -216,6 +263,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       iterations: ctx.iteration,
       inputTokens: ctx.usage.inputTokens,
       outputTokens: ctx.usage.outputTokens,
+      thinkingTokens: ctx.usage.thinkingTokens ?? null,
       totalMessages: ctx.messages.length,
     })
   }
@@ -246,6 +294,7 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
   return {
     beforeLoopBegin: [beforeLoopBegin],
     beforeModelCall: [beforeModelCall],
+    onStreamChunk: [onStreamChunk],
     afterModelResponse: [afterModelResponse],
     beforeToolExecution: [beforeToolExecution],
     afterToolExecution: [afterToolExecution],
