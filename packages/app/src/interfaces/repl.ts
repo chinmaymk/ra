@@ -246,6 +246,7 @@ export class Repl {
       compaction: this.options.compaction,
       logger: session.logger,
       middleware: mergeMiddleware(tuiHooks, session.middleware),
+      resumed: priorCount > 0,
     })
 
     this.activeLoop = loop

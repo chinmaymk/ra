@@ -93,6 +93,7 @@ export async function bootstrap(
       sessionId = ensured.id
     }
     sessionDir = storage.sessionDir(sessionId)
+    await mkdir(sessionDir, { recursive: true })
   } else {
     sessionId = (await storage.create({
       provider: agent.provider,
@@ -109,6 +110,10 @@ export async function bootstrap(
     logs: { enabled: app.logsEnabled, level: app.logLevel, output: 'session' },
     traces: { enabled: app.tracesEnabled, output: 'session' },
   }, { sessionId, sessionDir })
+
+  if (opts.resume) {
+    logger.info('session resumed', { sessionId, sessionDir })
+  }
 
   const bootstrapTokenSpan = tracer.startSpan('bootstrap.tokenBudget')
 

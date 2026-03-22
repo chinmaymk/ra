@@ -14,6 +14,8 @@ export interface LoopContext extends StoppableContext {
   sessionId: string
   usage: TokenUsage
   lastUsage: TokenUsage | undefined
+  /** True when this loop is running against a resumed session (prior messages loaded from storage). */
+  resumed: boolean
 }
 
 export interface ModelCallContext extends StoppableContext {
