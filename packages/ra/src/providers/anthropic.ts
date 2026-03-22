@@ -83,6 +83,14 @@ export class AnthropicProvider implements IProvider {
           else if (event.delta.type === 'input_json_delta') yield { type: 'tool_call_delta', id: activeToolCalls.get(event.index) ?? '', argsDelta: event.delta.partial_json }
           else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
           break
+        case 'content_block_stop': {
+          const toolCallId = activeToolCalls.get(event.index)
+          if (toolCallId) {
+            yield { type: 'tool_call_end', id: toolCallId }
+            activeToolCalls.delete(event.index)
+          }
+          break
+        }
         case 'message_delta': {
           usage = { inputTokens: inputTokens + cacheReadTokens + cacheCreationTokens, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
           if (cacheReadTokens) usage.cacheReadTokens = cacheReadTokens
