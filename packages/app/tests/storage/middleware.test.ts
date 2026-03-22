@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { join } from 'path'
 import { SessionStorage } from '../../src/storage/sessions'
 import { createHistoryMiddleware } from '../../src/storage/middleware'
+import { createResolverMiddleware } from '../../src/context/resolve-middleware'
 import { createSessionMiddleware } from '../../src/agent/session'
 import { mergeMiddleware, AgentLoop, ToolRegistry } from '@chinmaymk/ra'
 import type { IProvider, IMessage } from '@chinmaymk/ra'
+import type { PatternResolver } from '../../src/context/resolvers'
 import { mockProvider, mockSequenceProvider } from '../fixtures'
 import { tmpdir } from '../tmpdir'
 
@@ -322,6 +324,141 @@ describe('SessionHistoryMiddleware', () => {
     // Verify only one system message was stored
     const systemMessages = stored.filter(m => m.role === 'system')
     expect(systemMessages).toHaveLength(1)
+  })
+
+  it('resolver middleware + history: skill pattern in system prompt does not duplicate', async () => {
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
+
+    // Fake skill resolver: /verify → <skill name="verify">run tests</skill>
+    const skillResolver: PatternResolver = {
+      name: 'skill',
+      pattern: /(?<=^|\s)\/([\w][\w-]*)(?=\s|$)/gm,
+      async resolve(ref: string) {
+        if (ref === 'verify') return '<skill name="verify">run tests</skill>'
+        return null
+      },
+    }
+
+    const resolverMw = createResolverMiddleware([skillResolver], '/tmp')
+    const historyMw = createHistoryMiddleware(storage, 0)
+
+    const middleware = mergeMiddleware(
+      { beforeModelCall: [resolverMw] },
+      historyMw,
+    )
+
+    const loop = new AgentLoop({
+      provider: mockProvider('ok'),
+      tools: new ToolRegistry(),
+      model: 'test',
+      sessionId: session.id,
+      middleware,
+    })
+
+    // System prompt contains a skill reference that the resolver will expand.
+    // The resolver creates a NEW object via spread — _messageId must survive.
+    const messages: IMessage[] = [
+      { role: 'system', content: 'You are helpful. Use /verify before finishing.' },
+      { role: 'user', content: 'available skills: verify' },
+      { role: 'user', content: 'do the task' },
+    ]
+    await loop.run(messages)
+
+    const stored = await storage.readMessages(session.id)
+
+    // Exactly: system + 2 users + assistant = 4. NOT 5 (duplicated system).
+    expect(stored).toHaveLength(4)
+    expect(stored[0]?.role).toBe('system')
+    expect(stored[1]?.role).toBe('user')
+    expect(stored[2]?.role).toBe('user')
+    expect(stored[3]?.role).toBe('assistant')
+
+    // System message stored exactly once
+    expect(stored.filter(m => m.role === 'system')).toHaveLength(1)
+
+    // The stored system message should be the ORIGINAL (not yet resolved),
+    // because resolution happens in beforeModelCall which fires after
+    // beforeLoopBegin where history saves initial messages.
+    expect((stored[0]!.content as string)).toContain('/verify')
+  })
+
+  it('resolver middleware + history: no duplicates across resumed multi-turn session', async () => {
+    const session = await storage.create({ provider: 'mock', model: 'test', interface: 'cli' })
+
+    // Fake file resolver: @config → "[config]\nkey=value"
+    const fileResolver: PatternResolver = {
+      name: 'file',
+      pattern: /(?<!\w)@(\w+)/g,
+      async resolve(ref: string) {
+        return `[${ref}]\nkey=value`
+      },
+    }
+
+    const resolverMw = createResolverMiddleware([fileResolver], '/tmp')
+
+    // ── Turn 1: new session ──
+    const turn1History = createHistoryMiddleware(storage, 0)
+    const turn1Mw = mergeMiddleware({ beforeModelCall: [resolverMw] }, turn1History)
+
+    const turn1Loop = new AgentLoop({
+      provider: mockProvider('first answer'),
+      tools: new ToolRegistry(),
+      model: 'test',
+      sessionId: session.id,
+      middleware: turn1Mw,
+    })
+
+    const turn1Messages: IMessage[] = [
+      { role: 'system', content: 'You are helpful. See @config for settings.' },
+      { role: 'user', content: 'check @readme' },
+    ]
+    await turn1Loop.run(turn1Messages)
+
+    const afterTurn1 = await storage.readMessages(session.id)
+    // system + user + assistant = 3
+    expect(afterTurn1).toHaveLength(3)
+    expect(afterTurn1[0]?.role).toBe('system')
+    expect(afterTurn1[1]?.role).toBe('user')
+    expect(afterTurn1[2]?.role).toBe('assistant')
+
+    // ── Turn 2: resume ──
+    // Load stored messages, append new user message (simulating CLI resume)
+    const storedMessages = await storage.readMessages(session.id)
+    const priorCount = storedMessages.length
+
+    const turn2History = createHistoryMiddleware(storage, priorCount)
+    const turn2Mw = mergeMiddleware({ beforeModelCall: [resolverMw] }, turn2History)
+
+    const turn2Loop = new AgentLoop({
+      provider: mockProvider('second answer'),
+      tools: new ToolRegistry(),
+      model: 'test',
+      sessionId: session.id,
+      middleware: turn2Mw,
+    })
+
+    const turn2Messages: IMessage[] = [
+      ...storedMessages,
+      { role: 'user', content: 'now look at @changelog' },
+    ]
+    await turn2Loop.run(turn2Messages)
+
+    const afterTurn2 = await storage.readMessages(session.id)
+
+    // Turn 1 (3) + new user + new assistant = 5. No duplicates.
+    expect(afterTurn2).toHaveLength(5)
+
+    // Verify each message appears exactly once by content
+    expect(afterTurn2.filter(m => m.role === 'system')).toHaveLength(1)
+    expect(afterTurn2.filter(m => m.role === 'user' && (m.content as string).includes('@readme'))).toHaveLength(1)
+    expect(afterTurn2.filter(m => m.role === 'assistant' && m.content === 'first answer')).toHaveLength(1)
+    expect(afterTurn2.filter(m => m.role === 'user' && (m.content as string).includes('@changelog'))).toHaveLength(1)
+    expect(afterTurn2.filter(m => m.role === 'assistant' && m.content === 'second answer')).toHaveLength(1)
+
+    // Verify _messageId is present and unique across all stored messages
+    const ids = afterTurn2.map(m => m._messageId).filter(Boolean)
+    expect(ids).toHaveLength(5)
+    expect(new Set(ids).size).toBe(5)
   })
 
   it('skips initial messages with priorCount and saves new ones', async () => {

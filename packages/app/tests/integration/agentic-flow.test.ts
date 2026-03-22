@@ -168,6 +168,95 @@ describe('Agentic flow integration', () => {
     expect(afterTurn2.length).toBe(afterTurn1.length + 2)
   })
 
+  it('resolver with skill pattern: no duplicates on resume', async () => {
+    const sessionId = `skill-resolve-${Date.now()}`
+
+    // Create a skill directory with a SKILL.md file
+    const skillsDir = join(tmpDir, 'skills-resolve')
+    const skillDir = join(skillsDir, 'check')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(join(skillDir, 'SKILL.md'), [
+      '---',
+      'name: check',
+      'description: Run checks',
+      '---',
+      'Run all checks before finishing.',
+    ].join('\n'))
+
+    // Config: custom system prompt with /check skill reference, plus skill dir
+    const configFile = join(tmpDir, 'ra-skill-resolve.config.json')
+    writeFileSync(configFile, JSON.stringify({
+      agent: {
+        systemPrompt: 'You are helpful. Always /check before responding.',
+        context: { enabled: false },
+      },
+      app: { skillDirs: [skillsDir] },
+    }))
+
+    // Turn 1: system prompt gets resolved by resolver middleware (spread replaces object)
+    env.mock.enqueue([{ type: 'text', content: 'turn one done' }])
+    const { exitCode: exit1 } = await runBinary(
+      ['--cli', '--config', configFile, `--resume=${sessionId}`, 'do the task'],
+      env.binaryEnv,
+    )
+    expect(exit1).toBe(0)
+
+    // Verify turn 1 request: system prompt should contain resolved skill XML
+    const turn1Req = env.mock.requests()[0]?.body as Record<string, unknown>
+    const turn1System = turn1Req?.system
+    expect(JSON.stringify(turn1System)).toContain('check')
+
+    // Read stored messages after turn 1
+    const sessionsDir = join(env.storageDir, 'sessions')
+    const sessionDirs = readdirSync(sessionsDir).filter(d =>
+      d.includes(sessionId.replace(/[^a-zA-Z0-9_-]/g, ''))
+    )
+    expect(sessionDirs).toHaveLength(1)
+    const messagesFile = join(sessionsDir, sessionDirs[0]!, 'messages.jsonl')
+    const afterTurn1 = readFileSync(messagesFile, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+    const turn1SystemCount = afterTurn1.filter((m: any) => m.role === 'system').length
+
+    // System message must appear exactly once
+    expect(turn1SystemCount).toBe(1)
+
+    env.mock.resetRequests()
+
+    // Turn 2: resume session — system prompt loaded from disk,
+    // resolver may re-resolve it (creating new object via spread).
+    // _messageId must prevent the history middleware from re-saving it.
+    env.mock.enqueue([{ type: 'text', content: 'turn two done' }])
+    const { exitCode: exit2 } = await runBinary(
+      ['--cli', '--config', configFile, `--resume=${sessionId}`, 'follow up'],
+      env.binaryEnv,
+    )
+    expect(exit2).toBe(0)
+
+    // Read stored messages after turn 2
+    const afterTurn2 = readFileSync(messagesFile, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+
+    // No message duplication: system still appears exactly once
+    const turn2SystemCount = afterTurn2.filter((m: any) => m.role === 'system').length
+    expect(turn2SystemCount).toBe(1)
+
+    // Turn 1 messages should not be re-saved
+    const turn1Assistants = afterTurn2.filter((m: any) => m.role === 'assistant' && m.content === 'turn one done')
+    expect(turn1Assistants).toHaveLength(1)
+
+    // Turn 2 added exactly: new user + new assistant
+    expect(afterTurn2.length).toBe(afterTurn1.length + 2)
+
+    // Verify the model request for turn 2 also has no duplicate messages
+    const turn2Req = env.mock.requests()[0]?.body as Record<string, unknown>
+    const turn2Messages = (turn2Req?.messages ?? []) as { role: string; content: unknown }[]
+    const turn2AssistantMsgs = turn2Messages.filter(m => m.role === 'assistant')
+    expect(turn2AssistantMsgs).toHaveLength(1) // only one assistant turn from prior history
+
+    // _messageId must NOT leak to the provider
+    for (const msg of turn2Messages) {
+      expect((msg as any)._messageId).toBeUndefined()
+    }
+  })
+
   it('middleware hooks fire: beforeLoopBegin is invoked', async () => {
     const hooksFile = join(tmpDir, 'hooks-log.json')
     writeFileSync(hooksFile, '[]')
