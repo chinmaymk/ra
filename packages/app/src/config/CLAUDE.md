@@ -26,7 +26,7 @@ Config files and defaults support Docker Compose–style `${VAR}` interpolation:
 
 After interpolation, string values are coerced to match expected types (number, boolean) based on the default config schema.
 
-Provider credentials are resolved from standard env vars by default (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`). No `RA_` prefix needed.
+Provider credentials are resolved from standard env vars by default (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
 
 ## Config Sections
 

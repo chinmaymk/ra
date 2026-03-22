@@ -589,6 +589,15 @@ describe('legacy flat config migration', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
+  it('coerces interpolated values in flat keys after migration', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      maxIterations: '${ITERS:-25}',
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.maxIterations).toBe(25)
+    expect(typeof c.agent.maxIterations).toBe('number')
+  })
+
   it('migrates flat provider, model, and interface keys', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       provider: 'openai',

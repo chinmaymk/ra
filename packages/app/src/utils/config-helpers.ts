@@ -95,6 +95,10 @@ export function interpolateEnvVars(
   return obj
 }
 
+function isPlainObj(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v)
+}
+
 /**
  * Coerce interpolated string values to match the types in a schema object.
  * After `${}` interpolation, values like `"3000"` or `"true"` may be strings
@@ -126,13 +130,11 @@ export function coerceTypes(obj: unknown, schema: unknown): unknown {
       : obj
   }
 
-  // Recurse into objects
-  if (obj !== null && typeof obj === 'object' && !Array.isArray(obj) &&
-      schema !== null && typeof schema === 'object' && !Array.isArray(schema)) {
+  // Recurse into plain objects
+  if (isPlainObj(obj) && isPlainObj(schema)) {
     const result: Record<string, unknown> = {}
-    const schemaRec = schema as Record<string, unknown>
-    for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
-      result[key] = key in schemaRec ? coerceTypes(val, schemaRec[key]) : val
+    for (const [key, val] of Object.entries(obj)) {
+      result[key] = key in schema ? coerceTypes(val, schema[key]) : val
     }
     return result
   }

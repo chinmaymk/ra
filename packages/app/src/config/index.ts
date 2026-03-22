@@ -156,24 +156,22 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   const { config: rawFileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
   const configDir = configFilePath ? dirname(configFilePath) : cwd
 
-  // Resolve ${VAR}, ${VAR:-default}, ${VAR-default} references, then coerce
-  // interpolated strings (e.g. "3000") to match the types in defaultConfig.
   const rawDefaults = JSON.parse(JSON.stringify(defaultConfig))
-  const fileConfig = coerceTypes(interpolateEnvVars(rawFileConfig, env), rawDefaults) as Partial<RaConfig>
-  const cliArgs = options.cliArgs ?? {}
+  const fileConfig = interpolateEnvVars(rawFileConfig, env) as Record<string, unknown>
+  const cliArgs = (options.cliArgs ?? {}) as Record<string, unknown>
 
-  // Migrate legacy flat config keys into app/agent sections, then normalize tools
-  const layers = [fileConfig, cliArgs] as Record<string, unknown>[]
-  for (const layer of layers) {
+  // Normalize first so flat keys land at their proper nested paths
+  for (const layer of [fileConfig, cliArgs]) {
     normalizeFlatConfig(layer)
     normalizeToolsConfig(layer)
   }
 
+  // Coerce after normalization so schema paths match (e.g. "50" → 50)
+  const coercedFileConfig = coerceTypes(fileConfig, rawDefaults) as Record<string, unknown>
+
   // defaults < file < CLI
-  // Deep clone defaults to prevent mutation of the shared defaultConfig object,
-  // then interpolate ${VAR:-default} references in the defaults layer.
   const defaults = interpolateEnvVars(rawDefaults, env) as Record<string, unknown>
-  const merged = layers.reduce(
+  const merged = [coercedFileConfig, cliArgs].reduce(
     (acc, layer) => deepMerge(acc, layer),
     defaults,
   )
