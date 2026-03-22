@@ -52,11 +52,11 @@ function emptyMiddleware(): MiddlewareConfig {
   }
 }
 
-const DEFAULT_MAX_ITERATIONS = 10
+const DEFAULT_MAX_ITERATIONS = 0
 const DEFAULT_MAX_RETRIES = 3
 const MAX_COMPACTION_RETRIES = 3
 const DEFAULT_MAX_TOOL_RESPONSE_SIZE = 25_000
-const ADAPTIVE_HIGH_TURNS = 5
+const ADAPTIVE_HIGH_TURNS = 10
 
 /** Resolve a ThinkingMode to the concrete ThinkingLevel for a given iteration. */
 export function resolveThinking(mode: ThinkingMode | undefined, iteration: number): ThinkingLevel | undefined {
@@ -221,7 +221,7 @@ export class AgentLoop {
       await runMiddlewareChain(loopCtx(), this.middleware.beforeLoopBegin, this.toolTimeout)
       if (signal.aborted) return { messages, iterations, usage, durationMs: Date.now() - startTime, ...(stopReason && { stopReason }) }
 
-      while (iterations < this.maxIterations) {
+      while (this.maxIterations === 0 || iterations < this.maxIterations) {
         if (this.maxTokenBudget > 0 && (usage.inputTokens + usage.outputTokens) >= this.maxTokenBudget) {
           this.logger.info('token budget exceeded', { used: usage.inputTokens + usage.outputTokens, budget: this.maxTokenBudget })
           stopReason = 'token_budget_exceeded'
