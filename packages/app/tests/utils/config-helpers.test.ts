@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { interpolateString, interpolateEnvVars } from '../../src/utils/config-helpers'
+import { interpolateString, interpolateEnvVars, coerceTypes } from '../../src/utils/config-helpers'
 
 describe('interpolateString', () => {
   const env = { HOME: '/home/user', TOKEN: 'secret', EMPTY: '' }
@@ -94,5 +94,54 @@ describe('interpolateEnvVars', () => {
   it('throws for missing required variables in nested config', () => {
     const input = { app: { token: '${REQUIRED_VAR}' } }
     expect(() => interpolateEnvVars(input, env)).toThrow('Environment variable "REQUIRED_VAR" is required but not set')
+  })
+})
+
+describe('coerceTypes', () => {
+  it('coerces string to number when schema has number', () => {
+    expect(coerceTypes('42', 0)).toBe(42)
+    expect(coerceTypes('-5', 0)).toBe(-5)
+    expect(coerceTypes('3.14', 0)).toBe(3.14)
+  })
+
+  it('leaves non-numeric strings as strings when schema is number', () => {
+    expect(coerceTypes('abc', 0)).toBe('abc')
+  })
+
+  it('coerces "true"/"false" to boolean when schema has boolean', () => {
+    expect(coerceTypes('true', false)).toBe(true)
+    expect(coerceTypes('false', true)).toBe(false)
+  })
+
+  it('leaves other strings as-is when schema is boolean', () => {
+    expect(coerceTypes('yes', false)).toBe('yes')
+  })
+
+  it('recurses into objects', () => {
+    const obj = { port: '3000', token: 'secret', nested: { enabled: 'true' } }
+    const schema = { port: 0, token: '', nested: { enabled: false } }
+    const result = coerceTypes(obj, schema)
+    expect(result).toEqual({ port: 3000, token: 'secret', nested: { enabled: true } })
+  })
+
+  it('leaves keys not in schema untouched', () => {
+    const obj = { port: '3000', custom: 'value' }
+    const schema = { port: 0 }
+    const result = coerceTypes(obj, schema) as Record<string, unknown>
+    expect(result.port).toBe(3000)
+    expect(result.custom).toBe('value')
+  })
+
+  it('handles null and undefined gracefully', () => {
+    expect(coerceTypes(null, 0)).toBeNull()
+    expect(coerceTypes(undefined, 0)).toBeUndefined()
+    expect(coerceTypes('42', null)).toBe('42')
+    expect(coerceTypes('42', undefined)).toBe('42')
+  })
+
+  it('does not coerce when types already match', () => {
+    expect(coerceTypes(42, 0)).toBe(42)
+    expect(coerceTypes(true, false)).toBe(true)
+    expect(coerceTypes('hello', '')).toBe('hello')
   })
 })

@@ -5,7 +5,7 @@
 ## Setup
 
 ```bash
-export RA_GOOGLE_API_KEY=AIza...
+export GOOGLE_API_KEY=AIza...
 ra --provider google "Hello"
 ```
 
@@ -13,7 +13,7 @@ ra --provider google "Hello"
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RA_GOOGLE_API_KEY` | Yes | Google AI API key |
+| `GOOGLE_API_KEY` | Yes | Google AI API key (standard Google env var) |
 
 ## Models
 

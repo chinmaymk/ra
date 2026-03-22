@@ -65,7 +65,7 @@ ra "List all TODO comments" | ra "Group by priority and format as a table"
 
 ```bash
 # Primary provider fails? Flip and keep going
-RA_PROVIDER=openai ra "Continue where we left off"
+ra --provider openai "Continue where we left off"
 ```
 
 ### MCP tool in Claude Desktop

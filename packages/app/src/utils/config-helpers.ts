@@ -94,3 +94,48 @@ export function interpolateEnvVars(
   }
   return obj
 }
+
+/**
+ * Coerce interpolated string values to match the types in a schema object.
+ * After `${}` interpolation, values like `"3000"` or `"true"` may be strings
+ * where the schema expects numbers or booleans. This walks both trees in
+ * parallel and converts string values when the schema type is number or boolean.
+ */
+export function coerceTypes(obj: unknown, schema: unknown): unknown {
+  if (obj === null || obj === undefined) return obj
+  if (schema === null || schema === undefined) return obj
+
+  // String → number coercion
+  if (typeof schema === 'number' && typeof obj === 'string') {
+    const n = Number(obj)
+    return Number.isNaN(n) ? obj : n
+  }
+
+  // String → boolean coercion
+  if (typeof schema === 'boolean' && typeof obj === 'string') {
+    if (obj === 'true') return true
+    if (obj === 'false') return false
+    return obj
+  }
+
+  // Recurse into arrays (coerce each element against schema[0] if available)
+  if (Array.isArray(obj) && Array.isArray(schema)) {
+    const itemSchema = schema[0]
+    return itemSchema !== undefined
+      ? obj.map(item => coerceTypes(item, itemSchema))
+      : obj
+  }
+
+  // Recurse into objects
+  if (obj !== null && typeof obj === 'object' && !Array.isArray(obj) &&
+      schema !== null && typeof schema === 'object' && !Array.isArray(schema)) {
+    const result: Record<string, unknown> = {}
+    const schemaRec = schema as Record<string, unknown>
+    for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+      result[key] = key in schemaRec ? coerceTypes(val, schemaRec[key]) : val
+    }
+    return result
+  }
+
+  return obj
+}

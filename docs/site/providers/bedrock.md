@@ -4,17 +4,9 @@
 
 ## Setup
 
-**Option 1: Bearer token**
+**Option 1: AWS credential chain** (recommended)
 
-```bash
-export RA_BEDROCK_API_KEY=your-bearer-token
-export RA_BEDROCK_REGION=us-east-1
-ra --provider bedrock "Hello"
-```
-
-**Option 2: AWS credential chain**
-
-If `RA_BEDROCK_API_KEY` is not set, ra falls back to the standard AWS credential chain:
+ra uses the standard AWS credential chain:
 
 1. `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars
 2. `~/.aws/credentials` file
@@ -23,7 +15,23 @@ If `RA_BEDROCK_API_KEY` is not set, ra falls back to the standard AWS credential
 ```bash
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
-export RA_BEDROCK_REGION=us-east-1
+export AWS_REGION=us-east-1
+ra --provider bedrock "Hello"
+```
+
+**Option 2: Bearer token**
+
+A bearer token can be set in a config file:
+
+```yaml
+app:
+  providers:
+    bedrock:
+      apiKey: your-bearer-token
+```
+
+```bash
+export AWS_REGION=us-east-1
 ra --provider bedrock "Hello"
 ```
 
@@ -31,8 +39,7 @@ ra --provider bedrock "Hello"
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RA_BEDROCK_API_KEY` | No | Bearer token (if not using AWS credential chain) |
-| `RA_BEDROCK_REGION` | Yes | AWS region (e.g. `us-east-1`) |
+| `AWS_REGION` | Yes | AWS region (e.g. `us-east-1`) |
 
 ## Models
 

@@ -1,21 +1,32 @@
 # src/config/
 
-Layered configuration system: CLI flags > env vars > config file.
+Layered configuration system: CLI flags > config file > defaults.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `types.ts` | `RaConfig`, `AppConfig`, `AgentConfig` interfaces — all configuration fields with types |
-| `defaults.ts` | `defaultConfig` object — sensible defaults for every field |
-| `index.ts` | `loadConfig()` — merges all layers, resolves paths |
+| `defaults.ts` | `defaultConfig` object — sensible defaults for every field, with `${VAR:-default}` references for provider credentials |
+| `index.ts` | `loadConfig()` — merges all layers, resolves paths, interpolates `${VAR}` references |
 
 ## Config Hierarchy
 
 Each layer overrides the previous:
 ```
---cli-flags > RA_* env vars > ra.config.{yml,json,toml}
+--cli-flags > ra.config.{yml,json,toml} > defaults
 ```
+
+## Environment Variable Interpolation
+
+Config files and defaults support Docker Compose–style `${VAR}` interpolation:
+- `${VAR}` — required, errors if not set
+- `${VAR:-default}` — use default if unset or empty
+- `${VAR-default}` — use default if unset (empty string is kept)
+
+After interpolation, string values are coerced to match expected types (number, boolean) based on the default config schema.
+
+Provider credentials are resolved from standard env vars by default (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`). No `RA_` prefix needed.
 
 ## Config Sections
 
@@ -61,20 +72,16 @@ Each layer overrides the previous:
 
 ## Provider Options
 
-Each provider has its own options block under `app.providers`. The agent selects which one to use via `agent.provider`:
+Each provider has its own options block under `app.providers`. The agent selects which one to use via `agent.provider`. Defaults resolve standard env vars:
 ```yaml
 app:
   providers:
-    anthropic: { apiKey: "" }
-    openai: { apiKey: "" }
-    google: { apiKey: "" }
-    ollama: { host: "http://localhost:11434" }
-    bedrock: { region: "us-east-1" }
-    azure: { endpoint: "", deployment: "", apiKey: "" }
+    anthropic: { apiKey: "${ANTHROPIC_API_KEY:-}" }
+    openai: { apiKey: "${OPENAI_API_KEY:-}" }
+    google: { apiKey: "${GOOGLE_API_KEY:-}" }
+    ollama: { host: "${OLLAMA_HOST:-http://localhost:11434}" }
+    bedrock: { region: "${AWS_REGION:-us-east-1}" }
+    azure: { endpoint: "${AZURE_OPENAI_ENDPOINT:-}", deployment: "${AZURE_OPENAI_DEPLOYMENT:-}", apiKey: "${AZURE_OPENAI_API_KEY:-}" }
 agent:
   provider: anthropic
 ```
-
-## Env Var Convention
-
-All env vars are prefixed with `RA_`: `RA_PROVIDER`, `RA_MODEL`, `RA_ANTHROPIC_API_KEY`, etc.

@@ -3,7 +3,7 @@
 Set your provider key and go:
 
 ```bash
-export RA_ANTHROPIC_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-..."
 ```
 
 ## One-shot — streams to stdout and exits

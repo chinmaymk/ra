@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
 ## Quick start
 
 ```bash
-export RA_ANTHROPIC_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-..."
 
 ra "Summarize the key points of this file" --file report.pdf   # one-shot
 ra                                                              # interactive REPL

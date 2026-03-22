@@ -18,14 +18,14 @@ ra --provider ollama --model llama3 "Write a haiku"
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RA_OLLAMA_HOST` | No | Ollama host (default: `http://localhost:11434`) |
+| `OLLAMA_HOST` | No | Ollama host (default: `http://localhost:11434`) |
 
 ## Remote Ollama
 
 Point ra at an Ollama instance running on another machine:
 
 ```bash
-export RA_OLLAMA_HOST=http://my-server:11434
+export OLLAMA_HOST=http://my-server:11434
 ra --provider ollama --model llama3 "Hello"
 ```
 
