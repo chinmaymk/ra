@@ -3,7 +3,7 @@ import {
   ansi, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
   printCommandResponse, printError, collapseThinking, createStreamState,
-  handleStreamChunk, StreamBuffer, RESPONSE_PREFIX,
+  handleStreamChunk, clearPendingTools, StreamBuffer, RESPONSE_PREFIX,
 } from '../../src/interfaces/tui'
 import { captureStdout } from '../fixtures'
 
@@ -152,6 +152,41 @@ describe('handleStreamChunk text', () => {
     const out3 = captureStdout(() => handleStreamChunk(state, 'text', '\nline two'))
     expect(out3).toContain('\n')
     expect(out3).toContain('line two')
+  })
+})
+
+describe('handleStreamChunk tool_call_start', () => {
+  it('shows tool name immediately when tool_call_start arrives', () => {
+    const state = createStreamState()
+    const output = captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    expect(output).toContain('◆')
+    expect(output).toContain('Read')
+    expect(state.pendingToolNames).toEqual(['Read'])
+  })
+
+  it('accumulates multiple tool names on one line', () => {
+    const state = createStreamState()
+    captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    const output = captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Grep'))
+    expect(output).toContain('Read, Grep')
+    expect(state.pendingToolNames).toEqual(['Read', 'Grep'])
+  })
+
+  it('closes text box before showing tool names', () => {
+    const state = createStreamState()
+    captureStdout(() => handleStreamChunk(state, 'text', 'some text'))
+    expect(state.boxOpened).toBe(true)
+    captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    expect(state.boxOpened).toBe(false)
+    expect(state.pendingToolNames).toEqual(['Read'])
+  })
+
+  it('clearPendingTools resets state', () => {
+    const state = createStreamState()
+    captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    expect(state.pendingToolNames).toEqual(['Read'])
+    captureStdout(() => clearPendingTools(state))
+    expect(state.pendingToolNames).toEqual([])
   })
 })
 

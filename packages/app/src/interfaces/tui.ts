@@ -169,6 +169,8 @@ export interface TuiStreamState {
   streamBuf: StreamBuffer | null
   thinkingBuf: StreamBuffer | null
   toolStartTimes: Map<string, number>
+  /** Tool names shown during streaming (before execution starts). */
+  pendingToolNames: string[]
 }
 
 /** Create a new TUI streaming state for a single agent loop run. */
@@ -177,6 +179,7 @@ export function createStreamState(): TuiStreamState {
     boxOpened: false, thinkingOpened: false, thinkingCollapsed: false,
     thinkingLines: 0, thinkingStartTime: 0,
     streamBuf: null, thinkingBuf: null, toolStartTimes: new Map(),
+    pendingToolNames: [],
   }
 }
 
@@ -187,7 +190,7 @@ function countNewlines(s: string): number {
 }
 
 /** Handle a stream chunk for TUI display. */
-export function handleStreamChunk(state: TuiStreamState, chunkType: string, delta?: string): void {
+export function handleStreamChunk(state: TuiStreamState, chunkType: string, delta?: string, toolName?: string): void {
   if (chunkType === 'thinking') {
     if (state.thinkingCollapsed) return
     if (!state.thinkingOpened) {
@@ -215,6 +218,28 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
       state.streamBuf = new StreamBuffer(contentWidth)
     }
     if (delta && state.streamBuf) process.stdout.write(state.streamBuf.write(delta))
+  } else if (chunkType === 'tool_call_start' && toolName) {
+    // Show tool names immediately so users see activity during arg streaming
+    if (state.thinkingOpened) collapseThinking(state)
+    if (state.boxOpened) {
+      const out = state.streamBuf?.end(); if (out) process.stdout.write(out)
+      process.stdout.write('\n')
+      state.boxOpened = false
+      state.streamBuf = null
+    }
+    stopSpinner(true)
+    state.pendingToolNames.push(toolName)
+    // Rewrite the pending tools line with all names so far
+    const label = state.pendingToolNames.join(', ')
+    process.stdout.write(`\r\x1b[K  ${ansi.yellow}◆ ${label}${ansi.reset}`)
+  }
+}
+
+/** Clear any pending tool names preview line. Call before printing the real tool execution line. */
+export function clearPendingTools(state: TuiStreamState): void {
+  if (state.pendingToolNames.length > 0) {
+    process.stdout.write('\r\x1b[K')
+    state.pendingToolNames = []
   }
 }
 
@@ -240,6 +265,7 @@ export function collapseThinking(state: TuiStreamState): void {
 /** Flush TUI state at end of loop run (success or error). */
 export function flushStreamState(state: TuiStreamState): void {
   if (state.thinkingOpened) collapseThinking(state)
+  clearPendingTools(state)
   stopSpinner(true)
   const out = state.streamBuf?.end()
   if (out) process.stdout.write(out)
