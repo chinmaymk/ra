@@ -36,9 +36,8 @@ function versionUrl(version: string): string {
 
 function onChange(e: Event) {
   const target = e.target as HTMLSelectElement
-  if (target.value && target.value !== currentVersion) {
-    window.location.href = versionUrl(target.value)
-  }
+  const path = versionUrl(target.value)
+  window.location.href = window.location.origin + path
 }
 
 onMounted(async () => {
