@@ -60,6 +60,7 @@ export function makeModelCallCtx(messages: import('@chinmaymk/ra').IMessage[], o
       sessionId: 'test',
       usage: { inputTokens: 0, outputTokens: 0 },
       lastUsage: undefined,
+      resumed: false,
     },
     ...overrides,
   }

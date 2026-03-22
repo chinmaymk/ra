@@ -6,8 +6,9 @@ Tools are self-describing — each includes a detailed schema and description so
 
 ```yaml
 # ra.config.yml — tools are enabled by default
-tools:
-  builtin: true
+agent:
+  tools:
+    builtin: true
 ```
 
 When ra runs as an [MCP server](/modes/mcp), all built-in tools (except `AskUserQuestion`) are automatically exposed as MCP tools.
@@ -208,9 +209,10 @@ When built-in tools are enabled, ra registers an ephemeral key-value scratchpad 
 Disable the scratchpad with:
 
 ```yaml
-tools:
-  scratchpad:
-    enabled: false
+agent:
+  tools:
+    scratchpad:
+      enabled: false
 ```
 
 ### `scratchpad_write`
@@ -307,12 +309,13 @@ The `tools` section lets you independently enable/disable tools and set per-tool
 ### Disable specific tools
 
 ```yaml
-tools:
-  builtin: true
-  WebFetch:
-    enabled: false
-  DeleteFile:
-    enabled: false
+agent:
+  tools:
+    builtin: true
+    WebFetch:
+      enabled: false
+    DeleteFile:
+      enabled: false
 ```
 
 ### Constrain file tools with rootDir
@@ -320,23 +323,25 @@ tools:
 Restrict filesystem tools to a specific directory. Paths outside this root are rejected at execution time.
 
 ```yaml
-tools:
-  builtin: true
-  Read:
-    rootDir: "./src"
-  Write:
-    rootDir: "./src"
-  Edit:
-    rootDir: "./src"
+agent:
+  tools:
+    builtin: true
+    Read:
+      rootDir: "./src"
+    Write:
+      rootDir: "./src"
+    Edit:
+      rootDir: "./src"
 ```
 
 ### Limit Agent concurrency
 
 ```yaml
-tools:
-  builtin: true
-  Agent:
-    maxConcurrency: 2
+agent:
+  tools:
+    builtin: true
+    Agent:
+      maxConcurrency: 2
 ```
 
 ### Truncate large tool responses
@@ -344,8 +349,9 @@ tools:
 When a tool returns more characters than `maxResponseSize`, the output is truncated at a newline boundary and a notice is appended telling the model to use more targeted queries. Default: `25000`.
 
 ```yaml
-tools:
-  maxResponseSize: 50000   # raise the limit
+agent:
+  tools:
+    maxResponseSize: 50000   # raise the limit
 ```
 
 ```bash
@@ -357,8 +363,9 @@ RA_MAX_TOOL_RESPONSE_SIZE=50000 ra   # or via env var
 To run ra without any built-in tools (e.g., when using only [MCP tools](/modes/mcp)):
 
 ```yaml
-tools:
-  builtin: false
+agent:
+  tools:
+    builtin: false
 ```
 
 ```bash

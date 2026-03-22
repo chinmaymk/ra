@@ -19,7 +19,7 @@ function makeCtx(messages: IMessage[], filePath: string): ModelCallContext {
   return {
     stop: () => controller.abort(), signal: controller.signal, logger,
     request: { model: 'test', messages: messagesWithToolCall, tools: [] },
-    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: messagesWithToolCall, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: messagesWithToolCall, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
   }
 }
 
@@ -29,7 +29,7 @@ function makeRawCtx(messages: IMessage[]): ModelCallContext {
   return {
     stop: () => controller.abort(), signal: controller.signal, logger,
     request: { model: 'test', messages: [...messages], tools: [] },
-    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: [...messages], iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: [...messages], iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
   }
 }
 
@@ -91,7 +91,7 @@ describe('createDiscoveryMiddleware', () => {
     await mw({
       stop: () => controller.abort(), signal: controller.signal, logger,
       request: { model: 'test', messages: msgs, tools: [] },
-      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
     })
     expect(msgs).toHaveLength(1)
   })
@@ -157,7 +157,7 @@ describe('createDiscoveryMiddleware', () => {
     await mw({
       stop: () => controller.abort(), signal: controller.signal, logger,
       request: { model: 'test', messages: msgs, tools: [] },
-      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
     })
     expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Utils rules'))).toBeTruthy()
   })
@@ -227,6 +227,19 @@ describe('createDiscoveryMiddleware — file path extraction', () => {
     const msgs: IMessage[] = [
       { role: 'user', content: 'hi' },
       { role: 'assistant', content: '', toolCalls: [{ id: 'tc1', name: 'Read', arguments: '{invalid json' }] },
+    ]
+    const ctx = makeRawCtx(msgs)
+    await mw(ctx) // should not throw
+    expect(countContext(ctx.request.messages)).toBe(0)
+  })
+
+  it('ignores paths containing null bytes in tool arguments', async () => {
+    writeFileSync(join(tmp, 'src', 'api', 'CLAUDE.md'), '# API rules')
+    const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())
+    const pathWithNull = join(tmp, 'src', 'api', 'handler.ts') + '\0'
+    const msgs: IMessage[] = [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'tc1', name: 'Read', arguments: JSON.stringify({ path: pathWithNull }) }] },
     ]
     const ctx = makeRawCtx(msgs)
     await mw(ctx) // should not throw

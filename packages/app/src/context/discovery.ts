@@ -40,14 +40,16 @@ async function scanDirs(dirs: string[], patterns: string[], root: string, exclud
   const files: ContextFile[] = []
   for (const dir of dirs) {
     for (const pattern of patterns) {
-      const glob = new Bun.Glob(pattern)
-      for await (const match of glob.scan({ cwd: dir, absolute: false, onlyFiles: true, dot: true })) {
-        const absPath = resolve(dir, match)
-        if (exclude?.has(absPath) || files.some(f => f.path === absPath)) continue
-        try {
-          files.push({ path: absPath, relativePath: relative(root, absPath), content: await Bun.file(absPath).text() })
-        } catch { /* skip unreadable */ }
-      }
+      try {
+        const glob = new Bun.Glob(pattern)
+        for await (const match of glob.scan({ cwd: dir, absolute: false, onlyFiles: true, dot: true })) {
+          const absPath = resolve(dir, match)
+          if (exclude?.has(absPath) || files.some(f => f.path === absPath)) continue
+          try {
+            files.push({ path: absPath, relativePath: relative(root, absPath), content: await Bun.file(absPath).text() })
+          } catch { /* skip unreadable */ }
+        }
+      } catch { /* skip unscannable dir */ }
     }
   }
   return files
@@ -89,14 +91,14 @@ function extractFilePathsFromMessages(messages: readonly { role: string; content
       for (const tc of msg.toolCalls) {
         try {
           for (const v of Object.values(JSON.parse(tc.arguments || '{}')))
-            if (typeof v === 'string' && isAbsolute(v)) paths.push(v)
+            if (typeof v === 'string' && isAbsolute(v) && !v.includes('\0')) paths.push(v)
         } catch { /* skip */ }
       }
     }
     // User/tool text content may reference paths
     if (typeof msg.content === 'string') {
       for (const m of msg.content.matchAll(absPathRe)) {
-        if (m[1]) paths.push(m[1])
+        if (m[1] && !m[1].includes('\0')) paths.push(m[1])
       }
     }
   }
@@ -113,26 +115,30 @@ export function createDiscoveryMiddleware(
   const walk = options?.subdirectoryWalk ?? true
 
   return async (ctx: ModelCallContext) => {
-    const filePaths = extractFilePathsFromMessages(ctx.request.messages)
-    const dirs: string[] = []
-    for (const fp of filePaths) {
-      dirs.push(...collectDirs(fp, root, walk, checked))
-    }
-    if (dirs.length === 0) return
+    try {
+      const filePaths = extractFilePathsFromMessages(ctx.request.messages)
+      const dirs: string[] = []
+      for (const fp of filePaths) {
+        dirs.push(...collectDirs(fp, root, walk, checked))
+      }
+      if (dirs.length === 0) return
 
-    const files = await scanDirs(dirs, patterns, root, seen)
-    if (files.length === 0) return
-    for (const f of files) seen.add(f.path)
-    ctx.logger.info('dynamic context files discovered', { fileCount: files.length, files: files.map(f => f.relativePath), dirsScanned: dirs.length })
+      const files = await scanDirs(dirs, patterns, root, seen)
+      if (files.length === 0) return
+      for (const f of files) seen.add(f.path)
+      ctx.logger.info('dynamic context files discovered', { fileCount: files.length, files: files.map(f => f.relativePath), dirsScanned: dirs.length })
 
-    const msgs = buildContextMessages(files)
-    const messages = ctx.request.messages
-    let idx = 0
-    for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i]
-      if (msg && typeof msg.content === 'string' && (msg.content as string).includes('<context-file '))
-        idx = i + 1
+      const msgs = buildContextMessages(files)
+      const messages = ctx.request.messages
+      let idx = 0
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i]
+        if (msg && typeof msg.content === 'string' && (msg.content as string).includes('<context-file '))
+          idx = i + 1
+      }
+      messages.splice(idx, 0, ...msgs)
+    } catch {
+      // Context discovery is best-effort — never crash the agent loop
     }
-    messages.splice(idx, 0, ...msgs)
   }
 }

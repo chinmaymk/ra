@@ -111,9 +111,10 @@ The reference content is attached to your next message as context.
 Configure where ra looks for skills:
 
 ```yaml
-skillDirs:
-  - ./skills          # project-local skills
-  - ~/.ra/skills      # globally installed skills
+app:
+  skillDirs:
+    - ./skills          # project-local skills
+    - ~/.ra/skills      # globally installed skills
 ```
 
 ## Installing skills from registries
@@ -156,9 +157,10 @@ ra skill remove code-review       # remove a skill
 After installing, add `~/.ra/skills` to your skill directories:
 
 ```yaml
-skillDirs:
-  - ./skills           # project-local skills
-  - ~/.ra/skills       # installed skills
+app:
+  skillDirs:
+    - ./skills           # project-local skills
+    - ~/.ra/skills       # installed skills
 ```
 
 ## Scripts

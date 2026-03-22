@@ -72,9 +72,10 @@ Returns the full response as JSON after the agent loop completes:
 ## Configuration
 
 ```yaml
-http:
-  port: 3000
-  token: my-secret-token
+app:
+  http:
+    port: 3000
+    token: my-secret-token
 ```
 
 Or via CLI flags:

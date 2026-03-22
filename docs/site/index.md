@@ -37,24 +37,26 @@ Drop a `ra.config.yml` in a repo and that directory becomes a project-specific a
 
 ```yaml
 # ra.config.yml
-provider: anthropic
-model: claude-sonnet-4-6
-maxIterations: 50
-thinking: medium
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  maxIterations: 50
+  thinking: medium
 
-skills:
-  - code-review
+  middleware:
+    beforeModelCall:
+      - "./middleware/budget.ts"
 
-middleware:
-  beforeModelCall:
-    - "./middleware/budget.ts"
+app:
+  skillDirs:
+    - ./skills
 
-mcp:
-  client:
-    - name: github
-      transport: stdio
-      command: npx
-      args: ["-y", "@modelcontextprotocol/server-github"]
+  mcp:
+    client:
+      - name: github
+        transport: stdio
+        command: npx
+        args: ["-y", "@modelcontextprotocol/server-github"]
 ```
 
 ## Use cases

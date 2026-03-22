@@ -6,21 +6,22 @@ By default, all tools are allowed (no rules configured). Add rules to restrict s
 
 ```yaml
 # ra.config.yml
-permissions:
-  rules:
-    - tool: execute_bash
-      command:
-        allow: ["^git ", "^bun "]
-        deny: ["--force", "--hard", "--no-verify"]
-    - tool: write_file
-      path:
-        allow: ["^src/", "^tests/"]
-        deny: ["\\.env"]
-      content:
-        deny: ["API_KEY", "SECRET"]
-    - tool: delete_file
-      path:
-        deny: [".*"]
+app:
+  permissions:
+    rules:
+      - tool: execute_bash
+        command:
+          allow: ["^git ", "^bun "]
+          deny: ["--force", "--hard", "--no-verify"]
+      - tool: write_file
+        path:
+          allow: ["^src/", "^tests/"]
+          deny: ["\\.env"]
+        content:
+          deny: ["API_KEY", "SECRET"]
+      - tool: delete_file
+        path:
+          deny: [".*"]
 ```
 
 ## How it works
@@ -45,8 +46,9 @@ When a tool call is denied, the model receives an error result with a clear mess
 When `true`, disables all permission checks. All tools are allowed unconditionally. Use this to explicitly opt out of the permissions system.
 
 ```yaml
-permissions:
-  no_rules_rules: true
+app:
+  permissions:
+    no_rules_rules: true
 ```
 
 ### `permissions.default_action`
@@ -54,8 +56,9 @@ permissions:
 What happens when a tool has no matching rules. Default: `allow`.
 
 ```yaml
-permissions:
-  default_action: deny  # block tools with no rules
+app:
+  permissions:
+    default_action: deny  # block tools with no rules
 ```
 
 Set to `deny` if you want an allowlist-only approach — only tools with explicit rules can execute.
@@ -68,18 +71,19 @@ Array of rule objects. Each rule has:
 - Any other key — a field name from the tool's input schema, mapped to `{ allow?: string[], deny?: string[] }`
 
 ```yaml
-permissions:
-  rules:
-    - tool: execute_bash
-      command:
-        allow: ["^git ", "^bun ", "^tsc$"]
-        deny: ["--force", "--hard", "\\|\\s*(bash|sh)"]
-    - tool: write_file
-      path:
-        allow: ["^src/", "^tests/"]
-    - tool: web_fetch
-      url:
-        deny: ["localhost", "127\\.0\\.0\\.1", "169\\.254\\."]
+app:
+  permissions:
+    rules:
+      - tool: execute_bash
+        command:
+          allow: ["^git ", "^bun ", "^tsc$"]
+          deny: ["--force", "--hard", "\\|\\s*(bash|sh)"]
+      - tool: write_file
+        path:
+          allow: ["^src/", "^tests/"]
+      - tool: web_fetch
+        url:
+          deny: ["localhost", "127\\.0\\.0\\.1", "169\\.254\\."]
 ```
 
 Multiple rules for the same tool are evaluated in order. All rules for a tool must pass.
@@ -109,71 +113,76 @@ Each built-in tool has specific fields you can write rules against. These are th
 ### Allow only safe git commands
 
 ```yaml
-permissions:
-  rules:
-    - tool: execute_bash
-      command:
-        allow: ["^git (status|diff|log|add|commit|push|pull|fetch|branch|checkout|stash)"]
-        deny: ["--force", "-f$", "--hard", "--no-verify"]
+app:
+  permissions:
+    rules:
+      - tool: execute_bash
+        command:
+          allow: ["^git (status|diff|log|add|commit|push|pull|fetch|branch|checkout|stash)"]
+          deny: ["--force", "-f$", "--hard", "--no-verify"]
 ```
 
 ### Restrict file operations to project directory
 
 ```yaml
-permissions:
-  rules:
-    - tool: write_file
-      path:
-        allow: ["^src/", "^tests/", "^docs/"]
-    - tool: delete_file
-      path:
-        deny: [".*"]  # block all deletes
-    - tool: move_file
-      source:
-        allow: ["^src/", "^tests/"]
-      destination:
-        allow: ["^src/", "^tests/"]
+app:
+  permissions:
+    rules:
+      - tool: write_file
+        path:
+          allow: ["^src/", "^tests/", "^docs/"]
+      - tool: delete_file
+        path:
+          deny: [".*"]  # block all deletes
+      - tool: move_file
+        source:
+          allow: ["^src/", "^tests/"]
+        destination:
+          allow: ["^src/", "^tests/"]
 ```
 
 ### Block secrets in file content
 
 ```yaml
-permissions:
-  rules:
-    - tool: write_file
-      content:
-        deny: ["(?i)api.?key\\s*=", "(?i)secret\\s*=", "(?i)password\\s*="]
-    - tool: append_file
-      content:
-        deny: ["(?i)api.?key\\s*=", "(?i)secret\\s*="]
+app:
+  permissions:
+    rules:
+      - tool: write_file
+        content:
+          deny: ["(?i)api.?key\\s*=", "(?i)secret\\s*=", "(?i)password\\s*="]
+      - tool: append_file
+        content:
+          deny: ["(?i)api.?key\\s*=", "(?i)secret\\s*="]
 ```
 
 ### Block network access to internal services
 
 ```yaml
-permissions:
-  rules:
-    - tool: web_fetch
-      url:
-        deny: ["localhost", "127\\.0\\.0\\.1", "10\\.", "172\\.(1[6-9]|2[0-9]|3[01])\\.", "192\\.168\\."]
+app:
+  permissions:
+    rules:
+      - tool: web_fetch
+        url:
+          deny: ["localhost", "127\\.0\\.0\\.1", "10\\.", "172\\.(1[6-9]|2[0-9]|3[01])\\.", "192\\.168\\."]
 ```
 
 ### Lockdown mode — deny everything except reads
 
 ```yaml
-permissions:
-  default_action: deny
-  rules:
-    - tool: read_file
-      path: {}          # empty rule = allow all (no deny, no allow constraints)
-    - tool: list_directory
-      path: {}
-    - tool: search_files
-      path: {}
-    - tool: glob_files
-      path: {}
-    - tool: ask_user
-    - tool: checklist
+app:
+  permissions:
+    default_action: deny
+    rules:
+      - tool: read_file
+        path: {}          # empty rule = allow all (no deny, no allow constraints)
+      - tool: list_directory
+        path: {}
+      - tool: search_files
+        path: {}
+      - tool: glob_files
+        path: {}
+      - tool: ask_user
+      - tool: checklist
 ```
 
 Tools with a rule entry but no field constraints are allowed unconditionally when `default_action: deny`.
