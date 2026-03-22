@@ -43,7 +43,9 @@ export function accumulateUsage(target: TokenUsage, source: TokenUsage): void {
   }
 }
 
-/** Compute cache hit percentage (one decimal place), or null if not applicable. */
+/** Compute cache hit percentage (one decimal place), or null if not applicable.
+ * Expects inputTokens to be the total input (all providers normalise to this).
+ */
 export function cacheHitPercent(inputTokens: number, cacheReadTokens: number | undefined): number | null {
   return inputTokens > 0 && cacheReadTokens
     ? Math.round((cacheReadTokens / inputTokens) * 1000) / 10

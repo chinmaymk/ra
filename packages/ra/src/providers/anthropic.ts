@@ -39,11 +39,13 @@ export class AnthropicProvider implements IProvider {
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const response = await this.client.messages.create(this.buildParams(request) as Anthropic.MessageCreateParamsNonStreaming)
     const raw = response.usage as unknown as RawAnthropicUsage
+    const cacheRead = raw.cache_read_input_tokens ?? 0
+    const cacheCreate = raw.cache_creation_input_tokens ?? 0
     const usage: TokenUsage = {
-      inputTokens: raw.input_tokens,
+      inputTokens: raw.input_tokens + cacheRead + cacheCreate,
       outputTokens: raw.output_tokens,
-      ...(raw.cache_read_input_tokens && { cacheReadTokens: raw.cache_read_input_tokens }),
-      ...(raw.cache_creation_input_tokens && { cacheCreationTokens: raw.cache_creation_input_tokens }),
+      ...(cacheRead && { cacheReadTokens: cacheRead }),
+      ...(cacheCreate && { cacheCreationTokens: cacheCreate }),
     }
     return { message: this.mapResponseToMessage(response), usage }
   }
@@ -79,10 +81,10 @@ export class AnthropicProvider implements IProvider {
         case 'content_block_delta':
           if (event.delta.type === 'text_delta') yield { type: 'text', delta: event.delta.text }
           else if (event.delta.type === 'input_json_delta') yield { type: 'tool_call_delta', id: activeToolCalls.get(event.index) ?? '', argsDelta: event.delta.partial_json }
-          else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as any).thinking }
+          else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
           break
         case 'message_delta': {
-          usage = { inputTokens, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
+          usage = { inputTokens: inputTokens + cacheReadTokens + cacheCreationTokens, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
           if (cacheReadTokens) usage.cacheReadTokens = cacheReadTokens
           if (cacheCreationTokens) usage.cacheCreationTokens = cacheCreationTokens
           break

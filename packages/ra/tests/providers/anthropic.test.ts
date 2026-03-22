@@ -442,6 +442,37 @@ describe('AnthropicProvider - stream() input token tracking', () => {
     expect(deltas[1].id).toBe('tool_2')
   })
 
+  it('includes cache tokens in inputTokens total', async () => {
+    mockMessagesCreate.mockResolvedValue((async function* () {
+      yield { type: 'message_start', message: { usage: { input_tokens: 5, cache_read_input_tokens: 13504, cache_creation_input_tokens: 222 } } }
+      yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } }
+      yield { type: 'message_delta', usage: { output_tokens: 10 } }
+      yield { type: 'message_stop' }
+    })())
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    const done = chunks.find(c => c.type === 'done')
+    expect(done.usage.inputTokens).toBe(5 + 13504 + 222)
+    expect(done.usage.cacheReadTokens).toBe(13504)
+    expect(done.usage.cacheCreationTokens).toBe(222)
+  })
+
+  it('includes cache tokens in chat() inputTokens total', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'cached' }],
+      usage: { input_tokens: 5, output_tokens: 10, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200 },
+    })
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const result = await provider.chat({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })
+    expect(result.usage?.inputTokens).toBe(5 + 1000 + 200)
+    expect(result.usage?.cacheReadTokens).toBe(1000)
+    expect(result.usage?.cacheCreationTokens).toBe(200)
+  })
+
   it('defaults inputTokens to 0 when message_start has no usage', async () => {
     mockMessagesCreate.mockResolvedValue((async function* () {
       yield { type: 'message_start', message: {} }

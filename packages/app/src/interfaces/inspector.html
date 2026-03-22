@@ -383,6 +383,7 @@
       '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.inputTokens) + '</div><div class="stat-label">Input Tokens</div></div>' +
       '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.outputTokens) + '</div><div class="stat-label">Output Tokens</div></div>' +
       (stats.thinkingTokens ? '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.thinkingTokens) + '</div><div class="stat-label">Thinking Tokens</div></div>' : '') +
+      (stats.cacheHitPercent != null ? '<div class="stat-card green"><div class="stat-value">' + stats.cacheHitPercent + '%</div><div class="stat-label">Cache Hit</div></div>' : '') +
       '<div class="stat-card orange"><div class="stat-value">' + stats.totalToolCalls + '</div><div class="stat-label">Tool Calls</div></div>' +
       (stats.totalToolErrors ? '<div class="stat-card error"><div class="stat-value">' + stats.totalToolErrors + '</div><div class="stat-label">Tool Errors</div></div>' : '') +
       '<div class="stat-card"><div class="stat-value">' + stats.totalMessages + '</div><div class="stat-label">Messages</div></div>' +
