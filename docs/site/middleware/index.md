@@ -4,11 +4,12 @@ Lifecycle hooks that let you intercept and modify every step of the [agent loop]
 
 ```yaml
 # ra.config.yml
-middleware:
-  beforeModelCall:
-    - "(ctx) => { console.log('Calling model...'); }"
-  afterToolExecution:
-    - "./middleware/log-tools.ts"
+agent:
+  middleware:
+    beforeModelCall:
+      - "(ctx) => { console.log('Calling model...'); }"
+    afterToolExecution:
+      - "./middleware/log-tools.ts"
 ```
 
 Each middleware is an `async (ctx) => void` function. Every context object has `stop()` and `signal`:
@@ -142,9 +143,10 @@ export default async (ctx) => {
 Reference it by path in config:
 
 ```yaml
-middleware:
-  afterToolExecution:
-    - "./middleware/audit-log.ts"
+agent:
+  middleware:
+    afterToolExecution:
+      - "./middleware/audit-log.ts"
 ```
 
 Paths can be relative (to project root), absolute, or use `~` for home directory. Both `.ts` and `.js` files are supported — TypeScript is transpiled automatically by Bun.
@@ -154,13 +156,14 @@ Paths can be relative (to project root), absolute, or use `~` for home directory
 Inline expressions are TypeScript strings in your config. They're transpiled at load time. Best for simple, single-expression hooks.
 
 ```yaml
-middleware:
-  beforeModelCall:
-    - "(ctx) => { console.log('Messages:', ctx.request.messages.length); }"
-  onStreamChunk:
-    - "(ctx) => { process.stdout.write(ctx.chunk.type === 'text' ? ctx.chunk.delta : '') }"
-  onError:
-    - "(ctx) => { console.error(`[${ctx.phase}]`, ctx.error.message); }"
+agent:
+  middleware:
+    beforeModelCall:
+      - "(ctx) => { console.log('Messages:', ctx.request.messages.length); }"
+    onStreamChunk:
+      - "(ctx) => { process.stdout.write(ctx.chunk.type === 'text' ? ctx.chunk.delta : '') }"
+    onError:
+      - "(ctx) => { console.error(`[${ctx.phase}]`, ctx.error.message); }"
 ```
 
 ## Stopping the loop
