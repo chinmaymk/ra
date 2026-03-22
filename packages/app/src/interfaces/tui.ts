@@ -229,16 +229,16 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
     }
     stopSpinner(true)
     state.pendingToolNames.push(toolName)
-    // Rewrite the pending tools line with all names so far
-    const label = state.pendingToolNames.join(', ')
-    process.stdout.write(`\r\x1b[K  ${ansi.yellow}◆ ${label}${ansi.reset}`)
+    // Each tool name on its own line
+    process.stdout.write(`  ${ansi.yellow}◆ ${toolName}${ansi.reset}\n`)
   }
 }
 
-/** Clear any pending tool names preview line. Call before printing the real tool execution line. */
+/** Clear any pending tool names preview lines. Call before printing the real tool execution line. */
 export function clearPendingTools(state: TuiStreamState): void {
   if (state.pendingToolNames.length > 0) {
-    process.stdout.write('\r\x1b[K')
+    // Move up and clear each pending line, then clear the current line
+    process.stdout.write(`\x1b[${state.pendingToolNames.length}A\x1b[J`)
     state.pendingToolNames = []
   }
 }

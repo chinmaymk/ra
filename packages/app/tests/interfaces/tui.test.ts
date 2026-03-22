@@ -164,11 +164,14 @@ describe('handleStreamChunk tool_call_start', () => {
     expect(state.pendingToolNames).toEqual(['Read'])
   })
 
-  it('accumulates multiple tool names on one line', () => {
+  it('shows each tool name on its own line', () => {
     const state = createStreamState()
-    captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
-    const output = captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Grep'))
-    expect(output).toContain('Read, Grep')
+    const out1 = captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Read'))
+    expect(out1).toContain('Read')
+    expect(out1).toContain('\n')
+    const out2 = captureStdout(() => handleStreamChunk(state, 'tool_call_start', undefined, 'Grep'))
+    expect(out2).toContain('Grep')
+    expect(out2).toContain('\n')
     expect(state.pendingToolNames).toEqual(['Read', 'Grep'])
   })
 
