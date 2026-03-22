@@ -21,10 +21,10 @@ JSONL-based session persistence. Used by REPL and HTTP interfaces.
 
 ## Config
 
-Sessions are stored under `{dataDir}/sessions/`. The `dataDir` defaults to `.ra` and is configured at the top level.
+Sessions are stored under `{dataDir}/sessions/`. The `dataDir` defaults to `~/.ra/<config-handle>/` (centralized, namespaced by project).
 
 ```yaml
-dataDir: ".ra"            # root for all runtime data
+# dataDir defaults to ~/.ra/<config-handle>/
 storage:
   format: "jsonl"         # message log format
   maxSessions: 100        # prune oldest beyond this
