@@ -80,21 +80,30 @@ for tag in $TAGS; do
   rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
   cp -r "$SITE_DIR/.vitepress/theme" "$TAG_DIR/docs/site/.vitepress/theme"
 
-  # Ensure the tag's config supports DOCS_BASE and DOCS_VERSION env vars.
+  # Wrap the tag's config (or current config) to inject base and version.
+  # This avoids patching the file with sed/awk which breaks across platforms.
   TAG_CONFIG="$TAG_DIR/docs/site/.vitepress/config.ts"
-  if [ -f "$TAG_CONFIG" ]; then
-    PATCHED=$(cat "$TAG_CONFIG")
-    if ! echo "$PATCHED" | grep -q 'DOCS_BASE'; then
-      PATCHED=$(echo "$PATCHED" | awk '{gsub(/base: \x27\/ra\/\x27/, "base: process.env.DOCS_BASE || \x27/ra/\x27"); print}')
-    fi
-    if ! echo "$PATCHED" | grep -q 'DOCS_VERSION'; then
-      PATCHED=$(echo "$PATCHED" | awk '/base:/{print; print "  vite: { define: { __DOCS_VERSION__: JSON.stringify(process.env.DOCS_VERSION || \x27dev\x27) } },"; next}1')
-    fi
-    echo "$PATCHED" > "$TAG_CONFIG"
-  else
-    # Tag has no config — use current one
+  if [ ! -f "$TAG_CONFIG" ]; then
     cp "$SITE_DIR/.vitepress/config.ts" "$TAG_CONFIG"
   fi
+  mv "$TAG_CONFIG" "$TAG_DIR/docs/site/.vitepress/config.original.ts"
+  cat > "$TAG_CONFIG" << WCONF
+import originalConfig from './config.original'
+import { defineConfig } from 'vitepress'
+const base = process.env.DOCS_BASE || '/ra/'
+const version = process.env.DOCS_VERSION || 'dev'
+export default defineConfig({
+  ...originalConfig,
+  base,
+  vite: {
+    ...((originalConfig as any).vite || {}),
+    define: {
+      ...((originalConfig as any).vite?.define || {}),
+      __DOCS_VERSION__: JSON.stringify(version),
+    },
+  },
+})
+WCONF
 
   if (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" DOCS_BASE="/ra/v/${version}/" bun vitepress build); then
     mkdir -p "$DIST_DIR/v/$version"
