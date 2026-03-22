@@ -1,6 +1,6 @@
 import { errorMessage } from '@chinmaymk/ra'
 import { resolve } from 'path'
-import type { SkillCommand, RecipeCommand } from './parse-args'
+import type { SubCommand } from './parse-args'
 import type { IMessage } from '@chinmaymk/ra'
 import type { MemoryStore } from '../memory'
 import type { RaConfig } from '../config/types'
@@ -16,78 +16,47 @@ export async function runExecScript(scriptPath: string): Promise<void> {
   }
 }
 
-/** Handle `ra skill install|remove|list` subcommands. Exits the process. */
-export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
-  const { installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir } = await import('../skills/registry')
-  const { action, args } = cmd
-
-  switch (action) {
-    case 'install': {
-      if (args.length === 0) {
-        console.error('Usage: ra skill install <source>')
-        process.exit(1)
-      }
-      for (const source of args) {
-        try {
-          const installed = await installSkill(source)
-          console.log('Installed skills:', installed.join(', '), '→', defaultSkillInstallDir())
-        } catch (err) {
-          console.error('Failed to install skill:', source, errorMessage(err))
-          process.exit(1)
-        }
-      }
-      process.exit(0)
-    }
-    case 'remove': {
-      if (args.length === 0) {
-        console.error('Usage: ra skill remove <name>')
-        process.exit(1)
-      }
-      for (const name of args) {
-        try {
-          await removeSkill(name)
-          console.log('Removed skill:', name)
-        } catch (err) {
-          console.error('Failed to remove skill:', name, errorMessage(err))
-          process.exit(1)
-        }
-      }
-      process.exit(0)
-    }
-    case 'list': {
-      const skills = await listInstalledSkills()
-      if (skills.length === 0) {
-        console.log('No skills installed in', defaultSkillInstallDir())
-      } else {
-        for (const s of skills) {
-          const src = s.source
-            ? ' (' + s.source.registry + (s.source.package ? ': ' + s.source.package : '') + (s.source.repo ? ': ' + s.source.repo : '') + (s.source.version ? '@' + s.source.version : '') + ')'
-            : ''
-          console.log('  ' + s.name + src)
-        }
-      }
-      process.exit(0)
-    }
-  }
+/** Format source metadata for display */
+function formatSource(source?: { registry: string; package?: string; repo?: string; version?: string }): string {
+  if (!source) return ''
+  return ' (' + source.registry + (source.package ? ': ' + source.package : '') + (source.repo ? ': ' + source.repo : '') + (source.version ? '@' + source.version : '') + ')'
 }
 
-/** Handle `ra recipe install|remove|list` subcommands. Exits the process. */
-export async function runRecipeCommand(cmd: RecipeCommand): Promise<void> {
+/** Registry operations for a given kind (skill or recipe) */
+interface RegistryOps {
+  install(source: string): Promise<string | string[]>
+  remove(name: string): Promise<void>
+  list(): Promise<Array<{ name: string; source?: { registry: string; package?: string; repo?: string; version?: string } }>>
+  defaultDir(): string
+}
+
+async function loadRegistryOps(kind: 'skill' | 'recipe'): Promise<RegistryOps> {
+  if (kind === 'skill') {
+    const { installSkill, removeSkill, listInstalledSkills, defaultSkillInstallDir } = await import('../skills/registry')
+    return { install: installSkill, remove: removeSkill, list: listInstalledSkills, defaultDir: defaultSkillInstallDir }
+  }
   const { installRecipe, removeRecipe, listInstalledRecipes, defaultRecipeInstallDir } = await import('../recipes/registry')
-  const { action, args } = cmd
+  return { install: installRecipe, remove: removeRecipe, list: listInstalledRecipes, defaultDir: defaultRecipeInstallDir }
+}
+
+/** Handle `ra skill|recipe install|remove|list` subcommands. Exits the process. */
+export async function runSubCommand(cmd: SubCommand): Promise<void> {
+  const { kind, action, args } = cmd
+  const ops = await loadRegistryOps(kind)
 
   switch (action) {
     case 'install': {
       if (args.length === 0) {
-        console.error('Usage: ra recipe install <source>')
+        console.error(`Usage: ra ${kind} install <source>`)
         process.exit(1)
       }
       for (const source of args) {
         try {
-          const installed = await installRecipe(source)
-          console.log('Installed recipe:', installed, '→', defaultRecipeInstallDir())
+          const installed = await ops.install(source)
+          const names = Array.isArray(installed) ? installed.join(', ') : installed
+          console.log(`Installed ${kind}:`, names, '→', ops.defaultDir())
         } catch (err) {
-          console.error('Failed to install recipe:', source, errorMessage(err))
+          console.error(`Failed to install ${kind}:`, source, errorMessage(err))
           process.exit(1)
         }
       }
@@ -95,36 +64,38 @@ export async function runRecipeCommand(cmd: RecipeCommand): Promise<void> {
     }
     case 'remove': {
       if (args.length === 0) {
-        console.error('Usage: ra recipe remove <name>')
+        console.error(`Usage: ra ${kind} remove <name>`)
         process.exit(1)
       }
       for (const name of args) {
         try {
-          await removeRecipe(name)
-          console.log('Removed recipe:', name)
+          await ops.remove(name)
+          console.log(`Removed ${kind}:`, name)
         } catch (err) {
-          console.error('Failed to remove recipe:', name, errorMessage(err))
+          console.error(`Failed to remove ${kind}:`, name, errorMessage(err))
           process.exit(1)
         }
       }
       process.exit(0)
     }
     case 'list': {
-      const recipes = await listInstalledRecipes()
-      if (recipes.length === 0) {
-        console.log('No recipes installed in', defaultRecipeInstallDir())
+      const items = await ops.list()
+      if (items.length === 0) {
+        console.log(`No ${kind}s installed in`, ops.defaultDir())
       } else {
-        for (const r of recipes) {
-          const src = r.source
-            ? ' (' + r.source.registry + (r.source.package ? ': ' + r.source.package : '') + (r.source.repo ? ': ' + r.source.repo : '') + (r.source.version ? '@' + r.source.version : '') + ')'
-            : ''
-          console.log('  ' + r.name + src)
+        for (const item of items) {
+          console.log('  ' + item.name + formatSource(item.source))
         }
       }
       process.exit(0)
     }
   }
 }
+
+/** @deprecated Use runSubCommand instead */
+export const runSkillCommand = runSubCommand
+/** @deprecated Use runSubCommand instead */
+export const runRecipeCommand = runSubCommand
 
 /** Handle --show-context */
 export function showContext(contextMessages: IMessage[]): void {

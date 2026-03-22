@@ -2,15 +2,16 @@ import { parseArgs as utilParseArgs } from 'util'
 import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
-export interface SkillCommand {
+export interface SubCommand {
+  kind: 'skill' | 'recipe'
   action: 'install' | 'remove' | 'list'
   args: string[]
 }
 
-export interface RecipeCommand {
-  action: 'install' | 'remove' | 'list'
-  args: string[]
-}
+/** @deprecated Use SubCommand instead */
+export type SkillCommand = SubCommand
+/** @deprecated Use SubCommand instead */
+export type RecipeCommand = SubCommand
 
 export interface ParsedArgsMeta {
   help: boolean
@@ -26,8 +27,7 @@ export interface ParsedArgsMeta {
   listMemories: boolean
   memories?: string
   forget?: string
-  skillCommand?: SkillCommand
-  recipeCommand?: RecipeCommand
+  subCommand?: SubCommand
   recipeName?: string
 }
 
@@ -73,10 +73,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
   )
   const userArgs = argv.slice(isScriptPath ? 2 : 1)
 
-  // Check for skill subcommand: ra skill install|remove|list [args...]
-  if (userArgs[0] === 'skill' && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
-    const action = userArgs[1] as 'install' | 'remove' | 'list'
-    const subArgs = userArgs.slice(2)
+  // Check for subcommands: ra skill|recipe install|remove|list [args...]
+  const SUB_KINDS = ['skill', 'recipe'] as const
+  const kind = userArgs[0] as typeof SUB_KINDS[number]
+  if (SUB_KINDS.includes(kind) && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
     return {
       config: {},
       meta: {
@@ -87,26 +87,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         runImmediately: false,
         listMemories: false,
         files: [],
-        skillCommand: { action, args: subArgs },
-      },
-    }
-  }
-
-  // Check for recipe subcommand: ra recipe install|remove|list [args...]
-  if (userArgs[0] === 'recipe' && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
-    const action = userArgs[1] as 'install' | 'remove' | 'list'
-    const subArgs = userArgs.slice(2)
-    return {
-      config: {},
-      meta: {
-        help: false,
-        version: false,
-        showContext: false,
-        showConfig: false,
-        runImmediately: false,
-        listMemories: false,
-        files: [],
-        recipeCommand: { action, args: subArgs },
+        subCommand: { kind, action: userArgs[1] as 'install' | 'remove' | 'list', args: userArgs.slice(2) },
       },
     }
   }

@@ -205,60 +205,34 @@ describe('parseArgs', () => {
     })
   })
 
-  describe('skill subcommands', () => {
-    it('parses "skill install <source>"', () => {
-      const r = parseArgs(dev('skill', 'install', 'code-review'))
-      expect(r.meta.skillCommand).toEqual({ action: 'install', args: ['code-review'] })
-    })
+  describe('subcommands (skill & recipe)', () => {
+    for (const kind of ['skill', 'recipe'] as const) {
+      it(`parses "${kind} install <source>"`, () => {
+        const r = parseArgs(dev(kind, 'install', 'test-source'))
+        expect(r.meta.subCommand).toEqual({ kind, action: 'install', args: ['test-source'] })
+      })
 
-    it('parses "skill install" with multiple sources', () => {
-      const r = parseArgs(dev('skill', 'install', 'review', 'lint'))
-      expect(r.meta.skillCommand).toEqual({ action: 'install', args: ['review', 'lint'] })
-    })
+      it(`parses "${kind} install" with multiple sources`, () => {
+        const r = parseArgs(dev(kind, 'install', 'a', 'b'))
+        expect(r.meta.subCommand).toEqual({ kind, action: 'install', args: ['a', 'b'] })
+      })
 
-    it('parses "skill remove <name>"', () => {
-      const r = parseArgs(dev('skill', 'remove', 'review'))
-      expect(r.meta.skillCommand).toEqual({ action: 'remove', args: ['review'] })
-    })
+      it(`parses "${kind} remove <name>"`, () => {
+        const r = parseArgs(dev(kind, 'remove', 'test'))
+        expect(r.meta.subCommand).toEqual({ kind, action: 'remove', args: ['test'] })
+      })
 
-    it('parses "skill list"', () => {
-      const r = parseArgs(dev('skill', 'list'))
-      expect(r.meta.skillCommand).toEqual({ action: 'list', args: [] })
-    })
+      it(`parses "${kind} list"`, () => {
+        const r = parseArgs(dev(kind, 'list'))
+        expect(r.meta.subCommand).toEqual({ kind, action: 'list', args: [] })
+      })
 
-    it('does not treat "skill" without subcommand as skill command', () => {
-      const r = parseArgs(dev('skill'))
-      expect(r.meta.skillCommand).toBeUndefined()
-      expect(r.meta.prompt).toBe('skill')
-    })
-  })
-
-  describe('recipe subcommands', () => {
-    it('parses "recipe install <source>"', () => {
-      const r = parseArgs(dev('recipe', 'install', 'user/repo'))
-      expect(r.meta.recipeCommand).toEqual({ action: 'install', args: ['user/repo'] })
-    })
-
-    it('parses "recipe install" with multiple sources', () => {
-      const r = parseArgs(dev('recipe', 'install', 'user/a', 'user/b'))
-      expect(r.meta.recipeCommand).toEqual({ action: 'install', args: ['user/a', 'user/b'] })
-    })
-
-    it('parses "recipe remove <name>"', () => {
-      const r = parseArgs(dev('recipe', 'remove', 'user/repo'))
-      expect(r.meta.recipeCommand).toEqual({ action: 'remove', args: ['user/repo'] })
-    })
-
-    it('parses "recipe list"', () => {
-      const r = parseArgs(dev('recipe', 'list'))
-      expect(r.meta.recipeCommand).toEqual({ action: 'list', args: [] })
-    })
-
-    it('does not treat "recipe" without subcommand as recipe command', () => {
-      const r = parseArgs(dev('recipe'))
-      expect(r.meta.recipeCommand).toBeUndefined()
-      expect(r.meta.prompt).toBe('recipe')
-    })
+      it(`does not treat "${kind}" without subcommand as subcommand`, () => {
+        const r = parseArgs(dev(kind))
+        expect(r.meta.subCommand).toBeUndefined()
+        expect(r.meta.prompt).toBe(kind)
+      })
+    }
   })
 
   describe('--recipe flag', () => {
