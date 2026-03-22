@@ -25,3 +25,19 @@ jobs:
 
       - name: Test
         run: bun test packages/ra/tests packages/app/tests
+
+  docs:
+    name: Docs build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install docs dependencies
+        run: cd docs/site && bun install
+
+      - name: Build docs
+        run: cd docs/site && bun run build
