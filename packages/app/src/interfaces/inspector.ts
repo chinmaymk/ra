@@ -293,6 +293,12 @@ export class InspectorServer {
           }
         }
 
+        // ── Handles API ──
+        if (path === '/api/handles') {
+          const handles = await SessionStorage.listHandles(globalDir)
+          return json({ handles, current: this.app.namespace })
+        }
+
         // ── Memory CRUD ──
         if (path === '/api/memory') {
           if (req.method === 'GET') {

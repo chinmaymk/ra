@@ -35,8 +35,8 @@
 
   /* Sidebar */
   .sidebar-header { padding: 12px 14px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); display: flex; justify-content: space-between; align-items: center; }
-  .sidebar-header .toggle-all { font-size: 10px; cursor: pointer; color: var(--accent); text-transform: none; letter-spacing: normal; opacity: 0.8; }
-  .sidebar-header .toggle-all:hover { opacity: 1; }
+  .sidebar-header select { font-size: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 2px 6px; font-family: var(--font); cursor: pointer; text-transform: none; letter-spacing: normal; max-width: 160px; }
+  .sidebar-header select:focus { border-color: var(--accent); outline: none; }
   .session-item .namespace { font-size: 10px; color: var(--purple); margin-bottom: 1px; }
   .session-item { padding: 10px 14px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.1s; position: relative; }
   .session-item:hover { background: var(--bg3); }
@@ -232,7 +232,7 @@
     </div>
   </header>
   <div class="sidebar" id="sidebar">
-    <div class="sidebar-header"><span>Sessions</span><span class="toggle-all" id="toggle-all">All projects</span></div>
+    <div class="sidebar-header"><span>Sessions</span><select id="handle-select"><option value="">Loading…</option></select></div>
     <div class="sidebar-actions">
       <button class="btn-clear-all" id="btn-clear-all">Clear all</button>
     </div>
@@ -252,7 +252,7 @@
   let currentNamespace = null;
   let currentView = 'overview';
   let sessionsMap = {};
-  let showAllProjects = false;
+  let selectedHandle = null; // null = current project, '' = all, string = specific handle
 
   function isGlobal(view) { return !SESSION_VIEWS.includes(view); }
 
@@ -283,36 +283,71 @@
     });
   });
 
-  // ── Sessions ──
-  document.getElementById('toggle-all').addEventListener('click', function() {
-    showAllProjects = !showAllProjects;
-    this.textContent = showAllProjects ? 'Current project' : 'All projects';
+  // ── Handle selector ──
+  const handleSelect = document.getElementById('handle-select');
+
+  async function loadHandles() {
+    const result = await apiFetch('/api/handles');
+    if (result.error) return;
+    const { handles, current } = result.data;
+    let html = '<option value="__current__">Current project</option>';
+    html += '<option value="__all__">All projects</option>';
+    if (handles.length > 1) {
+      html += '<option disabled>──────</option>';
+      handles.forEach(function(h) {
+        const label = h === current ? h + ' *' : h;
+        html += '<option value="' + esc(h) + '">' + esc(label) + '</option>';
+      });
+    }
+    handleSelect.innerHTML = html;
+    selectedHandle = null;
+  }
+
+  handleSelect.addEventListener('change', function() {
+    const val = this.value;
+    if (val === '__current__') selectedHandle = null;
+    else if (val === '__all__') selectedHandle = '';
+    else selectedHandle = val;
     loadSessions();
   });
 
   document.getElementById('btn-clear-all').addEventListener('click', async function() {
-    const scope = showAllProjects ? 'ALL sessions across ALL projects' : 'all sessions in the current project';
+    const isAll = selectedHandle === '';
+    const scope = isAll ? 'ALL sessions across ALL projects' : 'all sessions in the current view';
     if (!confirm('Delete ' + scope + '? This cannot be undone.')) return;
-    const url = showAllProjects ? '/api/sessions?all=true' : '/api/sessions';
-    await apiFetch(url, { method: 'DELETE' });
+    if (isAll) {
+      await apiFetch('/api/sessions?all=true', { method: 'DELETE' });
+    } else if (selectedHandle) {
+      await apiFetch('/api/handles/' + encodeURIComponent(selectedHandle), { method: 'DELETE' });
+    } else {
+      await apiFetch('/api/sessions', { method: 'DELETE' });
+    }
     currentSession = null;
     currentNamespace = null;
     main.innerHTML = '<div class="empty">Select a session to inspect</div>';
+    loadHandles();
     loadSessions();
   });
 
+  // ── Sessions ──
   async function loadSessions() {
-    const url = showAllProjects ? '/api/sessions?all=true' : '/api/sessions';
+    const isAll = selectedHandle === '' || (selectedHandle && selectedHandle !== '__current__');
+    const url = isAll ? '/api/sessions?all=true' : '/api/sessions';
     const result = await apiFetch(url);
     const list = document.getElementById('session-list');
     if (result.error) { list.innerHTML = '<div class="empty" style="color:var(--red)">' + esc(result.error) + '</div>'; return; }
-    const sessions = result.data;
+    let sessions = result.data;
+    // Filter by specific handle if one is selected
+    if (selectedHandle && selectedHandle !== '') {
+      sessions = sessions.filter(function(s) { return s.meta.namespace === selectedHandle; });
+    }
     if (!sessions.length) { list.innerHTML = '<div class="empty">No sessions</div>'; return; }
     sessionsMap = {};
     sessions.forEach(s => { sessionsMap[s.id] = s.meta; });
+    const showNs = selectedHandle === '';
     list.innerHTML = sessions.map(s => {
       const time = new Date(s.meta.created).toLocaleString();
-      const nsLine = s.meta.namespace && showAllProjects
+      const nsLine = s.meta.namespace && showNs
         ? '<div class="namespace">' + esc(s.meta.namespace) + '</div>'
         : '';
       return '<div class="session-item" data-id="' + esc(s.id) + '" data-ns="' + esc(s.meta.namespace || '') + '">' +
@@ -756,6 +791,7 @@
 
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+  loadHandles();
   loadSessions();
 })();
 </script>
