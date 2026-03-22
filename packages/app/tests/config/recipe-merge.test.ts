@@ -55,14 +55,15 @@ describe('loadConfig with recipePath', () => {
     expect(config.agent.systemPrompt).toBe('Recipe prompt')   // recipe preserved
   })
 
-  it('env vars override recipe values', async () => {
+  it('user config file overrides recipe model', async () => {
     const recipePath = writeRecipe([
       'agent:',
       '  provider: anthropic',
       '  model: claude-sonnet-4-6',
     ])
+    writeFileSync(join(TMP, 'ra.config.yaml'), 'agent:\n  model: custom-model\n')
 
-    const config = await loadConfig({ cwd: TMP, env: { RA_MODEL: 'custom-model' }, recipePath })
+    const config = await loadConfig({ cwd: TMP, env: {}, recipePath })
 
     expect(config.agent.model).toBe('custom-model')
   })
@@ -85,12 +86,13 @@ describe('loadConfig with recipePath', () => {
     const recipePath = writeRecipe([
       'agent:',
       '  provider: anthropic',
+      'app:',
       '  providers:',
       '    anthropic:',
       '      baseURL: https://recipe-proxy.example.com',
     ])
     writeFileSync(join(TMP, 'ra.config.yaml'), [
-      'agent:',
+      'app:',
       '  providers:',
       '    anthropic:',
       '      apiKey: sk-user-key',
@@ -98,8 +100,8 @@ describe('loadConfig with recipePath', () => {
 
     const config = await loadConfig({ cwd: TMP, env: {}, recipePath })
 
-    expect(config.agent.providers.anthropic.apiKey).toBe('sk-user-key')
-    expect(config.agent.providers.anthropic.baseURL).toBe('https://recipe-proxy.example.com')
+    expect(config.app.providers.anthropic.apiKey).toBe('sk-user-key')
+    expect(config.app.providers.anthropic.baseURL).toBe('https://recipe-proxy.example.com')
   })
 
   it('user skillDirs replace recipe skillDirs (array replacement)', async () => {
@@ -115,7 +117,7 @@ describe('loadConfig with recipePath', () => {
     expect(config.app.skillDirs).toEqual(['/user/skills'])
   })
 
-  it('full precedence: defaults < recipe < file < env < CLI', async () => {
+  it('full precedence: defaults < recipe < file < CLI', async () => {
     const recipePath = writeRecipe([
       'agent:',
       '  provider: openai',
@@ -131,13 +133,13 @@ describe('loadConfig with recipePath', () => {
 
     const config = await loadConfig({
       cwd: TMP,
-      env: { RA_MAX_ITERATIONS: '50' },
+      env: {},
       cliArgs: { agent: { provider: 'google' } } as any,
       recipePath,
     })
 
     expect(config.agent.provider).toBe('google')            // CLI wins
-    expect(config.agent.maxIterations).toBe(50)              // env wins
+    expect(config.agent.maxIterations).toBe(100)             // file wins over recipe
     expect(config.agent.model).toBe('claude-sonnet-4-6')     // file wins over recipe
     expect(config.agent.systemPrompt).toBe('Recipe prompt')  // recipe wins over default
   })
