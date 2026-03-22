@@ -13,6 +13,7 @@ import {
   type AgentLoopOptions,
   type CompactionConfig,
   type Logger,
+  type ThinkingMode,
 } from '@chinmaymk/ra'
 
 /** Tools that can't work from a background fork */
@@ -24,7 +25,7 @@ export interface SubagentToolOptions {
   model: string
   systemPrompt?: string
   middleware?: Partial<MiddlewareConfig>
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingMode
   compaction?: CompactionConfig
   toolTimeout?: number
   maxIterations?: number

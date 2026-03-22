@@ -52,11 +52,18 @@ export type StreamChunk =
   | { type: 'tool_call_end'; id: string }
   | { type: 'done'; usage?: TokenUsage }
 
+export type ThinkingLevel = 'low' | 'medium' | 'high'
+
+/** Thinking mode: off (disabled), a fixed level, or adaptive (high→low after 5 turns). */
+export type ThinkingMode = 'off' | ThinkingLevel | 'adaptive'
+
 export interface ChatRequest {
   model: string
   messages: IMessage[]
   tools?: ITool[]
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingLevel
+  /** Absolute cap on thinking budget tokens. When set, the provider uses min(levelBudget, cap). */
+  thinkingBudgetCap?: number
   providerOptions?: Record<string, unknown>
   signal?: AbortSignal
 }

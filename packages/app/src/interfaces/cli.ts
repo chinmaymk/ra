@@ -10,6 +10,7 @@ import {
   type CompactionConfig,
   type Logger,
   type LogLevel,
+  type ThinkingMode,
 } from '@chinmaymk/ra'
 import type { SkillIndex } from '../skills/types'
 import type { SessionStorage } from '../storage/sessions'
@@ -35,7 +36,8 @@ export interface CliOptions {
   tokenBudget?: number
   maxDuration?: number
   onChunk?: (text: string) => void
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingMode
+  thinkingBudgetCap?: number
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
   sessionMessages?: IMessage[]
