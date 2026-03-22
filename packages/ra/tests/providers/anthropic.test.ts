@@ -230,6 +230,49 @@ describe('AnthropicProvider', () => {
     expect(mapped[0].content[0].type).toBe('text')
   })
 
+  it('adds cache_control to last 2 user messages', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: 'first' },
+      { role: 'assistant' as const, content: 'reply1' },
+      { role: 'user' as const, content: 'second' },
+      { role: 'assistant' as const, content: 'reply2' },
+      { role: 'user' as const, content: 'third' },
+    ]
+    const mapped = provider.mapMessages(messages) as any[]
+    // First user message: no cache marker
+    expect(typeof mapped[0].content).toBe('string')
+    // Second user message (index 2): cache marker
+    expect(mapped[2].content[0].cache_control).toEqual({ type: 'ephemeral' })
+    // Third user message (index 4): cache marker
+    expect(mapped[4].content[0].cache_control).toEqual({ type: 'ephemeral' })
+  })
+
+  it('adds cache_control to user message with array content', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'hello' }, { type: 'text' as const, text: 'world' }] },
+    ]
+    const mapped = provider.mapMessages(messages) as any[]
+    // cache_control on last content block only
+    expect(mapped[0].content[0].cache_control).toBeUndefined()
+    expect(mapped[0].content[1].cache_control).toEqual({ type: 'ephemeral' })
+  })
+
+  it('adds cache_control to tool_result messages (mapped as user role)', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: 'hi' },
+      { role: 'assistant' as const, content: 'calling tool', toolCalls: [{ id: 'c1', name: 'test', arguments: '{}' }] },
+      { role: 'tool' as const, content: 'result', toolCallId: 'c1' },
+    ]
+    const mapped = provider.mapMessages(messages) as any[]
+    // tool result (last user message) should have cache marker
+    const toolResultMsg = mapped[2]
+    expect(toolResultMsg.role).toBe('user')
+    expect(toolResultMsg.content[0].cache_control).toEqual({ type: 'ephemeral' })
+  })
+
   it('maps response with only text (no tool_use)', () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
     const response = {
