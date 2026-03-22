@@ -29,7 +29,7 @@ import { loadSkillIndex, buildAvailableSkillsXml } from './skills/loader'
 import type { SkillIndex } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
-import { resolvePath } from './utils/paths'
+import { resolvePath, configHandle } from './utils/paths'
 import type { Tracer } from './observability/tracer'
 import type { Middleware } from '@chinmaymk/ra'
 
@@ -49,6 +49,7 @@ export interface AppContext {
   middleware: Partial<MiddlewareConfig>
   skillIndex: Map<string, SkillIndex>
   storage: SessionStorage
+  namespace: string
   sessionId: string
   resumed: boolean
   contextMessages: IMessage[]
@@ -70,11 +71,20 @@ export async function bootstrap(
   const { join } = await import('path')
   const storagePath = join(app.dataDir, 'sessions')
   const memoryPath = join(app.dataDir, 'memory.db')
+  const namespace = configHandle(app.configDir)
 
   // ── Storage & session ──────────────────────────────────────────────
   // Storage is created before observability — logger will be set after createObservability()
   const storage = new SessionStorage(storagePath)
   await storage.init()
+
+  const sessionOpts = {
+    provider: agent.provider,
+    model: agent.model,
+    interface: app.interface,
+    namespace,
+    configDir: app.configDir,
+  }
 
   let sessionId: string
   let sessionDir: string | undefined
@@ -86,21 +96,13 @@ export async function bootstrap(
       if (!latest) throw new Error('No sessions to resume')
       sessionId = latest.id
     } else {
-      const ensured = await storage.ensureSession(opts.resume, {
-        provider: agent.provider,
-        model: agent.model,
-        interface: app.interface,
-      })
+      const ensured = await storage.ensureSession(opts.resume, sessionOpts)
       sessionId = ensured.id
     }
     sessionDir = storage.sessionDir(sessionId)
     await mkdir(sessionDir, { recursive: true })
   } else {
-    sessionId = (await storage.create({
-      provider: agent.provider,
-      model: agent.model,
-      interface: app.interface,
-    })).id
+    sessionId = (await storage.create(sessionOpts)).id
     sessionDir = storage.sessionDir(sessionId)
     await mkdir(sessionDir, { recursive: true })
   }
@@ -329,6 +331,7 @@ export async function bootstrap(
     middleware,
     skillIndex,
     storage,
+    namespace,
     sessionId,
     resumed: !!opts.resume,
     contextMessages,

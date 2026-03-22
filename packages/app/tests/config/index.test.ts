@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { loadConfig } from '../../src/config'
+import { configHandle, homeDir } from '../../src/utils/paths'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
-import { tmpdir } from 'os'
+import { tmpdir, homedir } from 'os'
 
 describe('loadConfig', () => {
   let tmp: string
@@ -206,12 +207,12 @@ describe('loadConfig', () => {
 })
 
 describe('dataDir', () => {
-  it('defaults dataDir to .ra under configDir', async () => {
+  it('defaults dataDir to centralized ~/.ra/<handle>', async () => {
     const dir = join(tmpdir(), `ra-datadir-test-${Date.now()}-1`)
     mkdirSync(dir, { recursive: true })
     try {
       const c = await loadConfig({ cwd: dir, env: {} })
-      expect(c.app.dataDir).toBe(join(dir, '.ra'))
+      expect(c.app.dataDir).toBe(join(homeDir(), '.ra', configHandle(dir)))
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 

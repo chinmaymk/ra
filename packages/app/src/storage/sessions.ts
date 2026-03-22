@@ -13,6 +13,8 @@ export interface SessionMeta {
   provider: string
   model: string
   interface: string
+  namespace?: string
+  configDir?: string
 }
 
 export interface Session {
@@ -24,6 +26,8 @@ export interface CreateSessionOptions {
   provider: string
   model: string
   interface: string
+  namespace?: string
+  configDir?: string
 }
 
 export interface PruneOptions {
@@ -133,5 +137,18 @@ export class SessionStorage {
     }
 
     await Promise.all([...toDelete].map(id => rm(this.sessionDir(id), { recursive: true, force: true })))
+  }
+
+  /** List sessions across all namespaces under a global directory (e.g. ~/.ra/). */
+  static async listAll(globalDir: string): Promise<Session[]> {
+    const glob = new Bun.Glob('*/sessions/*/meta.json')
+    const sessions: Session[] = []
+    for await (const rel of glob.scan({ cwd: globalDir, onlyFiles: true })) {
+      try {
+        const meta = JSON.parse(await Bun.file(join(globalDir, rel)).text()) as SessionMeta
+        sessions.push({ id: meta.id, meta })
+      } catch { /* skip corrupt entries */ }
+    }
+    return sessions
   }
 }

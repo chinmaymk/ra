@@ -1,7 +1,9 @@
 import { join } from 'path'
 import type { AppContext } from '../bootstrap'
 import { discoverContextFiles } from '../context'
+import { SessionStorage } from '../storage/sessions'
 import { parseJsonlFile } from '../utils/files'
+import { homeDir } from '../utils/paths'
 import { cacheHitPercent } from '@chinmaymk/ra'
 import inspectorHtml from './inspector.html' with { type: 'text' }
 import faviconSvg from './favicon.svg' with { type: 'text' }
@@ -175,6 +177,32 @@ function buildTimeline(traces: TraceSpan[], logs: LogEntry[]) {
   return events
 }
 
+// ── Session view helper ───────────────────────────────────────────────
+
+async function serveSessionView(dir: string, id: string, view: string, storage: SessionStorage): Promise<Response> {
+  switch (view) {
+    case 'messages': {
+      // Try reading via storage first (works for current namespace), fall back to direct file read
+      try { return json(await storage.readMessages(id)) } catch { /* fall through */ }
+      return json(await parseJsonlFile(join(dir, 'messages.jsonl')))
+    }
+    case 'logs':     return json(await parseJsonlFile(join(dir, 'logs.jsonl')))
+    case 'traces':   return json(await parseJsonlFile(join(dir, 'traces.jsonl')))
+    case 'stats': {
+      const traces = await parseJsonlFile(join(dir, 'traces.jsonl')) as TraceSpan[]
+      let messages: Array<{ role?: string; toolCalls?: unknown[]; isError?: boolean; content?: unknown }>
+      try { messages = await storage.readMessages(id) as Array<{ role?: string; toolCalls?: unknown[]; isError?: boolean; content?: unknown }> } catch { messages = await parseJsonlFile(join(dir, 'messages.jsonl')) }
+      return json(buildStats(traces, messages))
+    }
+    case 'timeline': {
+      const traces = await parseJsonlFile(join(dir, 'traces.jsonl')) as TraceSpan[]
+      const logs = await parseJsonlFile(join(dir, 'logs.jsonl')) as LogEntry[]
+      return json(buildTimeline(traces, logs))
+    }
+    default: return json({ error: 'Unknown view' }, 404)
+  }
+}
+
 // ── Server ────────────────────────────────────────────────────────────
 
 export class InspectorServer {
@@ -198,32 +226,33 @@ export class InspectorServer {
 
         // ── Session-scoped API ──
         if (path === '/api/sessions') {
-          const sessions = await storage.list()
+          const all = url.searchParams.get('all') === 'true'
+          const sessions = all
+            ? await SessionStorage.listAll(join(homeDir(), '.ra'))
+            : await storage.list()
           sessions.sort((a, b) => new Date(b.meta.created).getTime() - new Date(a.meta.created).getTime())
           return json(sessions)
         }
 
+        // Namespace-aware route: /api/sessions/:namespace/:id/:view
+        const nsSessionMatch = path.match(/^\/api\/sessions\/([^/]+)\/([^/]+)\/(\w+)$/)
+        if (nsSessionMatch) {
+          const [, ns, id, view] = nsSessionMatch
+          const dir = join(homeDir(), '.ra', ns as string, 'sessions', id as string)
+          try {
+            return await serveSessionView(dir, id as string, view as string, storage)
+          } catch {
+            return json({ error: 'Session not found' }, 404)
+          }
+        }
+
+        // Legacy route: /api/sessions/:id/:view (current namespace)
         const sessionMatch = path.match(/^\/api\/sessions\/([^/]+)\/(\w+)$/)
         if (sessionMatch) {
           const [, id, view] = sessionMatch
           const dir = storage.sessionDir(id as string)
           try {
-            switch (view) {
-              case 'messages': return json(await storage.readMessages(id as string))
-              case 'logs':     return json(await parseJsonlFile(join(dir, 'logs.jsonl')))
-              case 'traces':   return json(await parseJsonlFile(join(dir, 'traces.jsonl')))
-              case 'stats': {
-                const traces = await parseJsonlFile(join(dir, 'traces.jsonl')) as TraceSpan[]
-                const messages = await storage.readMessages(id as string) as Array<{ role?: string; toolCalls?: unknown[]; isError?: boolean; content?: unknown }>
-                return json(buildStats(traces, messages))
-              }
-              case 'timeline': {
-                const traces = await parseJsonlFile(join(dir, 'traces.jsonl')) as TraceSpan[]
-                const logs = await parseJsonlFile(join(dir, 'logs.jsonl')) as LogEntry[]
-                return json(buildTimeline(traces, logs))
-              }
-              default: return json({ error: 'Unknown view' }, 404)
-            }
+            return await serveSessionView(dir, id as string, view as string, storage)
           } catch {
             return json({ error: 'Session not found' }, 404)
           }

@@ -34,7 +34,10 @@
   .main { overflow-y: auto; padding: 16px; }
 
   /* Sidebar */
-  .sidebar-header { padding: 12px 14px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); }
+  .sidebar-header { padding: 12px 14px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); display: flex; justify-content: space-between; align-items: center; }
+  .sidebar-header .toggle-all { font-size: 10px; cursor: pointer; color: var(--accent); text-transform: none; letter-spacing: normal; opacity: 0.8; }
+  .sidebar-header .toggle-all:hover { opacity: 1; }
+  .session-item .namespace { font-size: 10px; color: var(--purple); margin-bottom: 1px; }
   .session-item { padding: 10px 14px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.1s; }
   .session-item:hover { background: var(--bg3); }
   .session-item.active { background: var(--bg3); border-left-color: var(--accent); }
@@ -221,7 +224,7 @@
     </div>
   </header>
   <div class="sidebar" id="sidebar">
-    <div class="sidebar-header">Sessions</div>
+    <div class="sidebar-header"><span>Sessions</span><span class="toggle-all" id="toggle-all">All projects</span></div>
     <div id="session-list"><div class="loading">Loading…</div></div>
   </div>
   <div class="main" id="main">
@@ -235,8 +238,10 @@
   const main = document.getElementById('main');
   const SESSION_VIEWS = ['overview', 'timeline', 'messages', 'logs', 'traces'];
   let currentSession = null;
+  let currentNamespace = null;
   let currentView = 'overview';
   let sessionsMap = {};
+  let showAllProjects = false;
 
   function isGlobal(view) { return !SESSION_VIEWS.includes(view); }
 
@@ -268,8 +273,15 @@
   });
 
   // ── Sessions ──
+  document.getElementById('toggle-all').addEventListener('click', function() {
+    showAllProjects = !showAllProjects;
+    this.textContent = showAllProjects ? 'Current project' : 'All projects';
+    loadSessions();
+  });
+
   async function loadSessions() {
-    const result = await apiFetch('/api/sessions');
+    const url = showAllProjects ? '/api/sessions?all=true' : '/api/sessions';
+    const result = await apiFetch(url);
     const list = document.getElementById('session-list');
     if (result.error) { list.innerHTML = '<div class="empty" style="color:var(--red)">' + esc(result.error) + '</div>'; return; }
     const sessions = result.data;
@@ -278,7 +290,11 @@
     sessions.forEach(s => { sessionsMap[s.id] = s.meta; });
     list.innerHTML = sessions.map(s => {
       const time = new Date(s.meta.created).toLocaleString();
-      return '<div class="session-item" data-id="' + esc(s.id) + '">' +
+      const nsLine = s.meta.namespace && showAllProjects
+        ? '<div class="namespace">' + esc(s.meta.namespace) + '</div>'
+        : '';
+      return '<div class="session-item" data-id="' + esc(s.id) + '" data-ns="' + esc(s.meta.namespace || '') + '">' +
+        nsLine +
         '<div class="id">' + esc(s.id.slice(0, 8)) + '… <span class="badge">' + esc(s.meta.provider) + '/' + esc(s.meta.model) + '</span></div>' +
         '<div class="meta">' + esc(s.meta.interface) + ' · ' + esc(time) + '</div></div>';
     }).join('');
@@ -287,6 +303,7 @@
         $$('.session-item').forEach(e => e.classList.remove('active'));
         el.classList.add('active');
         currentSession = el.dataset.id;
+        currentNamespace = el.dataset.ns || null;
         // Auto-switch to session scope if on a global tab
         if (isGlobal(currentView)) {
           currentView = 'overview';
@@ -303,8 +320,12 @@
   function sessionBannerHtml(id) {
     const meta = sessionsMap[id];
     if (!meta) return '';
+    const nsField = meta.namespace
+      ? '<div class="sb-field"><span class="sb-label">Project</span><span class="sb-value">' + esc(meta.namespace) + '</span></div>'
+      : '';
     return '<div class="session-banner">' +
       '<div class="sb-field"><span class="sb-label">Session</span><span class="sb-value">' + esc(meta.id) + '</span></div>' +
+      nsField +
       '<div class="sb-field"><span class="sb-label">Provider</span><span class="sb-value">' + esc(meta.provider) + '</span></div>' +
       '<div class="sb-field"><span class="sb-label">Model</span><span class="sb-value">' + esc(meta.model) + '</span></div>' +
       '<div class="sb-field"><span class="sb-label">Interface</span><span class="sb-value">' + esc(meta.interface) + '</span></div>' +
@@ -332,7 +353,11 @@
   async function loadSessionView(id, view) {
     main.innerHTML = '<div class="loading">Loading…</div>';
     const apiView = view === 'overview' ? 'stats' : view;
-    const result = await apiFetch('/api/sessions/' + id + '/' + apiView);
+    const ns = currentNamespace;
+    const sessionUrl = ns
+      ? '/api/sessions/' + encodeURIComponent(ns) + '/' + id + '/' + apiView
+      : '/api/sessions/' + id + '/' + apiView;
+    const result = await apiFetch(sessionUrl);
     if (result.error) { showError(result.error); return; }
     const data = result.data;
     if (view === 'overview') renderOverview(data);

@@ -4,7 +4,7 @@ export const defaultConfig: RaConfig = {
   app: {
     interface: 'repl',
     configDir: process.cwd(),
-    dataDir: '.ra',
+    dataDir: '',
     http: { port: 3000, token: '' },
     inspector: { port: 3002 },
     storage: {
