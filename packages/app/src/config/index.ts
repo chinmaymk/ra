@@ -213,7 +213,7 @@ function normalizeToolsSection(obj: Record<string, unknown>): void {
 
 /** Check if a string looks like a local path (as opposed to an owner/repo name). */
 function looksLikeLocalPath(value: string): boolean {
-  return value.startsWith('./') || value.startsWith('../') || value.startsWith('/') || value.startsWith('~')
+  return /^(\.\.?[/\\]|[/\\]|~[/\\]|[A-Za-z]:[/\\])/.test(value)
 }
 
 /**

@@ -233,6 +233,51 @@ describe('parseArgs', () => {
     })
   })
 
+  describe('recipe subcommands', () => {
+    it('parses "recipe install <source>"', () => {
+      const r = parseArgs(dev('recipe', 'install', 'user/repo'))
+      expect(r.meta.recipeCommand).toEqual({ action: 'install', args: ['user/repo'] })
+    })
+
+    it('parses "recipe install" with multiple sources', () => {
+      const r = parseArgs(dev('recipe', 'install', 'user/a', 'user/b'))
+      expect(r.meta.recipeCommand).toEqual({ action: 'install', args: ['user/a', 'user/b'] })
+    })
+
+    it('parses "recipe remove <name>"', () => {
+      const r = parseArgs(dev('recipe', 'remove', 'user/repo'))
+      expect(r.meta.recipeCommand).toEqual({ action: 'remove', args: ['user/repo'] })
+    })
+
+    it('parses "recipe list"', () => {
+      const r = parseArgs(dev('recipe', 'list'))
+      expect(r.meta.recipeCommand).toEqual({ action: 'list', args: [] })
+    })
+
+    it('does not treat "recipe" without subcommand as recipe command', () => {
+      const r = parseArgs(dev('recipe'))
+      expect(r.meta.recipeCommand).toBeUndefined()
+      expect(r.meta.prompt).toBe('recipe')
+    })
+  })
+
+  describe('--recipe flag', () => {
+    it('parses --recipe into meta.recipeName', () => {
+      const r = parseArgs(dev('--recipe', 'user/repo'))
+      expect(r.meta.recipeName).toBe('user/repo')
+    })
+
+    it('--recipe with prompt', () => {
+      const r = parseArgs(dev('--recipe', 'user/repo', 'hello'))
+      expect(r.meta.recipeName).toBe('user/repo')
+      expect(r.meta.prompt).toBe('hello')
+    })
+
+    it('--recipe defaults to undefined', () => {
+      expect(parseArgs(dev()).meta.recipeName).toBeUndefined()
+    })
+  })
+
   describe('edge cases', () => {
     it('empty argv', () => {
       const r = parseArgs(['ra'])
