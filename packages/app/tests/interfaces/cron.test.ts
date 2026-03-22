@@ -123,7 +123,7 @@ function makeApp(overrides?: { provider?: IProvider }) {
       maxConcurrency: 1,
       tools: { builtin: false, overrides: {} },
       middleware: {},
-      context: { enabled: false, patterns: [], resolvers: [] },
+      context: { enabled: false, patterns: [], resolvers: [], subdirectoryWalk: true },
       compaction: { enabled: false, threshold: 0.8 },
       memory: { enabled: false, maxMemories: 100, ttlDays: 30, injectLimit: 5 },
     },

@@ -80,7 +80,7 @@ function collectDirs(filePath: string, root: string, walk: boolean, checked: Set
 }
 
 /** Extract absolute file paths from all messages (tool call arguments, tool results, and user text). */
-function extractFilePathsFromMessages(messages: readonly { role: string; content?: string; toolCalls?: readonly { arguments?: string }[] }[]): string[] {
+function extractFilePathsFromMessages(messages: readonly { role: string; content?: string | unknown; toolCalls?: readonly { arguments?: string }[] }[]): string[] {
   const paths: string[] = []
   const absPathRe = /(?:^|[\s"'=:])(\/([\w.@-]+\/)*[\w.@-]+)/g
   for (const msg of messages) {
