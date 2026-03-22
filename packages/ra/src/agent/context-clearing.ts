@@ -175,8 +175,14 @@ const DEFAULT_TRIGGER_THRESHOLD = 0.60
  * Creates a beforeModelCall middleware that clears old tool results and
  * thinking blocks when context usage exceeds a threshold.
  *
- * This is lighter than full compaction — it preserves message structure
- * and cache breakpoints, only replacing content within existing messages.
+ * This is lighter than full compaction — it preserves message count, roles,
+ * and toolCallIds, only replacing content within existing messages.
+ *
+ * Cache impact: clearing old messages *does* invalidate the conversation-prefix
+ * cache for that turn (since the cached prefix content changes). However, it
+ * only fires at high context usage (default 60%), by which point the cache has
+ * already paid for itself over many prior turns. The token savings from clearing
+ * (1x per token) outweigh the cache miss cost (0.1x → 1x for one turn).
  */
 export function createContextClearingMiddleware(
   config: ContextClearingConfig,
