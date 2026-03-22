@@ -40,6 +40,9 @@ agent:
   maxIterations: 50
   thinking: adaptive
   toolTimeout: 30000
+  parallelToolCalls: true       # run tool calls concurrently (default)
+  maxTokenBudget: 0             # 0 = unlimited, or set e.g. 200000
+  maxDuration: 0                # 0 = unlimited, or set e.g. 300000 (5 min)
 
   skillDirs:
     - ./skills
@@ -96,6 +99,9 @@ agent:
 | `agent.thinking` | `--thinking` | `off` | Thinking mode: `off`, `low`, `medium`, `high`, `adaptive` |
 | `agent.thinkingBudgetCap` | `--thinking-budget-cap` | — | Max thinking budget tokens (caps the level-based default) |
 | `agent.toolTimeout` | — | `30000` | Per-tool and middleware timeout (ms) |
+| `agent.parallelToolCalls` | — | `true` | Execute tool calls in parallel when the model returns multiple |
+| `agent.maxTokenBudget` | `--max-token-budget` | `0` | Max total tokens (input + output) before the loop stops. 0 = unlimited |
+| `agent.maxDuration` | `--max-duration` | `0` | Max wall-clock duration (ms) before the loop stops. 0 = unlimited |
 | `agent.tools.builtin` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
 
 ### Agent — Permissions

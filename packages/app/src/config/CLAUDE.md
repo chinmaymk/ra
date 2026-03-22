@@ -63,7 +63,10 @@ Everything a recipe defines: brain, tools, skills, MCP, permissions.
 | `agent.maxIterations` | `50` | Loop iteration limit |
 | `agent.maxRetries` | `3` | Retry limit for model calls |
 | `agent.toolTimeout` | `30000` | Tool execution timeout (ms) |
-| `agent.maxConcurrency` | `4` | Parallel tool execution limit |
+| `agent.maxConcurrency` | `4` | Parallel subagent task limit |
+| `agent.parallelToolCalls` | `true` | Execute tool calls concurrently |
+| `agent.maxTokenBudget` | `0` | Max total tokens before stopping (0 = unlimited) |
+| `agent.maxDuration` | `0` | Max wall-clock ms before stopping (0 = unlimited) |
 | `agent.tools.builtin` | `true` | Register built-in tools (master switch) |
 | `agent.tools.overrides` | `{}` | Per-tool settings |
 | `agent.skillDirs` | `['.claude/skills', ...]` | Directories to scan for skills |
