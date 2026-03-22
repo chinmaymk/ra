@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { mkdirSync, readdirSync, rmSync } from 'fs'
+import { mkdirSync, rmSync } from 'fs'
 import { homeDir } from '../utils/paths'
 import {
   parseSource, splitNpmVersion, withTempExtract, findExtractedRoot,

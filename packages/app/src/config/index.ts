@@ -204,9 +204,14 @@ function normalizeToolsSection(obj: Record<string, unknown>): void {
 
 // ── Recipe resolution helpers ───────────────────────────────────────
 
+/** Check if a string looks like a local path (not an owner/repo name). */
+function looksLikeLocalPath(value: string): boolean {
+  return /^(\.\.?[/\\]|[/\\]|~[/\\]|[A-Za-z]:[/\\])/.test(value)
+}
+
 /** Resolve a recipe config file from an installed name or local path. */
 async function resolveRecipe(nameOrPath: string, cwd: string): Promise<{ configPath: string; recipeDir: string } | null> {
-  if (looksLikePath(nameOrPath)) {
+  if (looksLikeLocalPath(nameOrPath)) {
     const resolved = resolvePath(nameOrPath, cwd)
     for (const name of CONFIG_FILES) {
       const full = join(resolved, name)
