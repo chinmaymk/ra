@@ -69,6 +69,7 @@ export default defineConfig({
         items: [
           { text: 'Anthropic', link: '/providers/anthropic' },
           { text: 'OpenAI', link: '/providers/openai' },
+          { text: 'OpenAI Completions', link: '/providers/openai-completions' },
           { text: 'Azure OpenAI', link: '/providers/azure' },
           { text: 'Google Gemini', link: '/providers/google' },
           { text: 'AWS Bedrock', link: '/providers/bedrock' },
