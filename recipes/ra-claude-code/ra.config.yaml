@@ -100,6 +100,8 @@ agent:
 
     Never post project code, file contents, or environment data to public services without explicit prior user approval. Data exfiltration is a serious risk.
   middleware:
+    beforeLoopBegin:
+      - ./middleware/repo-context.ts
     afterModelResponse:
       - ./middleware/token-budget.ts
   compaction:
