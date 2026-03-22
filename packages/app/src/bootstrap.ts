@@ -161,7 +161,7 @@ export async function bootstrap(
   // Dynamic context discovery — picks up context files from directories the agent touches
   if (agent.context.enabled) {
     const root = (await findGitRoot(process.cwd())) ?? process.cwd()
-    const discoveryMw = createDiscoveryMiddleware(agent.context.patterns, root, new Set(contextFiles.map(f => f.path)))
+    const discoveryMw = createDiscoveryMiddleware(agent.context.patterns, root, new Set(contextFiles.map(f => f.path)), { subdirectoryWalk: agent.context.subdirectoryWalk })
     middleware.afterToolExecution = append(middleware.afterToolExecution, discoveryMw)
   }
 

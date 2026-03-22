@@ -87,6 +87,52 @@ describe('createDiscoveryMiddleware', () => {
     rmSync(ext, { recursive: true, force: true })
   })
 
+  it('walks up from file dir to root when subdirectoryWalk is enabled', async () => {
+    // Create context files in both the immediate dir and an intermediate dir
+    const intermediate = join(tmp, 'src')
+    mkdirSync(intermediate, { recursive: true })
+    writeFileSync(join(intermediate, 'CLAUDE.md'), '# Src rules')
+    writeFileSync(join(subDir, 'CLAUDE.md'), '# Utils rules')
+
+    const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set(), { subdirectoryWalk: true })
+    const msgs: IMessage[] = [{ role: 'user', content: 'hi' }]
+    await mw(makeCtx(msgs, join(subDir, 'helpers.ts')))
+
+    // Should find both context files
+    expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Src rules'))).toBeTruthy()
+    expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Utils rules'))).toBeTruthy()
+  })
+
+  it('only checks immediate dir when subdirectoryWalk is disabled', async () => {
+    const intermediate = join(tmp, 'src')
+    mkdirSync(intermediate, { recursive: true })
+    writeFileSync(join(intermediate, 'CLAUDE.md'), '# Src rules')
+    writeFileSync(join(subDir, 'CLAUDE.md'), '# Utils rules')
+
+    const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set(), { subdirectoryWalk: false })
+    const msgs: IMessage[] = [{ role: 'user', content: 'hi' }]
+    await mw(makeCtx(msgs, join(subDir, 'helpers.ts')))
+
+    // Should find only the immediate dir's context file
+    expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Utils rules'))).toBeTruthy()
+    expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Src rules'))).toBeFalsy()
+  })
+
+  it('does not duplicate root context files already in initialPaths during walk', async () => {
+    const rootCtx = join(tmp, 'CLAUDE.md')
+    writeFileSync(rootCtx, '# Root')
+    writeFileSync(join(subDir, 'CLAUDE.md'), '# Utils')
+
+    const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set([rootCtx]), { subdirectoryWalk: true })
+    const msgs: IMessage[] = [{ role: 'user', content: 'hi' }]
+    await mw(makeCtx(msgs, join(subDir, 'helpers.ts')))
+
+    // Root context should NOT be re-added (it's in initialPaths)
+    expect(msgs.filter(m => typeof m.content === 'string' && m.content.includes('Root'))).toHaveLength(0)
+    // Utils context should be added
+    expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Utils'))).toBeTruthy()
+  })
+
   it('inserts after existing context-file messages', async () => {
     writeFileSync(join(subDir, 'CLAUDE.md'), '# Sub rules')
     const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())

@@ -55,20 +55,45 @@ async function scanDirs(dirs: string[], patterns: string[], root: string, exclud
 
 // ── Dynamic discovery middleware ─────────────────────────────────────
 
+/** Collect directories to scan for context files from a file path.
+ *  When `walk` is true, walks from the file's directory up to `root`,
+ *  returning every intermediate directory (excluding `root` itself,
+ *  since root-level files are already discovered at startup).
+ *  When `walk` is false, returns only the file's immediate directory. */
+function collectDirs(filePath: string, root: string, walk: boolean, checked: Set<string>): string[] {
+  const dirs: string[] = []
+  const start = dirname(filePath)
+  if (!walk) {
+    if (!checked.has(start)) { checked.add(start); dirs.push(start) }
+    return dirs
+  }
+  let current = start
+  const normalizedRoot = resolve(root)
+  while (true) {
+    if (!checked.has(current)) { checked.add(current); dirs.push(current) }
+    if (resolve(current) === normalizedRoot) break
+    const parent = resolve(current, '..')
+    if (parent === current) break // filesystem root
+    current = parent
+  }
+  return dirs
+}
+
 /** afterToolExecution middleware — discovers context files from directories the agent touches. */
 export function createDiscoveryMiddleware(
   patterns: string[], root: string, initialPaths: Set<string>,
+  options?: { subdirectoryWalk?: boolean },
 ): Middleware<ToolResultContext> {
   const seen = new Set(initialPaths)
   const checked = new Set<string>()
+  const walk = options?.subdirectoryWalk ?? true
 
   return async (ctx: ToolResultContext) => {
     const dirs: string[] = []
     try {
       for (const v of Object.values(JSON.parse(ctx.toolCall.arguments || '{}')))
         if (typeof v === 'string' && isAbsolute(v)) {
-          const d = dirname(v)
-          if (!checked.has(d)) { checked.add(d); dirs.push(d) }
+          dirs.push(...collectDirs(v, root, walk, checked))
         }
     } catch { /* skip */ }
     if (dirs.length === 0) return
