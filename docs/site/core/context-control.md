@@ -47,7 +47,7 @@ Enable extended thinking for models that support it. Five modes control how the 
 | `low` | Minimal reasoning budget |
 | `medium` | Moderate reasoning budget |
 | `high` | Maximum reasoning budget |
-| `adaptive` | `high` for the first 5 iterations, then `low` — balances deep initial reasoning with faster follow-up turns |
+| `adaptive` | `high` for the first 10 iterations, then `low` — balances deep initial reasoning with faster follow-up turns |
 
 ```bash
 ra --thinking high "Design a database schema for a social network"

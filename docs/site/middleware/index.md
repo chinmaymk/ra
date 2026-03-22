@@ -44,15 +44,18 @@ Available on all hooks via `ctx.loop` (or directly for loop-level hooks like `be
 ```ts
 {
   messages: IMessage[]     // full conversation history
-  iteration: number        // current loop iteration (0-indexed)
+  iteration: number        // current loop iteration (1-based during loop, 0 in beforeLoopBegin)
   maxIterations: number
   sessionId: string
   usage: {
     inputTokens: number
     outputTokens: number
   }
+  lastUsage: TokenUsage | undefined  // usage from the most recent model call
+  resumed: boolean                   // true if loaded from storage
   stop(): void
   signal: AbortSignal
+  logger: Logger
 }
 ```
 
@@ -84,7 +87,7 @@ Used by `onStreamChunk`. Fires for every chunk the model streams back.
     | { type: 'tool_call_start'; id: string; name: string }
     | { type: 'tool_call_delta'; id: string; argsDelta: string }
     | { type: 'tool_call_end'; id: string }
-    | { type: 'done'; usage?: { inputTokens: number; outputTokens: number } }
+  // Note: 'done' chunks are NOT passed through onStreamChunk middleware
   loop: LoopContext
 }
 ```
@@ -97,6 +100,7 @@ Used by `beforeToolExecution`. Fires before each tool is invoked.
 {
   toolCall: { id: string; name: string; arguments: string }
   loop: LoopContext
+  deny: (reason: string) => void  // reject this tool call without stopping the loop
 }
 ```
 
@@ -181,7 +185,7 @@ export default async (ctx) => {
 
 ## Timeout
 
-All hooks support a configurable timeout via `toolTimeout` (default: 30 seconds). If a middleware function exceeds the timeout, the loop continues without waiting.
+All hooks support a configurable timeout via `toolTimeout` (default: 120 seconds). If a middleware function exceeds the timeout, the loop continues without waiting.
 
 ## See also
 

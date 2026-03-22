@@ -44,7 +44,7 @@ Or in config:
 ```yaml
 agent:
   provider: anthropic
-  thinking: adaptive   # high for first 5 turns, then low
+  thinking: adaptive   # high for first 10 turns, then low
 ```
 
 ## Prompt caching
