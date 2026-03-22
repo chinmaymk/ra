@@ -184,8 +184,10 @@ export class Repl {
         async (ctx: ToolExecutionContext) => {
           if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
           const out = tuiState.streamBuf?.end(); if (out) process.stdout.write(out)
+          if (tuiState.boxOpened) process.stdout.write('\n')
           tui.stopSpinner(true)
           tuiState.boxOpened = false
+          tuiState.streamBuf = null
           tuiState.toolStartTimes.set(ctx.toolCall.id, Date.now())
           tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
         },
