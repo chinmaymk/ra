@@ -31,13 +31,25 @@ const filteredVersions = computed(() => {
   return versions.value.versions.filter(meetsMinVersion)
 })
 
-function versionUrl(version: string): string {
+function versionBase(version: string): string {
   if (version === 'dev') return `${SITE_ROOT}dev/`
   return `${SITE_ROOT}v/${version}/`
 }
 
+// Extract the page path after the version prefix, so switching versions
+// preserves the current page. e.g. /ra/dev/getting-started/install →
+// getting-started/install
+function currentPagePath(): string {
+  const path = window.location.pathname
+  // Match /ra/dev/..., /ra/v/x.y.z/..., or /ra/...
+  const match = path.match(/^\/ra\/(?:dev|v\/[^/]+)\/(.*)/) || path.match(/^\/ra\/(.*)/)
+  return match?.[1] || ''
+}
+
 function onChange() {
-  window.location.href = window.location.origin + versionUrl(currentVersion.value)
+  const base = versionBase(currentVersion.value)
+  const page = currentPagePath()
+  window.location.href = window.location.origin + base + page
 }
 
 onMounted(async () => {
