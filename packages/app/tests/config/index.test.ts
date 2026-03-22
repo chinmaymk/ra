@@ -475,6 +475,101 @@ describe('config edge cases', () => {
   })
 })
 
+describe('env var interpolation in config files', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-config-interp-${Date.now()}`)
+    mkdirSync(tmp, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('resolves ${VAR} in config file values', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'app:',
+      '  providers:',
+      '    anthropic:',
+      '      apiKey: "${MY_API_KEY}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { MY_API_KEY: 'sk-test-123' } })
+    expect(c.app.providers.anthropic.apiKey).toBe('sk-test-123')
+  })
+
+  it('resolves ${VAR:-default} with fallback when var is unset', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${MODEL:-claude-sonnet-4-6}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.model).toBe('claude-sonnet-4-6')
+  })
+
+  it('resolves ${VAR:-default} with env value when var is set', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${MODEL:-claude-sonnet-4-6}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { MODEL: 'gpt-4o' } })
+    expect(c.agent.model).toBe('gpt-4o')
+  })
+
+  it('resolves variables in MCP client env blocks', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'app:',
+      '  mcp:',
+      '    client:',
+      '      - name: github',
+      '        transport: stdio',
+      '        command: npx',
+      '        args: ["-y", "@modelcontextprotocol/server-github"]',
+      '        env:',
+      '          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { GITHUB_TOKEN: 'ghp_abc123' } })
+    expect(c.app.mcp.client[0]?.env?.GITHUB_PERSONAL_ACCESS_TOKEN).toBe('ghp_abc123')
+  })
+
+  it('throws when a required variable is missing', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'app:',
+      '  providers:',
+      '    anthropic:',
+      '      apiKey: "${REQUIRED_KEY}"',
+    ].join('\n'))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow(
+      'Environment variable "REQUIRED_KEY" is required but not set'
+    )
+  })
+
+  it('resolves ${VAR-default} keeping empty string when var is empty', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { model: '${EMPTY_VAR-fallback}' },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: { EMPTY_VAR: '' } })
+    expect(c.agent.model).toBe('')
+  })
+
+  it('leaves strings without ${} patterns untouched', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('anthropic')
+    expect(c.agent.model).toBe('claude-sonnet-4-6')
+  })
+
+  it('resolves multiple variables in one string', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { providers: { azure: { endpoint: 'https://${AZURE_HOST}:${AZURE_PORT}/v1' } } },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: { AZURE_HOST: 'myresource.openai.azure.com', AZURE_PORT: '443' } })
+    expect(c.app.providers.azure.endpoint).toBe('https://myresource.openai.azure.com:443/v1')
+  })
+})
+
 describe('legacy flat config migration', () => {
   let tmp: string
 

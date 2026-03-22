@@ -2,7 +2,7 @@ import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
-import { applyRule, type CoercionRule } from '../utils/config-helpers'
+import { applyRule, interpolateEnvVars, type CoercionRule } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
@@ -211,8 +211,12 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
 
-  const { config: fileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
+  const { config: rawFileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
   const configDir = configFilePath ? dirname(configFilePath) : cwd
+
+  // Resolve ${VAR}, ${VAR:-default}, ${VAR-default} in the file config
+  const fileConfig = interpolateEnvVars(rawFileConfig, env) as Partial<RaConfig>
+
   const envConfig = loadEnvVars(env)
   const cliArgs = options.cliArgs ?? {}
 
@@ -224,8 +228,12 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   }
 
   // defaults < file < env < CLI
-  // Deep clone defaults to prevent mutation of the shared defaultConfig object
-  const defaults = JSON.parse(JSON.stringify(defaultConfig)) as Record<string, unknown>
+  // Deep clone defaults to prevent mutation of the shared defaultConfig object,
+  // then interpolate ${VAR:-default} references in the defaults layer
+  const defaults = interpolateEnvVars(
+    JSON.parse(JSON.stringify(defaultConfig)),
+    env,
+  ) as Record<string, unknown>
   const merged = layers.reduce(
     (acc, layer) => deepMerge(acc, layer),
     defaults,
