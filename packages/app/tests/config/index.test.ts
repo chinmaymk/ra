@@ -20,7 +20,7 @@ describe('loadConfig', () => {
     const c = await loadConfig({ cwd: tmp, env: {} })
     expect(c.agent.provider).toBe('anthropic')
     expect(c.app.interface).toBe('repl')
-    expect(c.agent.maxIterations).toBe(50)
+    expect(c.agent.maxIterations).toBe(0)
     expect(c.agent.skillDirs).toEqual(['.claude/skills', '.agents/skills', '.opencode/skills'])
   })
 
@@ -454,7 +454,7 @@ describe('config edge cases', () => {
     writeFileSync(join(tmp, 'ra.config.json'), '{}')
     const c = await loadConfig({ cwd: tmp, env: {} })
     expect(c.agent.provider).toBe('anthropic')
-    expect(c.agent.maxIterations).toBe(50)
+    expect(c.agent.maxIterations).toBe(0)
   })
 
   it('unknown config keys in file are ignored', async () => {

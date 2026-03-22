@@ -39,9 +39,9 @@ export const defaultConfig: RaConfig = {
     provider: 'anthropic',
     model: 'claude-sonnet-4-6',
     systemPrompt: 'You are a helpful AI assistant.',
-    maxIterations: 50,
+    maxIterations: 0,
     maxRetries: 3,
-    toolTimeout: 30000,
+    toolTimeout: 120000,
     maxConcurrency: 4,
     parallelToolCalls: true,
     maxTokenBudget: 0,
@@ -71,7 +71,7 @@ export const defaultConfig: RaConfig = {
     },
     compaction: {
       enabled: true,
-      threshold: 0.80,
+      threshold: 0.70,
     },
     memory: {
       enabled: false,

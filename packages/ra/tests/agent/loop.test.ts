@@ -828,15 +828,15 @@ describe('AgentLoop', () => {
       expect(resolveThinking('high', 10)).toBe('high')
     })
 
-    it('returns high for adaptive in first 5 turns', () => {
-      for (let i = 1; i <= 5; i++) {
+    it('returns high for adaptive in first 10 turns', () => {
+      for (let i = 1; i <= 10; i++) {
         expect(resolveThinking('adaptive', i)).toBe('high')
       }
     })
 
-    it('returns low for adaptive after 5 turns', () => {
-      expect(resolveThinking('adaptive', 6)).toBe('low')
-      expect(resolveThinking('adaptive', 10)).toBe('low')
+    it('returns low for adaptive after 10 turns', () => {
+      expect(resolveThinking('adaptive', 11)).toBe('low')
+      expect(resolveThinking('adaptive', 20)).toBe('low')
       expect(resolveThinking('adaptive', 100)).toBe('low')
     })
   })
@@ -861,19 +861,19 @@ describe('AgentLoop', () => {
       chat: async () => ({ message: { role: 'assistant' as const, content: '' } }),
       async *stream(req: ChatRequest) {
         requests.push(req)
-        // Return tool calls for 6 iterations, then text to end the loop
-        if (requests.length < 7) { for (const c of toolChunks) yield c }
+        // Return tool calls for 11 iterations, then text to end the loop
+        if (requests.length < 12) { for (const c of toolChunks) yield c }
         else { yield { type: 'text' as const, delta: 'done' }; yield { type: 'done' as const } }
       },
     }
     const tools = new ToolRegistry()
     tools.register({ name: 'noop', description: '', inputSchema: {}, execute: async () => 'ok' })
-    const loop = new AgentLoop({ provider, tools, model: 'test', thinking: 'adaptive', maxIterations: 7 })
+    const loop = new AgentLoop({ provider, tools, model: 'test', thinking: 'adaptive', maxIterations: 12 })
     await loop.run([{ role: 'user', content: 'go' }])
 
-    for (let i = 0; i < 5; i++) expect(requests[i]?.thinking).toBe('high')
-    expect(requests[5]?.thinking).toBe('low')
-    expect(requests[6]?.thinking).toBe('low')
+    for (let i = 0; i < 10; i++) expect(requests[i]?.thinking).toBe('high')
+    expect(requests[10]?.thinking).toBe('low')
+    expect(requests[11]?.thinking).toBe('low')
   })
 
   it('passes thinkingBudgetCap to ChatRequest', async () => {
