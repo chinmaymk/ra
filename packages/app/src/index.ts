@@ -16,6 +16,25 @@ import { createSessionMiddleware } from './agent/session'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+/** Common AgentLoop options derived from agent config. Avoids repeating the same field mappings across launch sites. */
+function loopOptionsFrom(app: AppContext) {
+  const { agent } = app.config
+  return {
+    provider: app.provider,
+    tools: app.tools,
+    model: agent.model,
+    maxIterations: agent.maxIterations,
+    maxRetries: agent.maxRetries,
+    toolTimeout: agent.toolTimeout,
+    maxToolResponseSize: agent.tools.maxResponseSize,
+    parallelToolCalls: agent.parallelToolCalls,
+    tokenBudget: agent.tokenBudget,
+    maxDuration: agent.maxDuration,
+    thinking: agent.thinking,
+    compaction: agent.compaction,
+  }
+}
+
 async function readStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined
   const chunks: Buffer[] = []
@@ -102,18 +121,8 @@ function createMcpHandler(app: AppContext) {
       logger: app.logger,
     })
     const loop = new AgentLoop({
-      provider: app.provider,
-      tools: app.tools,
-      model: app.config.agent.model,
-      maxIterations: app.config.agent.maxIterations,
-      maxRetries: app.config.agent.maxRetries,
-      toolTimeout: app.config.agent.toolTimeout,
-      maxToolResponseSize: app.config.agent.tools.maxResponseSize,
-      parallelToolCalls: app.config.agent.parallelToolCalls,
-      tokenBudget: app.config.agent.tokenBudget,
-      maxDuration: app.config.agent.maxDuration,
+      ...loopOptionsFrom(app),
       middleware: loopSession.middleware,
-      compaction: app.config.agent.compaction,
       logger: loopSession.logger,
       sessionId: session.id,
     })
@@ -167,22 +176,12 @@ async function launchCli(parsed: ReturnType<typeof parseArgs>, app: AppContext):
     app.logger.info('resuming session', { sessionId: app.sessionId, messageCount: sessionMessages.length })
   }
   await runCli({
+    ...loopOptionsFrom(app),
     prompt: parsed.meta.prompt as string,
     files: parsed.meta.files,
     systemPrompt: app.config.agent.systemPrompt,
-    model: app.config.agent.model,
-    provider: app.provider,
-    tools: app.tools,
     skillIndex: app.skillIndex,
-    maxIterations: app.config.agent.maxIterations,
-    maxRetries: app.config.agent.maxRetries,
-    maxToolResponseSize: app.config.agent.tools.maxResponseSize,
-    parallelToolCalls: app.config.agent.parallelToolCalls,
-    tokenBudget: app.config.agent.tokenBudget,
-    maxDuration: app.config.agent.maxDuration,
     middleware: app.middleware,
-    thinking: app.config.agent.thinking,
-    compaction: app.config.agent.compaction,
     contextMessages: app.contextMessages,
     sessionMessages,
     logger: app.logger,
@@ -200,24 +199,13 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
   const stopMcpHttp = await startSidecarMcp(app)
 
   const httpServer = new HttpServer({
+    ...loopOptionsFrom(app),
     port: app.config.app.http.port,
     token: app.config.app.http.token || undefined,
-    model: app.config.agent.model,
-    provider: app.provider,
-    tools: app.tools,
     storage: app.storage,
     systemPrompt: app.config.agent.systemPrompt,
     skillIndex: app.skillIndex,
-    maxIterations: app.config.agent.maxIterations,
-    maxRetries: app.config.agent.maxRetries,
-    toolTimeout: app.config.agent.toolTimeout,
-    maxToolResponseSize: app.config.agent.tools.maxResponseSize,
-    parallelToolCalls: app.config.agent.parallelToolCalls,
-    tokenBudget: app.config.agent.tokenBudget,
-    maxDuration: app.config.agent.maxDuration,
     middleware: app.middleware,
-    thinking: app.config.agent.thinking,
-    compaction: app.config.agent.compaction,
     contextMessages: app.contextMessages,
     logger: app.logger,
     logsEnabled: app.config.app.logsEnabled,
@@ -241,24 +229,13 @@ async function launchRepl(app: AppContext): Promise<void> {
   const stopMcpHttp = await startSidecarMcp(app)
 
   const repl = new Repl({
-    model: app.config.agent.model,
-    provider: app.provider,
-    tools: app.tools,
+    ...loopOptionsFrom(app),
     storage: app.storage,
     systemPrompt: app.config.agent.systemPrompt,
     skillIndex: app.skillIndex,
-    maxIterations: app.config.agent.maxIterations,
-    maxRetries: app.config.agent.maxRetries,
-    toolTimeout: app.config.agent.toolTimeout,
-    maxToolResponseSize: app.config.agent.tools.maxResponseSize,
-    parallelToolCalls: app.config.agent.parallelToolCalls,
-    tokenBudget: app.config.agent.tokenBudget,
-    maxDuration: app.config.agent.maxDuration,
     sessionId: app.sessionId,
     resumed: app.resumed,
     middleware: app.middleware,
-    thinking: app.config.agent.thinking,
-    compaction: app.config.agent.compaction,
     contextMessages: app.contextMessages,
     memoryStore: app.memoryStore,
     logger: app.logger,
