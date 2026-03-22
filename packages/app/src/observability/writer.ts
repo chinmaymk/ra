@@ -4,7 +4,7 @@ import { appendFile } from 'node:fs/promises'
 export class JsonlWriter {
   private output: 'stderr' | 'stdout' | 'file'
   private filePath: string | undefined
-  private pending: Promise<void>[] = []
+  private tail: Promise<void> = Promise.resolve()
 
   constructor(output: 'stderr' | 'stdout' | 'file', filePath?: string) {
     this.output = output
@@ -16,7 +16,7 @@ export class JsonlWriter {
   write(data: unknown): void {
     const line = JSON.stringify(data) + '\n'
     if (this.filePath) {
-      this.pending.push(appendFile(this.filePath, line))
+      this.tail = this.tail.then(() => appendFile(this.filePath!, line))
     } else if (this.output === 'stdout') {
       process.stdout.write(line)
     } else {
@@ -25,8 +25,6 @@ export class JsonlWriter {
   }
 
   async flush(): Promise<void> {
-    const inflight = this.pending
-    this.pending = []
-    await Promise.all(inflight)
+    await this.tail
   }
 }

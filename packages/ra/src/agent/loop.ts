@@ -74,6 +74,7 @@ export class AgentLoop {
   private maxRetries: number
   private maxToolResponseSize: number
   private resumed: boolean
+
   private externalAbort: AbortController | null = null
 
   constructor(options: AgentLoopOptions) {
@@ -86,10 +87,11 @@ export class AgentLoop {
     this.thinking = options.thinking
     this.toolTimeout = options.toolTimeout ?? 0
     this.logger = options.logger ?? new NoopLogger()
+    this.resumed = options.resumed ?? false
     this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
-    this.resumed = options.resumed ?? false
+
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
