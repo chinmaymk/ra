@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { withBase } from 'vitepress'
 
 declare const __DOCS_VERSION__: string
 
@@ -34,17 +35,16 @@ const displayLabel = computed(() => {
 })
 
 function versionUrl(version: string): string {
-  const base = '/ra/'
-  if (versions.value && version === versions.value.latest) return base
-  return `${base}v/${version}/`
+  if (versions.value && version === versions.value.latest) return withBase('/')
+  return withBase(`/v/${version}/`)
 }
 
 onMounted(async () => {
   try {
-    const res = await fetch('/ra/versions.json')
+    const res = await fetch(withBase('/versions.json'))
     if (res.ok) versions.value = await res.json()
   } catch {
-    // versions.json unavailable (local dev) — picker shows current only
+    // versions.json unavailable — picker shows current version only
   }
 })
 
@@ -58,18 +58,18 @@ function close() {
 </script>
 
 <template>
-  <div class="version-picker" v-if="versions" @mouseleave="close">
-    <button class="version-picker-button" @click="toggle">
+  <div class="version-picker" @mouseleave="close">
+    <button class="version-picker-button" @click="toggle" :disabled="!versions">
       {{ displayLabel }}
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <svg v-if="versions" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
         <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
-    <div class="version-picker-menu" v-show="open">
+    <div class="version-picker-menu" v-show="open && versions">
       <a
         v-if="currentVersion !== 'dev'"
         class="version-picker-item"
-        href="/ra/dev/"
+        :href="withBase('/dev/')"
       >dev</a>
       <a
         v-for="v in filteredVersions"
@@ -105,9 +105,14 @@ function close() {
   line-height: 28px;
 }
 
-.version-picker-button:hover {
+.version-picker-button:hover:not(:disabled) {
   border-color: var(--vp-c-brand-1);
   color: var(--vp-c-text-1);
+}
+
+.version-picker-button:disabled {
+  cursor: default;
+  opacity: 0.7;
 }
 
 .version-picker-menu {
