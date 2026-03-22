@@ -84,6 +84,7 @@ export default defineConfig({
           { text: 'HTTP API', link: '/api/' },
           { text: 'Recipes', link: '/recipes/' },
           { text: 'Dynamic Prompts', link: '/recipes/dynamic-prompts' },
+          { text: 'Recipe & Skill Registries', link: '/recipes/registries' },
         ],
       },
     ],

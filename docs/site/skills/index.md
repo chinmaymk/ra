@@ -119,25 +119,25 @@ agent:
 
 ## Installing skills from registries
 
-ra can download skills from npm, GitHub, or URLs and store them in `~/.ra/skills`.
+ra can download skills from GitHub, npm, or URLs and store them in `~/.ra/skills`.
+
+### Install from GitHub
+
+```bash
+ra skill install user/ra-skill-review          # bare name (default: GitHub)
+ra skill install github:user/ra-skill-review   # explicit GitHub prefix
+```
+
+Downloads the default branch and looks for skill directories within.
 
 ### Install from npm
 
 ```bash
-ra skill install code-review                  # bare package name
 ra skill install npm:ra-skill-lint            # explicit npm prefix
 ra skill install npm:ra-skill-lint@1.2.3      # specific version
 ```
 
 **Package convention:** Packages can either have a `SKILL.md` at their root, or contain one or more skill subdirectories (each with its own `SKILL.md`). The `ra-skill-` prefix in the package name is stripped when naming the installed skill directory.
-
-### Install from GitHub
-
-```bash
-ra skill install github:user/ra-skill-review
-```
-
-Downloads the default branch and looks for skill directories within.
 
 ### Install from URL
 
