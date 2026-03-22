@@ -43,4 +43,4 @@ registry.register(myTool())
 - Return strings when possible (objects get `JSON.stringify()`'d)
 - Thrown errors become tool results with `isError: true`
 - Tools are subject to `toolTimeout` (default 30s)
-- All tools are exposed when ra runs as MCP server
+- All built-in tools are exposed when ra runs as MCP server
