@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { withBase } from 'vitepress'
 
 declare const __DOCS_VERSION__: string
@@ -12,6 +12,7 @@ interface VersionsData {
 const currentVersion = __DOCS_VERSION__
 const versions = ref<VersionsData | null>(null)
 const open = ref(false)
+const picker = ref<HTMLElement | null>(null)
 
 const MIN_VERSION = [0, 0, 5] as const
 
@@ -50,19 +51,26 @@ onMounted(async () => {
   } catch {
     // versions.json unavailable — picker shows current version only
   }
+  document.addEventListener('click', onClickOutside)
 })
+
+onUnmounted(() => {
+  document.removeEventListener('click', onClickOutside)
+})
+
+function onClickOutside(e: MouseEvent) {
+  if (picker.value && !picker.value.contains(e.target as Node)) {
+    open.value = false
+  }
+}
 
 function toggle() {
   if (hasMenu.value) open.value = !open.value
 }
-
-function close() {
-  open.value = false
-}
 </script>
 
 <template>
-  <div class="version-picker" @mouseleave="close">
+  <div class="version-picker" ref="picker">
     <button class="version-picker-button" @click="toggle" :class="{ interactive: hasMenu }">
       {{ displayLabel }}
       <svg v-if="hasMenu" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -120,7 +128,7 @@ function close() {
 
 .version-picker-menu {
   position: absolute;
-  top: calc(100% + 4px);
+  top: 100%;
   right: 0;
   min-width: 100%;
   max-height: 240px;
@@ -129,6 +137,7 @@ function close() {
   border: 1px solid var(--vp-c-border);
   border-radius: 8px;
   padding: 4px;
+  margin-top: 4px;
   z-index: 100;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
