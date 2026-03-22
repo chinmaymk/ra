@@ -44,6 +44,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
 
   return {
     name: 'Agent',
+    timeout: 300_000,
     description:
       'Fork parallel copies of yourself to work on independent tasks simultaneously. ' +
       'Each fork inherits your tools, model, and system prompt but gets a fresh conversation. ' +

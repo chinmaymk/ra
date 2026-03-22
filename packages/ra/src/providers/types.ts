@@ -34,6 +34,8 @@ export interface ITool {
   description: string
   inputSchema: Record<string, unknown>
   execute(input: unknown): Promise<unknown>
+  /** Per-tool timeout in ms. Overrides the global toolTimeout when set. */
+  timeout?: number
 }
 
 export interface TokenUsage {
