@@ -29,16 +29,15 @@ async function resolveMessage(
   idx: number,
   resolvers: PatternResolver[],
   cwd: string,
-): Promise<{ resolved: boolean; refCount: number; refs: { original: string; resolver: string; contentLength: number }[] }> {
+): Promise<{ resolved: boolean; refCount: number }> {
   const msg = messages[idx]
-  const empty = { resolved: false, refCount: 0, refs: [] }
-  if (!msg) return empty
+  if (!msg) return { resolved: false, refCount: 0 }
 
   const text = extractResolvableText(msg.content)
-  if (!text) return empty
+  if (!text) return { resolved: false, refCount: 0 }
 
   const result = await resolvePatterns(text, resolvers, cwd)
-  if (result.references.length === 0) return empty
+  if (result.references.length === 0) return { resolved: false, refCount: 0 }
 
   const resolved = formatResolvedReferences(result.references)
 
@@ -54,12 +53,7 @@ async function resolveMessage(
       content: [...(msg.content as ContentPart[]), { type: 'text', text: `\n\n${resolved}${RESOLVED_MARKER}` }],
     }
   }
-  const refs = result.references.map(r => ({
-    original: r.original,
-    resolver: r.resolver,
-    contentLength: r.resolved.length,
-  }))
-  return { resolved: true, refCount: result.references.length, refs }
+  return { resolved: true, refCount: result.references.length }
 }
 
 /**
@@ -82,12 +76,11 @@ export function createResolverMiddleware(
     // Resolve system prompt messages
     for (let i = 0; i < messages.length; i++) {
       if (messages[i]?.role === 'system') {
-        const { resolved, refCount, refs } = await resolveMessage(messages, i, resolvers, cwd)
+        const { resolved, refCount } = await resolveMessage(messages, i, resolvers, cwd)
         if (resolved) {
           logger.info('pattern resolved in system message', {
             messageIndex: i,
             referenceCount: refCount,
-            references: refs,
           })
         }
       }
@@ -103,12 +96,11 @@ export function createResolverMiddleware(
     }
     if (lastUserIdx === -1) return
 
-    const { resolved, refCount, refs } = await resolveMessage(messages, lastUserIdx, resolvers, cwd)
+    const { resolved, refCount } = await resolveMessage(messages, lastUserIdx, resolvers, cwd)
     if (resolved) {
       logger.info('pattern resolved in user message', {
         messageIndex: lastUserIdx,
         referenceCount: refCount,
-        references: refs,
       })
     }
   }
