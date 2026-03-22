@@ -241,21 +241,27 @@ export async function runCron(options: CronRunnerOptions): Promise<void> {
   let jobsRun = 0
   let jobsFailed = 0
 
+  // setTimeout max safe delay is 2^31 - 1 ms (~24.8 days).
+  // For far-future jobs, we sleep in capped intervals and re-check.
+  const MAX_TIMEOUT_MS = 2_147_483_647
+
   while (!signal?.aborted) {
     scheduled.sort((a, b) => a.nextRun.getTime() - b.nextRun.getTime())
     const next = scheduled[0] as ScheduledJob
-    const delay = Math.max(0, next.nextRun.getTime() - Date.now())
+    let delay = Math.max(0, next.nextRun.getTime() - Date.now())
 
-    if (delay > 0) {
+    while (delay > 0 && !signal?.aborted) {
+      const sleepMs = Math.min(delay, MAX_TIMEOUT_MS)
       logger.debug('cron scheduler sleeping', {
         nextJob: next.job.name,
-        delayMs: delay,
+        delayMs: sleepMs,
         nextRun: next.nextRun.toISOString(),
       })
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, delay)
+        const timer = setTimeout(resolve, sleepMs)
         signal?.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true })
       })
+      delay = Math.max(0, next.nextRun.getTime() - Date.now())
     }
 
     if (signal?.aborted) break

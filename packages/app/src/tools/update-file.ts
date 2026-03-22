@@ -31,7 +31,8 @@ export function updateFileTool(options?: EditToolOptions): ITool {
       if (!content.includes(old_string)) {
         throw new Error(`old_string not found in ${path}. Make sure the string matches exactly, including whitespace and indentation.`)
       }
-      const updated = content.replace(old_string, new_string)
+      const idx = content.indexOf(old_string)
+      const updated = content.slice(0, idx) + new_string + content.slice(idx + old_string.length)
       await writeFile(path, updated, 'utf-8')
       return `File updated: ${path}`
     },

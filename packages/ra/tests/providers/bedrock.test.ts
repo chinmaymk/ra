@@ -294,6 +294,7 @@ describe('BedrockProvider - stream()', () => {
       stream: (async function* () {
         yield { contentBlockStart: { start: { toolUse: { toolUseId: 'tc_1', name: 'Read' } } } }
         yield { contentBlockDelta: { delta: { toolUse: { input: '{"path":"x"}' } } } }
+        yield { contentBlockStop: {} }
         yield { messageStop: {} }
       })(),
     })
@@ -304,6 +305,7 @@ describe('BedrockProvider - stream()', () => {
     }
     expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'Read' })
     expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"x"}' })
+    expect(chunks[2]).toEqual({ type: 'tool_call_end', id: 'tc_1' })
   })
 
   it('yields thinking deltas from reasoningContent events', async () => {

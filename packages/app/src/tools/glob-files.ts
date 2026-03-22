@@ -27,8 +27,13 @@ export function globFilesTool(options?: GlobToolOptions): ITool {
       if (rootDir) assertWithinRoot(path, rootDir)
       const glob = new Glob(pattern)
       const results: string[] = []
-      for await (const file of glob.scan({ cwd: path, dot: false })) {
-        results.push(file)
+      try {
+        for await (const file of glob.scan({ cwd: path, dot: false })) {
+          results.push(file)
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        throw new Error(`Failed to scan "${path}" with pattern "${pattern}": ${message}`)
       }
       results.sort()
       return results.length ? results.join('\n') : `No files found matching "${pattern}"`
