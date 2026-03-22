@@ -49,7 +49,11 @@ agent:
 
 ## Prompt caching
 
-ra automatically applies cache hints to system prompts and tool definitions when using Anthropic. This reduces costs on multi-turn sessions without any configuration needed. Cached tokens are billed at a reduced rate — especially beneficial for sessions with large system prompts or many tools.
+ra automatically places `cache_control: ephemeral` breakpoints on system prompts, tool definitions, and the last user message. This means the entire conversation prefix is cached across iterations — cached input tokens are 10x cheaper than uncached.
+
+No configuration needed. Cache stats (read/write tokens) are tracked per-iteration and visible in session traces.
+
+See [Context Control — Prompt caching](/core/context-control#prompt-caching) for details.
 
 ## Custom base URL
 

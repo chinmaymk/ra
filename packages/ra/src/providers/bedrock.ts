@@ -7,7 +7,7 @@ import {
   type Tool as BedrockTool,
   type ToolInputSchema,
 } from '@aws-sdk/client-bedrock-runtime'
-import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, DEFAULT_MAX_TOKENS } from './utils'
+import { extractSystemMessages, extractUsage, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, DEFAULT_MAX_TOKENS } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 
@@ -32,7 +32,7 @@ export class BedrockProvider implements IProvider {
     return {
       modelId: request.model,
       messages: this.mapMessages(filtered),
-      ...(system && { system: [{ text: system }] }),
+      ...(system && { system: [{ text: system }, { cachePoint: { type: 'default' } }] as unknown as Array<{ text: string }> }),
       ...(request.tools?.length && { toolConfig: { tools: this.mapTools(request.tools) } }),
       inferenceConfig: { maxTokens: (request.providerOptions?.maxTokens as number) ?? DEFAULT_MAX_TOKENS },
       ...(request.thinking && {
@@ -45,10 +45,12 @@ export class BedrockProvider implements IProvider {
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const response = await this.client.send(new ConverseCommand(this.buildParams(request)))
-    const usage: TokenUsage = {
-      inputTokens: response.usage?.inputTokens ?? 0,
-      outputTokens: response.usage?.outputTokens ?? 0,
-    }
+    const usage = extractUsage(response.usage, {
+      inputTokens: 'inputTokens',
+      outputTokens: 'outputTokens',
+      cacheReadTokens: 'cacheReadInputTokenCount',
+      cacheCreationTokens: 'cacheWriteInputTokenCount',
+    })
     return { message: this.mapResponseToMessage(response.output?.message), usage }
   }
 
@@ -75,7 +77,12 @@ export class BedrockProvider implements IProvider {
       } else if (event.contentBlockDelta?.delta?.reasoningContent?.text) {
         yield { type: 'thinking', delta: event.contentBlockDelta.delta.reasoningContent.text }
       } else if (event.metadata?.usage) {
-        usage = { inputTokens: event.metadata.usage.inputTokens ?? 0, outputTokens: event.metadata.usage.outputTokens ?? 0 }
+        usage = extractUsage(event.metadata.usage, {
+          inputTokens: 'inputTokens',
+          outputTokens: 'outputTokens',
+          cacheReadTokens: 'cacheReadInputTokenCount',
+          cacheCreationTokens: 'cacheWriteInputTokenCount',
+        })
       } else if (event.messageStop) {
         emittedDone = true
         yield { type: 'done', usage }
@@ -97,7 +104,7 @@ export class BedrockProvider implements IProvider {
         if (typeof msg.content === 'string' && msg.content) content.push({ text: msg.content })
         else if (Array.isArray(msg.content)) content.push(...this.mapContentParts(msg.content))
         for (const tc of msg.toolCalls) {
-          content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: parseToolArguments(tc.arguments) as unknown as Record<string, never> } })
+          content.push({ toolUse: { toolUseId: tc.id, name: tc.name, input: parseToolArguments(tc.arguments) as Record<string, never> } })
         }
         return { role: 'assistant', content }
       }
@@ -108,7 +115,21 @@ export class BedrockProvider implements IProvider {
         : { role, content: this.mapContentParts(msg.content) }
     })
     // Merge consecutive same-role messages (required for alternating-turn APIs)
-    return mergeConsecutive(mapped, (a, b) => { a.content = (a.content ?? []).concat(b.content ?? []) })
+    const merged = mergeConsecutive(mapped, (a, b) => { a.content = (a.content ?? []).concat(b.content ?? []) })
+    // Add cache breakpoints on the last two user turns for rolling cache hits
+    this.addConversationCacheBreakpoints(merged)
+    return merged
+  }
+
+  /** Place cachePoint blocks on the last two user-role messages. */
+  private addConversationCacheBreakpoints(messages: BedrockMessage[]): void {
+    let marked = 0
+    for (let i = messages.length - 1; i >= 0 && marked < 2; i--) {
+      const msg = messages[i]!
+      if (msg.role !== 'user' || !msg.content) continue
+      msg.content.push({ cachePoint: { type: 'default' } } as unknown as ContentBlock)
+      marked++
+    }
   }
 
   mapTools(tools: ITool[]): BedrockTool[] {

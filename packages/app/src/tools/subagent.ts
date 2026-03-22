@@ -86,6 +86,10 @@ export function subagentTool(options: SubagentToolOptions): ITool {
         childTools.register(subagentTool({ ...options, tools: childTools, _depth: depth + 1 }))
       }
 
+      // Track all child loops so we can abort them on timeout
+      const childLoops: AgentLoop[] = []
+      const abortChildren = () => { for (const loop of childLoops) loop.abort() }
+
       const loopOptions: AgentLoopOptions = {
         provider: options.provider,
         tools: childTools,
@@ -98,41 +102,53 @@ export function subagentTool(options: SubagentToolOptions): ITool {
         logger: options.logger,
       }
 
-      const results = await Promise.all(tasks.map(async ({ task }) => {
-        const messages: IMessage[] = []
-        if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt })
-        messages.push({ role: 'user', content: task })
-
-        try {
-          const result = await new AgentLoop(loopOptions).run(messages)
-          const last = result.messages.findLast(m => m.role === 'assistant')
-          return {
-            task,
-            status: 'completed' as const,
-            result: last ? serializeContent(last.content) : '(no response)',
-            iterations: result.iterations,
-            usage: result.usage,
-          }
-        } catch (err) {
-          return {
-            task,
-            status: 'error' as const,
-            result: errorMessage(err),
-            iterations: 0,
-            usage: { inputTokens: 0, outputTokens: 0 } as TokenUsage,
-          }
-        }
-      }))
-
-      // Compute aggregate usage for parent rollup
       const totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
-      for (const r of results) accumulateUsage(totalUsage, r.usage)
 
-      const completed = results.filter(r => r.status === 'completed').length
-      const errored = results.filter(r => r.status === 'error').length
-      logger.info('subagent tasks finished', { taskCount: tasks.length, completed, errored, inputTokens: totalUsage.inputTokens, outputTokens: totalUsage.outputTokens })
+      // Set a deadline to abort child loops matching the Agent tool's own timeout.
+      // Without this, child loops keep running (and billing) even after the parent moves on.
+      let deadline: ReturnType<typeof setTimeout> | undefined
+      deadline = setTimeout(abortChildren, 300_000)
 
-      return { results, usage: totalUsage }
+      try {
+        const results = await Promise.all(tasks.map(async ({ task }) => {
+          const messages: IMessage[] = []
+          if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt })
+          messages.push({ role: 'user', content: task })
+
+          const loop = new AgentLoop(loopOptions)
+          childLoops.push(loop)
+          try {
+            const result = await loop.run(messages)
+            accumulateUsage(totalUsage, result.usage)
+            const last = result.messages.findLast(m => m.role === 'assistant')
+            return {
+              task,
+              status: 'completed' as const,
+              result: last ? serializeContent(last.content) : '(no response)',
+              iterations: result.iterations,
+              usage: result.usage,
+            }
+          } catch (err) {
+            return {
+              task,
+              status: 'error' as const,
+              result: errorMessage(err),
+              iterations: 0,
+              usage: { inputTokens: 0, outputTokens: 0 } as TokenUsage,
+            }
+          }
+        }))
+
+        const completed = results.filter(r => r.status === 'completed').length
+        const errored = results.filter(r => r.status === 'error').length
+        logger.info('subagent tasks finished', { taskCount: tasks.length, completed, errored, inputTokens: totalUsage.inputTokens, outputTokens: totalUsage.outputTokens })
+
+        return { results, usage: totalUsage }
+      } finally {
+        if (deadline) clearTimeout(deadline)
+        // Abort any still-running child loops (e.g. if one task threw and Promise.all rejected)
+        abortChildren()
+      }
     },
   }
 }

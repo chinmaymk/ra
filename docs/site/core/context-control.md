@@ -23,19 +23,54 @@ Key properties:
 
 ## Token tracking
 
-ra tracks input and output tokens across every iteration of the loop. Your middleware can read cumulative usage via `ctx.loop.usage` and enforce budgets, log costs, or trigger compaction early.
+ra tracks input, output, and cache tokens across every iteration of the loop. Your middleware can read cumulative usage via `ctx.loop.usage` and enforce budgets, log costs, or trigger compaction early.
 
 ```ts
 // middleware/log-cost.ts
 export default async (ctx) => {
-  const { inputTokens, outputTokens } = ctx.loop.usage
-  console.log(`Tokens used: ${inputTokens} in, ${outputTokens} out`)
+  const { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens } = ctx.loop.usage
+  console.log(`Tokens: ${inputTokens} in, ${outputTokens} out, ${cacheReadTokens ?? 0} cache read`)
 }
 ```
 
 ## Prompt caching
 
-For Anthropic, ra automatically applies cache hints to system prompts and tool definitions. This reduces costs on multi-turn sessions without any configuration — cached tokens are billed at a reduced rate.
+ra automatically applies prompt caching for providers that support it. Cached tokens are served from the provider's cache instead of being re-processed, reducing both cost and latency — with zero configuration.
+
+### How it works
+
+On each model call, ra places cache breakpoints at three positions:
+
+1. **System prompt** — Cached so your instructions aren't re-processed every turn.
+2. **Tool definitions** — Cached so tool schemas (often the largest part of the request) are read from cache.
+3. **Last user/tool message** — Cached so the entire conversation prefix is reused on the next iteration. This is the biggest win for agentic loops, where the model is called repeatedly with a growing message history.
+
+On iteration 1, the full request is processed and written to cache. On iterations 2+, the provider reads the cached prefix and only processes the new messages — typically just the last tool result.
+
+### Provider support
+
+| Provider | Mechanism | Automatic |
+|----------|-----------|-----------|
+| **Anthropic** | `cache_control: ephemeral` on content blocks | Yes |
+| **Bedrock** | `cachePoint` blocks (Claude models) | Yes |
+| **OpenAI / Azure** | Automatic prefix caching (no opt-in needed) | Yes |
+| **Google** | Not yet supported | — |
+| **Ollama** | Not applicable | — |
+
+### Token tracking
+
+ra tracks cache hit/miss tokens separately. Use `ctx.loop.usage` in middleware to see the breakdown:
+
+```ts
+export default async (ctx) => {
+  const { inputTokens, cacheReadTokens, cacheCreationTokens } = ctx.loop.usage
+  // cacheReadTokens — tokens served from cache (cheap)
+  // cacheCreationTokens — tokens written to cache on first call
+  // inputTokens — total input tokens (includes cached)
+}
+```
+
+Cache stats are also visible in session traces and the inspector UI (`ra inspect`).
 
 ## Extended thinking
 

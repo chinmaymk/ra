@@ -28,12 +28,37 @@ export function mergeConsecutiveRoles<T extends { role: string; content: unknown
   })
 }
 
+/** Safely extract token usage from any object with numeric properties, returns zero defaults. */
+export function extractUsage(usage: unknown, propertyNames: {
+  inputTokens?: string;
+  outputTokens?: string;
+  cacheReadTokens?: string;
+  cacheCreationTokens?: string;
+}): TokenUsage {
+  if (!usage || typeof usage !== 'object') {
+    return { inputTokens: 0, outputTokens: 0 }
+  }
+  const obj = usage as Record<string, unknown>
+  return {
+    inputTokens: (obj[propertyNames.inputTokens ?? 'inputTokens'] as number) ?? 0,
+    outputTokens: (obj[propertyNames.outputTokens ?? 'outputTokens'] as number) ?? 0,
+    ...(((obj[propertyNames.cacheReadTokens ?? 'cacheReadTokens'] as number) ?? 0) > 0 && { cacheReadTokens: obj[propertyNames.cacheReadTokens ?? 'cacheReadTokens'] as number }),
+    ...(((obj[propertyNames.cacheCreationTokens ?? 'cacheCreationTokens'] as number) ?? 0) > 0 && { cacheCreationTokens: obj[propertyNames.cacheCreationTokens ?? 'cacheCreationTokens'] as number }),
+  }
+}
+
 /** Accumulate source token usage into target (mutates target) */
 export function accumulateUsage(target: TokenUsage, source: TokenUsage): void {
   target.inputTokens += source.inputTokens
   target.outputTokens += source.outputTokens
   if (source.thinkingTokens) {
     target.thinkingTokens = (target.thinkingTokens ?? 0) + source.thinkingTokens
+  }
+  if (source.cacheReadTokens) {
+    target.cacheReadTokens = (target.cacheReadTokens ?? 0) + source.cacheReadTokens
+  }
+  if (source.cacheCreationTokens) {
+    target.cacheCreationTokens = (target.cacheCreationTokens ?? 0) + source.cacheCreationTokens
   }
 }
 

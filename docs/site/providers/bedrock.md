@@ -49,6 +49,14 @@ Use the full Bedrock model ID:
 ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Triage this bug"
 ```
 
+## Prompt caching
+
+ra automatically adds `cachePoint` blocks to system prompts and the last user message when using Claude models on Bedrock. This caches the conversation prefix across iterations, reducing both cost and latency.
+
+No configuration needed. Cache stats are tracked per-iteration and visible in session traces.
+
+See [Context Control — Prompt caching](/core/context-control#prompt-caching) for details.
+
 ## Extended thinking
 
 Supported levels: `low`, `medium`, `high`.

@@ -43,6 +43,10 @@ function emptyMiddleware(): MiddlewareConfig {
   }
 }
 
+function hasUsage(value: unknown): value is { usage: TokenUsage } {
+  return value !== null && typeof value === 'object' && 'usage' in value && value.usage instanceof Object
+}
+
 const DEFAULT_MAX_ITERATIONS = 10
 const DEFAULT_MAX_RETRIES = 3
 const MAX_COMPACTION_RETRIES = 3
@@ -214,9 +218,8 @@ export class AgentLoop {
                 this.logger.warn('tool output truncated', { tool: tc.name, toolCallId: tc.id, originalLength, maxChars: this.maxToolResponseSize })
               }
               // Roll up child usage (e.g. from subagent tool) into parent totals
-              if (value && typeof value === 'object' && 'usage' in value) {
-                const childUsage = (value as { usage: TokenUsage }).usage
-                if (childUsage) accumulateUsage(usage, childUsage)
+              if (hasUsage(value)) {
+                if (value.usage) accumulateUsage(usage, value.usage)
               }
             } catch (err) {
               isError = true
