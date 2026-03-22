@@ -39,7 +39,7 @@ generateVersionsJson()
 export default defineConfig({
   title: 'ra',
   description: 'The predictable, observable agent harness.',
-  base: '/ra/',
+  base: process.env.DOCS_BASE || '/ra/',
   appearance: 'dark',
   vite: {
     define: {

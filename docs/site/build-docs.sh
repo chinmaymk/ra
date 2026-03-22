@@ -40,17 +40,10 @@ DOCS_VERSION="${LATEST:-dev}" bun vitepress build "$SITE_DIR"
 
 # ── Build dev docs ────────────────────────────────────────────────────
 echo "Building dev docs..."
-DEV_CONFIG="$SITE_DIR/.vitepress/config.dev.ts"
-cat > "$DEV_CONFIG" << 'EOF'
-import config from './config'
-import { defineConfig } from 'vitepress'
-export default defineConfig({ ...config, base: '/ra/dev/' })
-EOF
-
 DEV_DIST=$(mktemp -d)
-DOCS_VERSION="dev" bun vitepress build "$SITE_DIR" --config "$DEV_CONFIG"
+DOCS_VERSION="dev" DOCS_BASE="/ra/dev/" bun vitepress build "$SITE_DIR"
 cp -r "$DIST_DIR/"* "$DEV_DIST/"
-rm -rf "$DIST_DIR" "$DEV_CONFIG"
+rm -rf "$DIST_DIR"
 
 # Restore root build, then add dev under /dev/
 DOCS_VERSION="${LATEST:-dev}" bun vitepress build "$SITE_DIR"
@@ -88,13 +81,7 @@ for tag in $TAGS; do
   cp -r "$SITE_DIR/.vitepress/theme" "$TAG_DIR/docs/site/.vitepress/theme"
   cp "$SITE_DIR/.vitepress/config.ts" "$TAG_DIR/docs/site/.vitepress/config.ts"
 
-  cat > "$TAG_DIR/docs/site/.vitepress/config.version.ts" << VCONF
-import config from './config'
-import { defineConfig } from 'vitepress'
-export default defineConfig({ ...config, base: '/ra/v/${version}/' })
-VCONF
-
-  if (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" bun vitepress build --config .vitepress/config.version.ts); then
+  if (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" DOCS_BASE="/ra/v/${version}/" bun vitepress build); then
     mkdir -p "$DIST_DIR/v/$version"
     cp -r "$TAG_DIR/docs/site/.vitepress/dist/"* "$DIST_DIR/v/$version/"
     echo "  Done: v$version"
