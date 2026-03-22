@@ -319,11 +319,18 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
     }
     const recipeRaw = await parseFile(resolved.configPath)
     const recipeConfig = interpolateEnvVars(recipeRaw, env) as Record<string, unknown>
-    normalizeLayer(recipeConfig)
 
     // Recipes must only define agent configuration — reject app stanza
+    // Check before normalizeLayer which may create an empty `app` object
     if (recipeConfig.app !== undefined) {
       throw new Error(`Recipe "${recipeName}" contains an "app" stanza. Recipes may only define "agent" configuration.`)
+    }
+
+    normalizeLayer(recipeConfig)
+
+    // normalizeMcpConfig may create an empty `app` object — remove it
+    if (isPlainObject(recipeConfig.app) && Object.keys(recipeConfig.app as Record<string, unknown>).length === 0) {
+      delete recipeConfig.app
     }
 
     // Pre-resolve recipe paths against its directory
