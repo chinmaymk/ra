@@ -154,6 +154,13 @@ describe('loadConfig', () => {
     expect((c.app as any).http).toBeNull()
   })
 
+  it('deepMerge: __proto__ keys are ignored to prevent prototype pollution', async () => {
+    const malicious = JSON.parse('{"agent":{"__proto__":{"polluted":true}}}')
+    const c = await loadConfig({ cwd: tmp, env: {}, cliArgs: malicious })
+    expect(({} as any).polluted).toBeUndefined()
+    expect((c.agent as any).__proto__.polluted).toBeUndefined()
+  })
+
   describe('provider credentials via standard env vars', () => {
     it('ANTHROPIC_API_KEY resolves in defaults', async () => {
       const c = await loadConfig({ cwd: tmp, env: { ANTHROPIC_API_KEY: 'sk-ant-123' } })
