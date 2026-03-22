@@ -1,5 +1,4 @@
 // Pure ANSI TUI utilities — no external dependencies
-import wrapAnsi from 'wrap-ansi'
 
 export const ansi = {
   reset: '\x1b[0m',
@@ -101,45 +100,20 @@ export const RESPONSE_PREFIX = `  `
 /** Visible column width of RESPONSE_PREFIX. */
 export const RESPONSE_PREFIX_LEN = 2
 
-/** Streaming line-buffer that wraps completed logical lines with wrap-ansi.
- *
- * Text is accumulated until a `\n` is received; each complete line is then
- * word-wrapped at `contentWidth` (hard-breaking any word that exceeds the
- * limit) and re-prefixed with RESPONSE_PREFIX on every visual sub-line.
- *
- * The in-progress (last, incomplete) line is held in the buffer and only
- * output when `end()` is called or the next `\n` arrives. */
+/** Pass-through stream writer that outputs text immediately for responsive
+ * token display. Newlines are re-prefixed with RESPONSE_PREFIX so each new
+ * line retains the proper indent. No buffering — tokens appear as they arrive. */
 export class StreamBuffer {
-  private buf = ''
-
   constructor(private readonly contentWidth: number) {}
 
+  /** Write text immediately, replacing newlines with newline + indent prefix. */
   write(text: string): string {
-    this.buf += text
-    const parts = this.buf.split('\n')
-    this.buf = parts.pop() ?? ''   // keep last incomplete line
-    if (parts.length === 0) return ''
-
-    // Each complete line → wrap → re-prefix continuation sub-lines
-    const formatted = parts.map(l => this._wrapLine(l))
-    // Join with newline+prefix (next line starts with prefix already on screen
-    // from the previous continuation, so we just need \n + prefix between lines)
-    return formatted.join('\n' + RESPONSE_PREFIX) + '\n' + RESPONSE_PREFIX
+    return text.replaceAll('\n', '\n' + RESPONSE_PREFIX)
   }
 
-  /** Flush the buffered incomplete line — call once when streaming ends. */
+  /** No-op — all content was already written during streaming. */
   end(): string {
-    const out = this._wrapLine(this.buf)
-    this.buf = ''
-    return out
-  }
-
-  private _wrapLine(line: string): string {
-    if (!line) return ''
-    const wrapped = wrapAnsi(line, this.contentWidth, { hard: true, trim: false })
-    // trim: false preserves leading whitespace (code indents) but leaves trailing
-    // spaces at word-break points — remove those.
-    return wrapped.split('\n').map(l => l.trimEnd()).join('\n' + RESPONSE_PREFIX)
+    return ''
   }
 }
 

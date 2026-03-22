@@ -137,63 +137,39 @@ describe('collapseThinking', () => {
 })
 
 describe('StreamBuffer', () => {
-  // Helper: strip ANSI codes for readable assertions
-  const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
-  const P = strip(RESPONSE_PREFIX)  // e.g. "  │ "
+  const P = RESPONSE_PREFIX
 
-  it('passes short text through unchanged (no newline yet)', () => {
+  it('outputs text immediately without buffering', () => {
     const b = new StreamBuffer(40)
-    // No newline → nothing output yet (buffered)
-    expect(b.write('hello world')).toBe('')
-    // end() flushes it
-    expect(b.end()).toBe('hello world')
+    expect(b.write('hello world')).toBe('hello world')
+    // end() is a no-op since everything was already written
+    expect(b.end()).toBe('')
   })
 
-  it('outputs a complete line when \\n arrives', () => {
+  it('replaces newlines with newline + prefix', () => {
     const b = new StreamBuffer(40)
     const out = b.write('hello world\n')
-    // Complete line → formatted and flushed, prefix for the next line appended
-    expect(strip(out)).toBe('hello world\n' + P)
+    expect(out).toBe('hello world\n' + P)
   })
 
-  it('wraps long lines at contentWidth', () => {
-    const b = new StreamBuffer(10)
-    // "hello world" is 11 chars — wider than contentWidth 10
-    const out = b.write('hello world\n')
-    const stripped = strip(out)
-    // wrap-ansi should break at word boundary: "hello" and "world"
-    expect(stripped).toBe('hello\n' + P + 'world\n' + P)
-  })
-
-  it('hard-breaks a word longer than contentWidth', () => {
-    const b = new StreamBuffer(8)
-    const out = b.write('abcdefghijkl\n')
-    const stripped = strip(out)
-    // 12-char word hard-broken into 8 + 4
-    expect(stripped).toBe('abcdefgh\n' + P + 'ijkl\n' + P)
-  })
-
-  it('buffers across chunks and flushes at newline', () => {
+  it('streams each chunk immediately', () => {
     const b = new StreamBuffer(40)
-    expect(b.write('hel')).toBe('')    // buffered
-    expect(b.write('lo ')).toBe('')    // buffered
-    expect(b.write('world')).toBe('')  // buffered
-    const out = b.write('\n')
-    expect(strip(out)).toBe('hello world\n' + P)
+    expect(b.write('hel')).toBe('hel')
+    expect(b.write('lo ')).toBe('lo ')
+    expect(b.write('world')).toBe('world')
+    expect(b.write('\n')).toBe('\n' + P)
   })
 
   it('handles multiple lines in one chunk', () => {
     const b = new StreamBuffer(40)
     const out = b.write('line one\nline two\n')
-    const stripped = strip(out)
-    expect(stripped).toBe('line one\n' + P + 'line two\n' + P)
+    expect(out).toBe('line one\n' + P + 'line two\n' + P)
   })
 
   it('handles blank lines (paragraph breaks)', () => {
     const b = new StreamBuffer(40)
     const out = b.write('para one\n\npara two\n')
-    const stripped = strip(out)
-    expect(stripped).toBe('para one\n' + P + '\n' + P + 'para two\n' + P)
+    expect(out).toBe('para one\n' + P + '\n' + P + 'para two\n' + P)
   })
 })
 
