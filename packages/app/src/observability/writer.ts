@@ -1,9 +1,10 @@
-import { appendFileSync } from 'node:fs'
+import { appendFile } from 'node:fs/promises'
 
 /** Shared JSONL writer for observability output (logger and tracer). */
 export class JsonlWriter {
   private output: 'stderr' | 'stdout' | 'file'
   private filePath: string | undefined
+  private pending: Promise<void>[] = []
 
   constructor(output: 'stderr' | 'stdout' | 'file', filePath?: string) {
     this.output = output
@@ -15,7 +16,7 @@ export class JsonlWriter {
   write(data: unknown): void {
     const line = JSON.stringify(data) + '\n'
     if (this.filePath) {
-      appendFileSync(this.filePath, line)
+      this.pending.push(appendFile(this.filePath, line))
     } else if (this.output === 'stdout') {
       process.stdout.write(line)
     } else {
@@ -24,6 +25,8 @@ export class JsonlWriter {
   }
 
   async flush(): Promise<void> {
-    // No-op: appendFileSync writes are immediately flushed by the OS.
+    const inflight = this.pending
+    this.pending = []
+    await Promise.all(inflight)
   }
 }
