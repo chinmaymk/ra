@@ -76,10 +76,26 @@ for tag in $TAGS; do
     git -C "$REPO_ROOT" archive HEAD -- docs/site/ | tar -x -C "$TAG_DIR"
   fi
 
-  # Use current theme + config so version picker works everywhere
+  # Use current theme so version picker works everywhere
   rm -rf "$TAG_DIR/docs/site/.vitepress/theme"
   cp -r "$SITE_DIR/.vitepress/theme" "$TAG_DIR/docs/site/.vitepress/theme"
-  cp "$SITE_DIR/.vitepress/config.ts" "$TAG_DIR/docs/site/.vitepress/config.ts"
+
+  # Ensure the tag's config supports DOCS_BASE and DOCS_VERSION env vars.
+  # If it has a hardcoded base, patch it. If it already reads the env var, no-op.
+  TAG_CONFIG="$TAG_DIR/docs/site/.vitepress/config.ts"
+  if [ -f "$TAG_CONFIG" ]; then
+    if ! grep -q 'DOCS_BASE' "$TAG_CONFIG"; then
+      sed -i "s|base: '/ra/'|base: process.env.DOCS_BASE || '/ra/'|" "$TAG_CONFIG"
+    fi
+    if ! grep -q 'DOCS_VERSION' "$TAG_CONFIG"; then
+      # Add vite define block if not present
+      sed -i "/base:/a\\
+  vite: { define: { __DOCS_VERSION__: JSON.stringify(process.env.DOCS_VERSION || 'dev') } }," "$TAG_CONFIG"
+    fi
+  else
+    # Tag has no config — use current one
+    cp "$SITE_DIR/.vitepress/config.ts" "$TAG_CONFIG"
+  fi
 
   if (cd "$TAG_DIR/docs/site" && bun install && DOCS_VERSION="$version" DOCS_BASE="/ra/v/${version}/" bun vitepress build); then
     mkdir -p "$DIST_DIR/v/$version"
