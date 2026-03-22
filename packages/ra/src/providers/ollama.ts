@@ -20,6 +20,7 @@ export class OllamaProvider implements IProvider {
       messages: this.mapMessages(request.messages),
     }
     if (request.tools?.length) params.tools = this.mapTools(request.tools)
+    if (request.thinking) params.think = request.thinking
     if (request.providerOptions) Object.assign(params as unknown as Record<string, unknown>, request.providerOptions)
     return params
   }
@@ -37,6 +38,7 @@ export class OllamaProvider implements IProvider {
     for await (const chunk of stream) {
       const msg = chunk.message
       if (!msg) continue
+      if (msg.thinking) yield { type: 'thinking', delta: msg.thinking }
       if (msg.content) yield { type: 'text', delta: msg.content }
       if (msg.tool_calls) {
         for (const tc of msg.tool_calls) {

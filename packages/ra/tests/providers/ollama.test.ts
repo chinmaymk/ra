@@ -117,6 +117,35 @@ describe('OllamaProvider', () => {
     expect((params as any).temperature).toBe(0.7)
   })
 
+  it('buildParams passes thinking level to think param', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const params = provider.buildParams({
+      model: 'qwq',
+      messages: [{ role: 'user', content: 'hi' }],
+      thinking: 'high',
+    })
+    expect((params as any).think).toBe('high')
+  })
+
+  it('buildParams passes low thinking level to think param', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const params = provider.buildParams({
+      model: 'qwq',
+      messages: [{ role: 'user', content: 'hi' }],
+      thinking: 'low',
+    })
+    expect((params as any).think).toBe('low')
+  })
+
+  it('buildParams does not set think when thinking is not set', () => {
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const params = provider.buildParams({
+      model: 'llama3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect((params as any).think).toBeUndefined()
+  })
+
   it('maps user message with array content to joined text', () => {
     const provider = new OllamaProvider({ host: 'http://localhost:11434' })
     const messages = [
@@ -259,6 +288,22 @@ describe('OllamaProvider - stream()', () => {
     }
     expect(chunks[0]).toEqual({ type: 'text', delta: 'text' })
     expect(chunks[1].type).toBe('done')
+  })
+
+  it('yields thinking deltas when message has thinking field', async () => {
+    mockOllamaChat.mockResolvedValue((async function* () {
+      yield { message: { thinking: 'Let me reason...', content: '' }, done: false }
+      yield { message: { content: 'The answer is 42' }, done: false }
+      yield { message: {}, done: true, prompt_eval_count: 10, eval_count: 5 }
+    })())
+    const provider = new OllamaProvider({ host: 'http://localhost:11434' })
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'qwq', messages: [{ role: 'user', content: 'think about this' }] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'thinking', delta: 'Let me reason...' })
+    expect(chunks[1]).toEqual({ type: 'text', delta: 'The answer is 42' })
+    expect(chunks[2].type).toBe('done')
   })
 
   it('done without eval counts yields undefined usage', async () => {

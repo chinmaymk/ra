@@ -72,6 +72,8 @@ export class BedrockProvider implements IProvider {
         yield { type: 'text', delta: event.contentBlockDelta.delta.text }
       } else if (event.contentBlockDelta?.delta?.toolUse?.input) {
         yield { type: 'tool_call_delta', id: currentToolCallId, argsDelta: event.contentBlockDelta.delta.toolUse.input }
+      } else if (event.contentBlockDelta?.delta?.reasoningContent?.text) {
+        yield { type: 'thinking', delta: event.contentBlockDelta.delta.reasoningContent.text }
       } else if (event.metadata?.usage) {
         usage = { inputTokens: event.metadata.usage.inputTokens ?? 0, outputTokens: event.metadata.usage.outputTokens ?? 0 }
       } else if (event.messageStop) {
