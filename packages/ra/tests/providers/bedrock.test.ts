@@ -150,7 +150,7 @@ describe('thinking', () => {
       messages: [{ role: 'user', content: 'hi' }],
       thinking: 'low',
     })
-    expect((params as any).additionalModelRequestFields.thinking.budget_tokens).toBe(1000)
+    expect((params as any).additionalModelRequestFields.thinking.budget_tokens).toBe(1024)
   })
 })
 

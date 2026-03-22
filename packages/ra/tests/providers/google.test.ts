@@ -178,7 +178,7 @@ describe('GoogleProvider', () => {
       (new GoogleProvider({ apiKey: 'test' }) as any).buildGenerationConfig(thinking)
 
     it('builds generationConfig for medium', () => {
-      expect(buildConfig('medium')).toEqual({ thinkingConfig: { thinkingBudget: 4096 } })
+      expect(buildConfig('medium')).toEqual({ thinkingConfig: { thinkingBudget: 8192 } })
     })
 
     it('returns undefined when thinking not set', () => {
@@ -186,11 +186,11 @@ describe('GoogleProvider', () => {
     })
 
     it('maps low to 512', () => {
-      expect(buildConfig('low')).toEqual({ thinkingConfig: { thinkingBudget: 512 } })
+      expect(buildConfig('low')).toEqual({ thinkingConfig: { thinkingBudget: 1024 } })
     })
 
     it('maps high to 16384', () => {
-      expect(buildConfig('high')).toEqual({ thinkingConfig: { thinkingBudget: 16384 } })
+      expect(buildConfig('high')).toEqual({ thinkingConfig: { thinkingBudget: 24576 } })
     })
   })
 
