@@ -9,7 +9,7 @@ import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
 export { defaultConfig } from './defaults'
-export type { RaConfig, LoadConfigOptions, McpClientConfig, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
+export type { RaConfig, LoadConfigOptions, McpServerEntry, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
 
 const CONFIG_FILES = [
   'ra.config.json',
@@ -66,15 +66,72 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
 const AGENT_KEYS = new Set([
   'provider', 'model', 'thinking', 'systemPrompt',
   'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
-  'tools', 'middleware', 'context', 'compaction', 'memory',
+  'tools', 'skillDirs', 'mcp', 'permissions',
+  'middleware', 'context', 'compaction', 'memory',
 ])
 
 // Keys that belong under `app` when found at the top level (legacy flat config)
 const APP_KEYS = new Set([
   'interface', 'dataDir', 'http', 'inspector', 'storage',
-  'skillDirs', 'skills', 'mcp', 'permissions', 'providers',
+  'mcpServer', 'providers',
   'logsEnabled', 'logLevel', 'tracesEnabled',
 ])
+
+/**
+ * Normalize MCP config from legacy shapes into the new split layout.
+ * Handles:
+ *   - `app.mcp: { client, server, lazySchemas }` → split to `agent.mcp.servers` + `app.mcpServer`
+ *   - `app.mcp.client` → `agent.mcp.servers` (rename client→servers)
+ *   - `agent.mcp.client` → `agent.mcp.servers` (rename only)
+ */
+function normalizeMcpConfig(raw: Record<string, unknown>): void {
+  const app = raw.app as Record<string, unknown> | undefined
+  if (isPlainObject(app) && isPlainObject(app.mcp)) {
+    const mcp = app.mcp as Record<string, unknown>
+    // Move client (→servers) + lazySchemas to agent.mcp
+    if (!isPlainObject(raw.agent)) raw.agent = {}
+    const agent = raw.agent as Record<string, unknown>
+    if (!isPlainObject(agent.mcp)) agent.mcp = {}
+    const agentMcp = agent.mcp as Record<string, unknown>
+    if (mcp.client !== undefined && agentMcp.servers === undefined) {
+      agentMcp.servers = mcp.client
+    }
+    if (mcp.lazySchemas !== undefined && agentMcp.lazySchemas === undefined) {
+      agentMcp.lazySchemas = mcp.lazySchemas
+    }
+    // Move server to app.mcpServer
+    if (isPlainObject(mcp.server) && app.mcpServer === undefined) {
+      app.mcpServer = mcp.server
+    }
+    delete app.mcp
+  }
+
+  // Also migrate app.skillDirs and app.permissions to agent (backward compat)
+  if (isPlainObject(app)) {
+    if (!isPlainObject(raw.agent)) raw.agent = {}
+    const agent = raw.agent as Record<string, unknown>
+    if (app.skillDirs !== undefined && agent.skillDirs === undefined) {
+      agent.skillDirs = app.skillDirs
+      delete app.skillDirs
+    }
+    if (isPlainObject(app.permissions) && agent.permissions === undefined) {
+      agent.permissions = app.permissions
+      delete app.permissions
+    }
+    // Remove dead `skills` key
+    delete app.skills
+  }
+
+  // Rename agent.mcp.client → agent.mcp.servers if needed
+  const agent = raw.agent as Record<string, unknown> | undefined
+  if (isPlainObject(agent) && isPlainObject(agent.mcp)) {
+    const agentMcp = agent.mcp as Record<string, unknown>
+    if (agentMcp.client !== undefined && agentMcp.servers === undefined) {
+      agentMcp.servers = agentMcp.client
+      delete agentMcp.client
+    }
+  }
+}
 
 /**
  * Migrate legacy flat config keys into their `app`/`agent` sections.
@@ -172,6 +229,7 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   // Normalize first so flat keys land at their proper nested paths
   for (const layer of [fileConfig, cliArgs]) {
     normalizeFlatConfig(layer)
+    normalizeMcpConfig(layer)
     normalizeToolsConfig(layer)
   }
 

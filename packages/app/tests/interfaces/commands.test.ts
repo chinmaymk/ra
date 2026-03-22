@@ -42,9 +42,9 @@ describe('showConfig', () => {
     const parsed = JSON.parse(output)
     expect(parsed.agent.compaction).toBeDefined()
     expect(parsed.agent.memory).toBeDefined()
-    expect(parsed.app.mcp).toBeDefined()
+    expect(parsed.agent.mcp).toBeDefined()
     expect(parsed.agent.context).toBeDefined()
-    expect(parsed.app.permissions).toBeDefined()
+    expect(parsed.agent.permissions).toBeDefined()
   })
 
   it('includes context files when provided', () => {

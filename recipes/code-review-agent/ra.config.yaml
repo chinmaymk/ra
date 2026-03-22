@@ -1,21 +1,16 @@
-app:
-  interface: cli
-  skills:
-    - code-review
+agent:
+  provider: ${PROVIDER:-anthropic}
+  model: ${MODEL:-claude-sonnet-4-6}
   skillDirs:
     - ./skills
   mcp:
-    client:
+    servers:
       - name: github
         transport: stdio
         command: npx
         args: ["-y", "@modelcontextprotocol/server-github"]
         env:
           GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
-
-agent:
-  provider: ${PROVIDER:-anthropic}
-  model: ${MODEL:-claude-sonnet-4-6}
   middleware:
     afterModelResponse:
       - ./middleware/token-budget.ts

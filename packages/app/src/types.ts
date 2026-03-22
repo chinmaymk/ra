@@ -10,7 +10,7 @@
 export type {
   ProviderName,
   RaConfig,
-  McpClientConfig,
+  McpServerEntry,
   McpServerConfig,
   LoadConfigOptions,
   ToolsConfig,

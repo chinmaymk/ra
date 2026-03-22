@@ -12,7 +12,6 @@ export const defaultConfig: RaConfig = {
       maxSessions: 100,
       ttlDays: 30,
     },
-    skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
     providers: {
       anthropic: { apiKey: '${ANTHROPIC_API_KEY:-}' },
       openai: { apiKey: '${OPENAI_API_KEY:-}' },
@@ -22,19 +21,14 @@ export const defaultConfig: RaConfig = {
       bedrock: { region: '${AWS_REGION:-us-east-1}' },
       azure: { endpoint: '${AZURE_OPENAI_ENDPOINT:-}', deployment: '${AZURE_OPENAI_DEPLOYMENT:-}', apiKey: '${AZURE_OPENAI_API_KEY:-}' },
     },
-    mcp: {
-      client: [],
-      server: {
-        enabled: false,
-        port: 3001,
-        tool: {
-          name: 'ra',
-          description: 'Ra AI agent',
-        },
+    mcpServer: {
+      enabled: false,
+      port: 3001,
+      tool: {
+        name: 'ra',
+        description: 'Ra AI agent',
       },
-      lazySchemas: true,
     },
-    permissions: {},
     logsEnabled: true,
     logLevel: 'info',
     tracesEnabled: true,
@@ -52,6 +46,12 @@ export const defaultConfig: RaConfig = {
       overrides: {},
       maxResponseSize: 25000,
     },
+    skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
+    mcp: {
+      servers: [],
+      lazySchemas: true,
+    },
+    permissions: {},
     middleware: {},
     context: {
       enabled: true,

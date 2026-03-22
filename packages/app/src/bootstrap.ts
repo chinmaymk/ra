@@ -225,7 +225,7 @@ export async function bootstrap(
   }
 
   // ── Skills ─────────────────────────────────────────────────────────
-  const resolvedSkillDirs = app.skillDirs.map(d => resolvePath(d, app.configDir))
+  const resolvedSkillDirs = agent.skillDirs.map(d => resolvePath(d, app.configDir))
   const skillIndex = await loadSkillIndex(resolvedSkillDirs, logger)
   if (skillIndex.size > 0) {
     const availableXml = buildAvailableSkillsXml(skillIndex)
@@ -244,31 +244,31 @@ export async function bootstrap(
 
   // ── MCP clients ────────────────────────────────────────────────────
   const mcpClient = new McpClient()
-  if (app.mcp.client?.length) {
-    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: app.mcp.client.length })
-    logger.info('connecting to MCP servers', { serverCount: app.mcp.client.length, servers: app.mcp.client.map(c => c.name) })
+  if (agent.mcp.servers?.length) {
+    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: agent.mcp.servers.length })
+    logger.info('connecting to MCP servers', { serverCount: agent.mcp.servers.length, servers: agent.mcp.servers.map(c => c.name) })
     const knownToolNames = new Set(tools.all().map(t => t.name))
-    await mcpClient.connect(app.mcp.client, tools, { lazySchemas: app.mcp.lazySchemas, logger })
+    await mcpClient.connect(agent.mcp.servers, tools, { lazySchemas: agent.mcp.lazySchemas, logger })
     const mcpTools = tools.all().filter(t => !knownToolNames.has(t.name))
     const mcpToolTokens = estimateTokens(mcpTools)
     logger.info('MCP servers connected', {
       totalTools: tools.all().length,
       mcpToolCount: mcpTools.length,
-      lazySchemas: app.mcp.lazySchemas,
+      lazySchemas: agent.mcp.lazySchemas,
       estimatedMcpToolTokens: mcpToolTokens,
     })
     tracer.endSpan(mcpSpan, 'ok', {
       mcpToolCount: mcpTools.length,
       estimatedTokens: mcpToolTokens,
-      lazySchemas: app.mcp.lazySchemas,
+      lazySchemas: agent.mcp.lazySchemas,
     })
   }
 
   // ── Permissions middleware ─────────────────────────────────────────
-  if (app.permissions.rules?.length && !app.permissions.no_rules_rules) {
-    const permMw = createPermissionsMiddleware(app.permissions)
+  if (agent.permissions.rules?.length && !agent.permissions.no_rules_rules) {
+    const permMw = createPermissionsMiddleware(agent.permissions)
     middleware.beforeToolExecution = prepend(middleware.beforeToolExecution, permMw)
-    logger.info('permissions middleware loaded', { ruleCount: app.permissions.rules.length })
+    logger.info('permissions middleware loaded', { ruleCount: agent.permissions.rules.length })
   }
 
   // ── Subagent tool (registered last — child registry built lazily) ──

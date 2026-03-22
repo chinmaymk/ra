@@ -79,24 +79,24 @@ describe('parseArgs', () => {
 
   describe('MCP server flags', () => {
     it('--mcp-server-enabled', () => {
-      expect(parseArgs(dev('--mcp-server-enabled')).config.app?.mcp?.server.enabled).toBe(true)
+      expect(parseArgs(dev('--mcp-server-enabled')).config.app?.mcpServer?.enabled).toBe(true)
     })
     it('--mcp-server-port', () => {
-      expect(parseArgs(dev('--mcp-server-port', '4001')).config.app?.mcp?.server.port).toBe(4001)
+      expect(parseArgs(dev('--mcp-server-port', '4001')).config.app?.mcpServer?.port).toBe(4001)
     })
     it('--mcp-stdio sets mcp-stdio', () => {
       expect(parseArgs(dev('--mcp-stdio')).config.app?.interface).toBe('mcp-stdio')
     })
     it('--mcp-server-tool-name', () => {
-      expect(parseArgs(dev('--mcp-server-tool-name', 'mybot')).config.app?.mcp?.server.tool.name).toBe('mybot')
+      expect(parseArgs(dev('--mcp-server-tool-name', 'mybot')).config.app?.mcpServer?.tool.name).toBe('mybot')
     })
     it('--mcp-server-tool-description', () => {
-      expect(parseArgs(dev('--mcp-server-tool-description', 'A bot')).config.app?.mcp?.server.tool.description).toBe('A bot')
+      expect(parseArgs(dev('--mcp-server-tool-description', 'A bot')).config.app?.mcpServer?.tool.description).toBe('A bot')
     })
     it('individual MCP flags do not clobber siblings', () => {
       const r = parseArgs(dev('--mcp-server-port', '5000'))
-      expect(r.config.app?.mcp?.server.port).toBe(5000)
-      expect(r.config.app?.mcp?.server.enabled).toBeUndefined()
+      expect(r.config.app?.mcpServer?.port).toBe(5000)
+      expect(r.config.app?.mcpServer?.enabled).toBeUndefined()
     })
   })
 
@@ -130,11 +130,11 @@ describe('parseArgs', () => {
   })
 
   describe('skills flags', () => {
-    it('--skill-dir sets config.app.skillDirs', () => {
-      expect(parseArgs(dev('--skill-dir', '/skills/a')).config.app?.skillDirs).toEqual(['/skills/a'])
+    it('--skill-dir sets config.agent.skillDirs', () => {
+      expect(parseArgs(dev('--skill-dir', '/skills/a')).config.agent?.skillDirs).toEqual(['/skills/a'])
     })
     it('--skill-dir is repeatable', () => {
-      expect(parseArgs(dev('--skill-dir', '/a', '--skill-dir', '/b')).config.app?.skillDirs).toEqual(['/a', '/b'])
+      expect(parseArgs(dev('--skill-dir', '/a', '--skill-dir', '/b')).config.agent?.skillDirs).toEqual(['/a', '/b'])
     })
   })
 
@@ -269,10 +269,10 @@ describe('parseArgs', () => {
         '--mcp-server-tool-name', 'ra',
         '--mcp-server-tool-description', 'My agent',
       ))
-      expect(r.config.app?.mcp?.server.enabled).toBe(true)
-      expect(r.config.app?.mcp?.server.port).toBe(5000)
-      expect(r.config.app?.mcp?.server.tool.name).toBe('ra')
-      expect(r.config.app?.mcp?.server.tool.description).toBe('My agent')
+      expect(r.config.app?.mcpServer?.enabled).toBe(true)
+      expect(r.config.app?.mcpServer?.port).toBe(5000)
+      expect(r.config.app?.mcpServer?.tool.name).toBe('ra')
+      expect(r.config.app?.mcpServer?.tool.description).toBe('My agent')
     })
   })
 })

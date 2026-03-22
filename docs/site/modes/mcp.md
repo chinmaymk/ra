@@ -8,9 +8,9 @@ Connect ra to external MCP servers. Their tools become available to the model au
 
 ```yaml
 # ra.config.yml
-app:
+agent:
   mcp:
-    client:
+    servers:
       - name: filesystem
         transport: stdio
         command: npx
@@ -33,9 +33,8 @@ agent:
   tools:
     builtin: false
 
-app:
   mcp:
-    client:
+    servers:
       - name: my-tools
         transport: stdio
         command: ./my-mcp-server
@@ -71,7 +70,7 @@ This is especially effective when connecting to multiple MCP servers with many t
 
 ```yaml
 # ra.config.yml
-app:
+agent:
   mcp:
     lazySchemas: true   # default: true
 ```
@@ -79,14 +78,14 @@ app:
 To disable lazy loading and send full schemas every time (the pre-optimization behavior):
 
 ```yaml
-app:
+agent:
   mcp:
     lazySchemas: false
 ```
 
 | Field | Env var | Default | Description |
 |-------|---------|---------|-------------|
-| `mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | `true` | Enable lazy schema loading for MCP tools |
+| `agent.mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | `true` | Enable lazy schema loading for MCP tools |
 
 ## ra as MCP server
 

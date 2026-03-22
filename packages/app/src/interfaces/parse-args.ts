@@ -50,14 +50,14 @@ const FLAG_RULES: Record<string, CoercionRule> = {
   'http-port':                   { type: 'int',    path: ['app', 'http', 'port'] },
   'http-token':                  { type: 'string', path: ['app', 'http', 'token'] },
   'inspector-port':              { type: 'int',    path: ['app', 'inspector', 'port'] },
-  'mcp-server-enabled':          { type: 'bool',   path: ['app', 'mcp', 'server', 'enabled'], value: true },
-  'mcp-server-port':             { type: 'int',    path: ['app', 'mcp', 'server', 'port'] },
-  'mcp-server-tool-name':        { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'name'] },
-  'mcp-server-tool-description': { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'description'] },
+  'mcp-server-enabled':          { type: 'bool',   path: ['app', 'mcpServer', 'enabled'], value: true },
+  'mcp-server-port':             { type: 'int',    path: ['app', 'mcpServer', 'port'] },
+  'mcp-server-tool-name':        { type: 'string', path: ['app', 'mcpServer', 'tool', 'name'] },
+  'mcp-server-tool-description': { type: 'string', path: ['app', 'mcpServer', 'tool', 'description'] },
   'data-dir':                    { type: 'string', path: ['app', 'dataDir'] },
   'storage-max-sessions':        { type: 'int',    path: ['app', 'storage', 'maxSessions'] },
   'storage-ttl-days':            { type: 'int',    path: ['app', 'storage', 'ttlDays'] },
-  'skill-dir':                   { type: 'string', path: ['app', 'skillDirs'] },
+  'skill-dir':                   { type: 'string', path: ['agent', 'skillDirs'] },
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {

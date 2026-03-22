@@ -1,15 +1,10 @@
-app:
-  interface: repl
-  skills:
-    - coding-agent
-  skillDirs:
-    - ./skills
-
 agent:
   provider: anthropic
   model: claude-opus-4-6
   tools:
     builtin: true
+  skillDirs:
+    - ./skills
   maxIterations: 200
   thinking: high
   compaction:

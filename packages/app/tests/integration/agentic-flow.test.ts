@@ -186,8 +186,8 @@ describe('Agentic flow integration', () => {
       agent: {
         systemPrompt: 'You are helpful. Always /check before responding.',
         context: { enabled: false },
+        skillDirs: [skillsDir],
       },
-      app: { skillDirs: [skillsDir] },
     }))
 
     // Turn 1: system prompt gets resolved by resolver middleware (spread replaces object)
@@ -302,8 +302,8 @@ export default async function(_ctx: unknown) {
       agent: {
         compaction: { enabled: true, maxTokens: 1000, contextWindow: 5000 },
         context: { enabled: false },
+        skillDirs: [],
       },
-      app: { skillDirs: [] },
     }))
 
     const { stdout, exitCode } = await runBinary(

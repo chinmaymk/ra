@@ -34,7 +34,7 @@ inputs:
     required: false
     default: 'true'
 
-  # --- Skills (maps to RaConfig.skills / skillDirs) ---
+  # --- Skills (maps to AgentConfig.skillDirs) ---
   skills:
     description: 'Comma-separated list of skills to activate'
     required: false
