@@ -9,17 +9,17 @@ By default, all tools are allowed (no rules configured). Add rules to restrict s
 app:
   permissions:
     rules:
-      - tool: execute_bash
+      - tool: Bash
         command:
           allow: ["^git ", "^bun "]
           deny: ["--force", "--hard", "--no-verify"]
-      - tool: write_file
+      - tool: Write
         path:
           allow: ["^src/", "^tests/"]
           deny: ["\\.env"]
         content:
           deny: ["API_KEY", "SECRET"]
-      - tool: delete_file
+      - tool: DeleteFile
         path:
           deny: [".*"]
 ```
@@ -67,21 +67,21 @@ Set to `deny` if you want an allowlist-only approach — only tools with explici
 
 Array of rule objects. Each rule has:
 
-- `tool` (required) — the tool name to match (e.g. `execute_bash`, `write_file`)
+- `tool` (required) — the registered tool name to match (e.g. `Bash`, `Write`, `Read`)
 - Any other key — a field name from the tool's input schema, mapped to `{ allow?: string[], deny?: string[] }`
 
 ```yaml
 app:
   permissions:
     rules:
-      - tool: execute_bash
+      - tool: Bash
         command:
           allow: ["^git ", "^bun ", "^tsc$"]
           deny: ["--force", "--hard", "\\|\\s*(bash|sh)"]
-      - tool: write_file
+      - tool: Write
         path:
           allow: ["^src/", "^tests/"]
-      - tool: web_fetch
+      - tool: WebFetch
         url:
           deny: ["localhost", "127\\.0\\.0\\.1", "169\\.254\\."]
 ```
@@ -94,19 +94,19 @@ Each built-in tool has specific fields you can write rules against. These are th
 
 | Tool | Key fields | Description |
 |------|-----------|-------------|
-| `execute_bash` | `command`, `cwd` | Shell command and working directory |
-| `execute_powershell` | `command`, `cwd` | PowerShell command and working directory |
-| `read_file` | `path` | File path to read |
-| `write_file` | `path`, `content` | File path and content to write |
-| `update_file` | `path`, `old_string`, `new_string` | File path and replacement strings |
-| `append_file` | `path`, `content` | File path and content to append |
-| `delete_file` | `path` | File path to delete |
-| `move_file` | `source`, `destination` | Source and destination paths |
-| `copy_file` | `source`, `destination` | Source and destination paths |
-| `list_directory` | `path` | Directory path |
-| `search_files` | `path`, `pattern` | Search directory and pattern |
-| `glob_files` | `path`, `pattern` | Search directory and glob |
-| `web_fetch` | `url`, `method`, `body` | URL, HTTP method, request body |
+| `Bash` | `command`, `cwd` | Shell command and working directory |
+| `PowerShell` | `command`, `cwd` | PowerShell command and working directory |
+| `Read` | `path` | File path to read |
+| `Write` | `path`, `content` | File path and content to write |
+| `Edit` | `path`, `old_string`, `new_string` | File path and replacement strings |
+| `AppendFile` | `path`, `content` | File path and content to append |
+| `DeleteFile` | `path` | File path to delete |
+| `MoveFile` | `source`, `destination` | Source and destination paths |
+| `CopyFile` | `source`, `destination` | Source and destination paths |
+| `LS` | `path` | Directory path |
+| `Grep` | `path`, `pattern` | Search directory and pattern |
+| `Glob` | `path`, `pattern` | Search directory and glob |
+| `WebFetch` | `url`, `method`, `body` | URL, HTTP method, request body |
 
 ## Examples
 
@@ -116,7 +116,7 @@ Each built-in tool has specific fields you can write rules against. These are th
 app:
   permissions:
     rules:
-      - tool: execute_bash
+      - tool: Bash
         command:
           allow: ["^git (status|diff|log|add|commit|push|pull|fetch|branch|checkout|stash)"]
           deny: ["--force", "-f$", "--hard", "--no-verify"]
@@ -128,13 +128,13 @@ app:
 app:
   permissions:
     rules:
-      - tool: write_file
+      - tool: Write
         path:
           allow: ["^src/", "^tests/", "^docs/"]
-      - tool: delete_file
+      - tool: DeleteFile
         path:
           deny: [".*"]  # block all deletes
-      - tool: move_file
+      - tool: MoveFile
         source:
           allow: ["^src/", "^tests/"]
         destination:
@@ -147,10 +147,10 @@ app:
 app:
   permissions:
     rules:
-      - tool: write_file
+      - tool: Write
         content:
           deny: ["(?i)api.?key\\s*=", "(?i)secret\\s*=", "(?i)password\\s*="]
-      - tool: append_file
+      - tool: AppendFile
         content:
           deny: ["(?i)api.?key\\s*=", "(?i)secret\\s*="]
 ```
@@ -161,7 +161,7 @@ app:
 app:
   permissions:
     rules:
-      - tool: web_fetch
+      - tool: WebFetch
         url:
           deny: ["localhost", "127\\.0\\.0\\.1", "10\\.", "172\\.(1[6-9]|2[0-9]|3[01])\\.", "192\\.168\\."]
 ```
@@ -173,15 +173,14 @@ app:
   permissions:
     default_action: deny
     rules:
-      - tool: read_file
+      - tool: Read
         path: {}          # empty rule = allow all (no deny, no allow constraints)
-      - tool: list_directory
+      - tool: LS
         path: {}
-      - tool: search_files
+      - tool: Grep
         path: {}
-      - tool: glob_files
+      - tool: Glob
         path: {}
-      - tool: checklist
 ```
 
 Tools with a rule entry but no field constraints are allowed unconditionally when `default_action: deny`.
@@ -191,13 +190,13 @@ Tools with a rule entry but no field constraints are allowed unconditionally whe
 When a tool call is denied, the model receives an error result like:
 
 ```
-Permission denied: 'execute_bash' field 'command' matches deny rule /--force/
+Permission denied: 'Bash' field 'command' matches deny rule /--force/
 ```
 
 or:
 
 ```
-Permission denied: 'write_file' field 'path' did not match any allow rule
+Permission denied: 'Write' field 'path' did not match any allow rule
 ```
 
 This gives the model enough context to adjust its approach — for example, dropping a `--force` flag or choosing a different file path.

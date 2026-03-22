@@ -112,11 +112,11 @@ Regex-based rules controlling what tools can do. See the [Permissions guide](/pe
 app:
   permissions:
     rules:
-      - tool: execute_bash
+      - tool: Bash
         command:
           allow: ["^git ", "^bun "]
           deny: ["--force", "--hard"]
-      - tool: write_file
+      - tool: Write
         path:
           allow: ["^src/", "^tests/"]
 ```

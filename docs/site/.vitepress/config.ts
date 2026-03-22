@@ -61,6 +61,7 @@ export default defineConfig({
           { text: 'Skills', link: '/skills/' },
           { text: 'Middleware', link: '/middleware/' },
           { text: 'Permissions', link: '/permissions/' },
+          { text: 'Memory', link: '/tools/#memory' },
           { text: 'Observability', link: '/observability/' },
         ],
       },
