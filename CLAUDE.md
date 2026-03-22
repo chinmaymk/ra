@@ -49,3 +49,5 @@ User message → [beforeLoopBegin]
 - Every `stream()` must yield `{ type: 'done' }` at the end
 - Preserve tool call IDs exactly
 - Structured logging only: `logger.info('event', { key: value })` — no interpolation
+- Ensure code is concise, easy to follow and extremely readable
+- Always run `bun tsc` and `bun test` to ensure everything passes
