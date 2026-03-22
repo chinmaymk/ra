@@ -204,8 +204,10 @@ export class AgentLoop {
             let content: string
             let isError = false
             try {
-              const value = this.toolTimeout > 0
-                ? await withTimeout(this.tools.execute(tc.name, input), this.toolTimeout, `Tool '${tc.name}'`)
+              const toolDef = this.tools.get(tc.name)
+              const effectiveTimeout = toolDef?.timeout ?? this.toolTimeout
+              const value = effectiveTimeout > 0
+                ? await withTimeout(this.tools.execute(tc.name, input), effectiveTimeout, `Tool '${tc.name}'`)
                 : await this.tools.execute(tc.name, input)
               content = typeof value === 'string' ? value : JSON.stringify(value)
               const originalLength = content.length
