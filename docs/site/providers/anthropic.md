@@ -32,11 +32,11 @@ ra --model claude-haiku-4-5-20251001 "Quick summary of this file" --file data.cs
 
 ## Extended thinking
 
-Enable extended thinking for deeper reasoning. Supported levels: `low`, `medium`, `high`.
+Enable extended thinking for deeper reasoning. Supported modes: `off` (default), `low`, `medium`, `high`, `adaptive`.
 
 ```bash
 ra --thinking high "Design a distributed cache"
-ra --thinking medium "Review this architecture"
+ra --thinking adaptive "Review this architecture"
 ```
 
 Or in config:
@@ -44,7 +44,7 @@ Or in config:
 ```yaml
 agent:
   provider: anthropic
-  thinking: medium
+  thinking: adaptive   # high for first 5 turns, then low
 ```
 
 ## Prompt caching

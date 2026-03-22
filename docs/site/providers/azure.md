@@ -78,7 +78,7 @@ In Azure OpenAI, you deploy a model under a name you choose (e.g. `my-gpt4o`). r
 
 ## Extended thinking
 
-Supported levels: `low`, `medium`, `high` (requires a reasoning-capable deployment).
+Supported modes: `off`, `low`, `medium`, `high`, `adaptive` (requires a reasoning-capable deployment).
 
 ```bash
 ra --provider azure --thinking medium "Analyze this architecture"

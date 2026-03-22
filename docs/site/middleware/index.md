@@ -66,7 +66,7 @@ Used by `beforeModelCall` and `afterModelResponse`. You can inspect or modify th
     model: string
     messages: IMessage[]
     tools?: ITool[]
-    thinking?: 'low' | 'medium' | 'high'
+    thinking?: 'low' | 'medium' | 'high'  // resolved from ThinkingMode
   }
   loop: LoopContext
 }

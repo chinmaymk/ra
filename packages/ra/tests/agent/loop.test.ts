@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { AgentLoop, ToolRegistry, NoopLogger, resolveThinking } from '@chinmaymk/ra'
 import type { IProvider, ChatRequest, ChatResponse, Logger, StreamChunk } from '@chinmaymk/ra'
-import { mockProvider } from './test-utils'
+import { mockProvider, capturingProvider } from './test-utils'
 
 describe('AgentLoop', () => {
   it('runs single turn with no tool calls', async () => {
@@ -45,19 +45,10 @@ describe('AgentLoop', () => {
   })
 
   it('passes thinking to ChatRequest', async () => {
-    const capturedRequests: ChatRequest[] = []
-    const mockProvider = {
-      name: 'mock',
-      stream: async function*(req: ChatRequest) {
-        capturedRequests.push(req)
-        yield { type: 'done' as const }
-      },
-      chat: async () => ({ message: { role: 'assistant' as const, content: '' } }),
-    }
-    const tools = new ToolRegistry()
-    const loop = new AgentLoop({ provider: mockProvider, tools, model: 'test', thinking: 'low' })
+    const requests: ChatRequest[] = []
+    const loop = new AgentLoop({ provider: capturingProvider(requests), tools: new ToolRegistry(), model: 'test', thinking: 'low' })
     await loop.run([{ role: 'user', content: 'hi' }])
-    expect(capturedRequests[0]?.thinking).toBe('low')
+    expect(requests[0]?.thinking).toBe('low')
   })
 
   it('runs middleware at lifecycle points', async () => {
@@ -851,23 +842,15 @@ describe('AgentLoop', () => {
   })
 
   it('thinking off does not pass thinking to ChatRequest', async () => {
-    const capturedRequests: ChatRequest[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      stream: async function*(req: ChatRequest) {
-        capturedRequests.push(req)
-        yield { type: 'done' as const }
-      },
-      chat: async () => ({ message: { role: 'assistant' as const, content: '' } }),
-    }
-    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), model: 'test', thinking: 'off' })
+    const requests: ChatRequest[] = []
+    const loop = new AgentLoop({ provider: capturingProvider(requests), tools: new ToolRegistry(), model: 'test', thinking: 'off' })
     await loop.run([{ role: 'user', content: 'hi' }])
-    expect(capturedRequests[0]?.thinking).toBeUndefined()
+    expect(requests[0]?.thinking).toBeUndefined()
   })
 
   it('adaptive thinking switches from high to low after 5 iterations', async () => {
-    const capturedRequests: ChatRequest[] = []
-    const toolCall: StreamChunk[] = [
+    const requests: ChatRequest[] = []
+    const toolChunks: StreamChunk[] = [
       { type: 'tool_call_start', id: 'tc1', name: 'noop' },
       { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
       { type: 'tool_call_end', id: 'tc1' },
@@ -875,59 +858,37 @@ describe('AgentLoop', () => {
     ]
     const provider: IProvider = {
       name: 'mock',
-      stream: async function*(req: ChatRequest) {
-        capturedRequests.push(req)
-        if (capturedRequests.length < 7) {
-          for (const chunk of toolCall) yield chunk
-        } else {
-          yield { type: 'text' as const, delta: 'done' }
-          yield { type: 'done' as const }
-        }
-      },
       chat: async () => ({ message: { role: 'assistant' as const, content: '' } }),
+      async *stream(req: ChatRequest) {
+        requests.push(req)
+        // Return tool calls for 6 iterations, then text to end the loop
+        if (requests.length < 7) { for (const c of toolChunks) yield c }
+        else { yield { type: 'text' as const, delta: 'done' }; yield { type: 'done' as const } }
+      },
     }
     const tools = new ToolRegistry()
     tools.register({ name: 'noop', description: '', inputSchema: {}, execute: async () => 'ok' })
     const loop = new AgentLoop({ provider, tools, model: 'test', thinking: 'adaptive', maxIterations: 7 })
     await loop.run([{ role: 'user', content: 'go' }])
-    // First 5 should be high
-    for (let i = 0; i < 5; i++) {
-      expect(capturedRequests[i]?.thinking).toBe('high')
-    }
-    // 6th and 7th should be low
-    expect(capturedRequests[5]?.thinking).toBe('low')
-    expect(capturedRequests[6]?.thinking).toBe('low')
+
+    for (let i = 0; i < 5; i++) expect(requests[i]?.thinking).toBe('high')
+    expect(requests[5]?.thinking).toBe('low')
+    expect(requests[6]?.thinking).toBe('low')
   })
 
   it('passes thinkingBudgetCap to ChatRequest', async () => {
-    const capturedRequests: ChatRequest[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      stream: async function*(req: ChatRequest) {
-        capturedRequests.push(req)
-        yield { type: 'done' as const }
-      },
-      chat: async () => ({ message: { role: 'assistant' as const, content: '' } }),
-    }
-    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), model: 'test', thinking: 'high', thinkingBudgetCap: 5000 })
+    const requests: ChatRequest[] = []
+    const loop = new AgentLoop({ provider: capturingProvider(requests), tools: new ToolRegistry(), model: 'test', thinking: 'high', thinkingBudgetCap: 5000 })
     await loop.run([{ role: 'user', content: 'hi' }])
-    expect(capturedRequests[0]?.thinking).toBe('high')
-    expect(capturedRequests[0]?.thinkingBudgetCap).toBe(5000)
+    expect(requests[0]?.thinking).toBe('high')
+    expect(requests[0]?.thinkingBudgetCap).toBe(5000)
   })
 
   it('does not pass thinkingBudgetCap when thinking is off', async () => {
-    const capturedRequests: ChatRequest[] = []
-    const provider: IProvider = {
-      name: 'mock',
-      stream: async function*(req: ChatRequest) {
-        capturedRequests.push(req)
-        yield { type: 'done' as const }
-      },
-      chat: async () => ({ message: { role: 'assistant' as const, content: '' } }),
-    }
-    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), model: 'test', thinking: 'off', thinkingBudgetCap: 5000 })
+    const requests: ChatRequest[] = []
+    const loop = new AgentLoop({ provider: capturingProvider(requests), tools: new ToolRegistry(), model: 'test', thinking: 'off', thinkingBudgetCap: 5000 })
     await loop.run([{ role: 'user', content: 'hi' }])
-    expect(capturedRequests[0]?.thinking).toBeUndefined()
-    expect(capturedRequests[0]?.thinkingBudgetCap).toBeUndefined()
+    expect(requests[0]?.thinking).toBeUndefined()
+    expect(requests[0]?.thinkingBudgetCap).toBeUndefined()
   })
 })

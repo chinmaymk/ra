@@ -115,6 +115,19 @@ export class AgentLoop {
     this.externalAbort?.abort()
   }
 
+  /** Build a ChatRequest with thinking resolved for the current iteration. */
+  private buildRequest(messages: IMessage[], iteration: number, signal: AbortSignal) {
+    const thinking = resolveThinking(this.thinking, iteration)
+    return {
+      model: this.model,
+      messages,
+      tools: this.tools.all(),
+      ...(thinking && { thinking }),
+      ...(thinking && this.thinkingBudgetCap && { thinkingBudgetCap: this.thinkingBudgetCap }),
+      signal,
+    }
+  }
+
   async run(initialMessages: IMessage[], _compactionRetries = 0): Promise<LoopResult> {
     const messages = initialMessages
     let iterations = 0
@@ -149,15 +162,7 @@ export class AgentLoop {
         iterations++
         this.logger.debug('iteration starting', { iteration: iterations, messageCount: messages.length })
 
-        const resolved = resolveThinking(this.thinking, iterations)
-        const request = {
-          model: this.model,
-          messages,
-          tools: this.tools.all(),
-          ...(resolved && { thinking: resolved }),
-          ...(resolved && this.thinkingBudgetCap && { thinkingBudgetCap: this.thinkingBudgetCap }),
-          signal,
-        }
+        const request = this.buildRequest(messages, iterations, signal)
         const modelCallCtx: ModelCallContext = { ...stoppable, request, loop: loopCtx() }
         await runMiddlewareChain(modelCallCtx, this.middleware.beforeModelCall, this.toolTimeout)
         if (signal.aborted) break
@@ -261,10 +266,9 @@ export class AgentLoop {
       // Attempt recovery via compaction when a provider rejects due to context length.
       if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err) && _compactionRetries < MAX_COMPACTION_RETRIES) {
         this.logger.info('context length exceeded, attempting compaction recovery', { attempt: _compactionRetries + 1, maxRetries: MAX_COMPACTION_RETRIES })
-        const recoveryThinking = resolveThinking(this.thinking, iterations)
         const modelCallCtx: ModelCallContext = {
           ...stoppable,
-          request: { model: this.model, messages, tools: this.tools.all(), ...(recoveryThinking && { thinking: recoveryThinking }), ...(recoveryThinking && this.thinkingBudgetCap && { thinkingBudgetCap: this.thinkingBudgetCap }), signal },
+          request: this.buildRequest(messages, iterations, signal),
           loop: loopCtx(),
         }
         const compacted = await forceCompact(this.provider, this.compactionConfig, modelCallCtx)

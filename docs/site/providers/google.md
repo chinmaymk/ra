@@ -29,7 +29,7 @@ ra --provider google --model gemini-2.0-flash "Quick question"
 
 ## Extended thinking
 
-Supported levels: `low`, `medium`, `high`.
+Supported modes: `off`, `low`, `medium`, `high`, `adaptive`.
 
 ```bash
 ra --provider google --model gemini-2.5-pro --thinking high "Reason through this carefully"

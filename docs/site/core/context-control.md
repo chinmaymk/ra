@@ -39,15 +39,32 @@ For Anthropic, ra automatically applies cache hints to system prompts and tool d
 
 ## Extended thinking
 
-Enable extended thinking for models that support it. Three budget levels control how much the model reasons before responding.
+Enable extended thinking for models that support it. Five modes control how the model reasons before responding.
+
+| Mode | Behavior |
+|------|----------|
+| `off` | Disabled (default) |
+| `low` | Minimal reasoning budget |
+| `medium` | Moderate reasoning budget |
+| `high` | Maximum reasoning budget |
+| `adaptive` | `high` for the first 5 iterations, then `low` — balances deep initial reasoning with faster follow-up turns |
 
 ```bash
 ra --thinking high "Design a database schema for a social network"
+ra --thinking adaptive "Build a REST API"
 ```
 
 ```yaml
 agent:
-  thinking: high  # low | medium | high (token budgets vary by provider)
+  thinking: adaptive
+```
+
+Optionally cap the thinking budget in tokens. The provider uses `min(levelBudget, cap)`:
+
+```yaml
+agent:
+  thinking: high
+  thinkingBudgetCap: 10000   # never exceed 10k thinking tokens
 ```
 
 Thinking output streams to the terminal in the REPL, so you can watch the model reason in real time. In the [HTTP API](/api/), thinking tokens are emitted as `{"type":"thinking","delta":"..."}` SSE events.

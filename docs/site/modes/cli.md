@@ -15,7 +15,7 @@ ra --provider openai --model gpt-4.1-mini "Explain this"
 ra --file report.pdf "Summarize in three bullets"
 ra --skill code-review --file diff.patch "Review this diff"
 ra --system-prompt "You are a JSON extractor. Output only JSON." "Extract fields from: ..."
-ra --thinking high "Design a distributed cache"
+ra --thinking adaptive "Design a distributed cache"
 ```
 
 ## Piping

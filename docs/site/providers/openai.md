@@ -36,7 +36,7 @@ ra --provider openai --model o3 "Solve this step by step"
 
 ## Extended thinking
 
-Supported levels: `low`, `medium`, `high`. Works with both providers.
+Supported modes: `off`, `low`, `medium`, `high`, `adaptive`. Works with both providers.
 
 ```bash
 ra --provider openai --thinking high "Solve this step by step"

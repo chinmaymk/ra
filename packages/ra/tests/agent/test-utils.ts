@@ -17,6 +17,18 @@ export function mockProvider(responses: StreamChunk[][]): IProvider {
   }
 }
 
+/** Provider that captures every ChatRequest and yields a single done chunk. */
+export function capturingProvider(requests: ChatRequest[]): IProvider {
+  return {
+    name: 'mock',
+    chat: async () => ({ message: { role: 'assistant' as const, content: '' } }),
+    async *stream(req: ChatRequest) {
+      requests.push(req)
+      yield { type: 'done' as const }
+    },
+  }
+}
+
 /** Helper that waits but resolves early if the signal fires. */
 export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {

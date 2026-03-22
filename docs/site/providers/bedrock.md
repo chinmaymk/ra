@@ -51,7 +51,7 @@ ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Triage this bug"
 
 ## Extended thinking
 
-Supported levels: `low`, `medium`, `high`.
+Supported modes: `off`, `low`, `medium`, `high`, `adaptive`.
 
 ```bash
 ra --provider bedrock --thinking medium "Analyze this architecture"
