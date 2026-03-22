@@ -150,7 +150,7 @@ describe('thinking', () => {
       messages: [{ role: 'user', content: 'hi' }],
       thinking: 'low',
     })
-    expect((params as any).additionalModelRequestFields.thinking.budget_tokens).toBe(1000)
+    expect((params as any).additionalModelRequestFields.thinking.budget_tokens).toBe(1024)
   })
 })
 
@@ -304,6 +304,25 @@ describe('BedrockProvider - stream()', () => {
     }
     expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'Read' })
     expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":"x"}' })
+  })
+
+  it('yields thinking deltas from reasoningContent events', async () => {
+    mockClientSend.mockResolvedValue({
+      stream: (async function* () {
+        yield { contentBlockDelta: { delta: { reasoningContent: { text: 'Let me think...' } } } }
+        yield { contentBlockDelta: { delta: { text: 'Answer here' } } }
+        yield { metadata: { usage: { inputTokens: 10, outputTokens: 5 } } }
+        yield { messageStop: {} }
+      })(),
+    })
+    const provider = new BedrockProvider({})
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }], thinking: 'high' })) {
+      chunks.push(chunk)
+    }
+    expect(chunks[0]).toEqual({ type: 'thinking', delta: 'Let me think...' })
+    expect(chunks[1]).toEqual({ type: 'text', delta: 'Answer here' })
+    expect(chunks[2].type).toBe('done')
   })
 
   it('emits done even when stream ends without messageStop', async () => {

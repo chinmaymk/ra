@@ -349,13 +349,13 @@ describe('thinking', () => {
       thinking: 'medium' as const,
     }
     const params = provider.buildParams(request)
-    expect(params.thinking).toEqual({ type: 'enabled', budget_tokens: 8000 })
+    expect(params.thinking).toEqual({ type: 'enabled', budget_tokens: 16000 })
   })
 
   it('maps low to 1000 tokens', () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
     const params = provider.buildParams({ model: 'x', messages: [], thinking: 'low' })
-    expect((params as any).thinking.budget_tokens).toBe(1000)
+    expect((params as any).thinking.budget_tokens).toBe(1024)
   })
 
   it('maps high to 32000 tokens', () => {

@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, type Content, type Part, type Tool as GeminiTool, t
 import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
-const THINKING_BUDGETS_GOOGLE = { low: 512, medium: 4096, high: 16384 } as const
+const THINKING_BUDGETS_GOOGLE = { low: 1024, medium: 8192, high: 24576 } as const
 
 /** Check if a Gemini part is a thinking/thought block (not in official types yet). */
 function isThoughtPart(part: Record<string, unknown>): boolean {

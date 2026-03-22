@@ -30,4 +30,23 @@ describe('AzureProvider', () => {
     const p = new AzureProvider({ endpoint: 'https://test.openai.azure.com/', deployment: 'gpt-4o', apiVersion: '2024-02-01' })
     expect(p.name).toBe('azure')
   })
+
+  it('passes thinking as reasoning effort in buildParams', () => {
+    const p = new AzureProvider({ endpoint: 'https://test.openai.azure.com/', deployment: 'o3', apiVersion: '2024-02-01' })
+    const params = p.buildParams({
+      model: 'ignored',
+      messages: [{ role: 'user', content: 'hi' }],
+      thinking: 'high',
+    })
+    expect((params as any).reasoning).toEqual({ effort: 'high' })
+  })
+
+  it('does not include reasoning when thinking is not set', () => {
+    const p = new AzureProvider({ endpoint: 'https://test.openai.azure.com/', deployment: 'gpt-4o', apiVersion: '2024-02-01' })
+    const params = p.buildParams({
+      model: 'ignored',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect((params as any).reasoning).toBeUndefined()
+  })
 })

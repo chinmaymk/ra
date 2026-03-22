@@ -115,6 +115,26 @@ describe('thinking / reasoning effort', () => {
     expect((params as any).reasoning).toEqual({ effort: 'medium' })
   })
 
+  it('maps low thinking to low effort', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const params = provider.buildParams({
+      model: 'o3',
+      messages: [{ role: 'user' as const, content: 'hi' }],
+      thinking: 'low',
+    })
+    expect((params as any).reasoning).toEqual({ effort: 'low' })
+  })
+
+  it('maps high thinking to high effort', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const params = provider.buildParams({
+      model: 'o3',
+      messages: [{ role: 'user' as const, content: 'hi' }],
+      thinking: 'high',
+    })
+    expect((params as any).reasoning).toEqual({ effort: 'high' })
+  })
+
   it('does not add reasoning when thinking is not set', () => {
     const provider = new OpenAIProvider({ apiKey: 'test' })
     const params = provider.buildParams({

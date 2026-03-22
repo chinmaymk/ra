@@ -48,8 +48,8 @@ export function serializeContent(content: string | ContentPart[]): string {
   return typeof content === 'string' ? content : JSON.stringify(content)
 }
 
-/** Thinking budget tokens shared by Anthropic and Bedrock providers. */
-export const THINKING_BUDGETS = { low: 1000, medium: 8000, high: 32000 } as const
+/** Thinking budget tokens shared by Anthropic and Bedrock providers. Minimum is 1024 per Anthropic API. */
+export const THINKING_BUDGETS = { low: 1024, medium: 16000, high: 32000 } as const
 
 /** Default max output tokens for providers that require an explicit limit (Anthropic, Bedrock). */
 export const DEFAULT_MAX_TOKENS = 4096
