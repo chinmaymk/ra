@@ -2,7 +2,8 @@ import { parseArgs as utilParseArgs } from 'util'
 import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
-export interface SkillCommand {
+export interface SubCommand {
+  kind: 'skill' | 'recipe'
   action: 'install' | 'remove' | 'list'
   args: string[]
 }
@@ -21,7 +22,8 @@ export interface ParsedArgsMeta {
   listMemories: boolean
   memories?: string
   forget?: string
-  skillCommand?: SkillCommand
+  subCommand?: SubCommand
+  recipeName?: string
 }
 
 export interface ParsedArgs {
@@ -67,10 +69,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
   )
   const userArgs = argv.slice(isScriptPath ? 2 : 1)
 
-  // Check for skill subcommand: ra skill install|remove|list [args...]
-  if (userArgs[0] === 'skill' && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
-    const action = userArgs[1] as 'install' | 'remove' | 'list'
-    const subArgs = userArgs.slice(2)
+  // Check for subcommands: ra skill|recipe install|remove|list [args...]
+  const SUB_KINDS = ['skill', 'recipe'] as const
+  const kind = userArgs[0] as typeof SUB_KINDS[number]
+  if (SUB_KINDS.includes(kind) && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
     return {
       config: {},
       meta: {
@@ -81,7 +83,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         runImmediately: false,
         listMemories: false,
         files: [],
-        skillCommand: { action, args: subArgs },
+        subCommand: { kind, action: userArgs[1] as 'install' | 'remove' | 'list', args: userArgs.slice(2) },
       },
     }
   }
@@ -149,8 +151,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'data-dir':                    { type: 'string' },
       'storage-max-sessions':        { type: 'string' },
       'storage-ttl-days':            { type: 'string' },
-      // Skills
+      // Skills & recipes
       'skill-dir':                   { type: 'string', multiple: true },
+      'recipe':                      { type: 'string' },
       // Provider connection options (non-sensitive)
       'anthropic-base-url':          { type: 'string' },
       'openai-base-url':             { type: 'string' },
@@ -196,6 +199,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       resume:     resumeValue,
       configPath: values.config as string | undefined,
       exec:       values.exec as string | undefined,
+      recipeName: values.recipe as string | undefined,
     },
   }
 }

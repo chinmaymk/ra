@@ -122,6 +122,7 @@ export default defineConfig({
           { text: 'Configuration', link: '/configuration/' },
           { text: 'HTTP API', link: '/api/' },
           { text: 'Recipes', link: '/recipes/' },
+          { text: 'Creating Recipes', link: '/recipes/creating-recipes' },
           { text: 'Dynamic Prompts', link: '/recipes/dynamic-prompts' },
         ],
       },

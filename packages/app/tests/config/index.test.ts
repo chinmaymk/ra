@@ -577,6 +577,105 @@ describe('env var interpolation in config files', () => {
   })
 })
 
+describe('recipe resolution', () => {
+  let tmp: string
+  let recipeDir: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-recipe-config-${Date.now()}`)
+    recipeDir = join(tmp, 'recipes', 'testuser', 'my-recipe')
+    mkdirSync(recipeDir, { recursive: true })
+    writeFileSync(join(recipeDir, 'ra.config.yaml'), [
+      'agent:',
+      '  provider: openai',
+      '  model: gpt-4o',
+      '  maxIterations: 100',
+      '  skillDirs:',
+      '    - ./skills',
+    ].join('\n'))
+    // Create a skills dir in the recipe
+    mkdirSync(join(recipeDir, 'skills'), { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('loads recipe via recipeName option (local path)', async () => {
+    const c = await loadConfig({ cwd: tmp, env: {}, recipeName: recipeDir })
+    expect(c.agent.provider).toBe('openai')
+    expect(c.agent.model).toBe('gpt-4o')
+    expect(c.agent.maxIterations).toBe(100)
+  })
+
+  it('recipe skillDirs are pre-resolved to absolute paths', async () => {
+    const c = await loadConfig({ cwd: tmp, env: {}, recipeName: recipeDir })
+    expect(c.agent.skillDirs.some(d => d === join(recipeDir, 'skills'))).toBe(true)
+  })
+
+  it('recipe skillDirs are prepended to default skillDirs', async () => {
+    const c = await loadConfig({ cwd: tmp, env: {}, recipeName: recipeDir })
+    // Recipe dir comes first, defaults come after
+    expect(c.agent.skillDirs[0]).toBe(join(recipeDir, 'skills'))
+    expect(c.agent.skillDirs.length).toBeGreaterThan(1)
+  })
+
+  it('local config file overrides recipe values', async () => {
+    const projectDir = join(tmp, 'project')
+    mkdirSync(projectDir, { recursive: true })
+    writeFileSync(join(projectDir, 'ra.config.yaml'), [
+      'agent:',
+      '  recipe: ' + recipeDir,
+      '  model: custom-model',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: projectDir, env: {} })
+    expect(c.agent.provider).toBe('openai')  // from recipe
+    expect(c.agent.model).toBe('custom-model')  // overridden by local
+  })
+
+  it('CLI args override recipe values', async () => {
+    const c = await loadConfig({
+      cwd: tmp,
+      env: {},
+      recipeName: recipeDir,
+      cliArgs: { agent: { model: 'cli-model' } } as any,
+    })
+    expect(c.agent.model).toBe('cli-model')
+  })
+
+  it('throws when recipe not found', async () => {
+    await expect(loadConfig({ cwd: tmp, env: {}, recipeName: 'nonexistent/recipe' }))
+      .rejects.toThrow('Recipe not found')
+  })
+
+  it('recipe field is stripped from final config', async () => {
+    const projectDir = join(tmp, 'project2')
+    mkdirSync(projectDir, { recursive: true })
+    writeFileSync(join(projectDir, 'ra.config.yaml'), [
+      'agent:',
+      '  recipe: ' + recipeDir,
+    ].join('\n'))
+    const c = await loadConfig({ cwd: projectDir, env: {} })
+    expect(c.agent.recipe).toBeUndefined()
+  })
+
+  it('recipeName from CLI takes priority over config file recipe field', async () => {
+    const otherRecipe = join(tmp, 'recipes', 'other', 'recipe')
+    mkdirSync(otherRecipe, { recursive: true })
+    writeFileSync(join(otherRecipe, 'ra.config.yaml'), 'agent:\n  provider: google\n')
+
+    const projectDir = join(tmp, 'project3')
+    mkdirSync(projectDir, { recursive: true })
+    writeFileSync(join(projectDir, 'ra.config.yaml'), [
+      'agent:',
+      '  recipe: ' + recipeDir,
+    ].join('\n'))
+
+    const c = await loadConfig({ cwd: projectDir, env: {}, recipeName: otherRecipe })
+    expect(c.agent.provider).toBe('google')  // from CLI recipe, not config file recipe
+  })
+})
+
 describe('legacy flat config migration', () => {
   let tmp: string
 
