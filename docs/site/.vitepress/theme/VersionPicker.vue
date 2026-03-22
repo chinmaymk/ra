@@ -9,7 +9,7 @@ interface VersionsData {
   versions: string[]
 }
 
-const currentVersion = __DOCS_VERSION__
+const currentVersion = ref(__DOCS_VERSION__)
 const versions = ref<VersionsData | null>(null)
 
 const MIN_VERSION = [0, 0, 5] as const
@@ -34,9 +34,8 @@ function versionUrl(version: string): string {
   return withBase(`/v/${version}/`)
 }
 
-function onChange(e: Event) {
-  const target = e.target as HTMLSelectElement
-  const path = versionUrl(target.value)
+function onChange() {
+  const path = versionUrl(currentVersion.value)
   window.location.href = window.location.origin + path
 }
 
@@ -51,7 +50,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <select class="version-select" :value="currentVersion" @change="onChange">
+  <select class="version-select" v-model="currentVersion" @change="onChange">
     <option value="dev">dev</option>
     <option
       v-for="v in filteredVersions"
