@@ -211,6 +211,111 @@ describe('observability middleware', () => {
     expect((loopSpan!.attributes as Record<string, unknown>).stack).toContain('provider exploded')
   })
 
+  it('tracks stream metrics and TTFT in model call span', async () => {
+    const logger = new Logger({ level: 'debug', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    const provider = mockSequenceProvider([
+      [
+        { type: 'text', delta: 'hello ' },
+        { type: 'text', delta: 'world' },
+        { type: 'done', usage: { inputTokens: 10, outputTokens: 5 } },
+      ],
+    ])
+
+    const loop = new AgentLoop({
+      provider,
+      tools: new ToolRegistry(),
+      maxIterations: 10,
+      middleware: obsMw,
+    })
+
+    await loop.run([{ role: 'user', content: 'hi' }])
+
+    const { logs, spans } = parseOutput(captured)
+
+    // Model call span should include stream metrics
+    const modelSpan = spans.find(r => r.name === 'agent.model_call')
+    expect(modelSpan).toBeDefined()
+    const attrs = modelSpan!.attributes as Record<string, unknown>
+    expect(attrs.streamChunkCount).toBe(2)
+    expect(attrs.streamTextLength).toBe(11) // 'hello ' + 'world'
+    expect(typeof attrs.ttftMs).toBe('number')
+    expect(attrs.ttftMs as number).toBeGreaterThanOrEqual(0)
+
+    // Model response log should include TTFT
+    const responseLog = logs.find(e => e.message === 'model responded')
+    expect(responseLog).toBeDefined()
+    expect(typeof responseLog!.ttftMs).toBe('number')
+  })
+
+  it('includes model name and tool count in iteration span', async () => {
+    const logger = new Logger({ level: 'debug', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    const provider = mockSequenceProvider([
+      [
+        { type: 'text', delta: 'hi' },
+        { type: 'done', usage: { inputTokens: 10, outputTokens: 5 } },
+      ],
+    ])
+
+    const tools = new ToolRegistry()
+    tools.register({ name: 'echo', description: 'echo', inputSchema: {}, execute: async () => 'ok' })
+
+    const loop = new AgentLoop({
+      provider,
+      tools,
+      maxIterations: 10,
+      model: 'gpt-4',
+      middleware: obsMw,
+    })
+
+    await loop.run([{ role: 'user', content: 'hi' }])
+
+    const { spans } = parseOutput(captured)
+
+    // Iteration span should include model name
+    const iterSpan = spans.find(r => r.name === 'agent.iteration')
+    expect(iterSpan).toBeDefined()
+    expect((iterSpan!.attributes as Record<string, unknown>).model).toBe('gpt-4')
+
+    // Model call span should include tool count
+    const modelSpan = spans.find(r => r.name === 'agent.model_call')
+    expect(modelSpan).toBeDefined()
+    expect((modelSpan!.attributes as Record<string, unknown>).toolCount).toBe(1)
+  })
+
+  it('includes thinking tokens in loop complete span', async () => {
+    const logger = new Logger({ level: 'info', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    const provider = mockSequenceProvider([
+      [
+        { type: 'text', delta: 'ok' },
+        { type: 'done', usage: { inputTokens: 10, outputTokens: 5, thinkingTokens: 3 } },
+      ],
+    ])
+
+    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
+    await loop.run([{ role: 'user', content: 'think' }])
+
+    const { logs, spans } = parseOutput(captured)
+
+    // Loop complete span should include thinking tokens
+    const loopSpan = spans.find(r => r.name === 'agent.loop')
+    expect(loopSpan).toBeDefined()
+    expect((loopSpan!.attributes as Record<string, unknown>).thinkingTokens).toBe(3)
+
+    // Log should include thinking tokens
+    const completeLog = logs.find(e => e.message === 'agent loop complete')
+    expect(completeLog).toBeDefined()
+    expect(completeLog!.thinkingTokens).toBe(3)
+  })
+
   it('is safe to reuse across multiple loop runs', async () => {
     const logger = new Logger({ level: 'info', output: 'stderr' })
     const tracer = new Tracer({ output: 'stderr' })

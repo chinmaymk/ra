@@ -77,7 +77,9 @@ export class SessionStorage {
   }
 
   async readMessages(id: string): Promise<IMessage[]> {
-    return parseJsonlFile<IMessage>(join(this.sessionDir(id), 'messages.jsonl'))
+    const messages = await parseJsonlFile<IMessage>(join(this.sessionDir(id), 'messages.jsonl'))
+    this.logger.debug('messages loaded', { sessionId: id, messageCount: messages.length })
+    return messages
   }
 
   async list(): Promise<Session[]> {
@@ -106,6 +108,7 @@ export class SessionStorage {
     if (isNew) {
       const meta: SessionMeta = { id, created: new Date().toISOString(), ...options }
       await Bun.write(metaPath, JSON.stringify(meta, null, 2))
+      this.logger.info('session created', { sessionId: id, provider: options.provider, model: options.model })
     }
     return { id, isNew }
   }
@@ -128,6 +131,7 @@ export class SessionStorage {
     if (toDelete.size > 0) {
       this.logger.info('sessions pruned', { pruned: toDelete.size, ttlDays: options.ttlDays, maxSessions: options.maxSessions })
     }
+
     await Promise.all([...toDelete].map(id => rm(this.sessionDir(id), { recursive: true, force: true })))
   }
 }

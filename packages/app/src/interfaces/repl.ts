@@ -315,7 +315,7 @@ export class Repl {
         const skill = await this.getSkill(skillName)
         if (!skill) return `Skill not found: ${skillName}`
         const output = isRun
-          ? await runSkillScriptByName(skill, targetName, {})
+          ? await runSkillScriptByName(skill, targetName, {}, this.options.logger)
           : await readSkillReference(skill, targetName)
         if (output.trim()) {
           const tag = isRun ? 'skill-script' : 'skill-reference'

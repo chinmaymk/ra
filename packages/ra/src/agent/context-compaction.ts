@@ -169,7 +169,10 @@ async function _runCompaction(
     const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
     const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
     const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
-    if (estimated <= triggerThreshold) return false
+    if (estimated <= triggerThreshold) {
+      ctx.logger.debug('compaction not needed', { estimatedTokens: estimated, threshold: triggerThreshold })
+      return false
+    }
     ctx.logger.info('compaction triggered', { estimatedTokens: estimated, threshold: triggerThreshold, messageCount: messages.length })
   }
 
@@ -234,12 +237,21 @@ async function _runCompaction(
   const originalCount = messages.length
   ctx.request.messages.length = 0
   ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
-  ctx.logger.info('compaction complete', { originalMessages: originalCount, compactedMessages: ctx.request.messages.length })
+  const estimatedTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
+  const threshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
+  ctx.logger.info('compaction complete', {
+    originalMessages: originalCount,
+    compactedMessages: ctx.request.messages.length,
+    compactableMessages: compactable.length,
+    estimatedTokens,
+    threshold,
+    force,
+  })
   config.onCompact?.({
     originalMessages: originalCount,
     compactedMessages: ctx.request.messages.length,
-    estimatedTokens: ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages),
-    threshold: config.maxTokens ?? Math.floor(contextWindow * config.threshold),
+    estimatedTokens,
+    threshold,
   })
   return true
 }
