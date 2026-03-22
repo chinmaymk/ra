@@ -8,16 +8,17 @@ Observability is enabled by default. Logs and traces go to the session directory
 
 ```yaml
 # ra.config.yml
-logsEnabled: true        # toggle session logs (default: true)
-logLevel: info           # debug | info | warn | error
-tracesEnabled: true      # toggle session traces (default: true)
+app:
+  logsEnabled: true        # toggle session logs (default: true)
+  logLevel: info           # debug | info | warn | error
+  tracesEnabled: true      # toggle session traces (default: true)
 ```
 
 | Config key | Env var | Default | Description |
 |------------|---------|---------|-------------|
-| `logsEnabled` | `RA_LOGS_ENABLED` | `true` | Enable or disable session logs |
-| `logLevel` | `RA_LOG_LEVEL` | `info` | Minimum log level |
-| `tracesEnabled` | `RA_TRACES_ENABLED` | `true` | Enable or disable session traces |
+| `app.logsEnabled` | `RA_LOGS_ENABLED` | `true` | Enable or disable session logs |
+| `app.logLevel` | `RA_LOG_LEVEL` | `info` | Minimum log level |
+| `app.tracesEnabled` | `RA_TRACES_ENABLED` | `true` | Enable or disable session traces |
 
 Logs and traces are always written to the session directory (`{dataDir}/sessions/<id>/logs.jsonl` and `traces.jsonl`). When no session is active, they fall back to `stderr`.
 
@@ -114,8 +115,9 @@ cat ~/.ra/sessions/<session-id>/traces.jsonl | jq 'select(.name == "agent.tool_e
 ## Disabling observability
 
 ```yaml
-logsEnabled: false
-tracesEnabled: false
+app:
+  logsEnabled: false
+  tracesEnabled: false
 ```
 
 Or via environment variables:
@@ -128,6 +130,7 @@ When disabled, no-op implementations are used — zero overhead.
 
 ## See also
 
+- [Inspector](/modes/inspector) — web dashboard for browsing sessions, traces, and logs
 - [Sessions](/core/sessions) — where session logs are stored
 - [Middleware](/middleware/) — observability is implemented as built-in middleware hooks
 - [Configuration](/configuration/) — full config reference
