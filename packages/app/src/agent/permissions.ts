@@ -50,7 +50,10 @@ export function createPermissionsMiddleware(config: PermissionsConfig): Middlewa
     const toolRules = rulesByTool.get(name)
 
     if (!toolRules) {
-      if (defaultAction === 'deny') ctx.deny(`Permission denied: no rules configured for tool '${name}' and default_action is 'deny'`)
+      if (defaultAction === 'deny') {
+        ctx.logger.info('tool denied by default action', { tool: name })
+        ctx.deny(`Permission denied: no rules configured for tool '${name}' and default_action is 'deny'`)
+      }
       return
     }
 
@@ -62,7 +65,11 @@ export function createPermissionsMiddleware(config: PermissionsConfig): Middlewa
         const val = input[key]
         if (val == null) continue
         const reason = checkField(name, key, typeof val === 'string' ? val : JSON.stringify(val), compiledRule)
-        if (reason) { ctx.deny(reason); return }
+        if (reason) {
+          ctx.logger.info('tool denied by permission rule', { tool: name, field: key, reason })
+          ctx.deny(reason)
+          return
+        }
       }
     }
   }

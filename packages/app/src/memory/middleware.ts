@@ -23,6 +23,8 @@ export function createMemoryMiddleware(options: MemoryMiddlewareOptions) {
       const memories = store.list(injectLimit)
       if (memories.length === 0) return
 
+      ctx.logger?.debug('injecting recalled memories', { count: memories.length })
+
       const lines = memories.map(m =>
         `- [${m.tags || 'general'}] ${m.content}`
       )

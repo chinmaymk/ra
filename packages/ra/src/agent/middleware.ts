@@ -11,7 +11,10 @@ export async function runMiddlewareChain<T extends StoppableContext>(
     try {
       await (timeoutMs > 0 ? withTimeout(mw(ctx), timeoutMs, 'middleware') : mw(ctx))
     } catch (err) {
-      if (err instanceof TimeoutError) continue
+      if (err instanceof TimeoutError) {
+        ctx.logger.warn('middleware timed out', { timeoutMs, middlewareIndex: chain.indexOf(mw) })
+        continue
+      }
       throw err
     }
   }

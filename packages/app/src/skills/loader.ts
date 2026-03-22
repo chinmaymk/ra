@@ -1,4 +1,6 @@
 import { join } from 'path'
+import { NoopLogger } from '@chinmaymk/ra'
+import type { Logger } from '@chinmaymk/ra'
 import { firstSegment } from '../utils/paths'
 import { resolveSkillAsset, type Skill, type SkillIndex, type SkillMetadata } from './types'
 import { parseFrontmatter, extractSkillMetadata } from './frontmatter'
@@ -17,7 +19,8 @@ async function listSubdirFiles(skillDir: string, subdir: string): Promise<string
  * Scan skill directories for SKILL.md files and return lightweight index entries.
  * Only reads frontmatter — does not load bodies, scripts, or references.
  */
-export async function loadSkillIndex(dirs: string[]): Promise<Map<string, SkillIndex>> {
+export async function loadSkillIndex(dirs: string[], logger?: Logger): Promise<Map<string, SkillIndex>> {
+  const log = logger ?? new NoopLogger()
   const result = new Map<string, SkillIndex>()
 
   for (const dir of dirs) {
@@ -35,6 +38,7 @@ export async function loadSkillIndex(dirs: string[]): Promise<Map<string, SkillI
     } catch { /* dir doesn't exist */ }
   }
 
+  log.debug('skill index loaded', { skillCount: result.size, skills: [...result.keys()], dirs })
   return result
 }
 

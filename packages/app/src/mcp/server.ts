@@ -1,4 +1,5 @@
-import { errorMessage } from '@chinmaymk/ra'
+import { errorMessage, NoopLogger } from '@chinmaymk/ra'
+import type { Logger } from '@chinmaymk/ra'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -39,12 +40,16 @@ function buildServer(config: McpServerConfig, handler: McpToolHandler, builtinTo
   return server
 }
 
-export async function startMcpStdio(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): Promise<void> {
+export async function startMcpStdio(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry, logger?: Logger): Promise<void> {
+  const log = logger ?? new NoopLogger()
   const server = buildServer(config, handler, builtinTools)
+  log.info('MCP server starting', { transport: 'stdio', tool: config.tool.name })
   await server.connect(new StdioServerTransport())
+  log.info('MCP server connected', { transport: 'stdio' })
 }
 
-export async function startMcpHttp(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry): Promise<() => Promise<void>> {
+export async function startMcpHttp(config: McpServerConfig, handler: McpToolHandler, builtinTools?: ToolRegistry, logger?: Logger): Promise<() => Promise<void>> {
+  const log = logger ?? new NoopLogger()
   const server = buildServer(config, handler, builtinTools)
   const transports = new Map<string, StreamableHTTPServerTransport>()
 
@@ -62,6 +67,7 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
       if (!t) { res.writeHead(404).end('Session not found'); return }
       await t.close()
       transports.delete(sessionId)
+      log.info('MCP HTTP session deleted', { sessionId })
       res.writeHead(200).end()
       return
     }
@@ -74,6 +80,7 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
       transport.onclose = () => { if (transport.sessionId) transports.delete(transport.sessionId) }
       await server.connect(transport)
       isNew = true
+      log.info('MCP HTTP session created', { sessionId: transport.sessionId })
     } else if (sessionId && transports.has(sessionId)) {
       transport = transports.get(sessionId)!
     } else {
@@ -92,6 +99,7 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
         transports.set(transport.sessionId, transport)
       }
     } catch (err) {
+      log.error('MCP HTTP request failed', { sessionId: transport.sessionId, error: errorMessage(err) })
       if (isNew) {
         if (transport.sessionId) transports.delete(transport.sessionId)
         await transport.close().catch(() => {})
@@ -107,8 +115,10 @@ export async function startMcpHttp(config: McpServerConfig, handler: McpToolHand
     httpServer.listen(config.port, () => resolve())
     httpServer.once('error', reject)
   })
+  log.info('MCP HTTP server listening', { port: config.port, tool: config.tool.name })
 
   return async () => {
+    log.info('MCP HTTP server shutting down', { activeSessions: transports.size })
     for (const t of transports.values()) await t.close()
     transports.clear()
     await server.close()

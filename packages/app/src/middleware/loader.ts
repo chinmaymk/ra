@@ -1,5 +1,6 @@
 import { looksLikePath, resolvePath } from '../utils/paths'
-import { errorMessage } from '@chinmaymk/ra'
+import { errorMessage, NoopLogger } from '@chinmaymk/ra'
+import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '@chinmaymk/ra'
 
@@ -35,16 +36,19 @@ async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
 export async function loadMiddleware(
   config: RaConfig,
   cwd: string,
+  logger?: Logger,
 ): Promise<Partial<MiddlewareConfig>> {
+  const log = logger ?? new NoopLogger()
   const result: Partial<MiddlewareConfig> = {}
 
   for (const [hook, entries] of Object.entries(config.agent.middleware ?? {})) {
     if (!VALID_HOOKS.has(hook as keyof MiddlewareConfig)) {
-      console.warn('[ra] Unknown middleware hook — skipping', hook)
+      log.warn('unknown middleware hook, skipping', { hook })
       continue
     }
     const fns = await Promise.all(entries.map(e => loadOne(e, cwd)))
     ;(result as Record<string, unknown[]>)[hook] = fns
+    log.debug('middleware hook loaded', { hook, count: fns.length })
   }
 
   return result

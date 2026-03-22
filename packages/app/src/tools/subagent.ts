@@ -4,6 +4,7 @@ import {
   ToolRegistry,
   accumulateUsage,
   serializeContent,
+  NoopLogger,
   type ITool,
   type IMessage,
   type IProvider,
@@ -68,8 +69,11 @@ export function subagentTool(options: SubagentToolOptions): ITool {
     },
 
     async execute(input: unknown) {
+      const logger = options.logger ?? new NoopLogger()
       const { tasks } = input as { tasks: { task: string }[] }
       if (!tasks?.length) throw new Error('At least one task is required')
+
+      logger.info('subagent forking', { taskCount: tasks.length, depth, maxDepth, tasks: tasks.map(t => t.task.slice(0, 100)) })
 
       // Build child tool registry lazily so we pick up tools registered
       // after subagentTool() was constructed (e.g. MCP tools)
@@ -123,6 +127,10 @@ export function subagentTool(options: SubagentToolOptions): ITool {
       // Compute aggregate usage for parent rollup
       const totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
       for (const r of results) accumulateUsage(totalUsage, r.usage)
+
+      const completed = results.filter(r => r.status === 'completed').length
+      const errored = results.filter(r => r.status === 'error').length
+      logger.info('subagent tasks finished', { taskCount: tasks.length, completed, errored, inputTokens: totalUsage.inputTokens, outputTokens: totalUsage.outputTokens })
 
       return { results, usage: totalUsage }
     },

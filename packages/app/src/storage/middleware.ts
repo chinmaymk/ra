@@ -35,6 +35,7 @@ export function createHistoryMiddleware(storage: SessionStorage, priorCount = 0)
       if (newInitial.length > 0) {
         await storage.appendMessages(ctx.sessionId, newInitial)
         for (const msg of newInitial) savedIds.add(ensureMessageId(msg))
+        ctx.logger.debug('initial messages persisted', { count: newInitial.length, sessionId: ctx.sessionId })
       }
     }],
     afterLoopIteration: [async (ctx: LoopContext) => {
@@ -42,6 +43,7 @@ export function createHistoryMiddleware(storage: SessionStorage, priorCount = 0)
       if (unsaved.length > 0) {
         await storage.appendMessages(ctx.sessionId, unsaved)
         for (const msg of unsaved) savedIds.add(ensureMessageId(msg))
+        ctx.logger.debug('messages persisted', { count: unsaved.length, sessionId: ctx.sessionId })
       }
     }],
   }
