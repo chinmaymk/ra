@@ -7,6 +7,11 @@ export interface SkillCommand {
   args: string[]
 }
 
+export interface RecipeCommand {
+  action: 'install' | 'remove' | 'list'
+  args: string[]
+}
+
 export interface ParsedArgsMeta {
   help: boolean
   version: boolean
@@ -22,6 +27,8 @@ export interface ParsedArgsMeta {
   memories?: string
   forget?: string
   skillCommand?: SkillCommand
+  recipeCommand?: RecipeCommand
+  recipeName?: string
 }
 
 export interface ParsedArgs {
@@ -81,6 +88,25 @@ export function parseArgs(argv: string[]): ParsedArgs {
         listMemories: false,
         files: [],
         skillCommand: { action, args: subArgs },
+      },
+    }
+  }
+
+  // Check for recipe subcommand: ra recipe install|remove|list [args...]
+  if (userArgs[0] === 'recipe' && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
+    const action = userArgs[1] as 'install' | 'remove' | 'list'
+    const subArgs = userArgs.slice(2)
+    return {
+      config: {},
+      meta: {
+        help: false,
+        version: false,
+        showContext: false,
+        showConfig: false,
+        runImmediately: false,
+        listMemories: false,
+        files: [],
+        recipeCommand: { action, args: subArgs },
       },
     }
   }
@@ -147,8 +173,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'data-dir':                    { type: 'string' },
       'storage-max-sessions':        { type: 'string' },
       'storage-ttl-days':            { type: 'string' },
-      // Skills
+      // Skills & recipes
       'skill-dir':                   { type: 'string', multiple: true },
+      'recipe':                      { type: 'string' },
       // Provider connection options (non-sensitive)
       'anthropic-base-url':          { type: 'string' },
       'openai-base-url':             { type: 'string' },
@@ -194,6 +221,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       resume:     resumeValue,
       configPath: values.config as string | undefined,
       exec:       values.exec as string | undefined,
+      recipeName: values.recipe as string | undefined,
     },
   }
 }

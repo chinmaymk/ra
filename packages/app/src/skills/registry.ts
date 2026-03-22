@@ -1,6 +1,7 @@
 import { join, basename } from 'path'
 import { mkdirSync, cpSync, rmSync, writeFileSync } from 'fs'
 import { homeDir, firstSegment } from '../utils/paths'
+import { parseSource, withTempExtract, findExtractedRoot, resolveNpmTarball } from '../registry/helpers'
 import type { SkillSource } from './types'
 
 /** Default directory for installed skills */
@@ -10,65 +11,13 @@ export function defaultSkillInstallDir(): string {
 
 /**
  * Parse a skill source string into a registry type and identifier.
- *
- * Formats:
- *   npm:<package>[@version]     → npm registry
- *   github:<owner>/<repo>       → GitHub tarball
- *   https://...                 → raw URL (tarball or git)
- *   <package>                   → defaults to npm
+ * Skills default to npm for bare names (unlike recipes which default to github).
  */
-export function parseSkillSource(source: string): { registry: 'npm' | 'github' | 'url'; identifier: string; version?: string } {
-  if (source.startsWith('npm:')) {
-    const rest = source.slice(4)
-    return splitNpmVersion(rest)
-  }
-  if (source.startsWith('github:')) {
-    return { registry: 'github', identifier: source.slice(7) }
-  }
-  if (source.startsWith('https://') || source.startsWith('http://')) {
-    return { registry: 'url', identifier: source }
-  }
-  // Default: treat as npm package
-  return splitNpmVersion(source)
+export function parseSkillSource(source: string) {
+  return parseSource(source)
 }
 
-function splitNpmVersion(pkg: string): { registry: 'npm'; identifier: string; version?: string } {
-  // For scoped packages (@scope/name@version), the last @ after the scope is the version separator
-  const scopeEnd = pkg.startsWith('@') ? pkg.indexOf('/') : -1
-  const atIdx = pkg.lastIndexOf('@')
-  if (atIdx > scopeEnd && atIdx > 0) {
-    return { registry: 'npm', identifier: pkg.slice(0, atIdx), version: pkg.slice(atIdx + 1) }
-  }
-  return { registry: 'npm', identifier: pkg }
-}
-
-// ── Shared helpers ──────────────────────────────────────────────────
-
-/** Download a URL to a temp dir, extract it, and run a callback with the extracted path. Cleans up on completion. */
-async function withTempExtract<T>(
-  installDir: string,
-  url: string,
-  errorPrefix: string,
-  fn: (extractedDir: string) => Promise<T>,
-): Promise<T> {
-  const tmpDir = join(installDir, '.tmp-install-' + Date.now())
-  mkdirSync(tmpDir, { recursive: true })
-
-  try {
-    const resp = await fetch(url)
-    if (!resp.ok) throw new Error(`${errorPrefix}: download failed (${resp.status})`)
-
-    const tarballPath = join(tmpDir, 'archive.tgz')
-    await Bun.write(tarballPath, resp)
-
-    const extract = Bun.spawnSync(['tar', 'xzf', tarballPath, '-C', tmpDir])
-    if (extract.exitCode !== 0) throw new Error(`${errorPrefix}: failed to extract tarball`)
-
-    return await fn(tmpDir)
-  } finally {
-    rmSync(tmpDir, { recursive: true, force: true })
-  }
-}
+// ── Skill-specific helpers ──────────────────────────────────────────
 
 /** Find all directories containing a SKILL.md within a root directory (one level deep + skills/ convention). */
 async function findSkillDirsIn(root: string): Promise<string[]> {
@@ -119,32 +68,11 @@ async function installSkillDirs(
 // ── Registry installers ─────────────────────────────────────────────
 
 async function installFromNpm(packageName: string, version: string | undefined, installDir: string): Promise<string[]> {
-  const versionSpec = version ?? 'latest'
-
-  // Fetch package metadata — scoped packages use URL encoding on the full name
-  const registryUrl = `https://registry.npmjs.org/${packageName.startsWith('@') ? packageName : encodeURIComponent(packageName)}`
-  const metaResp = await fetch(registryUrl)
-  if (!metaResp.ok) throw new Error(`npm: package "${packageName}" not found (${metaResp.status})`)
-  const meta = await metaResp.json() as Record<string, unknown>
-
-  // Resolve version
-  const distTags = meta['dist-tags'] as Record<string, string> | undefined
-  const versions = meta['versions'] as Record<string, unknown> | undefined
-  let resolvedVersion = versionSpec
-  if (distTags?.[versionSpec]) {
-    resolvedVersion = distTags[versionSpec]
-  }
-  if (!versions?.[resolvedVersion]) {
-    throw new Error(`npm: version "${resolvedVersion}" not found for "${packageName}"`)
-  }
-  const versionMeta = versions[resolvedVersion] as Record<string, unknown>
-  const dist = versionMeta['dist'] as { tarball: string } | undefined
-  if (!dist?.tarball) throw new Error(`npm: no tarball URL for "${packageName}@${resolvedVersion}"`)
-
+  const { tarballUrl, resolvedVersion } = await resolveNpmTarball(packageName, version)
   const fallbackName = packageName.replace(/^@[^/]+\//, '').replace(/^ra-skill-/, '')
   const source: Omit<SkillSource, 'installedAt'> = { registry: 'npm', package: packageName, version: resolvedVersion }
 
-  return withTempExtract(installDir, dist.tarball, `npm`, async (tmpDir) => {
+  return withTempExtract(installDir, tarballUrl, `npm`, async (tmpDir) => {
     const packageDir = join(tmpDir, 'package')
     const installed = await installSkillDirs(packageDir, installDir, source, fallbackName)
     if (installed.length === 0) throw new Error(`npm: no skills found in "${packageName}@${resolvedVersion}"`)
@@ -156,19 +84,12 @@ async function installFromGithub(repo: string, installDir: string): Promise<stri
   const [owner, name] = repo.split('/')
   if (!owner || !name) throw new Error(`github: invalid repo format "${repo}", expected "owner/repo"`)
 
-  // GitHub API tarball endpoint auto-resolves the default branch
   const tarballUrl = `https://api.github.com/repos/${owner}/${name}/tarball`
   const source: Omit<SkillSource, 'installedAt'> = { registry: 'github', repo }
   const fallbackName = name.replace(/^ra-skill-/, '')
 
   return withTempExtract(installDir, tarballUrl, `github`, async (tmpDir) => {
-    // GitHub extracts to <owner>-<repo>-<sha>/ directory
-    const entries: string[] = []
-    for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
-      if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
-    }
-    const repoDir = entries.length === 1 ? join(tmpDir, entries[0] as string) : tmpDir
-
+    const repoDir = await findExtractedRoot(tmpDir)
     const installed = await installSkillDirs(repoDir, installDir, source, fallbackName)
     if (installed.length === 0) throw new Error(`github: no skills found in "${repo}"`)
     return installed
@@ -179,13 +100,7 @@ async function installFromUrl(url: string, installDir: string): Promise<string[]
   const source: Omit<SkillSource, 'installedAt'> = { registry: 'url', url }
 
   return withTempExtract(installDir, url, 'url', async (tmpDir) => {
-    // Check for a single extracted directory (common tarball pattern)
-    const entries: string[] = []
-    for await (const entry of new Bun.Glob('*/').scan({ cwd: tmpDir, onlyFiles: false })) {
-      if (!entry.startsWith('.') && entry !== 'archive.tgz') entries.push(entry.replace(/\/$/, ''))
-    }
-    const extractedRoot = entries.length === 1 ? join(tmpDir, entries[0] as string) : tmpDir
-
+    const extractedRoot = await findExtractedRoot(tmpDir)
     const installed = await installSkillDirs(extractedRoot, installDir, source, undefined)
     if (installed.length === 0) throw new Error(`url: no skills found at "${url}"`)
     return installed

@@ -84,6 +84,8 @@ export interface AppConfig {
 
 /** Agent behavior settings — LLM config, tools, context, memory, capabilities. */
 export interface AgentConfig {
+  /** Installed recipe name (owner/repo) or local path to use as base agent config. */
+  recipe?: string
   provider: ProviderName
   model: string
   thinking?: 'low' | 'medium' | 'high'
@@ -164,4 +166,6 @@ export interface LoadConfigOptions {
   configPath?: string
   cliArgs?: Partial<RaConfig>
   env?: Record<string, string | undefined>
+  /** Recipe name (from --recipe flag) to load as base agent config. */
+  recipeName?: string
 }

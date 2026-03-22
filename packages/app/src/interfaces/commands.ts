@@ -1,6 +1,6 @@
 import { errorMessage } from '@chinmaymk/ra'
 import { resolve } from 'path'
-import type { SkillCommand } from './parse-args'
+import type { SkillCommand, RecipeCommand } from './parse-args'
 import type { IMessage } from '@chinmaymk/ra'
 import type { MemoryStore } from '../memory'
 import type { RaConfig } from '../config/types'
@@ -64,6 +64,61 @@ export async function runSkillCommand(cmd: SkillCommand): Promise<void> {
             ? ' (' + s.source.registry + (s.source.package ? ': ' + s.source.package : '') + (s.source.repo ? ': ' + s.source.repo : '') + (s.source.version ? '@' + s.source.version : '') + ')'
             : ''
           console.log('  ' + s.name + src)
+        }
+      }
+      process.exit(0)
+    }
+  }
+}
+
+/** Handle `ra recipe install|remove|list` subcommands. Exits the process. */
+export async function runRecipeCommand(cmd: RecipeCommand): Promise<void> {
+  const { installRecipe, removeRecipe, listInstalledRecipes, defaultRecipeInstallDir } = await import('../recipes/registry')
+  const { action, args } = cmd
+
+  switch (action) {
+    case 'install': {
+      if (args.length === 0) {
+        console.error('Usage: ra recipe install <source>')
+        process.exit(1)
+      }
+      for (const source of args) {
+        try {
+          const installed = await installRecipe(source)
+          console.log('Installed recipe:', installed, '→', defaultRecipeInstallDir())
+        } catch (err) {
+          console.error('Failed to install recipe:', source, errorMessage(err))
+          process.exit(1)
+        }
+      }
+      process.exit(0)
+    }
+    case 'remove': {
+      if (args.length === 0) {
+        console.error('Usage: ra recipe remove <name>')
+        process.exit(1)
+      }
+      for (const name of args) {
+        try {
+          await removeRecipe(name)
+          console.log('Removed recipe:', name)
+        } catch (err) {
+          console.error('Failed to remove recipe:', name, errorMessage(err))
+          process.exit(1)
+        }
+      }
+      process.exit(0)
+    }
+    case 'list': {
+      const recipes = await listInstalledRecipes()
+      if (recipes.length === 0) {
+        console.log('No recipes installed in', defaultRecipeInstallDir())
+      } else {
+        for (const r of recipes) {
+          const src = r.source
+            ? ' (' + r.source.registry + (r.source.package ? ': ' + r.source.package : '') + (r.source.repo ? ': ' + r.source.repo : '') + (r.source.version ? '@' + r.source.version : '') + ')'
+            : ''
+          console.log('  ' + r.name + src)
         }
       }
       process.exit(0)

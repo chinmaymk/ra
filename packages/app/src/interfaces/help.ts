@@ -13,6 +13,7 @@ OPTIONS
   --skill <name>                      Skill to activate for this run (repeatable)
   --skill-dir <path>                  Directory to load skills from (repeatable)
   --file <path>                       File to attach (repeatable)
+  --recipe <name>                     Use an installed recipe as agent config base
   --resume                            Resume the most recent session
   --resume=<session-id>               Resume a specific session by ID
 
@@ -72,6 +73,22 @@ SKILL MANAGEMENT
     ra skill install npm:ra-skill-lint@1.0   npm with version
     ra skill install github:user/repo        GitHub repository
     ra skill install https://example.com/s.tgz  URL tarball
+
+RECIPE MANAGEMENT
+  ra recipe install <source>          Install recipe from GitHub, npm, or URL
+  ra recipe remove <name>             Remove an installed recipe
+  ra recipe list                      List installed recipes
+
+  Sources:
+    ra recipe install user/repo              GitHub repository (default for owner/repo)
+    ra recipe install npm:ra-recipe-foo      npm package
+    ra recipe install github:user/repo       GitHub (explicit)
+
+  Usage:
+    ra --recipe user/repo "prompt"           Use installed recipe
+    ra --recipe ./local/recipe "prompt"      Use local recipe directory
+    agent:
+      recipe: user/repo                      Reference in ra.config.yaml
 
 ENV VARS
   Config files and defaults support Docker Compose–style interpolation:
