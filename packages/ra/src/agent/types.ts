@@ -26,30 +26,6 @@ export interface LoopContext extends StoppableContext {
   elapsedMs: number
 }
 
-/** Progress snapshot emitted via onProgress callback. */
-export interface ProgressInfo {
-  iteration: number
-  maxIterations: number
-  usage: TokenUsage
-  elapsedMs: number
-  messages: IMessage[]
-  /** Which phase just completed. */
-  phase: 'model_response' | 'tool_execution' | 'iteration_complete'
-}
-
-/** Callback to receive incremental tool results for mid-execution checkpointing. */
-export interface CheckpointEvent {
-  toolCallId: string
-  toolName: string
-  content: string
-  isError: boolean
-  /** The full message array at the time of checkpoint. */
-  messages: IMessage[]
-}
-
-/** Heartbeat callback for long-running tools. Tools call this to signal liveness. */
-export type HeartbeatFn = () => void
-
 export interface ModelCallContext extends StoppableContext {
   request: ChatRequest
   loop: LoopContext

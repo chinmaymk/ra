@@ -33,16 +33,9 @@ export interface ITool {
   name: string
   description: string
   inputSchema: Record<string, unknown>
-  execute(input: unknown, options?: ToolExecuteOptions): Promise<unknown>
+  execute(input: unknown): Promise<unknown>
   /** Per-tool timeout in ms. Overrides the global toolTimeout when set. */
   timeout?: number
-}
-
-/** Options passed to tool.execute() for long-running task support. */
-export interface ToolExecuteOptions {
-  /** Call this periodically to signal the tool is still alive and reset liveness timers. */
-  heartbeat: () => void
-  signal: AbortSignal
 }
 
 export interface TokenUsage {

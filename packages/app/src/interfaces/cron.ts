@@ -73,6 +73,9 @@ function resolveJobConfig(baseCfg: AgentConfig, overrides: Partial<AgentConfig> 
     toolTimeout: overrides?.toolTimeout ?? baseCfg.toolTimeout,
     thinking: overrides?.thinking ?? baseCfg.thinking,
     maxToolResponseSize: overrides?.tools?.maxResponseSize ?? baseCfg.tools.maxResponseSize,
+    parallelToolCalls: overrides?.parallelToolCalls ?? baseCfg.parallelToolCalls,
+    tokenBudget: overrides?.tokenBudget ?? baseCfg.tokenBudget,
+    maxDuration: overrides?.maxDuration ?? baseCfg.maxDuration,
     compaction: overrides?.compaction
       ? { ...baseCfg.compaction, ...overrides.compaction }
       : baseCfg.compaction,

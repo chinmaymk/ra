@@ -92,6 +92,12 @@ export interface AgentConfig {
   maxRetries: number
   toolTimeout: number
   maxConcurrency: number
+  /** Execute tool calls in parallel when multiple are returned by the model. Default false. */
+  parallelToolCalls: boolean
+  /** Maximum total token budget (input + output). 0 = unlimited. Default 0. */
+  tokenBudget: number
+  /** Maximum wall-clock duration in ms for the entire loop. 0 = unlimited. Default 0. */
+  maxDuration: number
   tools: ToolsConfig
   skillDirs: string[]
   /** MCP servers the agent can connect to. */

@@ -6,7 +6,6 @@ export type {
   IToolCall,
   IToolResult,
   ITool,
-  ToolExecuteOptions,
   TokenUsage,
   StreamChunk,
   ChatRequest,
@@ -50,9 +49,6 @@ export type {
   ErrorContext,
   Middleware,
   MiddlewareConfig,
-  ProgressInfo,
-  CheckpointEvent,
-  HeartbeatFn,
 } from './agent/types'
 
 // ── Agent runtime ───────────────────────────────────────────────────

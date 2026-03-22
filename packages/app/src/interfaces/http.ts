@@ -35,6 +35,9 @@ export interface HttpOptions {
   maxRetries?: number
   toolTimeout?: number
   maxToolResponseSize?: number
+  parallelToolCalls?: boolean
+  tokenBudget?: number
+  maxDuration?: number
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
@@ -183,6 +186,9 @@ export class HttpServer {
       maxRetries: this.options.maxRetries,
       toolTimeout: this.options.toolTimeout,
       maxToolResponseSize: this.options.maxToolResponseSize,
+      parallelToolCalls: this.options.parallelToolCalls,
+      tokenBudget: this.options.tokenBudget,
+      maxDuration: this.options.maxDuration,
       sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,

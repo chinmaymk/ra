@@ -1,6 +1,6 @@
 import { errorMessage, withRetry } from '../utils/errors'
-import type { IProvider, IMessage, IToolCall, TokenUsage, ToolExecuteOptions } from '../providers/types'
-import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext, StopOptions, ProgressInfo, CheckpointEvent } from './types'
+import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
+import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext, StopOptions } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
@@ -28,16 +28,10 @@ export interface AgentLoopOptions {
   resumed?: boolean
   /** Execute tool calls in parallel when multiple are returned by the model. Default false. */
   parallelToolCalls?: boolean
-  /** Maximum total token budget (input + output). Loop stops when exceeded. */
+  /** Maximum total token budget (input + output). Loop stops when exceeded. 0 = unlimited. */
   tokenBudget?: number
-  /** Maximum wall-clock duration in ms for the entire loop. */
+  /** Maximum wall-clock duration in ms for the entire loop. 0 = unlimited. */
   maxDuration?: number
-  /** Called at natural milestones (after model response, tool execution, iteration). */
-  onProgress?: (info: ProgressInfo) => void
-  /** Called after each tool result is produced, before the iteration ends. Enables incremental checkpointing. */
-  onCheckpoint?: (event: CheckpointEvent) => void
-  /** Liveness timeout in ms for tool execution. If a tool doesn't heartbeat within this window, it's considered hung. 0 = disabled. Default 0. */
-  heartbeatTimeout?: number
 }
 
 export interface LoopResult {
@@ -97,9 +91,6 @@ export class AgentLoop {
   private parallelToolCalls: boolean
   private tokenBudget: number
   private maxDuration: number
-  private onProgress: ((info: ProgressInfo) => void) | undefined
-  private onCheckpoint: ((event: CheckpointEvent) => void) | undefined
-  private heartbeatTimeout: number
 
   private externalAbort: AbortController | null = null
 
@@ -120,9 +111,6 @@ export class AgentLoop {
     this.parallelToolCalls = options.parallelToolCalls ?? false
     this.tokenBudget = options.tokenBudget ?? 0
     this.maxDuration = options.maxDuration ?? 0
-    this.onProgress = options.onProgress
-    this.onCheckpoint = options.onCheckpoint
-    this.heartbeatTimeout = options.heartbeatTimeout ?? 0
 
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
@@ -162,7 +150,6 @@ export class AgentLoop {
     const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
     let lastUsage: TokenUsage | undefined
 
-    // Mutable context — updated in place to avoid repeated object creation
     const ctx: LoopContext = {
       ...stoppable, messages, iteration: 0, maxIterations: this.maxIterations,
       sessionId: this.sessionId, usage, lastUsage: undefined, resumed: this.resumed, elapsedMs: 0,
@@ -247,7 +234,6 @@ export class AgentLoop {
         refreshCtx()
         modelCallCtx.loop = ctx
         await runMiddlewareChain(modelCallCtx, this.middleware.afterModelResponse, this.toolTimeout)
-        this.emitProgress(iterations, usage, messages, startTime, 'model_response')
         if (signal.aborted) break
 
         if (toolCalls.length) {
@@ -260,13 +246,11 @@ export class AgentLoop {
             await this.executeToolsSequential(toolCalls, env)
           }
 
-          this.emitProgress(iterations, usage, messages, startTime, 'tool_execution')
           currentPhase = 'model_call'
         }
 
         refreshCtx()
         await runMiddlewareChain(ctx, this.middleware.afterLoopIteration, this.toolTimeout)
-        this.emitProgress(iterations, usage, messages, startTime, 'iteration_complete')
         if (signal.aborted) break
         if (!toolCalls.length) break
       }
@@ -319,16 +303,13 @@ export class AgentLoop {
     return { input: parseToolArguments(tc.arguments || '{}') }
   }
 
-  /** Emit afterToolExecution middleware + checkpoint for a completed tool result. */
+  /** Emit afterToolExecution middleware and push the result message. */
   private async finalizeToolResult(tc: IToolCall, content: string, isError: boolean, env: ToolExecEnv): Promise<void> {
     await runMiddlewareChain(
       { ...env.stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError }, loop: env.ctx } satisfies ToolResultContext,
       this.middleware.afterToolExecution, this.toolTimeout,
     )
     env.messages.push({ role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) })
-    if (this.onCheckpoint) {
-      this.onCheckpoint({ toolCallId: tc.id, toolName: tc.name, content, isError, messages: env.messages })
-    }
   }
 
   private async executeToolsSequential(toolCalls: IToolCall[], env: ToolExecEnv): Promise<void> {
@@ -383,19 +364,16 @@ export class AgentLoop {
     }
   }
 
-  /** Execute a single tool call with timeout, heartbeat, truncation, and child usage rollup. */
+  /** Execute a single tool call with timeout, truncation, and child usage rollup. */
   private async executeToolCall(
     tc: IToolCall,
     input: Record<string, unknown>,
-    env: Pick<ToolExecEnv, 'usage' | 'signal'>,
+    env: Pick<ToolExecEnv, 'usage'>,
   ): Promise<{ content: string }> {
     const toolDef = this.tools.get(tc.name)
     const effectiveTimeout = toolDef?.timeout ?? this.toolTimeout
-    const execOptions: ToolExecuteOptions = { heartbeat: () => {}, signal: env.signal }
 
-    const executePromise = this.heartbeatTimeout > 0
-      ? this.executeWithHeartbeat(tc.name, input, execOptions, this.heartbeatTimeout)
-      : this.tools.execute(tc.name, input, execOptions)
+    const executePromise = this.tools.execute(tc.name, input)
 
     const value = effectiveTimeout > 0
       ? await withTimeout(executePromise, effectiveTimeout, `Tool '${tc.name}'`)
@@ -414,43 +392,5 @@ export class AgentLoop {
     }
 
     return { content }
-  }
-
-  private executeWithHeartbeat(
-    toolName: string,
-    input: Record<string, unknown>,
-    execOptions: ToolExecuteOptions,
-    heartbeatMs: number,
-  ): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout>
-      let settled = false
-
-      const resetTimer = () => {
-        clearTimeout(timer)
-        timer = setTimeout(() => {
-          settled = true
-          reject(new Error(`Tool '${toolName}' heartbeat timeout: no heartbeat received within ${heartbeatMs}ms`))
-        }, heartbeatMs)
-      }
-
-      execOptions.heartbeat = () => {
-        if (settled) return
-        this.logger.debug('tool heartbeat received', { tool: toolName })
-        resetTimer()
-      }
-
-      resetTimer()
-
-      this.tools.execute(toolName, input, execOptions).then(
-        (value) => { settled = true; clearTimeout(timer); resolve(value) },
-        (err) => { settled = true; clearTimeout(timer); reject(err) },
-      )
-    })
-  }
-
-  private emitProgress(iteration: number, usage: TokenUsage, messages: IMessage[], startTime: number, phase: ProgressInfo['phase']): void {
-    if (!this.onProgress) return
-    this.onProgress({ iteration, maxIterations: this.maxIterations, usage, elapsedMs: Date.now() - startTime, messages, phase })
   }
 }

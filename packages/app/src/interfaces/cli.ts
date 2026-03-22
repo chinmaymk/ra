@@ -31,6 +31,9 @@ export interface CliOptions {
   maxRetries?: number
   toolTimeout?: number
   maxToolResponseSize?: number
+  parallelToolCalls?: boolean
+  tokenBudget?: number
+  maxDuration?: number
   onChunk?: (text: string) => void
   thinking?: 'low' | 'medium' | 'high'
   compaction?: CompactionConfig
@@ -50,7 +53,7 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], systemPrompt, model, provider, tools, skillIndex, middleware, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
+  const { prompt, files = [], systemPrompt, model, provider, tools, skillIndex, middleware, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, parallelToolCalls, tokenBudget, maxDuration, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
 
   const { messages: initialMessages, priorCount } = buildThreadMessages({
     storedMessages: sessionMessages,
@@ -76,7 +79,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
     }],
   }
   const loop = new AgentLoop({
-    provider, tools, model, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, thinking, compaction, sessionId,
+    provider, tools, model, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, parallelToolCalls, tokenBudget, maxDuration, thinking, compaction, sessionId,
     logger: session.logger,
     middleware: mergeMiddleware(streamHook, session.middleware),
     resumed: sessionMessages.length > 0,

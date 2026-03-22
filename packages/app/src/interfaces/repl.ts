@@ -39,6 +39,9 @@ export interface ReplOptions {
   maxRetries?: number
   toolTimeout?: number
   maxToolResponseSize?: number
+  parallelToolCalls?: boolean
+  tokenBudget?: number
+  maxDuration?: number
   sessionId?: string
   resumed?: boolean
   thinking?: 'low' | 'medium' | 'high'
@@ -208,6 +211,9 @@ export class Repl {
       maxRetries: this.options.maxRetries,
       toolTimeout: this.options.toolTimeout,
       maxToolResponseSize: this.options.maxToolResponseSize,
+      parallelToolCalls: this.options.parallelToolCalls,
+      tokenBudget: this.options.tokenBudget,
+      maxDuration: this.options.maxDuration,
       sessionId: this.sessionId,
       thinking: this.options.thinking,
       compaction: this.options.compaction,

@@ -19,7 +19,7 @@ Core agent loop and infrastructure.
 - `ctx.stop('reason', { immediate: true })` — hard kill: aborts mid-stream via AbortController
 - `loop.abort()` — external hard kill (same as immediate stop)
 
-**Long-running task options:** `parallelToolCalls`, `tokenBudget`, `maxDuration`, `onProgress`, `onCheckpoint`, `heartbeatTimeout`. Tools receive `ToolExecuteOptions` with `heartbeat()` and `signal`.
+**Long-running task options:** `parallelToolCalls`, `tokenBudget`, `maxDuration` — all configurable via `AgentConfig` in the app package.
 
 **Middleware:** runs in array order per hook. All contexts extend `StoppableContext` (`stop()` + `signal` + `logger`).
 - `beforeModelCall` — can modify `ctx.request.messages` and `ctx.request.tools`
