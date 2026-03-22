@@ -33,24 +33,22 @@ recipes/<name>/
 
 3. **Write config** — `ra.config.yaml`:
 ```yaml
-provider: anthropic
-model: claude-sonnet-4-6
-interface: cli                    # cli for one-shot, repl for interactive
-skills:
-  - <skill-name>
-skillDirs:
-  - ./skills                      # always relative to recipe dir
-maxIterations: 10                 # 10 for focused tasks, 50+ for exploratory
-# Optional:
-mcp:
-  client:
-    - name: github
-      transport: stdio
-      command: npx
-      args: ["-y", "@modelcontextprotocol/server-github"]
-middleware:
-  afterModelResponse:
-    - ./middleware/token-budget.ts
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  skillDirs:
+    - ./skills                      # always relative to recipe dir
+  maxIterations: 10                 # 10 for focused tasks, 50+ for exploratory
+  # Optional:
+  mcp:
+    servers:
+      - name: github
+        transport: stdio
+        command: npx
+        args: ["-y", "@modelcontextprotocol/server-github"]
+  middleware:
+    afterModelResponse:
+      - ./middleware/token-budget.ts
 ```
 
 4. **Add middleware** (optional) — common hooks: token budget, tool filtering, logging

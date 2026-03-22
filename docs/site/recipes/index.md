@@ -36,7 +36,6 @@ agent:
     You are an expert on this codebase. You know TypeScript, Bun, and the project structure.
     When asked to make changes, write the code directly — don't describe what to do.
 
-app:
   skillDirs:
     - .ra/skills
 ```

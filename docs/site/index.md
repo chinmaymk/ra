@@ -47,12 +47,11 @@ agent:
     beforeModelCall:
       - "./middleware/budget.ts"
 
-app:
   skillDirs:
     - ./skills
 
   mcp:
-    client:
+    servers:
       - name: github
         transport: stdio
         command: npx
