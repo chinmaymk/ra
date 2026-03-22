@@ -16,6 +16,7 @@ import type { SessionStorage } from '../storage/sessions'
 import { createSessionMiddleware } from '../agent/session'
 import { buildThreadMessages } from './messages'
 import { fileToContentPart } from '../utils/files'
+import * as tui from './tui'
 
 export interface CliOptions {
   prompt: string
@@ -63,8 +64,16 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   const session = storage && sessionId
     ? createSessionMiddleware(middleware, { storage, sessionId, priorCount, logsEnabled, logLevel, tracesEnabled, logger })
     : { middleware: middleware ?? {}, logger }
+  const thinkingState = tui.createStreamState()
   const streamHook: Partial<MiddlewareConfig> = {
-    onStreamChunk: [async (ctx: StreamChunkContext) => { if (ctx.chunk.type === 'text') onChunk(ctx.chunk.delta) }],
+    onStreamChunk: [async (ctx: StreamChunkContext) => {
+      if (ctx.chunk.type === 'thinking') {
+        tui.handleStreamChunk(thinkingState, ctx.chunk.type, ctx.chunk.delta)
+      } else if (ctx.chunk.type === 'text') {
+        if (thinkingState.thinkingOpened) tui.collapseThinking(thinkingState)
+        onChunk(ctx.chunk.delta)
+      }
+    }],
   }
   const loop = new AgentLoop({
     provider, tools, model, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, thinking, compaction, sessionId,
@@ -74,6 +83,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   })
 
   const result = await loop.run(initialMessages)
+  if (thinkingState.thinkingOpened) tui.collapseThinking(thinkingState)
 
   return { messages: result.messages, priorCount }
 }

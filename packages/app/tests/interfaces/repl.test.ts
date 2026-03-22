@@ -56,7 +56,7 @@ describe('Repl', () => {
     expect(lastMessages.length).toBeGreaterThan(1)
   })
 
-  it('renders thinking chunks dimmed before main text', async () => {
+  it('collapses thinking block and shows elapsed time before main text', async () => {
     const storage = await makeStorage()
     const repl = new Repl({ model: 'test', provider: mockProviderWithThinking('hmm', 'hello'), tools: new ToolRegistry(), storage })
 
@@ -74,11 +74,8 @@ describe('Repl', () => {
     }
 
     const output = chunks.join('')
-    // dim ANSI code should appear before the thinking delta
-    const dimIndex = output.indexOf('\x1b[2m')
-    const hmmIndex = output.indexOf('hmm')
-    expect(dimIndex).toBeGreaterThanOrEqual(0)
-    expect(hmmIndex).toBeGreaterThan(dimIndex)
+    // Collapsed summary with elapsed time should appear
+    expect(output).toMatch(/thinking \(\d+\.\d+s\)/)
     // main text should also appear
     expect(output).toContain('hello')
   })

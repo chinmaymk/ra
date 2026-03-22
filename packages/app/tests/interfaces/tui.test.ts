@@ -2,8 +2,8 @@ import { describe, it, expect, afterEach } from 'bun:test'
 import {
   ansi, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
-  printCommandResponse, printError, printThinkingStart, printThinkingEnd,
-  StreamBuffer, RESPONSE_PREFIX,
+  printCommandResponse, printError, collapseThinking, createStreamState,
+  handleStreamChunk, StreamBuffer, RESPONSE_PREFIX,
 } from '../../src/interfaces/tui'
 import { captureStdout } from '../fixtures'
 
@@ -113,19 +113,26 @@ describe('printError', () => {
   })
 })
 
-describe('printThinkingStart', () => {
+describe('handleStreamChunk thinking', () => {
   it('outputs thinking header with dim styling', () => {
-    const output = captureStdout(() => printThinkingStart())
+    const state = createStreamState()
+    const output = captureStdout(() => handleStreamChunk(state, 'thinking', 'hmm'))
     expect(output).toContain('thinking')
     expect(output).toContain(ansi.dim)
+    expect(state.thinkingOpened).toBe(true)
   })
 })
 
-describe('printThinkingEnd', () => {
-  it('outputs thinking footer with reset', () => {
-    const output = captureStdout(() => printThinkingEnd())
-    expect(output).toContain(ansi.reset)
+describe('collapseThinking', () => {
+  it('replaces thinking block with elapsed summary', () => {
+    const state = createStreamState()
+    captureStdout(() => handleStreamChunk(state, 'thinking', 'hmm'))
+    const output = captureStdout(() => collapseThinking(state))
+    expect(output).toContain('thinking')
+    expect(output).toContain('s)')
     expect(output).toContain('╌')
+    expect(state.thinkingCollapsed).toBe(true)
+    expect(state.thinkingOpened).toBe(false)
   })
 })
 

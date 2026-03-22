@@ -188,29 +188,52 @@ export const PROMPT = `\x1b[96m›\x1b[0m `
 export interface TuiStreamState {
   boxOpened: boolean
   thinkingOpened: boolean
+  thinkingCollapsed: boolean
+  /** Number of \n characters written to stdout during thinking (including header). */
+  thinkingLines: number
+  thinkingStartTime: number
   streamBuf: StreamBuffer | null
+  thinkingBuf: StreamBuffer | null
   toolStartTimes: Map<string, number>
 }
 
 /** Create a new TUI streaming state for a single agent loop run. */
 export function createStreamState(): TuiStreamState {
-  return { boxOpened: false, thinkingOpened: false, streamBuf: null, toolStartTimes: new Map() }
+  return {
+    boxOpened: false, thinkingOpened: false, thinkingCollapsed: false,
+    thinkingLines: 0, thinkingStartTime: 0,
+    streamBuf: null, thinkingBuf: null, toolStartTimes: new Map(),
+  }
+}
+
+function countNewlines(s: string): number {
+  let n = 0
+  for (let i = 0; i < s.length; i++) if (s[i] === '\n') n++
+  return n
 }
 
 /** Handle a stream chunk for TUI display. */
 export function handleStreamChunk(state: TuiStreamState, chunkType: string, delta?: string): void {
   if (chunkType === 'thinking') {
+    if (state.thinkingCollapsed) return
     if (!state.thinkingOpened) {
       stopSpinner(true)
       printThinkingStart()
       state.thinkingOpened = true
+      state.thinkingStartTime = Date.now()
+      state.thinkingLines = 1 // printThinkingStart writes 1 \n
+      const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
+      state.thinkingBuf = new StreamBuffer(contentWidth)
     }
-    if (delta) process.stdout.write(delta)
+    if (delta && state.thinkingBuf) {
+      const output = state.thinkingBuf.write(delta)
+      if (output) {
+        process.stdout.write(output)
+        state.thinkingLines += countNewlines(output)
+      }
+    }
   } else if (chunkType === 'text') {
-    if (state.thinkingOpened) {
-      printThinkingEnd()
-      state.thinkingOpened = false
-    }
+    if (state.thinkingOpened) collapseThinking(state)
     if (!state.boxOpened) {
       stopSpinner()
       state.boxOpened = true
@@ -221,9 +244,28 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
   }
 }
 
+/** Collapse the thinking block into a single summary line. */
+export function collapseThinking(state: TuiStreamState): void {
+  if (!state.thinkingOpened || state.thinkingCollapsed) return
+  state.thinkingBuf = null
+
+  // Move cursor back to the header line and clear everything below
+  if (state.thinkingLines > 0) {
+    process.stdout.write(`\r\x1b[${state.thinkingLines}A\x1b[J`)
+  } else {
+    process.stdout.write(`\r\x1b[J`)
+  }
+
+  const elapsed = ((Date.now() - state.thinkingStartTime) / 1000).toFixed(1)
+  process.stdout.write(`  ${ansi.dim}╌╌ thinking (${elapsed}s) ╌╌${ansi.reset}\n`)
+
+  state.thinkingCollapsed = true
+  state.thinkingOpened = false
+}
+
 /** Flush TUI state at end of loop run (success or error). */
 export function flushStreamState(state: TuiStreamState): void {
-  if (state.thinkingOpened) printThinkingEnd()
+  if (state.thinkingOpened) collapseThinking(state)
   stopSpinner(true)
   const out = state.streamBuf?.end()
   if (out) process.stdout.write(out)
@@ -231,10 +273,6 @@ export function flushStreamState(state: TuiStreamState): void {
   else process.stdout.write('\n\n')
 }
 
-export function printThinkingStart(): void {
+function printThinkingStart(): void {
   process.stdout.write(`  ${ansi.dim}╌╌ thinking ╌╌${ansi.reset}\n  ${ansi.dim}`)
-}
-
-export function printThinkingEnd(): void {
-  process.stdout.write(`${ansi.reset}\n  ${ansi.dim}╌╌╌╌╌╌╌╌╌╌╌╌╌╌${ansi.reset}\n`)
 }

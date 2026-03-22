@@ -218,6 +218,7 @@ export class Repl {
       ],
       beforeToolExecution: [
         async (ctx: ToolExecutionContext) => {
+          if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
           const out = tuiState.streamBuf?.end(); if (out) process.stdout.write(out)
           tui.stopSpinner(true)
           tuiState.boxOpened = false
@@ -250,6 +251,10 @@ export class Repl {
     })
 
     this.activeLoop = loop
+    const onKeypress = (_str: string | undefined, key: { name?: string } | undefined) => {
+      if (key?.name === 'escape' && tuiState.thinkingOpened) tui.collapseThinking(tuiState)
+    }
+    process.stdin.on('keypress', onKeypress)
     try {
       const result = await loop.run(initialMessages)
       tui.flushStreamState(tuiState)
@@ -262,6 +267,7 @@ export class Repl {
         tui.printError(errorMessage(err))
       }
     } finally {
+      process.stdin.removeListener('keypress', onKeypress)
       this.activeLoop = null
     }
   }
