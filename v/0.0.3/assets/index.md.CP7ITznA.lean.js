@@ -1,1 +1,0 @@
-import{_ as a,o as i,c as t,ai as e}from"./chunks/framework.DRzLPsDb.js";const c=JSON.parse('{"title":"ra","description":"","frontmatter":{},"headers":[],"relativePath":"index.md","filePath":"index.md"}'),n={name:"index.md"};function h(l,s,r,p,o,k){return i(),t("div",null,[...s[0]||(s[0]=[e("",29)])])}const g=a(n,[["render",h]]);export{c as __pageData,g as default};

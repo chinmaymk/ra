@@ -1,1 +1,0 @@
-import{_ as a,o as i,c as e,ai as n}from"./chunks/framework.DRzLPsDb.js";const c=JSON.parse('{"title":"MCP","description":"","frontmatter":{},"headers":[],"relativePath":"modes/mcp.md","filePath":"modes/mcp.md"}'),t={name:"modes/mcp.md"};function l(p,s,h,r,o,k){return i(),e("div",null,[...s[0]||(s[0]=[n("",32)])])}const E=a(t,[["render",l]]);export{c as __pageData,E as default};
