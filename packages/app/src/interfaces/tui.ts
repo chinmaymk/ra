@@ -234,11 +234,13 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
   }
 }
 
-/** Clear any pending tool names preview lines. Call before printing the real tool execution line. */
+/** Reposition cursor to overwrite pending tool preview lines.
+ *  Called once before tool execution begins — cursor moves up so
+ *  printToolCall/printToolResult naturally overwrite each preview line. */
 export function clearPendingTools(state: TuiStreamState): void {
   if (state.pendingToolNames.length > 0) {
-    // Move up and clear each pending line, then clear the current line
-    process.stdout.write(`\x1b[${state.pendingToolNames.length}A\x1b[J`)
+    // Move cursor up to the first pending line (no erase — execution will overwrite)
+    process.stdout.write(`\x1b[${state.pendingToolNames.length}A\r`)
     state.pendingToolNames = []
   }
 }
