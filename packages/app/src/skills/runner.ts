@@ -1,4 +1,6 @@
 import { join, extname } from 'path'
+import { NoopLogger } from '@chinmaymk/ra'
+import type { Logger } from '@chinmaymk/ra'
 import { resolveSkillAsset, type Skill } from './types'
 
 function findRuntime(candidates: string[]): string {
@@ -42,8 +44,10 @@ async function resolveCmd(scriptPath: string): Promise<string[]> {
   }
 }
 
-export async function runSkillScript(scriptPath: string, env: Record<string, string>): Promise<string> {
+export async function runSkillScript(scriptPath: string, env: Record<string, string>, logger?: Logger): Promise<string> {
+  const log = logger ?? new NoopLogger()
   const cmd = await resolveCmd(scriptPath)
+  log.debug('skill script starting', { scriptPath, runtime: cmd[0] })
   const proc = Bun.spawn(cmd, { env: { ...process.env, ...env }, stdout: 'pipe', stderr: 'pipe' })
   const [output, stderrText, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -52,13 +56,15 @@ export async function runSkillScript(scriptPath: string, env: Record<string, str
   ])
 
   if (exitCode !== 0) {
+    log.error('skill script failed', { scriptPath, exitCode, stderr: stderrText.trim().slice(0, 200) })
     throw new Error(`Script exited with code ${exitCode}: ${stderrText.trim()}`)
   }
+  log.info('skill script completed', { scriptPath, exitCode, outputLength: output.length })
   return output
 }
 
-export async function runSkillScriptByName(skill: Skill, scriptName: string, env: Record<string, string>): Promise<string> {
+export async function runSkillScriptByName(skill: Skill, scriptName: string, env: Record<string, string>, logger?: Logger): Promise<string> {
   const rel = resolveSkillAsset(skill.scripts, scriptName, 'scripts')
   if (!rel) throw new Error(`Script not found: ${scriptName} in skill ${skill.metadata.name}`)
-  return runSkillScript(join(skill.dir, rel), env)
+  return runSkillScript(join(skill.dir, rel), env, logger)
 }

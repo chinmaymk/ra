@@ -4,6 +4,8 @@ import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
 import { interpolateEnvVars, coerceTypes } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
+import { NoopLogger } from '@chinmaymk/ra'
+import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
 export { defaultConfig } from './defaults'
@@ -149,12 +151,19 @@ function normalizeToolsSection(obj: Record<string, unknown>): void {
   obj.tools = { builtin, overrides, ...(maxResponseSize !== undefined && { maxResponseSize }) }
 }
 
-export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaConfig> {
+export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logger): Promise<RaConfig> {
+  const log = logger ?? new NoopLogger()
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
 
   const { config: rawFileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
   const configDir = configFilePath ? dirname(configFilePath) : cwd
+
+  if (configFilePath) {
+    log.info('config file loaded', { path: configFilePath })
+  } else {
+    log.debug('no config file found', { cwd, searchedFiles: CONFIG_FILES })
+  }
 
   const rawDefaults = JSON.parse(JSON.stringify(defaultConfig))
   const fileConfig = interpolateEnvVars(rawFileConfig, env) as Record<string, unknown>
@@ -186,8 +195,12 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   if (config.agent.systemPrompt && looksLikePath(config.agent.systemPrompt, ['.txt', '.md'])) {
     const resolved = resolvePath(config.agent.systemPrompt, configDir)
     const f = Bun.file(resolved)
-    if (await f.exists()) config.agent.systemPrompt = await f.text()
+    if (await f.exists()) {
+      config.agent.systemPrompt = await f.text()
+      log.debug('system prompt loaded from file', { path: resolved })
+    }
   }
 
+  log.debug('config resolved', { provider: config.agent.provider, model: config.agent.model, interface: config.app.interface })
   return config
 }

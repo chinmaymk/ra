@@ -1,6 +1,8 @@
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'fs'
 import { dirname } from 'path'
+import { NoopLogger } from '@chinmaymk/ra'
+import type { Logger } from '@chinmaymk/ra'
 
 export interface Memory {
   id: number
@@ -13,12 +15,15 @@ export interface MemoryStoreOptions {
   path: string
   maxMemories: number
   ttlDays: number
+  logger?: Logger
 }
 
 export class MemoryStore {
   private db: Database
+  private logger: Logger
 
   constructor(private options: MemoryStoreOptions) {
+    this.logger = options.logger ?? new NoopLogger()
     mkdirSync(dirname(options.path), { recursive: true })
     this.db = new Database(options.path)
     this.db.exec(`
@@ -43,18 +48,23 @@ export class MemoryStore {
   }
 
   save(content: string, tags = ''): Memory {
-    return this.db.prepare(
+    const memory = this.db.prepare(
       'INSERT INTO memories (content, tags) VALUES (?, ?) RETURNING id, content, tags, created_at AS createdAt',
     ).get(content, tags) as Memory
+    this.logger.debug('memory saved', { id: memory.id, tags, contentLength: content.length })
+    return memory
   }
 
   search(query: string, limit = 10): Memory[] {
     if (!query) return []
     try {
-      return this.db.prepare(
+      const results = this.db.prepare(
         'SELECT m.id, m.content, m.tags, m.created_at AS createdAt FROM memories_fts f JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?',
       ).all(query, limit) as Memory[]
-    } catch {
+      this.logger.debug('memory search', { query, limit, resultCount: results.length })
+      return results
+    } catch (err) {
+      this.logger.warn('memory search failed', { query, error: err instanceof Error ? err.message : String(err) })
       return []
     }
   }
@@ -77,22 +87,28 @@ export class MemoryStore {
       ids = this.db.prepare(
         'SELECT m.id FROM memories_fts f JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?',
       ).all(query, limit) as { id: number }[]
-    } catch {
+    } catch (err) {
+      this.logger.warn('memory forget search failed', { query, error: err instanceof Error ? err.message : String(err) })
       return 0
     }
     if (ids.length === 0) return 0
     this.db.prepare(`DELETE FROM memories WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids.map(r => r.id))
+    this.logger.info('memories forgotten', { query, count: ids.length })
     return ids.length
   }
 
   prune(): void {
+    const before = this.count()
     this.db.prepare("DELETE FROM memories WHERE created_at < datetime('now', ?)").run(`-${this.options.ttlDays} days`)
+    const pruned = before - this.count()
+    if (pruned > 0) this.logger.info('memories pruned by ttl', { pruned, ttlDays: this.options.ttlDays })
   }
 
   trim(): void {
     const excess = this.count() - this.options.maxMemories
     if (excess <= 0) return
     this.db.prepare('DELETE FROM memories WHERE id IN (SELECT id FROM memories ORDER BY id ASC LIMIT ?)').run(excess)
+    this.logger.info('memories trimmed', { trimmed: excess, maxMemories: this.options.maxMemories })
   }
 
   count(): number {

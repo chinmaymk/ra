@@ -72,6 +72,7 @@ export async function bootstrap(
   const memoryPath = join(app.dataDir, 'memory.db')
 
   // ── Storage & session ──────────────────────────────────────────────
+  // Storage is created before observability — logger will be set after createObservability()
   const storage = new SessionStorage(storagePath)
   await storage.init()
 
@@ -110,6 +111,8 @@ export async function bootstrap(
     traces: { enabled: app.tracesEnabled, output: 'session' },
   }, { sessionId, sessionDir })
 
+  storage.setLogger(logger)
+
   const bootstrapTokenSpan = tracer.startSpan('bootstrap.tokenBudget')
 
   // ── Compaction model default ───────────────────────────────────────
@@ -143,7 +146,7 @@ export async function bootstrap(
   }
 
   // ── Middleware ──────────────────────────────────────────────────────
-  const middleware: Partial<MiddlewareConfig> = await loadMiddleware(config, app.configDir)
+  const middleware: Partial<MiddlewareConfig> = await loadMiddleware(config, app.configDir, logger)
   const userHookCount = Object.values(middleware).reduce((n, hooks) => n + (hooks?.length ?? 0), 0)
   if (userHookCount > 0) {
     logger.info('custom middleware loaded', { hookCount: userHookCount })
@@ -189,6 +192,7 @@ export async function bootstrap(
       path: memoryPath,
       maxMemories: agent.memory.maxMemories,
       ttlDays: agent.memory.ttlDays,
+      logger,
     })
     tools.register(memorySearchTool(memoryStore))
     tools.register(memorySaveTool(memoryStore))
@@ -217,7 +221,7 @@ export async function bootstrap(
 
   // ── Skills ─────────────────────────────────────────────────────────
   const resolvedSkillDirs = app.skillDirs.map(d => resolvePath(d, app.configDir))
-  const skillIndex = await loadSkillIndex(resolvedSkillDirs)
+  const skillIndex = await loadSkillIndex(resolvedSkillDirs, logger)
   if (skillIndex.size > 0) {
     const availableXml = buildAvailableSkillsXml(skillIndex)
     const skillTokens = estimateTokens(availableXml)
@@ -239,7 +243,7 @@ export async function bootstrap(
     const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: app.mcp.client.length })
     logger.info('connecting to MCP servers', { serverCount: app.mcp.client.length, servers: app.mcp.client.map(c => c.name) })
     const knownToolNames = new Set(tools.all().map(t => t.name))
-    await mcpClient.connect(app.mcp.client, tools, { lazySchemas: app.mcp.lazySchemas })
+    await mcpClient.connect(app.mcp.client, tools, { lazySchemas: app.mcp.lazySchemas, logger })
     const mcpTools = tools.all().filter(t => !knownToolNames.has(t.name))
     const mcpToolTokens = estimateTokens(mcpTools)
     logger.info('MCP servers connected', {

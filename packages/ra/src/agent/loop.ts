@@ -121,12 +121,15 @@ export class AgentLoop {
 
     let currentPhase: 'model_call' | 'tool_execution' | 'stream' = 'model_call'
 
+    this.logger.debug('loop starting', { maxIterations: this.maxIterations, model: this.model, sessionId: this.sessionId, messageCount: messages.length })
+
     try {
       await runMiddlewareChain(loopCtx(), this.middleware.beforeLoopBegin, this.toolTimeout)
       if (signal.aborted) return { messages, iterations, usage, ...(stopReason && { stopReason }) }
 
       while (iterations < this.maxIterations) {
         iterations++
+        this.logger.debug('iteration starting', { iteration: iterations, messageCount: messages.length })
 
         const request = {
           model: this.model,
@@ -187,6 +190,7 @@ export class AgentLoop {
             await runMiddlewareChain(toolExecCtx, this.middleware.beforeToolExecution, this.toolTimeout)
             if (signal.aborted) break
             if (denied) {
+              this.logger.info('tool call denied', { tool: tc.name, toolCallId: tc.id, reason: denied })
               messages.push({ role: 'tool', content: denied, toolCallId: tc.id, isError: true })
               continue
             }
@@ -198,7 +202,11 @@ export class AgentLoop {
                 ? await withTimeout(this.tools.execute(tc.name, input), this.toolTimeout, `Tool '${tc.name}'`)
                 : await this.tools.execute(tc.name, input)
               content = typeof value === 'string' ? value : JSON.stringify(value)
+              const originalLength = content.length
               content = truncateToolOutput(content, this.maxToolResponseSize)
+              if (content.length !== originalLength) {
+                this.logger.warn('tool output truncated', { tool: tc.name, toolCallId: tc.id, originalLength, maxChars: this.maxToolResponseSize })
+              }
               // Roll up child usage (e.g. from subagent tool) into parent totals
               if (value && typeof value === 'object' && 'usage' in value) {
                 const childUsage = (value as { usage: TokenUsage }).usage
@@ -230,6 +238,7 @@ export class AgentLoop {
       }
       // Attempt recovery via compaction when a provider rejects due to context length.
       if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err) && _compactionRetries < MAX_COMPACTION_RETRIES) {
+        this.logger.info('context length exceeded, attempting compaction recovery', { attempt: _compactionRetries + 1, maxRetries: MAX_COMPACTION_RETRIES })
         const modelCallCtx: ModelCallContext = {
           ...stoppable,
           request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }), signal },
@@ -237,9 +246,11 @@ export class AgentLoop {
         }
         const compacted = await forceCompact(this.provider, this.compactionConfig, modelCallCtx)
         if (compacted) {
+          this.logger.info('compaction recovery succeeded, restarting loop', { messageCount: messages.length, attempt: _compactionRetries + 1 })
           this.externalAbort = null
           return this.run(messages, _compactionRetries + 1)
         }
+        this.logger.error('compaction recovery failed', { attempt: _compactionRetries + 1 })
       }
       const error = err instanceof Error ? err : new Error(String(err))
       await runMiddlewareChain({ ...stoppable, error, loop: loopCtx(), phase: currentPhase } satisfies ErrorContext, this.middleware.onError, this.toolTimeout)

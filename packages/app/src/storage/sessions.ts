@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { appendFile, mkdir, rm } from 'node:fs/promises'
-import type { IMessage } from '@chinmaymk/ra'
+import type { IMessage, Logger } from '@chinmaymk/ra'
+import { NoopLogger } from '@chinmaymk/ra'
 import { parseJsonlFile } from '../utils/files'
 
 const MS_PER_DAY = 86_400_000
@@ -32,9 +33,15 @@ export interface PruneOptions {
 
 export class SessionStorage {
   private storagePath: string
+  private logger: Logger
 
-  constructor(storagePath: string) {
+  constructor(storagePath: string, logger?: Logger) {
     this.storagePath = storagePath
+    this.logger = logger ?? new NoopLogger()
+  }
+
+  setLogger(logger: Logger): void {
+    this.logger = logger
   }
 
   async init(): Promise<void> {
@@ -54,6 +61,7 @@ export class SessionStorage {
     const dir = this.sessionDir(id)
     await mkdir(dir, { recursive: true })
     await Bun.write(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
+    this.logger.debug('session created', { sessionId: id, provider: options.provider, model: options.model })
     return { id, meta }
   }
 
@@ -117,6 +125,9 @@ export class SessionStorage {
       }
     }
 
+    if (toDelete.size > 0) {
+      this.logger.info('sessions pruned', { pruned: toDelete.size, ttlDays: options.ttlDays, maxSessions: options.maxSessions })
+    }
     await Promise.all([...toDelete].map(id => rm(this.sessionDir(id), { recursive: true, force: true })))
   }
 }

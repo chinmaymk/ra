@@ -123,6 +123,7 @@ export function createDiscoveryMiddleware(
     const files = await scanDirs(dirs, patterns, root, seen)
     if (files.length === 0) return
     for (const f of files) seen.add(f.path)
+    ctx.logger.info('dynamic context files discovered', { fileCount: files.length, files: files.map(f => f.relativePath), dirsScanned: dirs.length })
 
     const msgs = buildContextMessages(files)
     const messages = ctx.request.messages

@@ -170,6 +170,7 @@ async function _runCompaction(
     const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
     const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
     if (estimated <= triggerThreshold) return false
+    ctx.logger.info('compaction triggered', { estimatedTokens: estimated, threshold: triggerThreshold, messageCount: messages.length })
   }
 
   // Keep 20% of context window as recent messages when we know the window size,
@@ -178,7 +179,12 @@ async function _runCompaction(
   const targetPostCompaction = Math.floor(contextWindow * RECENT_BUDGET_FRACTION)
   const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
 
-  if (compactable.length === 0) return false
+  if (compactable.length === 0) {
+    ctx.logger.debug('compaction skipped, no compactable messages', { pinnedCount: pinned.length, recentCount: recent.length })
+    return false
+  }
+
+  ctx.logger.debug('compaction zones', { pinnedCount: pinned.length, compactableCount: compactable.length, recentCount: recent.length })
 
   const conversationText = compactable.map(m => {
     const content = serializeContent(m.content)
@@ -228,6 +234,7 @@ async function _runCompaction(
   const originalCount = messages.length
   ctx.request.messages.length = 0
   ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
+  ctx.logger.info('compaction complete', { originalMessages: originalCount, compactedMessages: ctx.request.messages.length })
   config.onCompact?.({
     originalMessages: originalCount,
     compactedMessages: ctx.request.messages.length,
