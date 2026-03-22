@@ -34,6 +34,7 @@ function makeCtx(messages: { role: string; content: string | ContentPart[] }[]):
       sessionId: 'test',
       usage: { inputTokens: 0, outputTokens: 0 },
       lastUsage: undefined,
+      resumed: false,
     },
   }
 }

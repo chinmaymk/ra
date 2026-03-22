@@ -120,6 +120,7 @@ describe('scratchpad middleware', () => {
         sessionId: 'test',
         usage: { inputTokens: 0, outputTokens: 0 },
         lastUsage: undefined,
+        resumed: false,
         stop: () => {},
         signal: new AbortController().signal,
         logger: { debug() {}, info() {}, warn() {}, error() {}, flush: async () => {} } as any,

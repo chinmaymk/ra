@@ -29,13 +29,16 @@ ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review t
 Drop a `ra.config.yml` in your repo:
 
 ```yaml
-provider: anthropic
-model: claude-sonnet-4-6
-systemPrompt: |
-  You are an expert on this codebase. You know TypeScript, Bun, and the project structure.
-  When asked to make changes, write the code directly — don't describe what to do.
-skillDirs:
-  - .ra/skills
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  systemPrompt: |
+    You are an expert on this codebase. You know TypeScript, Bun, and the project structure.
+    When asked to make changes, write the code directly — don't describe what to do.
+
+app:
+  skillDirs:
+    - .ra/skills
 ```
 
 Now `ra` in that directory becomes a project-aware agent.
@@ -97,9 +100,10 @@ export default async (ctx) => {
 
 ```yaml
 # ra.config.yml
-middleware:
-  afterLoopComplete:
-    - "./middleware/audit.ts"
+agent:
+  middleware:
+    afterLoopComplete:
+      - "./middleware/audit.ts"
 ```
 
 ### Scripting with --exec

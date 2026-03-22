@@ -273,6 +273,7 @@ describe('memory middleware', () => {
       sessionId: 'test',
       usage: { inputTokens: 0, outputTokens: 0 },
       lastUsage: undefined,
+      resumed: false,
       stop: () => {},
       signal: new AbortController().signal,
     }

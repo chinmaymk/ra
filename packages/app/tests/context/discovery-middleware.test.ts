@@ -19,7 +19,7 @@ function makeCtx(messages: IMessage[], filePath: string): ModelCallContext {
   return {
     stop: () => controller.abort(), signal: controller.signal, logger,
     request: { model: 'test', messages: messagesWithToolCall, tools: [] },
-    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: messagesWithToolCall, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: messagesWithToolCall, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
   }
 }
 
@@ -29,7 +29,7 @@ function makeRawCtx(messages: IMessage[]): ModelCallContext {
   return {
     stop: () => controller.abort(), signal: controller.signal, logger,
     request: { model: 'test', messages: [...messages], tools: [] },
-    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: [...messages], iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: [...messages], iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
   }
 }
 
@@ -91,7 +91,7 @@ describe('createDiscoveryMiddleware', () => {
     await mw({
       stop: () => controller.abort(), signal: controller.signal, logger,
       request: { model: 'test', messages: msgs, tools: [] },
-      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
     })
     expect(msgs).toHaveLength(1)
   })
@@ -157,7 +157,7 @@ describe('createDiscoveryMiddleware', () => {
     await mw({
       stop: () => controller.abort(), signal: controller.signal, logger,
       request: { model: 'test', messages: msgs, tools: [] },
-      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined },
+      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
     })
     expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Utils rules'))).toBeTruthy()
   })

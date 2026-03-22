@@ -42,8 +42,9 @@ ra --thinking medium "Review this architecture"
 Or in config:
 
 ```yaml
-provider: anthropic
-thinking: medium
+agent:
+  provider: anthropic
+  thinking: medium
 ```
 
 ## Prompt caching
