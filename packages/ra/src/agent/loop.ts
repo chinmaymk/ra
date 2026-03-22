@@ -162,16 +162,13 @@ export class AgentLoop {
     try {
       const toolDef = this.tools.get(tc.name)
       const effectiveTimeout = toolDef?.timeout ?? this.toolTimeout
-      const value = effectiveTimeout > 0
-        ? await withTimeout(this.tools.execute(tc.name, input), effectiveTimeout, `Tool '${tc.name}'`)
-        : await this.tools.execute(tc.name, input)
+      const value = await withTimeout(this.tools.execute(tc.name, input), effectiveTimeout, `Tool '${tc.name}'`)
       content = typeof value === 'string' ? value : JSON.stringify(value)
       const originalLength = content.length
       content = truncateToolOutput(content, this.maxToolResponseSize)
       if (content.length !== originalLength) {
         this.logger.warn('tool output truncated', { tool: tc.name, toolCallId: tc.id, originalLength, maxChars: this.maxToolResponseSize })
       }
-      // Roll up child usage (e.g. from subagent tool) into parent totals
       if (value && typeof value === 'object' && 'usage' in value) {
         const childUsage = (value as { usage: TokenUsage }).usage
         if (childUsage) accumulateUsage(usage, childUsage)
@@ -182,18 +179,6 @@ export class AgentLoop {
     }
     await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
     return { role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) }
-  }
-
-  /** Check if the token budget has been exceeded. */
-  private isTokenBudgetExceeded(usage: TokenUsage): boolean {
-    if (this.maxTokenBudget <= 0) return false
-    return (usage.inputTokens + usage.outputTokens) >= this.maxTokenBudget
-  }
-
-  /** Check if the duration limit has been exceeded. */
-  private isDurationExceeded(startTime: number): boolean {
-    if (this.maxDuration <= 0) return false
-    return (Date.now() - startTime) >= this.maxDuration
   }
 
   async run(initialMessages: IMessage[], _compactionRetries = 0): Promise<LoopResult> {
@@ -219,25 +204,22 @@ export class AgentLoop {
 
     const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId, usage, lastUsage, resumed: this.resumed })
 
-    const elapsed = () => Date.now() - startTime
-
     let currentPhase: 'model_call' | 'tool_execution' | 'stream' = 'model_call'
 
     this.logger.debug('loop starting', { maxIterations: this.maxIterations, model: this.model, sessionId: this.sessionId, messageCount: messages.length })
 
     try {
       await runMiddlewareChain(loopCtx(), this.middleware.beforeLoopBegin, this.toolTimeout)
-      if (signal.aborted) return { messages, iterations, usage, durationMs: elapsed(), ...(stopReason && { stopReason }) }
+      if (signal.aborted) return { messages, iterations, usage, durationMs: Date.now() - startTime, ...(stopReason && { stopReason }) }
 
       while (iterations < this.maxIterations) {
-        // Check limits before starting a new iteration
-        if (this.isTokenBudgetExceeded(usage)) {
+        if (this.maxTokenBudget > 0 && (usage.inputTokens + usage.outputTokens) >= this.maxTokenBudget) {
           this.logger.info('token budget exceeded', { used: usage.inputTokens + usage.outputTokens, budget: this.maxTokenBudget })
           stopReason = 'token_budget_exceeded'
           break
         }
-        if (this.isDurationExceeded(startTime)) {
-          this.logger.info('max duration exceeded', { elapsedMs: elapsed(), maxDuration: this.maxDuration })
+        if (this.maxDuration > 0 && (Date.now() - startTime) >= this.maxDuration) {
+          this.logger.info('max duration exceeded', { elapsedMs: Date.now() - startTime, maxDuration: this.maxDuration })
           stopReason = 'max_duration_exceeded'
           break
         }
@@ -291,16 +273,13 @@ export class AgentLoop {
 
         if (toolCalls.length) {
           currentPhase = 'tool_execution'
-          if (this.parallelToolCalls && toolCalls.length > 1) {
-            const results = await Promise.all(
-              toolCalls.map(tc => this.executeSingleTool(tc, stoppable, loopCtx, usage)),
-            )
-            messages.push(...results)
+          const exec = (tc: IToolCall) => this.executeSingleTool(tc, stoppable, loopCtx, usage)
+          if (this.parallelToolCalls) {
+            messages.push(...await Promise.all(toolCalls.map(exec)))
           } else {
             for (const tc of toolCalls) {
               if (signal.aborted) break
-              const result = await this.executeSingleTool(tc, stoppable, loopCtx, usage)
-              messages.push(result)
+              messages.push(await exec(tc))
             }
           }
           currentPhase = 'model_call'
@@ -318,7 +297,7 @@ export class AgentLoop {
       // If the loop was aborted (e.g. Ctrl+C), swallow the error and return partial results
       if (signal.aborted) {
         this.externalAbort = null
-        return { messages, iterations, usage, durationMs: elapsed(), stopReason: stopReason ?? 'aborted' }
+        return { messages, iterations, usage, durationMs: Date.now() - startTime, stopReason: stopReason ?? 'aborted' }
       }
       // Attempt recovery via compaction when a provider rejects due to context length.
       if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err) && _compactionRetries < MAX_COMPACTION_RETRIES) {
@@ -343,6 +322,6 @@ export class AgentLoop {
 
     this.externalAbort = null
     const finalReason = stopReason ?? (signal.aborted && !stoppedInternally ? 'aborted' : undefined)
-    return { messages, iterations, usage, durationMs: elapsed(), ...(finalReason && { stopReason: finalReason }) }
+    return { messages, iterations, usage, durationMs: Date.now() - startTime, ...(finalReason && { stopReason: finalReason }) }
   }
 }
