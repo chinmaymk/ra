@@ -32,13 +32,15 @@ ra --provider openai-completions \
 Or in a config file:
 
 ```yaml
-provider: openai-completions
-model: meta-llama/Llama-3-70b-chat-hf
 app:
   providers:
     openai-completions:
       baseUrl: https://api.together.xyz/v1
       apiKey: ${OPENAI_API_KEY}
+
+agent:
+  provider: openai-completions
+  model: meta-llama/Llama-3-70b-chat-hf
 ```
 
 ## When to use this instead of `openai`
