@@ -128,7 +128,6 @@ describe('scratchpad middleware', () => {
         logger: { debug() {}, info() {}, warn() {}, error() {}, flush: async () => {} } as any,
       },
       stop: () => {},
-      drain: () => {},
       signal: new AbortController().signal,
       logger: { debug() {}, info() {}, warn() {}, error() {}, flush: async () => {} } as any,
     }

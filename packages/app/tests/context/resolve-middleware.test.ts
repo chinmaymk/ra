@@ -18,7 +18,6 @@ function makeCtx(messages: { role: string; content: string | ContentPart[] }[]):
   const controller = new AbortController()
   return {
     stop: () => controller.abort(),
-
     signal: controller.signal,
     logger,
     request: {
@@ -27,7 +26,6 @@ function makeCtx(messages: { role: string; content: string | ContentPart[] }[]):
     },
     loop: {
       stop: () => controller.abort(),
-  
       signal: controller.signal,
       logger,
       messages: messages as any,

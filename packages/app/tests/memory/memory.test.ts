@@ -276,7 +276,6 @@ describe('memory middleware', () => {
       resumed: false,
       elapsedMs: 0,
       stop: () => {},
-
       signal: new AbortController().signal,
     }
   }

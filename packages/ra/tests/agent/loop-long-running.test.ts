@@ -245,7 +245,7 @@ describe('Graceful stop', () => {
     })
 
     const result = await loop.run([{ role: 'user', content: 'hi' }])
-    // The iteration should complete even though drain was called during beforeModelCall
+    // The iteration should complete even though stop was called during beforeModelCall
     expect(events).toContain('afterModelResponse')
     expect(events).toContain('afterLoopIteration')
     expect(result.stopReason).toBe('draining')
@@ -469,6 +469,68 @@ describe('Heartbeat liveness detection', () => {
 
     const toolResult = result.messages.find(m => m.role === 'tool')
     expect(toolResult?.content).toBe('ok')
+  })
+})
+
+describe('Immediate stop', () => {
+  it('stop with immediate: true aborts mid-stream', async () => {
+    let modelCalls = 0
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('use stream') },
+      async *stream() {
+        modelCalls++
+        yield { type: 'tool_call_start' as const, id: 'tc1', name: 'noop' }
+        yield { type: 'tool_call_delta' as const, id: 'tc1', argsDelta: '{}' }
+        yield { type: 'tool_call_end' as const, id: 'tc1' }
+        yield { type: 'done' as const }
+      },
+    }
+    const tools = new ToolRegistry()
+    tools.register({ name: 'noop', description: 'noop', inputSchema: {}, execute: async () => 'ok' })
+
+    const loop = new AgentLoop({
+      provider,
+      tools,
+      model: 'test',
+      maxIterations: 10,
+      middleware: {
+        afterModelResponse: [async (ctx) => { ctx.stop('halt', { immediate: true }) }],
+      },
+    })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    expect(result.stopReason).toBe('halt')
+    expect(modelCalls).toBe(1)
+  })
+})
+
+describe('Parallel tool execution with denied tools', () => {
+  it('denied tools produce error messages while approved tools execute in parallel', async () => {
+    const tools = new ToolRegistry()
+    tools.register({ name: 'allowed', description: 'ok', inputSchema: {}, execute: async () => 'result' })
+    tools.register({ name: 'blocked', description: 'no', inputSchema: {}, execute: async () => 'should not run' })
+
+    const provider = multiToolProvider(['allowed', 'blocked'])
+    const loop = new AgentLoop({
+      provider,
+      tools,
+      model: 'test',
+      maxIterations: 5,
+      parallelToolCalls: true,
+      middleware: {
+        beforeToolExecution: [async (ctx) => {
+          if (ctx.toolCall.name === 'blocked') ctx.deny('not allowed')
+        }],
+      },
+    })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+
+    const toolResults = result.messages.filter(m => m.role === 'tool')
+    expect(toolResults).toHaveLength(2)
+    const blocked = toolResults.find(m => m.content === 'not allowed')
+    expect(blocked?.isError).toBe(true)
+    const allowed = toolResults.find(m => m.content === 'result')
+    expect(allowed?.isError).toBeUndefined()
   })
 })
 
