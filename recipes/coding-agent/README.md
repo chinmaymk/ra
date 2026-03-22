@@ -72,5 +72,5 @@ mcp:
 
 1. **Config** (`ra.config.yaml`) — Sets up Opus with high thinking, REPL interface, 200 iteration limit
 2. **Skill** (`skills/coding-agent/SKILL.md`) — Defines coding agent behavior: file editing discipline, codebase navigation patterns, safety rules, testing workflow
-3. **Built-in tools** — Filesystem ops, bash, search, glob, web fetch, ask_user, checklist
+3. **Built-in tools** — Filesystem ops, bash, search, glob, web fetch, checklist
 4. **Compaction** — Summarizes old messages when context reaches 80% capacity

@@ -23,7 +23,6 @@ import type { Skill, SkillIndex } from '../skills/types'
 import { loadSkill, buildActiveSkillXml, readSkillReference } from '../skills/loader'
 import { buildThreadMessages } from './messages'
 import type { MemoryStore } from '../memory/store'
-import { askUserTool } from '../tools/ask-user'
 import { runSkillScriptByName } from '../skills/runner'
 import { extractContextFilePath } from '../context'
 import * as tui from './tui'
@@ -60,7 +59,6 @@ export class Repl {
   private sessionId: string | undefined
   private pendingSkill: Skill | undefined
   private pendingAttachments: ContentPart[] = []
-  private askUserResolve: ((answer: string) => void) | undefined
   private activeLoop: AgentLoop | null = null
   private lastInterruptTime = 0
   private skillCache = new Map<string, Promise<Skill>>()
@@ -95,34 +93,11 @@ export class Repl {
       tui.printResumeHeader(this.sessionId as string, this.messages.length)
     }
 
-    // Register AskUserQuestion to read inline from the terminal
-    const { description, inputSchema } = askUserTool()
-    this.options.tools.register({
-      name: 'AskUserQuestion',
-      description,
-      inputSchema,
-      execute: async (input: unknown) => {
-        const { question } = input as { question: string }
-        tui.stopSpinner(true)
-        tui.printCommandResponse(question)
-        rl.setPrompt('  > ')
-        rl.prompt()
-        return new Promise<string>(resolve => { this.askUserResolve = resolve })
-      },
-    })
-
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdout.isTTY })
     rl.setPrompt(tui.PROMPT)
 
     // Ctrl+C: cancel active request or double-press to exit
     rl.on('SIGINT', () => {
-      if (this.askUserResolve) {
-        const resolve = this.askUserResolve
-        this.askUserResolve = undefined
-        rl.setPrompt(tui.PROMPT)
-        resolve('')
-        return
-      }
       if (this.activeLoop) {
         this.activeLoop.abort()
         return
@@ -142,16 +117,6 @@ export class Repl {
     let inflight: Promise<void> | undefined
     rl.on('line', async (line: string) => {
       const trimmed = line.trim()
-
-      // Route answer to waiting ask_user Promise
-      if (this.askUserResolve) {
-        if (!trimmed) { rl.prompt(); return }
-        const resolve = this.askUserResolve
-        this.askUserResolve = undefined
-        rl.setPrompt(tui.PROMPT)
-        resolve(trimmed)
-        return
-      }
 
       if (!trimmed || processing) { if (!processing) rl.prompt(); return }
       processing = true

@@ -230,30 +230,6 @@ describe('AnthropicProvider', () => {
     expect(mapped[0].content[0].type).toBe('text')
   })
 
-  it('merges consecutive user messages after ask_user tool result', () => {
-    const provider = new AnthropicProvider({ apiKey: 'test' })
-    const messages = [
-      { role: 'user' as const, content: 'Do something' },
-      {
-        role: 'assistant' as const,
-        content: '',
-        toolCalls: [{ id: 'call_1', name: 'AskUserQuestion', arguments: '{"question":"What do you want?"}' }],
-      },
-      { role: 'tool' as const, content: '__RA_ASK_USER__What do you want?', toolCallId: 'call_1' },
-      { role: 'user' as const, content: 'I want X' },
-    ]
-    const mapped = provider.mapMessages(messages) as any[]
-    // tool result (user) and next user message should be merged into one user turn
-    expect(mapped).toHaveLength(3)
-    expect(mapped[0].role).toBe('user')
-    expect(mapped[1].role).toBe('assistant')
-    expect(mapped[2].role).toBe('user')
-    // Merged user turn should contain both tool_result and text
-    const lastUser = mapped[2].content as any[]
-    expect(lastUser.some((b: any) => b.type === 'tool_result')).toBe(true)
-    expect(lastUser.some((b: any) => b.type === 'text')).toBe(true)
-  })
-
   it('maps response with only text (no tool_use)', () => {
     const provider = new AnthropicProvider({ apiKey: 'test' })
     const response = {

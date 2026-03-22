@@ -25,7 +25,6 @@ loadConfig() → createProvider() → ToolRegistry + MCP tools → loadSkills() 
 | Loop calls | Single `run()` | `run()` per user input | `run()` per POST request |
 | Sessions | None (one-shot) | Auto-saved per turn | Optional via `sessionId` |
 | Streaming | `onChunk` callback | TUI middleware | Server-Sent Events |
-| AskUserQuestion | Async stdin prompt | Next user input resumes | Returns `{ askUser, sessionId }` |
 
 ## Skill Injection
 
@@ -40,4 +39,3 @@ Use `cli.ts` as a template. The pattern is:
 2. Create provider, tool registry, middleware
 3. Build initial messages (system prompt + skills + context + user input)
 4. Instantiate `AgentLoop` and call `run()`
-5. Handle `ASK_USER_SIGNAL` in the final messages if needed

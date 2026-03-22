@@ -16,7 +16,6 @@ import type { SessionStorage } from '../storage/sessions'
 import type { SkillIndex } from '../skills/types'
 import { createSessionMiddleware } from '../agent/session'
 import { buildMessagePrefix, buildThreadMessages } from './messages'
-import { askUserTool } from '../tools/ask-user'
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -51,7 +50,6 @@ export class HttpServer {
 
   constructor(options: HttpOptions) {
     this.options = options
-    options.tools.register(askUserTool())
   }
 
   get port(): number { return (this.server?.port ?? this.options.port) as number }

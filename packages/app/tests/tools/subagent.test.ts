@@ -230,24 +230,6 @@ describe('subagent tool', () => {
     expect(out.results[0].iterations).toBe(2)
   })
 
-  it('excludes ask_user from forks', async () => {
-    const capturedTools: string[] = []
-    const provider = capturingProvider(req => {
-      for (const t of req.tools ?? []) capturedTools.push(t.name)
-    })
-
-    const tools = new ToolRegistry()
-    tools.register({ name: 'AskUserQuestion', description: 'ask', inputSchema: {}, execute: async () => 'answer' })
-    tools.register({ name: 'Read', description: 'read', inputSchema: {}, execute: async () => 'content' })
-
-    const tool = subagentTool({ provider, tools, model: 'test' })
-    await tool.execute({ tasks: [{ task: 'test' }] })
-
-    expect(capturedTools).toContain('Read')
-    expect(capturedTools).not.toContain('AskUserQuestion')
-    expect(capturedTools).toContain('Agent')
-  })
-
   it('forks inherit memory tools', async () => {
     const capturedTools: string[] = []
     const provider = capturingProvider(req => {

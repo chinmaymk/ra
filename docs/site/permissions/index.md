@@ -181,7 +181,6 @@ app:
         path: {}
       - tool: glob_files
         path: {}
-      - tool: ask_user
       - tool: checklist
 ```
 
