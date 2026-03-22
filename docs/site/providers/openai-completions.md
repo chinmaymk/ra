@@ -62,7 +62,7 @@ The default `openai` provider uses the newer [Responses API](https://platform.op
 
 ## Extended thinking
 
-Supported levels: `low`, `medium`, `high` (if the model supports it).
+Supported modes: `off`, `low`, `medium`, `high`, `adaptive` (if the model supports it).
 
 ```bash
 ra --provider openai-completions --thinking high "Solve this step by step"

@@ -10,6 +10,7 @@ import {
   type CompactionConfig,
   type Logger,
   type LogLevel,
+  type ThinkingMode,
 } from '@chinmaymk/ra'
 import type { SkillIndex } from '../skills/types'
 import type { SessionStorage } from '../storage/sessions'
@@ -32,7 +33,8 @@ export interface CliOptions {
   toolTimeout?: number
   maxToolResponseSize?: number
   onChunk?: (text: string) => void
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingMode
+  thinkingBudgetCap?: number
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
   sessionMessages?: IMessage[]
@@ -50,7 +52,7 @@ export interface CliResult {
 }
 
 export async function runCli(options: CliOptions): Promise<CliResult> {
-  const { prompt, files = [], systemPrompt, model, provider, tools, skillIndex, middleware, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, onChunk = (t) => process.stdout.write(t), thinking, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
+  const { prompt, files = [], systemPrompt, model, provider, tools, skillIndex, middleware, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, onChunk = (t) => process.stdout.write(t), thinking, thinkingBudgetCap, compaction, contextMessages = [], sessionMessages = [], logger, logsEnabled, logLevel, tracesEnabled, storage, sessionId } = options
 
   const { messages: initialMessages, priorCount } = buildThreadMessages({
     storedMessages: sessionMessages,
@@ -76,7 +78,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
     }],
   }
   const loop = new AgentLoop({
-    provider, tools, model, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, thinking, compaction, sessionId,
+    provider, tools, model, maxIterations, maxRetries, toolTimeout, maxToolResponseSize, thinking, thinkingBudgetCap, compaction, sessionId,
     logger: session.logger,
     middleware: mergeMiddleware(streamHook, session.middleware),
     resumed: sessionMessages.length > 0,

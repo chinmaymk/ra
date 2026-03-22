@@ -48,8 +48,17 @@ export function serializeContent(content: string | ContentPart[]): string {
   return typeof content === 'string' ? content : JSON.stringify(content)
 }
 
-/** Thinking budget tokens shared by Anthropic and Bedrock providers. Minimum is 1024 per Anthropic API. */
+/** Minimum thinking budget per Anthropic API. */
+const MIN_THINKING_BUDGET = 1024
+
+/** Thinking budget tokens shared by Anthropic and Bedrock providers. */
 export const THINKING_BUDGETS = { low: 1024, medium: 16000, high: 32000 } as const
+
+/** Resolve the effective thinking budget, applying an optional cap. */
+export function resolveThinkingBudget(budgets: Record<string, number>, level: string, cap?: number): number {
+  const base = budgets[level] ?? MIN_THINKING_BUDGET
+  return cap ? Math.min(base, cap) : base
+}
 
 /** Default max output tokens for providers that require an explicit limit (Anthropic, Bedrock). */
 export const DEFAULT_MAX_TOKENS = 4096

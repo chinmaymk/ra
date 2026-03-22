@@ -38,7 +38,7 @@ agent:
   model: ${MODEL:-claude-sonnet-4-6}
   systemPrompt: You are a helpful coding assistant.
   maxIterations: 50
-  thinking: medium
+  thinking: adaptive
   toolTimeout: 30000
 
   skillDirs:
@@ -93,7 +93,8 @@ agent:
 | `agent.model` | `--model` | provider default | Model name |
 | `agent.systemPrompt` | `--system-prompt` | — | System prompt text |
 | `agent.maxIterations` | `--max-iterations` | `50` | Max agent loop iterations |
-| `agent.thinking` | `--thinking` | — | Extended thinking: `low`, `medium`, `high` |
+| `agent.thinking` | `--thinking` | `off` | Thinking mode: `off`, `low`, `medium`, `high`, `adaptive` |
+| `agent.thinkingBudgetCap` | `--thinking-budget-cap` | — | Max thinking budget tokens (caps the level-based default) |
 | `agent.toolTimeout` | — | `30000` | Per-tool and middleware timeout (ms) |
 | `agent.tools.builtin` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
 

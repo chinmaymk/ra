@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, extractTextContent, serializeContent, parseToolArguments } from '@chinmaymk/ra'
+import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, extractTextContent, serializeContent, parseToolArguments, resolveThinkingBudget, THINKING_BUDGETS } from '@chinmaymk/ra'
 import type { TokenUsage, ContentPart } from '@chinmaymk/ra'
 
 describe('mergeConsecutiveRoles', () => {
@@ -201,5 +201,24 @@ describe('parseToolArguments', () => {
 
   it('returns {} for empty string', () => {
     expect(parseToolArguments('')).toEqual({})
+  })
+})
+
+describe('resolveThinkingBudget', () => {
+  it('returns level budget when no cap', () => {
+    expect(resolveThinkingBudget(THINKING_BUDGETS, 'high')).toBe(32000)
+    expect(resolveThinkingBudget(THINKING_BUDGETS, 'low')).toBe(1024)
+  })
+
+  it('caps budget when cap is lower than level budget', () => {
+    expect(resolveThinkingBudget(THINKING_BUDGETS, 'high', 5000)).toBe(5000)
+  })
+
+  it('uses level budget when cap is higher', () => {
+    expect(resolveThinkingBudget(THINKING_BUDGETS, 'low', 50000)).toBe(1024)
+  })
+
+  it('falls back to 1024 for unknown level', () => {
+    expect(resolveThinkingBudget(THINKING_BUDGETS, 'unknown')).toBe(1024)
   })
 })

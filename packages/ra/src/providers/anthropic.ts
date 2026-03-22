@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { extractSystemMessages, mergeConsecutiveRoles, parseToolArguments, serializeContent, THINKING_BUDGETS, DEFAULT_MAX_TOKENS } from './utils'
+import { extractSystemMessages, mergeConsecutiveRoles, parseToolArguments, serializeContent, THINKING_BUDGETS, resolveThinkingBudget, DEFAULT_MAX_TOKENS } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 
@@ -24,7 +24,7 @@ export class AnthropicProvider implements IProvider {
       messages: this.mapMessages(filtered),
       ...(system && { system: [{ type: 'text' as const, text: system, cache_control: { type: 'ephemeral' as const } }] }),
       ...(request.tools?.length && { tools: this.mapTools(request.tools) }),
-      ...(request.thinking && { thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[request.thinking] } }),
+      ...(request.thinking && { thinking: { type: 'enabled', budget_tokens: resolveThinkingBudget(THINKING_BUDGETS, request.thinking, request.thinkingBudgetCap) } }),
     }
   }
 

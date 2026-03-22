@@ -11,6 +11,7 @@ import {
   type CompactionConfig,
   type Logger,
   type LogLevel,
+  type ThinkingMode,
 } from '@chinmaymk/ra'
 import type { SessionStorage } from '../storage/sessions'
 import type { SkillIndex } from '../skills/types'
@@ -35,7 +36,8 @@ export interface HttpOptions {
   maxRetries?: number
   toolTimeout?: number
   maxToolResponseSize?: number
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingMode
+  thinkingBudgetCap?: number
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
   logger?: Logger
@@ -185,6 +187,7 @@ export class HttpServer {
       maxToolResponseSize: this.options.maxToolResponseSize,
       sessionId,
       thinking: this.options.thinking,
+      thinkingBudgetCap: this.options.thinkingBudgetCap,
       compaction: this.options.compaction,
       logger: session.logger,
       resumed,

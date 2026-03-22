@@ -9,6 +9,7 @@ import {
   type IMessage,
   type IProvider,
   type TokenUsage,
+  type ThinkingMode,
   type MiddlewareConfig,
   type AgentLoopOptions,
   type CompactionConfig,
@@ -24,7 +25,8 @@ export interface SubagentToolOptions {
   model: string
   systemPrompt?: string
   middleware?: Partial<MiddlewareConfig>
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingMode
+  thinkingBudgetCap?: number
   compaction?: CompactionConfig
   toolTimeout?: number
   maxIterations?: number
@@ -94,6 +96,7 @@ export function subagentTool(options: SubagentToolOptions): ITool {
         maxIterations,
         middleware: options.middleware,
         thinking: options.thinking,
+        thinkingBudgetCap: options.thinkingBudgetCap,
         compaction: options.compaction,
         toolTimeout: options.toolTimeout,
         logger: options.logger,

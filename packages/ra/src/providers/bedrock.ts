@@ -7,7 +7,7 @@ import {
   type Tool as BedrockTool,
   type ToolInputSchema,
 } from '@aws-sdk/client-bedrock-runtime'
-import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, DEFAULT_MAX_TOKENS } from './utils'
+import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, resolveThinkingBudget, DEFAULT_MAX_TOKENS } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 
@@ -37,7 +37,7 @@ export class BedrockProvider implements IProvider {
       inferenceConfig: { maxTokens: (request.providerOptions?.maxTokens as number) ?? DEFAULT_MAX_TOKENS },
       ...(request.thinking && {
         additionalModelRequestFields: {
-          thinking: { type: 'enabled', budget_tokens: THINKING_BUDGETS[request.thinking] }
+          thinking: { type: 'enabled', budget_tokens: resolveThinkingBudget(THINKING_BUDGETS, request.thinking, request.thinkingBudgetCap) }
         }
       }),
     }

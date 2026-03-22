@@ -283,6 +283,7 @@ export async function bootstrap(
       systemPrompt: agent.systemPrompt,
       middleware,
       thinking: agent.thinking,
+      thinkingBudgetCap: agent.thinkingBudgetCap,
       compaction: agent.compaction,
       toolTimeout: agent.toolTimeout,
       maxIterations: agent.maxIterations,

@@ -12,6 +12,8 @@ export type {
   ChatResponse,
   IProvider,
   ProviderName,
+  ThinkingLevel,
+  ThinkingMode,
 } from './providers/types'
 
 // ── Provider utilities ──────────────────────────────────────────────
@@ -24,6 +26,7 @@ export {
   serializeContent,
   extractSystemMessages,
   THINKING_BUDGETS,
+  resolveThinkingBudget,
 } from './providers/utils'
 
 // ── Provider implementations ────────────────────────────────────────
@@ -51,7 +54,7 @@ export type {
 } from './agent/types'
 
 // ── Agent runtime ───────────────────────────────────────────────────
-export { AgentLoop, truncateToolOutput, type AgentLoopOptions, type LoopResult } from './agent/loop'
+export { AgentLoop, truncateToolOutput, resolveThinking, type AgentLoopOptions, type LoopResult } from './agent/loop'
 export { ToolRegistry } from './agent/tool-registry'
 export { runMiddlewareChain, mergeMiddleware } from './agent/middleware'
 export { createCompactionMiddleware, forceCompact, isContextLengthError, splitMessageZones, type CompactionConfig, type MessageZones } from './agent/context-compaction'
