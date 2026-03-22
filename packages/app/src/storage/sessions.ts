@@ -165,6 +165,16 @@ export class SessionStorage {
     return sessions
   }
 
+  /** List all handle (namespace) directories under the global directory. */
+  static async listHandles(globalDir: string): Promise<string[]> {
+    const glob = new Bun.Glob('*/sessions')
+    const handles: string[] = []
+    for await (const rel of glob.scan({ cwd: globalDir, onlyFiles: false })) {
+      handles.push(rel.replace(/\/sessions$/, ''))
+    }
+    return handles.sort()
+  }
+
   /** Delete a session from a specific namespace under the global directory. */
   static async deleteFromNamespace(globalDir: string, namespace: string, id: string): Promise<void> {
     const sanitized = id.replace(UNSAFE_SESSION_ID_CHARS, '')
