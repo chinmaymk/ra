@@ -158,11 +158,11 @@ export async function bootstrap(
     }
   }
 
-  // Dynamic context discovery — picks up context files from directories the agent touches
+  // Dynamic context discovery — picks up context files from directories referenced in messages
   if (agent.context.enabled) {
     const root = (await findGitRoot(process.cwd())) ?? process.cwd()
-    const discoveryMw = createDiscoveryMiddleware(agent.context.patterns, root, new Set(contextFiles.map(f => f.path)))
-    middleware.afterToolExecution = append(middleware.afterToolExecution, discoveryMw)
+    const discoveryMw = createDiscoveryMiddleware(agent.context.patterns, root, new Set(contextFiles.map(f => f.path)), { subdirectoryWalk: agent.context.subdirectoryWalk })
+    middleware.beforeModelCall = append(middleware.beforeModelCall, discoveryMw)
   }
 
   // ── Provider ───────────────────────────────────────────────────────

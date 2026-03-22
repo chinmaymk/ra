@@ -66,6 +66,7 @@ export const defaultConfig: RaConfig = {
         { name: 'file', enabled: true },
         { name: 'url', enabled: true },
       ],
+      subdirectoryWalk: true,
     },
     compaction: {
       enabled: true,

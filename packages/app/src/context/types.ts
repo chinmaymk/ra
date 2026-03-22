@@ -12,6 +12,10 @@ export interface ContextConfig {
   patterns: string[]
   /** Pattern resolvers for inline references like @file or url:https://... */
   resolvers: ResolverConfig[]
+  /** When true, discovering a file in a subdirectory also walks up from that
+   *  directory to the project root, injecting any context files found along
+   *  the way (not just in the immediate directory). Default: true. */
+  subdirectoryWalk: boolean
 }
 
 export interface ContextFile {

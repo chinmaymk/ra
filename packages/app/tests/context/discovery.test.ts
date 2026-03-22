@@ -11,6 +11,7 @@ describe('context types', () => {
       enabled: true,
       patterns: ['CLAUDE.md', '.cursorrules'],
       resolvers: [],
+      subdirectoryWalk: true,
     }
     expect(config.enabled).toBe(true)
     expect(config.patterns).toHaveLength(2)
