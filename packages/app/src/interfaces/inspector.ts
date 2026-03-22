@@ -37,9 +37,13 @@ function buildStats(traces: TraceSpan[], messages: Array<{ role?: string; toolCa
   let inputTokens = 0
   let outputTokens = 0
   let thinkingTokens = 0
+  let cacheReadTokens = 0
+  let cacheCreationTokens = 0
   if (loopSpan?.attributes) {
     inputTokens = (loopSpan.attributes.inputTokens as number) || 0
     outputTokens = (loopSpan.attributes.outputTokens as number) || 0
+    cacheReadTokens = (loopSpan.attributes.cacheReadTokens as number) || 0
+    cacheCreationTokens = (loopSpan.attributes.cacheCreationTokens as number) || 0
   }
   for (const mc of modelCalls) {
     const attrs = mc.attributes || {}
@@ -47,6 +51,8 @@ function buildStats(traces: TraceSpan[], messages: Array<{ role?: string; toolCa
     // Fall back to summing if loop span didn't have totals
     if (!inputTokens) inputTokens += (attrs.inputTokens as number) || 0
     if (!outputTokens) outputTokens += (attrs.outputTokens as number) || 0
+    if (!cacheReadTokens) cacheReadTokens += (attrs.cacheReadTokens as number) || 0
+    if (!cacheCreationTokens) cacheCreationTokens += (attrs.cacheCreationTokens as number) || 0
   }
 
   // Tool frequency map
@@ -66,13 +72,19 @@ function buildStats(traces: TraceSpan[], messages: Array<{ role?: string; toolCa
   const iterationStats = iterations.map((it, i) => {
     const mc = modelCalls.find(m => m.parentSpanId === it.spanId)
     const attrs = mc?.attributes || {}
+    const itInput = (attrs.inputTokens as number) || 0
+    const itCacheRead = (attrs.cacheReadTokens as number) || 0
+    const itCacheCreation = (attrs.cacheCreationTokens as number) || 0
     const itTools = toolExecs.filter(t => t.parentSpanId === it.spanId)
     return {
       iteration: i + 1,
       durationMs: it.durationMs || 0,
-      inputTokens: (attrs.inputTokens as number) || 0,
+      inputTokens: itInput,
       outputTokens: (attrs.outputTokens as number) || 0,
       thinkingTokens: (attrs.thinkingTokens as number) || 0,
+      cacheReadTokens: itCacheRead,
+      cacheCreationTokens: itCacheCreation,
+      cacheHitPercent: itInput > 0 && itCacheRead ? Math.round((itCacheRead / itInput) * 1000) / 10 : null,
       toolCalls: itTools.length,
       toolErrors: itTools.filter(t => t.status === 'error').length,
       toolNames: itTools.map(t => (t.attributes?.tool as string) || '?'),
@@ -82,12 +94,19 @@ function buildStats(traces: TraceSpan[], messages: Array<{ role?: string; toolCa
   // Error count from messages
   const errorMessages = messages.filter(m => m.isError)
 
+  const cacheHitPercent = inputTokens > 0 && cacheReadTokens
+    ? Math.round((cacheReadTokens / inputTokens) * 1000) / 10
+    : null
+
   return {
     totalDurationMs: loopSpan?.durationMs || iterations.reduce((s, i) => s + (i.durationMs || 0), 0),
     iterations: iterations.length,
     inputTokens,
     outputTokens,
     thinkingTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
+    cacheHitPercent,
     totalTokens: inputTokens + outputTokens + thinkingTokens,
     totalToolCalls: toolExecs.length,
     totalToolErrors: toolExecs.filter(t => t.status === 'error').length,
@@ -124,9 +143,12 @@ function buildTimeline(traces: TraceSpan[], logs: LogEntry[]) {
       const model = (span.attributes?.model as string) || ''
       const inTok = (span.attributes?.inputTokens as number) || 0
       const outTok = (span.attributes?.outputTokens as number) || 0
+      const cacheRead = (span.attributes?.cacheReadTokens as number) || 0
+      const cachePct = (span.attributes?.cacheHitPercent as number) || 0
+      const cacheDetail = cacheRead ? ' (' + cachePct + '% cached)' : ''
       events.push({
         ts: span.timestamp, type: 'model_call', label: 'Model call' + (model ? ' (' + model + ')' : ''),
-        detail: inTok + ' in / ' + outTok + ' out tokens',
+        detail: inTok + ' in / ' + outTok + ' out tokens' + cacheDetail,
         status: span.status, durationMs: span.durationMs,
       })
     } else if (name === 'agent.tool_execution') {

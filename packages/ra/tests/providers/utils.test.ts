@@ -145,6 +145,32 @@ describe('accumulateUsage', () => {
     accumulateUsage(target, { inputTokens: 1, outputTokens: 1 })
     expect(target.thinkingTokens).toBeUndefined()
   })
+
+  it('accumulates cacheReadTokens when source has it', () => {
+    const target: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+    accumulateUsage(target, { inputTokens: 20, outputTokens: 10, cacheReadTokens: 15 })
+    expect(target.cacheReadTokens).toBe(15)
+  })
+
+  it('accumulates cacheCreationTokens when source has it', () => {
+    const target: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+    accumulateUsage(target, { inputTokens: 20, outputTokens: 10, cacheCreationTokens: 8 })
+    expect(target.cacheCreationTokens).toBe(8)
+  })
+
+  it('accumulates cache tokens across multiple calls', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 10 }
+    accumulateUsage(target, { inputTokens: 5, outputTokens: 5, cacheReadTokens: 20, cacheCreationTokens: 3 })
+    expect(target.cacheReadTokens).toBe(30)
+    expect(target.cacheCreationTokens).toBe(3)
+  })
+
+  it('does not set cache tokens when source lacks them', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0 }
+    accumulateUsage(target, { inputTokens: 1, outputTokens: 1 })
+    expect(target.cacheReadTokens).toBeUndefined()
+    expect(target.cacheCreationTokens).toBeUndefined()
+  })
 })
 
 describe('extractTextContent', () => {

@@ -46,8 +46,12 @@ export class GoogleProvider implements IProvider {
     return { model, contents, tools }
   }
 
-  private toUsage(meta: { promptTokenCount?: number; candidatesTokenCount?: number }): TokenUsage {
-    return { inputTokens: meta.promptTokenCount ?? 0, outputTokens: meta.candidatesTokenCount ?? 0 }
+  private toUsage(meta: { promptTokenCount?: number; candidatesTokenCount?: number; cachedContentTokenCount?: number }): TokenUsage {
+    return {
+      inputTokens: meta.promptTokenCount ?? 0,
+      outputTokens: meta.candidatesTokenCount ?? 0,
+      ...(meta.cachedContentTokenCount && { cacheReadTokens: meta.cachedContentTokenCount }),
+    }
   }
 
   private buildGenerationConfig(thinking?: ThinkingLevel, budgetCap?: number): Record<string, unknown> | undefined {

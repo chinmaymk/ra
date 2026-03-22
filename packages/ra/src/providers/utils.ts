@@ -35,6 +35,12 @@ export function accumulateUsage(target: TokenUsage, source: TokenUsage): void {
   if (source.thinkingTokens) {
     target.thinkingTokens = (target.thinkingTokens ?? 0) + source.thinkingTokens
   }
+  if (source.cacheReadTokens) {
+    target.cacheReadTokens = (target.cacheReadTokens ?? 0) + source.cacheReadTokens
+  }
+  if (source.cacheCreationTokens) {
+    target.cacheCreationTokens = (target.cacheCreationTokens ?? 0) + source.cacheCreationTokens
+  }
 }
 
 /** Extract text from string or ContentPart[] content. */

@@ -118,11 +118,20 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       ? Math.round((streamFirstTokenTime - streamStartTime) * 100) / 100
       : undefined
 
+    const cacheReadTokens = usage?.cacheReadTokens ?? null
+    const cacheCreationTokens = usage?.cacheCreationTokens ?? null
+    const cacheHitPercent = (usage && usage.inputTokens > 0 && usage.cacheReadTokens)
+      ? Math.round((usage.cacheReadTokens / usage.inputTokens) * 1000) / 10
+      : null
+
     if (modelSpan) {
       tracer.endSpan(modelSpan, 'ok', {
         inputTokens: usage?.inputTokens,
         outputTokens: usage?.outputTokens,
         thinkingTokens: usage?.thinkingTokens ?? null,
+        cacheReadTokens,
+        cacheCreationTokens,
+        cacheHitPercent,
         toolCallCount: toolNames.length,
         toolNames,
         responseLength: responseText.length,
@@ -138,6 +147,9 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       inputTokens: usage?.inputTokens,
       outputTokens: usage?.outputTokens,
       thinkingTokens: usage?.thinkingTokens ?? null,
+      cacheReadTokens,
+      cacheCreationTokens,
+      cacheHitPercent,
       toolCallCount: toolNames.length,
       toolNames,
       responseLength: responseText.length,
@@ -254,6 +266,8 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
         inputTokens: ctx.usage.inputTokens,
         outputTokens: ctx.usage.outputTokens,
         thinkingTokens: ctx.usage.thinkingTokens ?? null,
+        cacheReadTokens: ctx.usage.cacheReadTokens ?? null,
+        cacheCreationTokens: ctx.usage.cacheCreationTokens ?? null,
         totalMessages: ctx.messages.length,
       })
       loopSpan = undefined
@@ -264,6 +278,8 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       inputTokens: ctx.usage.inputTokens,
       outputTokens: ctx.usage.outputTokens,
       thinkingTokens: ctx.usage.thinkingTokens ?? null,
+      cacheReadTokens: ctx.usage.cacheReadTokens ?? null,
+      cacheCreationTokens: ctx.usage.cacheCreationTokens ?? null,
       totalMessages: ctx.messages.length,
     })
   }

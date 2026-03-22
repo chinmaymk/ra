@@ -316,6 +316,68 @@ describe('observability middleware', () => {
     expect(completeLog!.thinkingTokens).toBe(3)
   })
 
+  it('includes cache metrics in model call and loop spans', async () => {
+    const logger = new Logger({ level: 'info', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    const provider = mockSequenceProvider([
+      [
+        { type: 'text', delta: 'cached response' },
+        { type: 'done', usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 80, cacheCreationTokens: 5 } },
+      ],
+    ])
+
+    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
+    await loop.run([{ role: 'user', content: 'test cache' }])
+
+    const { logs, spans } = parseOutput(captured)
+
+    // Model call span should include cache metrics
+    const modelSpan = spans.find(r => r.name === 'agent.model_call')
+    expect(modelSpan).toBeDefined()
+    const attrs = modelSpan!.attributes as Record<string, unknown>
+    expect(attrs.cacheReadTokens).toBe(80)
+    expect(attrs.cacheCreationTokens).toBe(5)
+    expect(attrs.cacheHitPercent).toBe(80)
+
+    // Loop span should include cache totals
+    const loopSpan = spans.find(r => r.name === 'agent.loop')
+    expect(loopSpan).toBeDefined()
+    const loopAttrs = loopSpan!.attributes as Record<string, unknown>
+    expect(loopAttrs.cacheReadTokens).toBe(80)
+    expect(loopAttrs.cacheCreationTokens).toBe(5)
+
+    // Log should include cache metrics
+    const responseLog = logs.find(e => e.message === 'model responded')
+    expect(responseLog).toBeDefined()
+    expect(responseLog!.cacheReadTokens).toBe(80)
+    expect(responseLog!.cacheHitPercent).toBe(80)
+  })
+
+  it('reports null cache metrics when provider does not return them', async () => {
+    const logger = new Logger({ level: 'info', output: 'stderr' })
+    const tracer = new Tracer({ output: 'stderr' })
+    const obsMw = createObservabilityMiddleware(logger, tracer)
+
+    const provider = mockSequenceProvider([
+      [
+        { type: 'text', delta: 'no cache' },
+        { type: 'done', usage: { inputTokens: 50, outputTokens: 10 } },
+      ],
+    ])
+
+    const loop = new AgentLoop({ provider, tools: new ToolRegistry(), maxIterations: 10, middleware: obsMw })
+    await loop.run([{ role: 'user', content: 'test' }])
+
+    const { spans } = parseOutput(captured)
+    const modelSpan = spans.find(r => r.name === 'agent.model_call')
+    const attrs = modelSpan!.attributes as Record<string, unknown>
+    expect(attrs.cacheReadTokens).toBeNull()
+    expect(attrs.cacheCreationTokens).toBeNull()
+    expect(attrs.cacheHitPercent).toBeNull()
+  })
+
   it('is safe to reuse across multiple loop runs', async () => {
     const logger = new Logger({ level: 'info', output: 'stderr' })
     const tracer = new Tracer({ output: 'stderr' })
