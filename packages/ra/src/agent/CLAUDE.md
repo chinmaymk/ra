@@ -12,7 +12,9 @@ Core agent loop and infrastructure.
 | `token-estimator.ts` | `estimateTokens()` — chars/4 heuristic |
 | `model-registry.ts` | `getContextWindowSize()` / `getDefaultCompactionModel()` |
 
-**Loop terminates when:** no tool calls, `maxIterations` reached, `stop()` called, or `signal.aborted`.
+**Loop terminates when:** no tool calls, `maxIterations` reached, `maxTokenBudget` exceeded, `maxDuration` exceeded, `stop()` called, or `signal.aborted`.
+
+**Parallel tool calls:** when `parallelToolCalls` is true (default), multiple tool calls from a single model response execute concurrently via `Promise.all`. Set to false for sequential execution. Middleware (`beforeToolExecution`, `afterToolExecution`) still runs per tool call.
 
 **Middleware:** runs in array order per hook. All contexts extend `StoppableContext` (`stop()` + `signal` + `logger`).
 - `beforeModelCall` — can modify `ctx.request.messages` and `ctx.request.tools`

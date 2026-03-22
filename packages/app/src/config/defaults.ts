@@ -41,6 +41,9 @@ export const defaultConfig: RaConfig = {
     maxRetries: 3,
     toolTimeout: 30000,
     maxConcurrency: 4,
+    parallelToolCalls: true,
+    maxTokenBudget: 0,
+    maxDuration: 0,
     tools: {
       builtin: true,
       overrides: {},
