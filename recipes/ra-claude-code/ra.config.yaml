@@ -1,3 +1,13 @@
+# Uncomment to add GitHub MCP server for PR/issue context:
+# app:
+#   mcpServers:
+#     - name: github
+#       transport: stdio
+#       command: npx
+#       args: ["-y", "@modelcontextprotocol/server-github"]
+#       env:
+#         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
 agent:
   provider: anthropic
   model: claude-opus-4-6
@@ -5,16 +15,6 @@ agent:
     builtin: true
   skillDirs:
     - ./skills
-
-  # Uncomment to add GitHub MCP server for PR/issue context:
-  # mcp:
-  #   servers:
-  #     - name: github
-  #       transport: stdio
-  #       command: npx
-  #       args: ["-y", "@modelcontextprotocol/server-github"]
-  #       env:
-  #         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
 
   maxIterations: 200
   thinking: high

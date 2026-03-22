@@ -12,15 +12,14 @@ MCP (Model Context Protocol) support — both as a client (connect to external t
 
 ## MCP Client
 
-Configured via `agent.mcp.servers[]` in config:
+Configured via `app.mcpServers[]` in config:
 ```yaml
-agent:
-  mcp:
-    servers:
-      - name: github
-        transport: stdio
-        command: npx
-        args: ["-y", "@modelcontextprotocol/server-github"]
+app:
+  mcpServers:
+    - name: github
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
 ```
 
 - Lists tools from the external server and wraps them as `ITool` instances
@@ -31,7 +30,7 @@ agent:
 
 ### Lazy Schema Loading (`lazy-tools.ts`)
 
-When `agent.mcp.lazySchemas` is enabled (default: `true`), MCP tools are additionally registered with:
+When `app.mcpLazySchemas` is enabled (default: `true`), MCP tools are additionally registered with:
 - Minimal `inputSchema` (no properties)
 - A first-call reveal: returns the full schema as an error (`isError: true`), model retries with correct params
 

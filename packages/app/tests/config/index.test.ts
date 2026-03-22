@@ -536,7 +536,7 @@ describe('env var interpolation in config files', () => {
       '          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"',
     ].join('\n'))
     const c = await loadConfig({ cwd: tmp, env: { GITHUB_TOKEN: 'ghp_abc123' } })
-    expect(c.agent.mcp.servers[0]?.env?.GITHUB_PERSONAL_ACCESS_TOKEN).toBe('ghp_abc123')
+    expect(c.app.mcpServers[0]?.env?.GITHUB_PERSONAL_ACCESS_TOKEN).toBe('ghp_abc123')
   })
 
   it('throws when a required variable is missing', async () => {

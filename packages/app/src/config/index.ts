@@ -60,70 +60,75 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
 const AGENT_KEYS = new Set([
   'provider', 'model', 'thinking', 'systemPrompt',
   'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
-  'tools', 'skillDirs', 'mcp', 'permissions',
+  'tools', 'skillDirs', 'permissions',
   'middleware', 'context', 'compaction', 'memory',
 ])
 
 // Keys that belong under `app` when found at the top level (legacy flat config)
 const APP_KEYS = new Set([
   'interface', 'dataDir', 'http', 'inspector', 'storage',
-  'mcpServer', 'providers',
+  'mcpServers', 'mcpLazySchemas', 'mcpServer', 'providers',
   'logsEnabled', 'logLevel', 'tracesEnabled',
 ])
 
 /**
- * Normalize MCP config from legacy shapes into the new split layout.
+ * Normalize MCP config from legacy shapes into the new layout.
  * Handles:
- *   - `app.mcp: { client, server, lazySchemas }` → split to `agent.mcp.servers` + `app.mcpServer`
- *   - `app.mcp.client` → `agent.mcp.servers` (rename client→servers)
- *   - `agent.mcp.client` → `agent.mcp.servers` (rename only)
+ *   - `app.mcp: { client, server, lazySchemas }` → split to `app.mcpServers` + `app.mcpServer`
+ *   - `app.mcp.client` → `app.mcpServers` (rename client→mcpServers)
+ *   - `agent.mcp.servers` → `app.mcpServers` (move from agent to app)
+ *   - `agent.mcp.client` → `app.mcpServers` (rename + move)
  */
 function normalizeMcpConfig(raw: Record<string, unknown>): void {
-  const app = raw.app as Record<string, unknown> | undefined
-  if (isPlainObject(app) && isPlainObject(app.mcp)) {
+  if (!isPlainObject(raw.app)) raw.app = {}
+  const app = raw.app as Record<string, unknown>
+
+  // Legacy: app.mcp: { client, server, lazySchemas }
+  if (isPlainObject(app.mcp)) {
     const mcp = app.mcp as Record<string, unknown>
-    // Move client (→servers) + lazySchemas to agent.mcp
-    if (!isPlainObject(raw.agent)) raw.agent = {}
-    const agent = raw.agent as Record<string, unknown>
-    if (!isPlainObject(agent.mcp)) agent.mcp = {}
-    const agentMcp = agent.mcp as Record<string, unknown>
-    if (mcp.client !== undefined && agentMcp.servers === undefined) {
-      agentMcp.servers = mcp.client
+    if (mcp.client !== undefined && app.mcpServers === undefined) {
+      app.mcpServers = mcp.client
     }
-    if (mcp.lazySchemas !== undefined && agentMcp.lazySchemas === undefined) {
-      agentMcp.lazySchemas = mcp.lazySchemas
+    if (mcp.servers !== undefined && app.mcpServers === undefined) {
+      app.mcpServers = mcp.servers
     }
-    // Move server to app.mcpServer
+    if (mcp.lazySchemas !== undefined && app.mcpLazySchemas === undefined) {
+      app.mcpLazySchemas = mcp.lazySchemas
+    }
     if (isPlainObject(mcp.server) && app.mcpServer === undefined) {
       app.mcpServer = mcp.server
     }
     delete app.mcp
   }
 
+  // Legacy: agent.mcp.servers / agent.mcp.client → app.mcpServers
+  const agent = raw.agent as Record<string, unknown> | undefined
+  if (isPlainObject(agent) && isPlainObject(agent.mcp)) {
+    const agentMcp = agent.mcp as Record<string, unknown>
+    const servers = agentMcp.servers ?? agentMcp.client
+    if (servers !== undefined && app.mcpServers === undefined) {
+      app.mcpServers = servers
+    }
+    if (agentMcp.lazySchemas !== undefined && app.mcpLazySchemas === undefined) {
+      app.mcpLazySchemas = agentMcp.lazySchemas
+    }
+    delete agent.mcp
+  }
+
   // Also migrate app.skillDirs and app.permissions to agent (backward compat)
   if (isPlainObject(app)) {
     if (!isPlainObject(raw.agent)) raw.agent = {}
-    const agent = raw.agent as Record<string, unknown>
-    if (app.skillDirs !== undefined && agent.skillDirs === undefined) {
-      agent.skillDirs = app.skillDirs
+    const agentObj = raw.agent as Record<string, unknown>
+    if (app.skillDirs !== undefined && agentObj.skillDirs === undefined) {
+      agentObj.skillDirs = app.skillDirs
       delete app.skillDirs
     }
-    if (isPlainObject(app.permissions) && agent.permissions === undefined) {
-      agent.permissions = app.permissions
+    if (isPlainObject(app.permissions) && agentObj.permissions === undefined) {
+      agentObj.permissions = app.permissions
       delete app.permissions
     }
     // Remove dead `skills` key
     delete app.skills
-  }
-
-  // Rename agent.mcp.client → agent.mcp.servers if needed
-  const agent = raw.agent as Record<string, unknown> | undefined
-  if (isPlainObject(agent) && isPlainObject(agent.mcp)) {
-    const agentMcp = agent.mcp as Record<string, unknown>
-    if (agentMcp.client !== undefined && agentMcp.servers === undefined) {
-      agentMcp.servers = agentMcp.client
-      delete agentMcp.client
-    }
   }
 }
 
@@ -249,12 +254,15 @@ interface RecipeArrays {
   middleware: Record<string, string[]>
 }
 
-/** Extract array fields from a recipe's agent config (they'd be lost by deepMerge). */
-function extractRecipeArrays(agent: Record<string, unknown>): RecipeArrays {
+/** Extract array fields from a recipe config (they'd be lost by deepMerge). */
+function extractRecipeArrays(config: Record<string, unknown>): RecipeArrays {
   const result: RecipeArrays = { skillDirs: [], mcpServers: [], middleware: {} }
+  const agent = (config.agent ?? config) as Record<string, unknown>
   if (Array.isArray(agent.skillDirs)) result.skillDirs = agent.skillDirs as string[]
-  if (isPlainObject(agent.mcp) && Array.isArray((agent.mcp as Record<string, unknown>).servers)) {
-    result.mcpServers = (agent.mcp as Record<string, unknown>).servers as unknown[]
+  // mcpServers can be under app.mcpServers (new) or agent.mcp.servers (legacy, post-normalize)
+  const app = config.app as Record<string, unknown> | undefined
+  if (isPlainObject(app) && Array.isArray(app.mcpServers)) {
+    result.mcpServers = app.mcpServers as unknown[]
   }
   if (isPlainObject(agent.middleware)) {
     for (const [hook, entries] of Object.entries(agent.middleware as Record<string, unknown>)) {
@@ -270,7 +278,7 @@ function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
     config.agent.skillDirs = [...arrays.skillDirs, ...config.agent.skillDirs]
   }
   if (arrays.mcpServers.length > 0) {
-    config.agent.mcp.servers = [...arrays.mcpServers as typeof config.agent.mcp.servers, ...config.agent.mcp.servers]
+    config.app.mcpServers = [...arrays.mcpServers as typeof config.app.mcpServers, ...config.app.mcpServers]
   }
   for (const [hook, entries] of Object.entries(arrays.middleware)) {
     const existing = config.agent.middleware[hook] ?? []
@@ -329,7 +337,7 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
     preResolveRecipePaths(recipeAgent, resolved.recipeDir)
 
     // Save array fields before deepMerge destroys them
-    recipeArrays = extractRecipeArrays(recipeAgent)
+    recipeArrays = extractRecipeArrays(recipeConfig)
 
     // Wrap in agent key if the recipe was a flat config
     recipeLayer = isPlainObject(recipeConfig.agent) ? recipeConfig : { agent: recipeConfig }

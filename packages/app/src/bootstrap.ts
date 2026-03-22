@@ -244,23 +244,23 @@ export async function bootstrap(
 
   // ── MCP clients ────────────────────────────────────────────────────
   const mcpClient = new McpClient()
-  if (agent.mcp.servers?.length) {
-    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: agent.mcp.servers.length })
-    logger.info('connecting to MCP servers', { serverCount: agent.mcp.servers.length, servers: agent.mcp.servers.map(c => c.name) })
+  if (app.mcpServers?.length) {
+    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: app.mcpServers.length })
+    logger.info('connecting to MCP servers', { serverCount: app.mcpServers.length, servers: app.mcpServers.map(c => c.name) })
     const knownToolNames = new Set(tools.all().map(t => t.name))
-    await mcpClient.connect(agent.mcp.servers, tools, { lazySchemas: agent.mcp.lazySchemas, logger })
+    await mcpClient.connect(app.mcpServers, tools, { lazySchemas: app.mcpLazySchemas, logger })
     const mcpTools = tools.all().filter(t => !knownToolNames.has(t.name))
     const mcpToolTokens = estimateTokens(mcpTools)
     logger.info('MCP servers connected', {
       totalTools: tools.all().length,
       mcpToolCount: mcpTools.length,
-      lazySchemas: agent.mcp.lazySchemas,
+      lazySchemas: app.mcpLazySchemas,
       estimatedMcpToolTokens: mcpToolTokens,
     })
     tracer.endSpan(mcpSpan, 'ok', {
       mcpToolCount: mcpTools.length,
       estimatedTokens: mcpToolTokens,
-      lazySchemas: agent.mcp.lazySchemas,
+      lazySchemas: app.mcpLazySchemas,
     })
   }
 

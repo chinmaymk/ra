@@ -76,6 +76,11 @@ export interface AppConfig {
     bedrock: BedrockProviderOptions
     azure: AzureProviderOptions
   }
+  /** External MCP servers to connect to. */
+  mcpServers: McpServerEntry[]
+  /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
+   *  First call returns full schema; model retries with correct params. Saves tokens. */
+  mcpLazySchemas: boolean
   /** Ra's own MCP server endpoint configuration. */
   mcpServer: McpServerConfig
   logsEnabled: boolean
@@ -99,13 +104,6 @@ export interface AgentConfig {
   maxConcurrency: number
   tools: ToolsConfig
   skillDirs: string[]
-  /** MCP servers the agent can connect to. */
-  mcp: {
-    servers: McpServerEntry[]
-    /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
-     *  First call returns full schema; model retries with correct params. Saves tokens. */
-    lazySchemas: boolean
-  }
   permissions: PermissionsConfig
   middleware: Record<string, string[]>
   context: ContextConfig

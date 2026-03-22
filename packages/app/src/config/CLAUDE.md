@@ -45,6 +45,8 @@ Infrastructure, deployment, and observability. Recipes typically don't set these
 | `app.inspector` | `{ port: 3002 }` | Inspector server settings |
 | `app.storage` | `{ maxSessions: 100, ttlDays: 30 }` | Session storage settings |
 | `app.providers` | `{ anthropic: {...}, ... }` | Per-provider credentials and connection options |
+| `app.mcpServers` | `[]` | External MCP servers to connect to |
+| `app.mcpLazySchemas` | `true` | Register MCP tools with minimal schemas (saves tokens) |
 | `app.mcpServer` | `{ enabled: false, port: 3001, ... }` | Ra's own MCP server endpoint |
 | `app.logsEnabled` | `true` | Enable session logs |
 | `app.logLevel` | `'info'` | Minimum log level |
@@ -52,7 +54,7 @@ Infrastructure, deployment, and observability. Recipes typically don't set these
 
 ### `agent` — Agent behavior and capabilities (AgentConfig)
 
-Everything a recipe defines: brain, tools, skills, MCP, permissions.
+Everything a recipe defines: brain, tools, skills, permissions.
 
 | Field | Default | Purpose |
 |-------|---------|---------|
@@ -67,8 +69,6 @@ Everything a recipe defines: brain, tools, skills, MCP, permissions.
 | `agent.tools.builtin` | `true` | Register built-in tools (master switch) |
 | `agent.tools.overrides` | `{}` | Per-tool settings |
 | `agent.skillDirs` | `['.claude/skills', ...]` | Directories to scan for skills |
-| `agent.mcp.servers` | `[]` | MCP servers the agent connects to |
-| `agent.mcp.lazySchemas` | `true` | Register MCP tools with minimal schemas (saves tokens) |
 | `agent.permissions` | `{}` | Tool permission rules |
 | `agent.middleware` | `{}` | Custom middleware hooks |
 | `agent.context` | `{ enabled: true, ... }` | Context file discovery |

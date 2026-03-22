@@ -33,6 +33,14 @@ app:
     maxSessions: 100
     ttlDays: 30
 
+  mcpServers:
+    - name: github
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
+
 agent:
   provider: ${PROVIDER:-anthropic}     # env override with default
   model: ${MODEL:-claude-sonnet-4-6}
@@ -43,15 +51,6 @@ agent:
 
   skillDirs:
     - ./skills
-
-  mcp:
-    servers:
-      - name: github
-        transport: stdio
-        command: npx
-        args: ["-y", "@modelcontextprotocol/server-github"]
-        env:
-          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
 
   compaction:
     enabled: true
@@ -208,12 +207,12 @@ All runtime data is organized under `dataDir`: sessions in `{dataDir}/sessions/`
 | `app.logLevel` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
 | `app.tracesEnabled` | `true` | Enable session traces |
 
-### Agent — MCP
+### App — MCP
 
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
-| `agent.mcp.servers` | — | `[]` | MCP servers the agent connects to |
-| `agent.mcp.lazySchemas` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
+| `app.mcpServers` | — | `[]` | External MCP servers to connect to |
+| `app.mcpLazySchemas` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
 
 See [MCP](/modes/mcp#lazy-schema-loading) for details.
 
