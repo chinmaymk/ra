@@ -13,7 +13,6 @@ import { copyFileTool } from '../../src/tools/copy-file'
 import { deleteFileTool } from '../../src/tools/delete-file'
 import { executeBashTool } from '../../src/tools/shell-exec'
 import { webFetchTool } from '../../src/tools/web-fetch'
-import { askUserTool } from '../../src/tools/ask-user'
 import { registerBuiltinTools } from '../../src/tools'
 import { ToolRegistry } from '@chinmaymk/ra'
 
@@ -249,13 +248,6 @@ describe('WebFetch', () => {
     } finally {
       server.stop(true)
     }
-  })
-})
-
-describe('AskUserQuestion', () => {
-  it('throws when called without an interface override', async () => {
-    const tool = askUserTool()
-    expect(tool.execute({ question: 'What color?' })).rejects.toThrow('ask_user is not available in this context')
   })
 })
 

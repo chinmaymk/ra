@@ -14,8 +14,6 @@ agent:
     overrides:
       Agent:
         enabled: false
-      AskUserQuestion:
-        enabled: false
       WebFetch:
         enabled: false
   compaction:

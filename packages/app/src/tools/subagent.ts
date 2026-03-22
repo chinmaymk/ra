@@ -16,7 +16,7 @@ import {
 } from '@chinmaymk/ra'
 
 /** Tools that can't work from a background fork */
-const EXCLUDED_TOOLS = new Set(['Agent', 'AskUserQuestion'])
+const EXCLUDED_TOOLS = new Set(['Agent'])
 
 export interface SubagentToolOptions {
   provider: IProvider

@@ -34,7 +34,6 @@ The system prompt tells the agent to `Read /autoresearch and begin` — the cont
 | `interface` | `repl` | Interactive setup, then autonomous loop |
 | `maxIterations` | `500` | Supports long autonomous runs (~100 experiments) |
 | `toolTimeout` | `900000` | 15 min timeout for training runs |
-| `AskUserQuestion` | disabled | Agent must not pause to ask questions |
 | `WebFetch` | disabled | No internet needed, keeps agent focused |
 | `Agent` | disabled | No subagents needed |
 | `permissions` | `no_rules_rules` | Agent needs unrestricted shell access for training |

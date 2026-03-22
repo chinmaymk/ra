@@ -22,10 +22,9 @@ function buildServer(config: McpServerConfig, handler: McpToolHandler, builtinTo
     })
   )
 
-  // Expose built-in tools as MCP tools (except AskUserQuestion)
+  // Expose built-in tools as MCP tools
   if (builtinTools) {
     for (const tool of builtinTools.all()) {
-      if (tool.name === 'AskUserQuestion') continue
       server.tool(
         tool.name,
         tool.description,

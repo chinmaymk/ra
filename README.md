@@ -142,7 +142,7 @@ Each provider needs an API key via environment variable (`RA_ANTHROPIC_API_KEY`,
 
 ## [Tools](https://chinmaymk.github.io/ra/tools/)
 
-Ra ships with built-in tools for filesystem operations (`Read`, `Write`, `Edit`, `Glob`, `Grep`, ...), shell execution (`Bash`/`PowerShell`), web fetching, and agent interaction (`AskUserQuestion`, `TodoWrite`, `Agent`). The `Agent` tool forks parallel copies of the agent to work on independent tasks simultaneously.
+Ra ships with built-in tools for filesystem operations (`Read`, `Write`, `Edit`, `Glob`, `Grep`, ...), shell execution (`Bash`/`PowerShell`), web fetching, and agent interaction (`TodoWrite`, `Agent`). The `Agent` tool forks parallel copies of the agent to work on independent tasks simultaneously.
 
 Each tool can be independently configured, constrained, or disabled:
 

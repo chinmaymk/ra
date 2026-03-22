@@ -11,7 +11,7 @@ agent:
     builtin: true
 ```
 
-When ra runs as an [MCP server](/modes/mcp), all built-in tools (except `AskUserQuestion`) are automatically exposed as MCP tools.
+When ra runs as an [MCP server](/modes/mcp), all built-in tools are automatically exposed as MCP tools.
 
 ## Filesystem
 
@@ -186,22 +186,6 @@ Make an HTTP request and return the response as JSON with `status`, `headers`, a
 }
 ```
 
-## Agent Interaction
-
-### `AskUserQuestion`
-
-Pause the agent loop and ask the user a question. The loop suspends until the user responds.
-
-- **REPL** — the question is printed and the next input resumes the conversation
-- **CLI** — the session ID is printed so the user can resume with `--resume`
-- **HTTP** — an `AskUserQuestion` SSE event is emitted with the question and session ID
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `question` | string | yes | Question to ask the user |
-
-This tool is **not exposed via MCP** since MCP clients manage their own user interaction.
-
 ## Scratchpad
 
 When built-in tools are enabled, ra registers an ephemeral key-value scratchpad that survives [context compaction](/core/agent-loop#compaction). Entries are re-injected before every model call via middleware, so the agent never loses them even as older messages are summarized. The scratchpad is **not** persisted across sessions — use [memory tools](#memory) for long-term storage.
@@ -263,7 +247,7 @@ Fork parallel copies of the agent to work on independent tasks simultaneously. E
 
 Returns `{ results, usage }` where each result has `task`, `status`, `result`, `iterations`, and `usage`. Aggregate usage rolls up into the parent's token tracking automatically.
 
-Only `AskUserQuestion` and `Agent` are excluded from forks — `AskUserQuestion` can't work from a background fork, and `Agent` nesting is depth-limited (default: 2) to prevent infinite recursion. All other tools (including memory) are inherited. Task failures don't affect siblings.
+Only `Agent` is excluded from forks — nesting is depth-limited (default: 2) to prevent infinite recursion. All other tools (including memory) are inherited. Task failures don't affect siblings.
 
 Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to control how many forks run in parallel.
 

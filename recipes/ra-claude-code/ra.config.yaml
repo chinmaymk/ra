@@ -31,7 +31,7 @@ agent:
     - Make sensible decisions — don't ask about code style, file locations, or obvious choices
     - Complete the loop — after changes, run tests/type-check/lint. Don't stop at "I've made the changes"
     - Fix what you break — if tests fail after your change, fix them. Don't report and wait.
-    - Only use AskUserQuestion when genuinely blocked or the action is destructive/irreversible
+    - Only ask the user when genuinely blocked or the action is destructive/irreversible
 
     ## Core Principles
 

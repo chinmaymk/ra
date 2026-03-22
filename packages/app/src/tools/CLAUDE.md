@@ -18,7 +18,6 @@ Built-in tools, each in its own file. `index.ts` registers them all.
 | `delete-file.ts` | `DeleteFile` | Filesystem |
 | `shell-exec.ts` | `Bash` / `PowerShell` | Shell (platform-specific) |
 | `web-fetch.ts` | `WebFetch` | Network |
-| `ask-user.ts` | `AskUserQuestion` | Agent interaction |
 | `subagent.ts` | `Agent` | Agent interaction (exported separately, not auto-registered) |
 
 ## Tool Pattern
@@ -44,4 +43,4 @@ registry.register(myTool())
 - Return strings when possible (objects get `JSON.stringify()`'d)
 - Thrown errors become tool results with `isError: true`
 - Tools are subject to `toolTimeout` (default 30s)
-- All tools except `AskUserQuestion` are exposed when ra runs as MCP server
+- All tools are exposed when ra runs as MCP server

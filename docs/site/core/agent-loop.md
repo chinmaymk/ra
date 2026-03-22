@@ -24,8 +24,6 @@ ra's core loop is simple: send messages to the model, stream the response, execu
          ▼
     Execute tools
          │
-         ├── ask_user? ──► suspend (loop exits without afterLoopComplete)
-         │
          ▼
    afterToolExecution
          │
@@ -42,8 +40,6 @@ ra's core loop is simple: send messages to the model, stream the response, execu
 3. **Tool execution** — If the model requested tool calls, `beforeToolExecution` fires for each one, then the tool runs, then `afterToolExecution` fires with the result.
 
 4. **Iterate or complete** — If tools were called, `afterLoopIteration` fires and the loop goes back to step 2 with the tool results appended to the conversation. If no tools were called, `afterLoopComplete` fires and the loop ends.
-
-5. **Suspend** — The `AskUserQuestion` tool is special: it suspends the loop and returns control to the caller without firing `afterLoopComplete`. The session is saved so you can [resume later](/core/sessions).
 
 ## Loop controls
 
