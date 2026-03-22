@@ -57,7 +57,7 @@ agent:
 
   compaction:
     enabled: true
-    threshold: 0.8
+    threshold: 0.70
     model: claude-haiku-4-5-20251001
 
   context:
@@ -137,7 +137,7 @@ agent:
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
 | `agent.compaction.enabled` | — | `true` | Enable automatic context compaction |
-| `agent.compaction.threshold` | — | `0.8` | Trigger at this fraction of context window |
+| `agent.compaction.threshold` | — | `0.70` | Trigger at this fraction of context window |
 | `agent.compaction.model` | — | provider default | Model for summarization |
 
 ### Agent — Context
@@ -145,7 +145,7 @@ agent:
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
 | `agent.context.enabled` | — | `true` | Enable context file discovery |
-| `agent.context.patterns` | — | `[]` | Glob patterns for context files |
+| `agent.context.patterns` | — | `['CLAUDE.md', 'AGENTS.md', '.cursorrules', ...]` | Glob patterns for context files |
 | `agent.context.resolvers` | — | built-in | Pattern resolvers for `@file` and `url:` |
 
 ### Agent — Tools

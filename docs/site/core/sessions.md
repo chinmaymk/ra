@@ -45,11 +45,7 @@ To resume a specific session later (if newer sessions exist), use `ra --resume=s
 
 ## Listing sessions
 
-```bash
-ra session list
-```
-
-Via the HTTP API:
+Use the HTTP API or the [Inspector](/modes/inspector) to browse sessions:
 
 ```bash
 curl http://localhost:3000/sessions

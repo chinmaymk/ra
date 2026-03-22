@@ -21,6 +21,7 @@ You get a `›` prompt. Type a message and ra streams the response, runs tools a
 | `/context` | Show discovered context files |
 | `/memories [n]` | Show stored memories (default: last 20) |
 | `/forget <query>` | Delete memories matching a search query |
+| `/save` | Confirm session is saved (sessions auto-save after each turn) |
 
 ## Example session
 

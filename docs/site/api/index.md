@@ -43,7 +43,7 @@ Stream a response via Server-Sent Events (SSE).
 ```
 data: {"type":"text","delta":"Hello"}
 data: {"type":"text","delta":"!"}
-data: {"type":"done","usage":{"inputTokens":150,"outputTokens":42}}
+data: {"type":"done","sessionId":"ses_abc123"}
 ```
 
 **SSE event types:**
@@ -51,11 +51,10 @@ data: {"type":"done","usage":{"inputTokens":150,"outputTokens":42}}
 | Type | Fields | Description |
 |------|--------|-------------|
 | `text` | `delta` | Text content token |
-| `thinking` | `delta` | Thinking/reasoning token |
 | `tool_call_start` | `id`, `name` | Tool invocation begins |
 | `tool_call_delta` | `id`, `argsDelta` | Tool argument streaming |
 | `tool_call_end` | `id` | Tool invocation complete |
-| `done` | `usage` (optional) | Stream complete |
+| `done` | `sessionId` | Stream complete |
 
 ## POST /chat/sync
 
