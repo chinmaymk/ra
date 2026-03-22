@@ -7,6 +7,11 @@ export default defineConfig({
   description: 'The predictable, observable agent harness.',
   base: '/ra/',
   appearance: 'dark',
+  vite: {
+    define: {
+      __DOCS_VERSION__: JSON.stringify(process.env.DOCS_VERSION || 'dev'),
+    },
+  },
   head: [
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],

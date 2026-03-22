@@ -83,10 +83,17 @@ jobs:
         run: |
           TAGS=$(git tag -l 'v*' --sort=-version:refname)
           REPO_ROOT=$(git rev-parse --show-toplevel)
+          MIN_VERSION="0.0.5"
           mkdir -p /tmp/versioned-docs-dist
 
           for tag in $TAGS; do
             version="${tag#v}"
+
+            # Only build docs for versions >= 0.0.5
+            if [ "$(printf '%s\n%s' "$MIN_VERSION" "$version" | sort -V | head -n1)" != "$MIN_VERSION" ]; then
+              echo "Skipping $tag (below minimum version $MIN_VERSION)"
+              continue
+            fi
 
             # Skip if already cached from a previous build
             if [ -d "/tmp/versioned-docs-dist/$version" ]; then
@@ -154,9 +161,16 @@ jobs:
           # Add versioned docs and build versions.json
           first=true
           VERSION_LIST=""
+          MIN_VERSION="0.0.5"
 
           for tag in $TAGS; do
             version="${tag#v}"
+
+            # Only include versions >= 0.0.5
+            if [ "$(printf '%s\n%s' "$MIN_VERSION" "$version" | sort -V | head -n1)" != "$MIN_VERSION" ]; then
+              continue
+            fi
+
             if [ -d "/tmp/versioned-docs-dist/$version" ]; then
               mkdir -p ".vitepress/dist/v/$version"
               cp -r "/tmp/versioned-docs-dist/$version/"* ".vitepress/dist/v/$version/"
