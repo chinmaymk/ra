@@ -78,7 +78,7 @@ export function createResolverMiddleware(
       if (messages[i]?.role === 'system') {
         const { resolved, refCount } = await resolveMessage(messages, i, resolvers, cwd)
         if (resolved) {
-          logger.info('pattern resolved in system message', {
+          logger.info('context resolver resolved markers in system prompt', {
             messageIndex: i,
             referenceCount: refCount,
           })
@@ -98,7 +98,7 @@ export function createResolverMiddleware(
 
     const { resolved, refCount } = await resolveMessage(messages, lastUserIdx, resolvers, cwd)
     if (resolved) {
-      logger.info('pattern resolved in user message', {
+      logger.info('context resolver resolved markers in user message', {
         messageIndex: lastUserIdx,
         referenceCount: refCount,
       })

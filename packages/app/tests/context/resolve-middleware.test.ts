@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { createResolverMiddleware } from '../../src/context/resolve-middleware'
 import { NoopLogger } from '@chinmaymk/ra'
-import type { ModelCallContext, IMessage, ContentPart } from '@chinmaymk/ra'
+import type { ModelCallContext, ContentPart } from '@chinmaymk/ra'
 import type { PatternResolver } from '../../src/context/resolvers'
 
 const logger = new NoopLogger()
@@ -14,7 +14,7 @@ const echoResolver: PatternResolver = {
   },
 }
 
-function makeCtx(messages: Partial<IMessage>[]): ModelCallContext {
+function makeCtx(messages: { role: string; content: string | ContentPart[] }[]): ModelCallContext {
   const controller = new AbortController()
   return {
     stop: () => controller.abort(),
@@ -22,13 +22,13 @@ function makeCtx(messages: Partial<IMessage>[]): ModelCallContext {
     logger,
     request: {
       model: 'test',
-      messages: messages as IMessage[],
+      messages: messages as any,
     },
     loop: {
       stop: () => controller.abort(),
       signal: controller.signal,
       logger,
-      messages: messages as IMessage[],
+      messages: messages as any,
       iteration: 1,
       maxIterations: 10,
       sessionId: 'test',
@@ -149,7 +149,7 @@ describe('createResolverMiddleware', () => {
 
   it('preserves _messageId across resolution (spread copies the ID)', async () => {
     const mw = createResolverMiddleware([echoResolver], '/tmp')
-    const messages: Partial<IMessage>[] = [
+    const messages = [
       { role: 'system', content: 'See @config', _messageId: 'sys-1' },
       { role: 'user', content: 'look at @readme', _messageId: 'usr-1' },
     ]
@@ -254,10 +254,10 @@ describe('createResolverMiddleware', () => {
       {
         role: 'system',
         content: [{ type: 'text', text: 'See @config' }] as ContentPart[],
-        _messageId: 'sys-parts-1',
       },
       { role: 'user', content: 'hello' },
     ])
+    ctx.request.messages[0]!._messageId = 'sys-parts-1'
     await mw(ctx)
     expect(ctx.request.messages[0]!._messageId).toBe('sys-parts-1')
     const parts = ctx.request.messages[0]!.content as ContentPart[]
