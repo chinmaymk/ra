@@ -404,6 +404,42 @@ describe('Repl interrupt handling', () => {
     const output = outputChunks.join('')
     expect(output).toContain('Goodbye!')
   })
+
+  it('double Ctrl+C prints Goodbye exactly once', async () => {
+    const storage = await makeStorage()
+    const input = new PassThrough()
+
+    const outputChunks: string[] = []
+    const origWrite = process.stdout.write.bind(process.stdout)
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      outputChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString())
+      return true
+    }
+    const origStdin = process.stdin
+    const origIsTTY = process.stdout.isTTY
+    Object.defineProperty(process, 'stdin', { value: input, writable: true, configurable: true })
+    process.stdout.isTTY = true as any
+
+    const repl = new Repl({ model: 'test', provider: mockProvider('ok'), tools: new ToolRegistry(), storage })
+
+    // Send two Ctrl+C keypresses (0x03) in quick succession to trigger exit
+    setTimeout(() => {
+      input.write('\x03')
+      setTimeout(() => input.write('\x03'), 50)
+    }, 10)
+
+    try {
+      await repl.start()
+    } finally {
+      process.stdout.write = origWrite
+      Object.defineProperty(process, 'stdin', { value: origStdin, writable: true, configurable: true })
+      process.stdout.isTTY = origIsTTY
+    }
+
+    const output = outputChunks.join('')
+    const goodbyeCount = output.split('Goodbye!').length - 1
+    expect(goodbyeCount).toBe(1)
+  })
 })
 
 
