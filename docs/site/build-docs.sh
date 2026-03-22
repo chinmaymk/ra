@@ -81,17 +81,16 @@ for tag in $TAGS; do
   cp -r "$SITE_DIR/.vitepress/theme" "$TAG_DIR/docs/site/.vitepress/theme"
 
   # Ensure the tag's config supports DOCS_BASE and DOCS_VERSION env vars.
-  # If it has a hardcoded base, patch it. If it already reads the env var, no-op.
   TAG_CONFIG="$TAG_DIR/docs/site/.vitepress/config.ts"
   if [ -f "$TAG_CONFIG" ]; then
-    if ! grep -q 'DOCS_BASE' "$TAG_CONFIG"; then
-      sed -i "s|base: '/ra/'|base: process.env.DOCS_BASE || '/ra/'|" "$TAG_CONFIG"
+    PATCHED=$(cat "$TAG_CONFIG")
+    if ! echo "$PATCHED" | grep -q 'DOCS_BASE'; then
+      PATCHED=$(echo "$PATCHED" | awk '{gsub(/base: \x27\/ra\/\x27/, "base: process.env.DOCS_BASE || \x27/ra/\x27"); print}')
     fi
-    if ! grep -q 'DOCS_VERSION' "$TAG_CONFIG"; then
-      # Add vite define block if not present
-      sed -i "/base:/a\\
-  vite: { define: { __DOCS_VERSION__: JSON.stringify(process.env.DOCS_VERSION || 'dev') } }," "$TAG_CONFIG"
+    if ! echo "$PATCHED" | grep -q 'DOCS_VERSION'; then
+      PATCHED=$(echo "$PATCHED" | awk '/base:/{print; print "  vite: { define: { __DOCS_VERSION__: JSON.stringify(process.env.DOCS_VERSION || \x27dev\x27) } },"; next}1')
     fi
+    echo "$PATCHED" > "$TAG_CONFIG"
   else
     # Tag has no config — use current one
     cp "$SITE_DIR/.vitepress/config.ts" "$TAG_CONFIG"
