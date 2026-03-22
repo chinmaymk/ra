@@ -233,6 +233,19 @@ describe('createDiscoveryMiddleware — file path extraction', () => {
     expect(countContext(ctx.request.messages)).toBe(0)
   })
 
+  it('ignores paths containing null bytes in tool arguments', async () => {
+    writeFileSync(join(tmp, 'src', 'api', 'CLAUDE.md'), '# API rules')
+    const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())
+    const pathWithNull = join(tmp, 'src', 'api', 'handler.ts') + '\0'
+    const msgs: IMessage[] = [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'tc1', name: 'Read', arguments: JSON.stringify({ path: pathWithNull }) }] },
+    ]
+    const ctx = makeRawCtx(msgs)
+    await mw(ctx) // should not throw
+    expect(countContext(ctx.request.messages)).toBe(0)
+  })
+
   it('ignores relative paths in tool arguments', async () => {
     writeFileSync(join(tmp, 'CLAUDE.md'), '# Root')
     const mw = createDiscoveryMiddleware(['CLAUDE.md'], tmp, new Set())
