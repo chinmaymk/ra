@@ -1,7 +1,7 @@
 import { resolve, relative, dirname, isAbsolute } from 'path'
 import { realpathSync } from 'fs'
 import type { ContextFile } from './types'
-import type { ToolResultContext, Middleware } from '@chinmaymk/ra'
+import type { ModelCallContext, Middleware } from '@chinmaymk/ra'
 import { buildContextMessages } from './inject'
 
 export interface DiscoverOptions {
@@ -79,23 +79,45 @@ function collectDirs(filePath: string, root: string, walk: boolean, checked: Set
   return dirs
 }
 
-/** afterToolExecution middleware — discovers context files from directories the agent touches. */
+/** Extract absolute file paths from all messages (tool call arguments, tool results, and user text). */
+function extractFilePathsFromMessages(messages: readonly { role: string; content?: string; toolCalls?: readonly { arguments?: string }[] }[]): string[] {
+  const paths: string[] = []
+  const absPathRe = /(?:^|[\s"'=:])(\/([\w.@-]+\/)*[\w.@-]+)/g
+  for (const msg of messages) {
+    // Tool call arguments
+    if (msg.toolCalls) {
+      for (const tc of msg.toolCalls) {
+        try {
+          for (const v of Object.values(JSON.parse(tc.arguments || '{}')))
+            if (typeof v === 'string' && isAbsolute(v)) paths.push(v)
+        } catch { /* skip */ }
+      }
+    }
+    // User/tool text content may reference paths
+    if (typeof msg.content === 'string') {
+      for (const m of msg.content.matchAll(absPathRe)) {
+        if (m[1]) paths.push(m[1])
+      }
+    }
+  }
+  return paths
+}
+
+/** beforeModelCall middleware — discovers context files from directories referenced in conversation. */
 export function createDiscoveryMiddleware(
   patterns: string[], root: string, initialPaths: Set<string>,
   options?: { subdirectoryWalk?: boolean },
-): Middleware<ToolResultContext> {
+): Middleware<ModelCallContext> {
   const seen = new Set(initialPaths)
   const checked = new Set<string>()
   const walk = options?.subdirectoryWalk ?? true
 
-  return async (ctx: ToolResultContext) => {
+  return async (ctx: ModelCallContext) => {
+    const filePaths = extractFilePathsFromMessages(ctx.request.messages)
     const dirs: string[] = []
-    try {
-      for (const v of Object.values(JSON.parse(ctx.toolCall.arguments || '{}')))
-        if (typeof v === 'string' && isAbsolute(v)) {
-          dirs.push(...collectDirs(v, root, walk, checked))
-        }
-    } catch { /* skip */ }
+    for (const fp of filePaths) {
+      dirs.push(...collectDirs(fp, root, walk, checked))
+    }
     if (dirs.length === 0) return
 
     const files = await scanDirs(dirs, patterns, root, seen)
@@ -103,7 +125,7 @@ export function createDiscoveryMiddleware(
     for (const f of files) seen.add(f.path)
 
     const msgs = buildContextMessages(files)
-    const messages = ctx.loop.messages
+    const messages = ctx.request.messages
     let idx = 0
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i]
