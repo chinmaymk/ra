@@ -42,7 +42,7 @@ describe('showConfig', () => {
     const parsed = JSON.parse(output)
     expect(parsed.agent.compaction).toBeDefined()
     expect(parsed.agent.memory).toBeDefined()
-    expect(parsed.agent.mcp).toBeDefined()
+    expect(parsed.app.mcpServers).toBeDefined()
     expect(parsed.agent.context).toBeDefined()
     expect(parsed.agent.permissions).toBeDefined()
   })
