@@ -11,8 +11,8 @@ function makeCtx(toolName: string, args: Record<string, unknown>): ToolExecution
   const ac = new AbortController()
   return {
     toolCall: { id: 'tc1', name: toolName, arguments: JSON.stringify(args) },
-    loop: { messages: [], iteration: 0, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false, stop: () => {}, signal: ac.signal, logger },
-    stop: () => {}, signal: ac.signal, logger,
+    loop: { messages: [], iteration: 0, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false, elapsedMs: 0, stop: () => {}, drain: () => {}, signal: ac.signal, logger },
+    stop: () => {}, drain: () => {}, signal: ac.signal, logger,
     deny: (r: string) => { denied = r },
     get denied() { return denied },
   }

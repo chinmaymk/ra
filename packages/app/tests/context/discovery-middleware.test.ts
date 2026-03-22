@@ -17,9 +17,9 @@ function makeCtx(messages: IMessage[], filePath: string): ModelCallContext {
     { role: 'assistant', content: '', toolCalls: [{ id: 'tc1', name: 'ReadFile', arguments: JSON.stringify({ file_path: filePath }) }] },
   ]
   return {
-    stop: () => controller.abort(), signal: controller.signal, logger,
+    stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger,
     request: { model: 'test', messages: messagesWithToolCall, tools: [] },
-    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: messagesWithToolCall, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
+    loop: { stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger, messages: messagesWithToolCall, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false, elapsedMs: 0 },
   }
 }
 
@@ -27,9 +27,9 @@ function makeCtx(messages: IMessage[], filePath: string): ModelCallContext {
 function makeRawCtx(messages: IMessage[]): ModelCallContext {
   const controller = new AbortController()
   return {
-    stop: () => controller.abort(), signal: controller.signal, logger,
+    stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger,
     request: { model: 'test', messages: [...messages], tools: [] },
-    loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: [...messages], iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
+    loop: { stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger, messages: [...messages], iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false, elapsedMs: 0 },
   }
 }
 
@@ -89,9 +89,9 @@ describe('createDiscoveryMiddleware', () => {
     const controller = new AbortController()
     const msgs: IMessage[] = [{ role: 'user', content: 'hello' }]
     await mw({
-      stop: () => controller.abort(), signal: controller.signal, logger,
+      stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger,
       request: { model: 'test', messages: msgs, tools: [] },
-      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
+      loop: { stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false, elapsedMs: 0 },
     })
     expect(msgs).toHaveLength(1)
   })
@@ -155,9 +155,9 @@ describe('createDiscoveryMiddleware', () => {
     const filePath = join(subDir, 'helpers.ts')
     const msgs: IMessage[] = [{ role: 'user', content: `Please edit ${filePath}` }]
     await mw({
-      stop: () => controller.abort(), signal: controller.signal, logger,
+      stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger,
       request: { model: 'test', messages: msgs, tools: [] },
-      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
+      loop: { stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger, messages: msgs, iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false, elapsedMs: 0 },
     })
     expect(msgs.find(m => typeof m.content === 'string' && m.content.includes('Utils rules'))).toBeTruthy()
   })

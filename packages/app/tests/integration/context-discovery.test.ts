@@ -45,9 +45,9 @@ describe('context discovery integration', () => {
   function buildCtx(messages: IMessage[]): ModelCallContext {
     const controller = new AbortController()
     return {
-      stop: () => controller.abort(), signal: controller.signal, logger,
+      stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger,
       request: { model: 'test', messages: [...messages], tools: [] },
-      loop: { stop: () => controller.abort(), signal: controller.signal, logger, messages: [...messages], iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false },
+      loop: { stop: () => controller.abort(), drain: () => {}, signal: controller.signal, logger, messages: [...messages], iteration: 1, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false, elapsedMs: 0 },
     }
   }
 

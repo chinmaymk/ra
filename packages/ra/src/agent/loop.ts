@@ -1,6 +1,6 @@
 import { errorMessage, withRetry } from '../utils/errors'
-import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
-import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
+import type { IProvider, IMessage, IToolCall, TokenUsage, ToolExecuteOptions } from '../providers/types'
+import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext, ProgressInfo, CheckpointEvent } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
@@ -26,6 +26,18 @@ export interface AgentLoopOptions {
   maxToolResponseSize?: number
   /** True when the loop is running against a resumed session (prior messages loaded from storage). */
   resumed?: boolean
+  /** Execute tool calls in parallel when multiple are returned by the model. Default false. */
+  parallelToolCalls?: boolean
+  /** Maximum total token budget (input + output). Loop stops when exceeded. */
+  tokenBudget?: number
+  /** Maximum wall-clock duration in ms for the entire loop. */
+  maxDuration?: number
+  /** Called at natural milestones (after model response, tool execution, iteration). */
+  onProgress?: (info: ProgressInfo) => void
+  /** Called after each tool result is produced, before the iteration ends. Enables incremental checkpointing. */
+  onCheckpoint?: (event: CheckpointEvent) => void
+  /** Liveness timeout in ms for tool execution. If a tool doesn't heartbeat within this window, it's considered hung. 0 = disabled. Default 0. */
+  heartbeatTimeout?: number
 }
 
 export interface LoopResult {
@@ -74,6 +86,12 @@ export class AgentLoop {
   private maxRetries: number
   private maxToolResponseSize: number
   private resumed: boolean
+  private parallelToolCalls: boolean
+  private tokenBudget: number
+  private maxDuration: number
+  private onProgress: ((info: ProgressInfo) => void) | undefined
+  private onCheckpoint: ((event: CheckpointEvent) => void) | undefined
+  private heartbeatTimeout: number
 
   private externalAbort: AbortController | null = null
 
@@ -91,6 +109,12 @@ export class AgentLoop {
     this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
+    this.parallelToolCalls = options.parallelToolCalls ?? false
+    this.tokenBudget = options.tokenBudget ?? 0
+    this.maxDuration = options.maxDuration ?? 0
+    this.onProgress = options.onProgress
+    this.onCheckpoint = options.onCheckpoint
+    this.heartbeatTimeout = options.heartbeatTimeout ?? 0
 
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
@@ -110,20 +134,37 @@ export class AgentLoop {
     this.externalAbort = controller
     let stopReason: string | undefined
     let stoppedInternally = false
+    let draining = false
+    const startTime = Date.now()
+
     const stop = (reason?: string) => {
       stoppedInternally = true
       stopReason = reason
       if (reason) this.logger.info('loop stopped', { reason })
       controller.abort()
     }
+
+    const drain = (reason?: string) => {
+      draining = true
+      stopReason = reason ?? 'drain'
+      this.logger.info('loop draining', { reason: stopReason })
+    }
+
     const { signal } = controller
 
-    const stoppable: StoppableContext = { stop, signal, logger: this.logger }
+    const stoppable: StoppableContext = { stop, drain, signal, logger: this.logger }
 
     const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
     let lastUsage: TokenUsage | undefined
 
-    const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId, usage, lastUsage, resumed: this.resumed })
+    const elapsed = () => Date.now() - startTime
+
+    const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId, usage, lastUsage, resumed: this.resumed, elapsedMs: elapsed() })
+
+    const emitProgress = (phase: ProgressInfo['phase']) => {
+      if (!this.onProgress) return
+      this.onProgress({ iteration: iterations, maxIterations: this.maxIterations, usage: { ...usage }, elapsedMs: elapsed(), messages, phase })
+    }
 
     let currentPhase: 'model_call' | 'tool_execution' | 'stream' = 'model_call'
 
@@ -134,6 +175,26 @@ export class AgentLoop {
       if (signal.aborted) return { messages, iterations, usage, ...(stopReason && { stopReason }) }
 
       while (iterations < this.maxIterations) {
+        // Check drain flag at iteration boundary
+        if (draining) {
+          this.logger.info('loop drained', { iteration: iterations, reason: stopReason })
+          break
+        }
+
+        // Check maxDuration
+        if (this.maxDuration > 0 && elapsed() >= this.maxDuration) {
+          stopReason = 'max_duration'
+          this.logger.info('loop max duration reached', { elapsedMs: elapsed(), maxDuration: this.maxDuration })
+          break
+        }
+
+        // Check token budget
+        if (this.tokenBudget > 0 && (usage.inputTokens + usage.outputTokens) >= this.tokenBudget) {
+          stopReason = 'token_budget'
+          this.logger.info('loop token budget exceeded', { totalTokens: usage.inputTokens + usage.outputTokens, tokenBudget: this.tokenBudget })
+          break
+        }
+
         iterations++
         this.logger.debug('iteration starting', { iteration: iterations, messageCount: messages.length })
 
@@ -185,52 +246,24 @@ export class AgentLoop {
         messages.push({ role: 'assistant', content: textAccumulator, ...(toolCalls.length && { toolCalls }) })
         modelCallCtx.loop = loopCtx()
         await runMiddlewareChain(modelCallCtx, this.middleware.afterModelResponse, this.toolTimeout)
+        emitProgress('model_response')
         if (signal.aborted) break
 
         if (toolCalls.length) {
           currentPhase = 'tool_execution'
-          for (const tc of toolCalls) {
-            if (signal.aborted) break
-            let denied: string | undefined
-            const toolExecCtx: ToolExecutionContext = { ...stoppable, toolCall: tc, loop: loopCtx(), deny: (r) => { denied = r } }
-            await runMiddlewareChain(toolExecCtx, this.middleware.beforeToolExecution, this.toolTimeout)
-            if (signal.aborted) break
-            if (denied) {
-              this.logger.info('tool call denied', { tool: tc.name, toolCallId: tc.id, reason: denied })
-              messages.push({ role: 'tool', content: denied, toolCallId: tc.id, isError: true })
-              continue
-            }
-            const input = parseToolArguments(tc.arguments || '{}')
-            let content: string
-            let isError = false
-            try {
-              const toolDef = this.tools.get(tc.name)
-              const effectiveTimeout = toolDef?.timeout ?? this.toolTimeout
-              const value = effectiveTimeout > 0
-                ? await withTimeout(this.tools.execute(tc.name, input), effectiveTimeout, `Tool '${tc.name}'`)
-                : await this.tools.execute(tc.name, input)
-              content = typeof value === 'string' ? value : JSON.stringify(value)
-              const originalLength = content.length
-              content = truncateToolOutput(content, this.maxToolResponseSize)
-              if (content.length !== originalLength) {
-                this.logger.warn('tool output truncated', { tool: tc.name, toolCallId: tc.id, originalLength, maxChars: this.maxToolResponseSize })
-              }
-              // Roll up child usage (e.g. from subagent tool) into parent totals
-              if (value && typeof value === 'object' && 'usage' in value) {
-                const childUsage = (value as { usage: TokenUsage }).usage
-                if (childUsage) accumulateUsage(usage, childUsage)
-              }
-            } catch (err) {
-              isError = true
-              content = errorMessage(err)
-            }
-            await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
-            messages.push({ role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) })
+
+          if (this.parallelToolCalls) {
+            await this.executeToolsParallel(toolCalls, messages, stoppable, loopCtx, usage, signal)
+          } else {
+            await this.executeToolsSequential(toolCalls, messages, stoppable, loopCtx, usage, signal)
           }
+
+          emitProgress('tool_execution')
           currentPhase = 'model_call'
         }
 
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopIteration, this.toolTimeout)
+        emitProgress('iteration_complete')
         if (signal.aborted) break
         if (!toolCalls.length) break
       }
@@ -268,5 +301,196 @@ export class AgentLoop {
     this.externalAbort = null
     const finalReason = stopReason ?? (signal.aborted && !stoppedInternally ? 'aborted' : undefined)
     return { messages, iterations, usage, ...(finalReason && { stopReason: finalReason }) }
+  }
+
+  /** Execute tool calls one at a time. */
+  private async executeToolsSequential(
+    toolCalls: IToolCall[],
+    messages: IMessage[],
+    stoppable: StoppableContext,
+    loopCtx: () => LoopContext,
+    usage: TokenUsage,
+    signal: AbortSignal,
+  ): Promise<void> {
+    for (const tc of toolCalls) {
+      if (signal.aborted) break
+      const result = await this.executeSingleTool(tc, messages, stoppable, loopCtx, usage, signal)
+      if (result) messages.push(result)
+    }
+  }
+
+  /** Execute tool calls concurrently with Promise.allSettled. */
+  private async executeToolsParallel(
+    toolCalls: IToolCall[],
+    messages: IMessage[],
+    stoppable: StoppableContext,
+    loopCtx: () => LoopContext,
+    usage: TokenUsage,
+    signal: AbortSignal,
+  ): Promise<void> {
+    // Run beforeToolExecution middleware sequentially (may have ordering dependencies)
+    // then execute the actual tool calls in parallel
+    const approved: { tc: IToolCall; input: Record<string, unknown> }[] = []
+    for (const tc of toolCalls) {
+      if (signal.aborted) break
+      let denied: string | undefined
+      const toolExecCtx: ToolExecutionContext = { ...stoppable, toolCall: tc, loop: loopCtx(), deny: (r) => { denied = r } }
+      await runMiddlewareChain(toolExecCtx, this.middleware.beforeToolExecution, this.toolTimeout)
+      if (signal.aborted) break
+      if (denied) {
+        this.logger.info('tool call denied', { tool: tc.name, toolCallId: tc.id, reason: denied })
+        messages.push({ role: 'tool', content: denied, toolCallId: tc.id, isError: true })
+        continue
+      }
+      approved.push({ tc, input: parseToolArguments(tc.arguments || '{}') })
+    }
+
+    if (!approved.length || signal.aborted) return
+
+    const results = await Promise.allSettled(
+      approved.map(({ tc, input }) => this.executeToolCall(tc, input, usage, signal)),
+    )
+
+    // Collect results in order, preserving tool call ordering for determinism
+    for (let i = 0; i < approved.length; i++) {
+      const entry = approved[i]!
+      const settled = results[i]!
+      let content: string
+      let isError = false
+
+      if (settled.status === 'fulfilled') {
+        content = settled.value.content
+        isError = settled.value.isError
+      } else {
+        isError = true
+        content = errorMessage(settled.reason)
+      }
+
+      await runMiddlewareChain({ ...stoppable, toolCall: entry.tc, result: { toolCallId: entry.tc.id, content, isError }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
+      messages.push({ role: 'tool', content, toolCallId: entry.tc.id, ...(isError && { isError: true }) })
+
+      if (this.onCheckpoint) {
+        this.onCheckpoint({ toolCallId: entry.tc.id, toolName: entry.tc.name, content, isError, messages })
+      }
+    }
+  }
+
+  /** Execute a single tool including middleware, and push the result message. Returns the message or undefined if aborted. */
+  private async executeSingleTool(
+    tc: IToolCall,
+    messages: IMessage[],
+    stoppable: StoppableContext,
+    loopCtx: () => LoopContext,
+    usage: TokenUsage,
+    signal: AbortSignal,
+  ): Promise<IMessage | undefined> {
+    let denied: string | undefined
+    const toolExecCtx: ToolExecutionContext = { ...stoppable, toolCall: tc, loop: loopCtx(), deny: (r) => { denied = r } }
+    await runMiddlewareChain(toolExecCtx, this.middleware.beforeToolExecution, this.toolTimeout)
+    if (signal.aborted) return undefined
+    if (denied) {
+      this.logger.info('tool call denied', { tool: tc.name, toolCallId: tc.id, reason: denied })
+      return { role: 'tool', content: denied, toolCallId: tc.id, isError: true }
+    }
+
+    const input = parseToolArguments(tc.arguments || '{}')
+    let content: string
+    let isError = false
+
+    try {
+      const result = await this.executeToolCall(tc, input, usage, signal)
+      content = result.content
+      isError = result.isError
+    } catch (err) {
+      isError = true
+      content = errorMessage(err)
+    }
+
+    await runMiddlewareChain({ ...stoppable, toolCall: tc, result: { toolCallId: tc.id, content, isError }, loop: loopCtx() } satisfies ToolResultContext, this.middleware.afterToolExecution, this.toolTimeout)
+
+    const msg: IMessage = { role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) }
+
+    if (this.onCheckpoint) {
+      // Pass messages + new message for checkpointing before it's formally added
+      this.onCheckpoint({ toolCallId: tc.id, toolName: tc.name, content, isError, messages: [...messages, msg] })
+    }
+
+    return msg
+  }
+
+  /** Low-level tool execution: timeout, heartbeat, truncation, child usage rollup. */
+  private async executeToolCall(
+    tc: IToolCall,
+    input: Record<string, unknown>,
+    usage: TokenUsage,
+    signal: AbortSignal,
+  ): Promise<{ content: string; isError: boolean }> {
+    const toolDef = this.tools.get(tc.name)
+    const effectiveTimeout = toolDef?.timeout ?? this.toolTimeout
+
+    const execOptions: ToolExecuteOptions = {
+      heartbeat: () => {},  // default no-op, replaced below if heartbeatTimeout is set
+      signal,
+    }
+
+    // Heartbeat-aware execution: wraps the tool call with a liveness timer
+    let executePromise: Promise<unknown>
+    if (this.heartbeatTimeout > 0) {
+      executePromise = this.executeWithHeartbeat(tc.name, input, execOptions, this.heartbeatTimeout)
+    } else {
+      executePromise = this.tools.execute(tc.name, input, execOptions)
+    }
+
+    const value = effectiveTimeout > 0
+      ? await withTimeout(executePromise, effectiveTimeout, `Tool '${tc.name}'`)
+      : await executePromise
+
+    let content = typeof value === 'string' ? value : JSON.stringify(value)
+    const originalLength = content.length
+    content = truncateToolOutput(content, this.maxToolResponseSize)
+    if (content.length !== originalLength) {
+      this.logger.warn('tool output truncated', { tool: tc.name, toolCallId: tc.id, originalLength, maxChars: this.maxToolResponseSize })
+    }
+
+    // Roll up child usage (e.g. from subagent tool) into parent totals
+    if (value && typeof value === 'object' && 'usage' in value) {
+      const childUsage = (value as { usage: TokenUsage }).usage
+      if (childUsage) accumulateUsage(usage, childUsage)
+    }
+
+    return { content, isError: false }
+  }
+
+  /** Execute a tool with heartbeat liveness monitoring. Rejects if heartbeat isn't called within the timeout. */
+  private executeWithHeartbeat(
+    toolName: string,
+    input: Record<string, unknown>,
+    execOptions: ToolExecuteOptions,
+    heartbeatMs: number,
+  ): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout>
+
+      const resetTimer = () => {
+        clearTimeout(timer)
+        timer = setTimeout(() => {
+          reject(new Error(`Tool '${toolName}' heartbeat timeout: no heartbeat received within ${heartbeatMs}ms`))
+        }, heartbeatMs)
+      }
+
+      // Set up the heartbeat function
+      execOptions.heartbeat = () => {
+        this.logger.debug('tool heartbeat received', { tool: toolName })
+        resetTimer()
+      }
+
+      // Start the initial liveness timer
+      resetTimer()
+
+      this.tools.execute(toolName, input, execOptions).then(
+        (value) => { clearTimeout(timer); resolve(value) },
+        (err) => { clearTimeout(timer); reject(err) },
+      )
+    })
   }
 }

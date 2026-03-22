@@ -274,7 +274,9 @@ describe('memory middleware', () => {
       usage: { inputTokens: 0, outputTokens: 0 },
       lastUsage: undefined,
       resumed: false,
+      elapsedMs: 0,
       stop: () => {},
+      drain: () => {},
       signal: new AbortController().signal,
     }
   }
