@@ -104,13 +104,13 @@ export class AnthropicProvider implements IProvider {
     const CACHE_CONTROL = { type: 'ephemeral' as const }
     let remaining = 2
     for (let i = messages.length - 1; i >= 0 && remaining > 0; i--) {
-      if (messages[i].role !== 'user') continue
-      const msg = messages[i]
+      const msg = messages[i]!
+      if (msg.role !== 'user') continue
       if (typeof msg.content === 'string') {
         msg.content = [{ type: 'text', text: msg.content, cache_control: CACHE_CONTROL }]
       } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-        const last = msg.content[msg.content.length - 1]
-        ;(last as Record<string, unknown>).cache_control = CACHE_CONTROL
+        const last = msg.content[msg.content.length - 1]!
+        ;(last as unknown as Record<string, unknown>).cache_control = CACHE_CONTROL
       }
       remaining--
     }
