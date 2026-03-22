@@ -252,7 +252,7 @@ export class Repl {
 
     this.activeLoop = loop
     const onKeypress = (_str: string | undefined, key: { name?: string } | undefined) => {
-      if (key?.name === 'escape' && tuiState.thinkingOpened) tui.collapseThinking(tuiState)
+      if (key?.name === 'escape' && this.activeLoop) this.activeLoop.abort()
     }
     process.stdin.on('keypress', onKeypress)
     try {
