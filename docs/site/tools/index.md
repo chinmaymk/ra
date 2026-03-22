@@ -253,7 +253,7 @@ Forks honor the parent's `maxIterations`. Use `maxConcurrency` (default: 4) to c
 
 ## MCP
 
-When [MCP clients](/modes/mcp) are configured, all MCP tools are registered with server-prefixed names (`github__search`) to avoid conflicts. When `mcpLazySchemas` is enabled (the default), schemas are additionally stripped — on the first call to each tool, ra returns the full schema as an error, and the model retries with correct parameters. See [MCP](/modes/mcp#server-prefixed-tool-names) for details.
+When [MCP clients](/modes/mcp) are configured, all MCP tools are registered with server-prefixed names (`github__search`) to avoid conflicts. When `app.mcpLazySchemas` is enabled (the default), schemas are additionally stripped — on the first call to each tool, ra returns the full schema as an error, and the model retries with correct parameters. See [MCP](/modes/mcp#server-prefixed-tool-names) for details.
 
 ## Memory
 

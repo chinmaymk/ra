@@ -2,7 +2,7 @@
 
 ra is the predictable, observable agent harness. Nothing hidden behind abstractions you can't reach. It doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](/middleware/) let you intercept every step — model calls, tool execution, streaming, all of it.
 
-It comes with [built-in tools](/tools/) for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent [sessions](/core/sessions) via JSONL. An FTS5 [memory](/configuration/#agent-memory) backed by SQLite. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease.
+It comes with [built-in tools](/tools/) for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent [sessions](/core/sessions) via JSONL. An FTS5 [memory](/configuration/#memory) backed by SQLite. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease.
 
 It speaks [MCP](/modes/mcp) both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol.
 
@@ -37,17 +37,9 @@ Drop a `ra.config.yml` in a repo and that directory becomes a project-specific a
 
 ```yaml
 # ra.config.yml
-app:
-  mcpServers:
-    - name: github
-      transport: stdio
-      command: npx
-      args: ["-y", "@modelcontextprotocol/server-github"]
-
 agent:
   provider: anthropic
   model: claude-sonnet-4-6
-  maxIterations: 200
   thinking: medium
 
   middleware:
@@ -56,6 +48,13 @@ agent:
 
   skillDirs:
     - ./skills
+
+app:
+  mcpServers:
+    - name: github
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
 ```
 
 ## Use cases
