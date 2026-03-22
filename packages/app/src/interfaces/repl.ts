@@ -129,7 +129,6 @@ export class Repl {
       }
       const now = Date.now()
       if (now - this.lastInterruptTime < DOUBLE_PRESS_TIMEOUT_MS) {
-        tui.printInterrupt('Goodbye!')
         rl.close()
         return
       }
