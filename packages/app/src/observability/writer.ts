@@ -1,22 +1,24 @@
-import { appendFile } from 'node:fs/promises'
+import { createWriteStream, type WriteStream } from 'node:fs'
 
 /** Shared JSONL writer for observability output (logger and tracer). */
 export class JsonlWriter {
+  private stream: WriteStream | undefined
   private output: 'stderr' | 'stdout' | 'file'
   private filePath: string | undefined
-  private tail: Promise<void> = Promise.resolve()
 
   constructor(output: 'stderr' | 'stdout' | 'file', filePath?: string) {
     this.output = output
     if (output === 'file' && filePath) {
       this.filePath = filePath
+      this.stream = createWriteStream(filePath, { flags: 'a' })
     }
   }
 
   write(data: unknown): void {
     const line = JSON.stringify(data) + '\n'
     if (this.filePath) {
-      this.tail = this.tail.then(() => appendFile(this.filePath!, line))
+      if (!this.stream) this.stream = createWriteStream(this.filePath, { flags: 'a' })
+      this.stream.write(line)
     } else if (this.output === 'stdout') {
       process.stdout.write(line)
     } else {
@@ -25,6 +27,13 @@ export class JsonlWriter {
   }
 
   async flush(): Promise<void> {
-    await this.tail
+    const stream = this.stream
+    if (!stream) return
+    this.stream = undefined
+    await new Promise<void>((resolve, reject) => {
+      stream.once('finish', resolve)
+      stream.once('error', reject)
+      stream.end()
+    })
   }
 }
