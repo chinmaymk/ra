@@ -13,6 +13,7 @@ OPTIONS
   --skill <name>                      Skill to activate for this run (repeatable)
   --skill-dir <path>                  Directory to load skills from (repeatable)
   --file <path>                       File to attach (repeatable)
+  --recipe <name>                     Use an installed recipe as agent config base
   --resume                            Resume the most recent session
   --resume=<session-id>               Resume a specific session by ID
 
@@ -63,15 +64,33 @@ PROVIDER OPTIONS
   --help, -h                          Print this help message
 
 SKILL MANAGEMENT
-  ra skill install <source>           Install skill from npm, GitHub, or URL
+  ra skill install <source>           Install skill from GitHub, npm, or URL
   ra skill remove <name>              Remove an installed skill
   ra skill list                       List installed skills
 
   Sources:
-    ra skill install code-review             npm package "code-review"
+    ra skill install user/repo               GitHub repository (default)
     ra skill install npm:ra-skill-lint@1.0   npm with version
-    ra skill install github:user/repo        GitHub repository
     ra skill install https://example.com/s.tgz  URL tarball
+
+RECIPE MANAGEMENT
+  ra recipe install <source>          Install recipe from GitHub, npm, or URL
+  ra recipe remove <name>             Remove an installed recipe
+  ra recipe list                      List installed recipes
+
+  Sources:
+    ra recipe install user/repo              GitHub repo (default)
+    ra recipe install npm:ra-recipe-foo      npm package
+    ra recipe install github:user/repo       GitHub (explicit)
+
+  Repos should contain a recipes/ folder with subdirectories, each having
+  a ra.config.{yaml,yml,json,toml}. Falls back to root-level config.
+
+  Usage:
+    ra --recipe owner/recipe-name "prompt"   Use installed recipe
+    ra --recipe ./local/recipe "prompt"      Use local recipe directory
+    agent:
+      recipe: owner/recipe-name              Reference in ra.config.yaml
 
 ENV VARS
   Config files and defaults support Docker Compose–style interpolation:

@@ -30,12 +30,4 @@ export function resolveSkillAsset(list: string[], name: string, prefix: string):
   return list.find(entry => entry === name || entry === prefixed || entry === prefixedWin)
 }
 
-/** Source information for a skill installed from a registry */
-export interface SkillSource {
-  registry: 'npm' | 'github' | 'url'
-  package?: string      // npm package name
-  repo?: string         // github owner/repo
-  url?: string          // raw URL
-  version?: string      // installed version
-  installedAt: string   // ISO timestamp
-}
+export type { RegistrySource as SkillSource } from '../registry/helpers'

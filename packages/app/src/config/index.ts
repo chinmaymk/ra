@@ -4,19 +4,13 @@ import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
 import { interpolateEnvVars, coerceTypes } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
+import { CONFIG_FILES } from '../registry/helpers'
 import { NoopLogger } from '@chinmaymk/ra'
 import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
 export { defaultConfig } from './defaults'
 export type { RaConfig, LoadConfigOptions, McpServerEntry, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
-
-const CONFIG_FILES = [
-  'ra.config.json',
-  'ra.config.yaml',
-  'ra.config.yml',
-  'ra.config.toml',
-]
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -208,6 +202,84 @@ function normalizeToolsSection(obj: Record<string, unknown>): void {
   obj.tools = { builtin, overrides, ...(maxResponseSize !== undefined && { maxResponseSize }) }
 }
 
+// ── Recipe resolution helpers ───────────────────────────────────────
+
+/** Check if a string looks like a local path (not an owner/repo name). */
+function looksLikeLocalPath(value: string): boolean {
+  return /^(\.\.?[/\\]|[/\\]|~[/\\]|[A-Za-z]:[/\\])/.test(value)
+}
+
+/** Resolve a recipe config file from an installed name or local path. */
+async function resolveRecipe(nameOrPath: string, cwd: string): Promise<{ configPath: string; recipeDir: string } | null> {
+  if (looksLikeLocalPath(nameOrPath)) {
+    const resolved = resolvePath(nameOrPath, cwd)
+    for (const name of CONFIG_FILES) {
+      const full = join(resolved, name)
+      if (await Bun.file(full).exists()) return { configPath: full, recipeDir: resolved }
+    }
+    return null
+  }
+  const { resolveRecipePath } = await import('../recipes/registry')
+  const configPath = await resolveRecipePath(nameOrPath)
+  return configPath ? { configPath, recipeDir: dirname(configPath) } : null
+}
+
+/** Pre-resolve a recipe's relative paths against its directory so they survive merging. */
+function preResolveRecipePaths(agent: Record<string, unknown>, recipeDir: string): void {
+  if (Array.isArray(agent.skillDirs)) {
+    agent.skillDirs = (agent.skillDirs as string[]).map(d => resolvePath(d, recipeDir))
+  }
+  if (typeof agent.systemPrompt === 'string' && looksLikePath(agent.systemPrompt, ['.txt', '.md'])) {
+    agent.systemPrompt = resolvePath(agent.systemPrompt, recipeDir)
+  }
+  if (isPlainObject(agent.middleware)) {
+    const mw = agent.middleware as Record<string, unknown>
+    for (const [hook, entries] of Object.entries(mw)) {
+      if (Array.isArray(entries)) {
+        mw[hook] = (entries as string[]).map(e => looksLikePath(e) ? resolvePath(e, recipeDir) : e)
+      }
+    }
+  }
+}
+
+/** Saved recipe arrays to prepend after all merges complete. */
+interface RecipeArrays {
+  skillDirs: string[]
+  mcpServers: unknown[]
+  middleware: Record<string, string[]>
+}
+
+/** Extract array fields from a recipe's agent config (they'd be lost by deepMerge). */
+function extractRecipeArrays(agent: Record<string, unknown>): RecipeArrays {
+  const result: RecipeArrays = { skillDirs: [], mcpServers: [], middleware: {} }
+  if (Array.isArray(agent.skillDirs)) result.skillDirs = agent.skillDirs as string[]
+  if (isPlainObject(agent.mcp) && Array.isArray((agent.mcp as Record<string, unknown>).servers)) {
+    result.mcpServers = (agent.mcp as Record<string, unknown>).servers as unknown[]
+  }
+  if (isPlainObject(agent.middleware)) {
+    for (const [hook, entries] of Object.entries(agent.middleware as Record<string, unknown>)) {
+      if (Array.isArray(entries)) result.middleware[hook] = entries as string[]
+    }
+  }
+  return result
+}
+
+/** Prepend recipe arrays to the final merged config. */
+function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
+  if (arrays.skillDirs.length > 0) {
+    config.agent.skillDirs = [...arrays.skillDirs, ...config.agent.skillDirs]
+  }
+  if (arrays.mcpServers.length > 0) {
+    config.agent.mcp.servers = [...arrays.mcpServers as typeof config.agent.mcp.servers, ...config.agent.mcp.servers]
+  }
+  for (const [hook, entries] of Object.entries(arrays.middleware)) {
+    const existing = config.agent.middleware[hook] ?? []
+    config.agent.middleware[hook] = [...entries, ...existing]
+  }
+}
+
+// ── Main config loader ──────────────────────────────────────────────
+
 export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logger): Promise<RaConfig> {
   const log = logger ?? new NoopLogger()
   const cwd = options.cwd ?? process.cwd()
@@ -226,28 +298,68 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   const fileConfig = interpolateEnvVars(rawFileConfig, env) as Record<string, unknown>
   const cliArgs = (options.cliArgs ?? {}) as Record<string, unknown>
 
-  // Normalize first so flat keys land at their proper nested paths
-  for (const layer of [fileConfig, cliArgs]) {
+  const normalizeLayer = (layer: Record<string, unknown>) => {
     normalizeFlatConfig(layer)
     normalizeMcpConfig(layer)
     normalizeToolsConfig(layer)
   }
+  for (const layer of [fileConfig, cliArgs]) normalizeLayer(layer)
 
   // Coerce after normalization so schema paths match (e.g. "50" → 50)
   const coercedFileConfig = coerceTypes(fileConfig, rawDefaults) as Record<string, unknown>
 
-  // defaults < file < CLI
+  // ── Recipe resolution ────────────────────────────────────────────
+  // Recipe source: --recipe flag takes priority, then agent.recipe in config file
+  const recipeName = options.recipeName
+    ?? (isPlainObject(coercedFileConfig.agent) ? (coercedFileConfig.agent as Record<string, unknown>).recipe as string | undefined : undefined)
+
+  let recipeArrays: RecipeArrays | undefined
+  let recipeLayer: Record<string, unknown> | undefined
+  if (recipeName) {
+    const resolved = await resolveRecipe(recipeName, cwd)
+    if (!resolved) {
+      throw new Error(`Recipe not found: "${recipeName}". Install it with: ra recipe install <source>`)
+    }
+    const recipeRaw = await parseFile(resolved.configPath)
+    const recipeConfig = interpolateEnvVars(recipeRaw, env) as Record<string, unknown>
+    normalizeLayer(recipeConfig)
+
+    // Pre-resolve recipe paths against its directory
+    const recipeAgent = (recipeConfig.agent ?? recipeConfig) as Record<string, unknown>
+    preResolveRecipePaths(recipeAgent, resolved.recipeDir)
+
+    // Save array fields before deepMerge destroys them
+    recipeArrays = extractRecipeArrays(recipeAgent)
+
+    // Wrap in agent key if the recipe was a flat config
+    recipeLayer = isPlainObject(recipeConfig.agent) ? recipeConfig : { agent: recipeConfig }
+
+    // Strip recipe key from file config
+    if (isPlainObject(coercedFileConfig.agent)) {
+      delete (coercedFileConfig.agent as Record<string, unknown>).recipe
+    }
+
+    log.info('recipe loaded', { recipe: recipeName, path: resolved.configPath })
+  }
+
+  // defaults < recipe < file < CLI
   const defaults = interpolateEnvVars(rawDefaults, env) as Record<string, unknown>
-  const merged = [coercedFileConfig, cliArgs].reduce(
-    (acc, layer) => deepMerge(acc, layer),
-    defaults,
-  )
+  const layers = recipeLayer
+    ? [recipeLayer, coercedFileConfig, cliArgs]
+    : [coercedFileConfig, cliArgs]
+  const merged = layers.reduce((acc, layer) => deepMerge(acc, layer), defaults)
 
   const config = merged as unknown as RaConfig
   config.app.configDir = configDir
 
   // Resolve dataDir against configDir
   config.app.dataDir = resolvePath(config.app.dataDir, configDir)
+
+  // Prepend recipe arrays (they were lost during deepMerge)
+  if (recipeArrays) prependRecipeArrays(config, recipeArrays)
+
+  // Strip recipe from final config (it's a loading-time directive)
+  delete config.agent.recipe
 
   // Only try loading systemPrompt as a file if it looks like a path
   if (config.agent.systemPrompt && looksLikePath(config.agent.systemPrompt, ['.txt', '.md'])) {

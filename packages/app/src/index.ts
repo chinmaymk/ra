@@ -5,7 +5,7 @@ import type { RaConfig } from './config/types'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
 import { HELP } from './interfaces/help'
-import { runExecScript, runSkillCommand, showContext, runMemoryCommand, showConfig } from './interfaces/commands'
+import { runExecScript, runSubCommand, showContext, runMemoryCommand, showConfig } from './interfaces/commands'
 import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
@@ -52,8 +52,8 @@ async function handleEarlyExits(parsed: ReturnType<typeof parseArgs>): Promise<v
     console.log(HELP)
     process.exit(0)
   }
-  if (parsed.meta.skillCommand) {
-    await runSkillCommand(parsed.meta.skillCommand)
+  if (parsed.meta.subCommand) {
+    await runSubCommand(parsed.meta.subCommand)
   }
 }
 
@@ -334,6 +334,7 @@ async function main(): Promise<void> {
     configPath: parsed.meta.configPath,
     cliArgs: parsed.config,
     env: process.env as Record<string, string | undefined>,
+    recipeName: parsed.meta.recipeName,
   })
 
   if (parsed.meta.showConfig || parsed.meta.showContext) {
