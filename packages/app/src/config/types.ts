@@ -92,7 +92,7 @@ export interface AgentConfig {
   maxRetries: number
   toolTimeout: number
   maxConcurrency: number
-  /** Execute tool calls in parallel when multiple are returned by the model. Default false. */
+  /** Execute tool calls in parallel when multiple are returned by the model. Default true. */
   parallelToolCalls: boolean
   /** Maximum total token budget (input + output). 0 = unlimited. Default 0. */
   tokenBudget: number

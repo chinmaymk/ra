@@ -26,7 +26,7 @@ export interface AgentLoopOptions {
   maxToolResponseSize?: number
   /** True when the loop is running against a resumed session (prior messages loaded from storage). */
   resumed?: boolean
-  /** Execute tool calls in parallel when multiple are returned by the model. Default false. */
+  /** Execute tool calls in parallel when multiple are returned by the model. Default true. */
   parallelToolCalls?: boolean
   /** Maximum total token budget (input + output). Loop stops when exceeded. 0 = unlimited. */
   tokenBudget?: number
@@ -108,7 +108,7 @@ export class AgentLoop {
     this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
-    this.parallelToolCalls = options.parallelToolCalls ?? false
+    this.parallelToolCalls = options.parallelToolCalls ?? true
     this.tokenBudget = options.tokenBudget ?? 0
     this.maxDuration = options.maxDuration ?? 0
 

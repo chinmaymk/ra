@@ -104,7 +104,7 @@ describe('Parallel tool execution', () => {
     expect(toolResults[1].content).toBe('fast_result')
   })
 
-  it('falls back to sequential when parallelToolCalls is false (default)', async () => {
+  it('falls back to sequential when parallelToolCalls is false', async () => {
     const startTimes: number[] = []
     const endTimes: number[] = []
     const tools = new ToolRegistry()
@@ -117,7 +117,7 @@ describe('Parallel tool execution', () => {
     }
 
     const provider = multiToolProvider(['slow_a', 'slow_b'])
-    const loop = new AgentLoop({ provider, tools, model: 'test', maxIterations: 5 })
+    const loop = new AgentLoop({ provider, tools, model: 'test', maxIterations: 5, parallelToolCalls: false })
     await loop.run([{ role: 'user', content: 'go' }])
 
     expect(startTimes[1]).toBeGreaterThanOrEqual(endTimes[0])
