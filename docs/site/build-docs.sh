@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 SITE_DIR="$SCRIPT_DIR"
 DIST_DIR="$SITE_DIR/.vitepress/dist"
-MIN_VERSION="0.0.5"
+MIN_VERSION="0.0.1"
 
 version_gte() {
   [ "$(printf '%s\n%s' "$1" "$2" | sort -V | head -n1)" = "$1" ]

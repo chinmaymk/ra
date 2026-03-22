@@ -15,7 +15,7 @@ const SITE_ROOT = '/ra/'
 const currentVersion = ref(__DOCS_VERSION__)
 const versions = ref<VersionsData | null>(null)
 
-const MIN_VERSION = [0, 0, 5] as const
+const MIN_VERSION = [0, 0, 1] as const
 
 function meetsMinVersion(v: string): boolean {
   const parts = v.split('.').map(Number)

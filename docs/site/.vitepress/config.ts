@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const MIN_VERSION = '0.0.5'
+const MIN_VERSION = '0.0.1'
 
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number)
