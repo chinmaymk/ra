@@ -48,7 +48,6 @@ export type {
   ErrorContext,
   Middleware,
   MiddlewareConfig,
-  ThinkingStrategy,
 } from './agent/types'
 
 // ── Agent runtime ───────────────────────────────────────────────────

@@ -123,6 +123,8 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
         inputTokens: usage?.inputTokens,
         outputTokens: usage?.outputTokens,
         thinkingTokens: usage?.thinkingTokens ?? null,
+        cacheReadTokens: usage?.cacheReadTokens ?? null,
+        cacheCreationTokens: usage?.cacheCreationTokens ?? null,
         toolCallCount: toolNames.length,
         toolNames,
         responseLength: responseText.length,
@@ -138,6 +140,8 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       inputTokens: usage?.inputTokens,
       outputTokens: usage?.outputTokens,
       thinkingTokens: usage?.thinkingTokens ?? null,
+      cacheReadTokens: usage?.cacheReadTokens ?? null,
+      cacheCreationTokens: usage?.cacheCreationTokens ?? null,
       toolCallCount: toolNames.length,
       toolNames,
       responseLength: responseText.length,
@@ -254,6 +258,8 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
         inputTokens: ctx.usage.inputTokens,
         outputTokens: ctx.usage.outputTokens,
         thinkingTokens: ctx.usage.thinkingTokens ?? null,
+        cacheReadTokens: ctx.usage.cacheReadTokens ?? null,
+        cacheCreationTokens: ctx.usage.cacheCreationTokens ?? null,
         totalMessages: ctx.messages.length,
       })
       loopSpan = undefined
@@ -264,6 +270,8 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
       inputTokens: ctx.usage.inputTokens,
       outputTokens: ctx.usage.outputTokens,
       thinkingTokens: ctx.usage.thinkingTokens ?? null,
+      cacheReadTokens: ctx.usage.cacheReadTokens ?? null,
+      cacheCreationTokens: ctx.usage.cacheCreationTokens ?? null,
       totalMessages: ctx.messages.length,
     })
   }

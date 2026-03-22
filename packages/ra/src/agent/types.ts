@@ -47,9 +47,6 @@ export interface ErrorContext extends StoppableContext {
   phase: 'model_call' | 'tool_execution' | 'stream'
 }
 
-/** Callback to determine thinking level per iteration. Return undefined to use the default. */
-export type ThinkingStrategy = (iteration: number, lastToolCalls: string[]) => 'low' | 'medium' | 'high' | undefined
-
 export type Middleware<T> = (ctx: T) => Promise<void>
 
 export interface MiddlewareConfig {

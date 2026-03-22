@@ -383,6 +383,9 @@
       '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.inputTokens) + '</div><div class="stat-label">Input Tokens</div></div>' +
       '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.outputTokens) + '</div><div class="stat-label">Output Tokens</div></div>' +
       (stats.thinkingTokens ? '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.thinkingTokens) + '</div><div class="stat-label">Thinking Tokens</div></div>' : '') +
+      (stats.cacheReadTokens ? '<div class="stat-card green"><div class="stat-value">' + fmtTokens(stats.cacheReadTokens) + '</div><div class="stat-label">Cache Read</div></div>' : '') +
+      (stats.cacheCreationTokens ? '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.cacheCreationTokens) + '</div><div class="stat-label">Cache Write</div></div>' : '') +
+      (stats.cacheReadTokens && stats.inputTokens ? '<div class="stat-card green"><div class="stat-value">' + Math.round(stats.cacheReadTokens / stats.inputTokens * 100) + '%</div><div class="stat-label">Cache Hit Rate</div></div>' : '') +
       '<div class="stat-card orange"><div class="stat-value">' + stats.totalToolCalls + '</div><div class="stat-label">Tool Calls</div></div>' +
       (stats.totalToolErrors ? '<div class="stat-card error"><div class="stat-value">' + stats.totalToolErrors + '</div><div class="stat-label">Tool Errors</div></div>' : '') +
       '<div class="stat-card"><div class="stat-value">' + stats.totalMessages + '</div><div class="stat-label">Messages</div></div>' +
@@ -392,13 +395,14 @@
     // Token usage per iteration
     if (stats.iterationStats && stats.iterationStats.length) {
       html += '<div class="config-section"><h2>Tokens per Iteration</h2>';
-      html += '<div class="token-legend"><span class="leg-input">Input</span><span class="leg-output">Output</span><span class="leg-thinking">Thinking</span></div>';
+      html += '<div class="token-legend"><span class="leg-input">Input</span><span class="leg-output">Output</span><span class="leg-thinking">Thinking</span><span class="leg-cache" style="color:#4caf50">Cache Read</span></div>';
       var maxTok = Math.max(1, ...stats.iterationStats.map(function(i) { return i.inputTokens + i.outputTokens + i.thinkingTokens; }));
       html += stats.iterationStats.map(function(it) {
         var inPct = (it.inputTokens / maxTok * 100).toFixed(1);
         var outPct = (it.outputTokens / maxTok * 100).toFixed(1);
         var thinkPct = (it.thinkingTokens / maxTok * 100).toFixed(1);
-        var toolStr = it.toolNames && it.toolNames.length ? it.toolNames.join(', ') : 'no tools';
+        var cacheHit = it.cacheReadTokens && it.inputTokens ? Math.round(it.cacheReadTokens / it.inputTokens * 100) : 0;
+        var cacheStr = cacheHit > 0 ? ' · ' + cacheHit + '% cached' : '';
         return '<div class="iter-bar">' +
           '<span class="iter-label">#' + it.iteration + '</span>' +
           '<div class="iter-track">' +
@@ -406,7 +410,7 @@
             '<div class="iter-segment seg-output" style="width:' + outPct + '%"></div>' +
             '<div class="iter-segment seg-thinking" style="width:' + thinkPct + '%"></div>' +
           '</div>' +
-          '<span class="iter-info">' + fmtDuration(it.durationMs) + ' · ' + fmtTokens(it.inputTokens + it.outputTokens + it.thinkingTokens) + ' tok · ' + it.toolCalls + ' tools</span>' +
+          '<span class="iter-info">' + fmtDuration(it.durationMs) + ' · ' + fmtTokens(it.inputTokens + it.outputTokens + it.thinkingTokens) + ' tok · ' + it.toolCalls + ' tools' + cacheStr + '</span>' +
         '</div>';
       }).join('');
       html += '</div>';

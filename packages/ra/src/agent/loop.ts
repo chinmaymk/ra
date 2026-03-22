@@ -1,6 +1,6 @@
 import { errorMessage, withRetry } from '../utils/errors'
 import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
-import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext, ThinkingStrategy } from './types'
+import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
@@ -30,8 +30,6 @@ export interface AgentLoopOptions {
   resumed?: boolean
   /** When true, reduce maxToolResponseSize as context usage grows. Default false. */
   adaptiveToolResponseSize?: boolean
-  /** Dynamic thinking level per iteration. Overrides static `thinking` when provided. */
-  thinkingStrategy?: ThinkingStrategy
 }
 
 export interface LoopResult {
@@ -54,16 +52,25 @@ const DEFAULT_MAX_RETRIES = 3
 const MAX_COMPACTION_RETRIES = 3
 const DEFAULT_MAX_TOOL_RESPONSE_SIZE = 25_000
 
-/** Truncate tool output that exceeds maxChars, appending a notice for the model. */
+/** Truncate tool output that exceeds maxChars using head+tail strategy.
+ *  Keeps the first half and last half of content, with an omission notice in the middle.
+ *  This preserves both the start (context/headers) and end (errors/results) of output. */
 export function truncateToolOutput(content: string, maxChars: number): string {
   if (content.length <= maxChars) return content
-  const truncated = content.slice(0, maxChars)
-  // Try to cut at a newline boundary to avoid splitting a line
-  const lastNewline = truncated.lastIndexOf('\n')
-  const cutPoint = lastNewline > maxChars * 0.8 ? lastNewline : maxChars
-  return content.slice(0, cutPoint) +
-    `\n\n<response clipped>\nOutput truncated: ${content.length.toLocaleString()} chars exceeded limit of ${maxChars.toLocaleString()}. ` +
-    'Use more targeted queries (e.g. offset/limit, specific paths, narrower search patterns) to get the information you need.'
+  const halfBudget = Math.floor(maxChars / 2)
+  const omitted = content.length - maxChars
+
+  // Try to cut at newline boundaries to avoid splitting lines
+  let headEnd = halfBudget
+  const headNewline = content.lastIndexOf('\n', halfBudget)
+  if (headNewline > halfBudget * 0.8) headEnd = headNewline + 1
+
+  let tailStart = content.length - halfBudget
+  const tailNewline = content.indexOf('\n', tailStart)
+  if (tailNewline !== -1 && tailNewline < tailStart + halfBudget * 0.2) tailStart = tailNewline + 1
+
+  const notice = `\n\n[...${omitted.toLocaleString()} chars omitted...]\n\n`
+  return content.slice(0, headEnd) + notice + content.slice(tailStart)
 }
 
 export class AgentLoop {
@@ -81,7 +88,6 @@ export class AgentLoop {
   private maxToolResponseSize: number
   private resumed: boolean
   private adaptiveToolResponseSize: boolean
-  private thinkingStrategy: ThinkingStrategy | undefined
 
   private externalAbort: AbortController | null = null
 
@@ -100,7 +106,6 @@ export class AgentLoop {
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
     this.adaptiveToolResponseSize = options.adaptiveToolResponseSize ?? false
-    this.thinkingStrategy = options.thinkingStrategy
 
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
@@ -164,19 +169,11 @@ export class AgentLoop {
         iterations++
         this.logger.debug('iteration starting', { iteration: iterations, messageCount: messages.length })
 
-        // Resolve thinking level: strategy callback overrides static setting
-        let thinkingLevel = this.thinking
-        if (this.thinkingStrategy) {
-          const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && m.toolCalls)
-          const lastToolCalls = lastAssistant?.toolCalls?.map(tc => tc.name) ?? []
-          thinkingLevel = this.thinkingStrategy(iterations, lastToolCalls) ?? this.thinking
-        }
-
         const request = {
           model: this.model,
           messages,
           tools: this.tools.all(),
-          ...(thinkingLevel && { thinking: thinkingLevel }),
+          ...(this.thinking && { thinking: this.thinking }),
           signal,
         }
         const modelCallCtx: ModelCallContext = { ...stoppable, request, loop: loopCtx() }

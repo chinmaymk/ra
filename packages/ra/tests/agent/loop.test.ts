@@ -775,11 +775,10 @@ describe('AgentLoop', () => {
     const loop = new AgentLoop({ provider, tools, maxIterations: 10, maxToolResponseSize: 100 })
     const result = await loop.run([{ role: 'user', content: 'go' }])
     const toolResult = result.messages.find(m => m.role === 'tool')
-    expect(toolResult?.content).toContain('<response clipped>')
-    expect(toolResult?.content).toContain('200')
-    expect(toolResult?.content).toContain('100')
-    const contentPortion = (toolResult!.content as string).split('\n\n<response clipped>')[0]!
-    expect(contentPortion.length).toBeLessThanOrEqual(100)
+    expect(toolResult?.content).toContain('chars omitted')
+    // Head+tail: both start and end of original content should be present
+    expect((toolResult?.content as string).startsWith('x')).toBe(true)
+    expect((toolResult?.content as string).endsWith('x')).toBe(true)
   })
 
   it('does not truncate tool output within maxToolResponseSize', async () => {
@@ -817,51 +816,10 @@ describe('AgentLoop', () => {
     const loop = new AgentLoop({ provider, tools, maxIterations: 10, maxToolResponseSize: 100 })
     const result = await loop.run([{ role: 'user', content: 'go' }])
     const toolResult = result.messages.find(m => m.role === 'tool')
-    // The content before the clipping notice should end at a newline boundary
-    const clippedContent = (toolResult!.content as string).split('\n\n<response clipped>')[0]!
-    expect(clippedContent.endsWith('\n') || !clippedContent.includes('\n') || lines.some(l => clippedContent.endsWith(l))).toBe(true)
-  })
-
-  it('thinkingStrategy overrides static thinking level per iteration', async () => {
-    const capturedRequests: ChatRequest[] = []
-    const customProvider: IProvider = {
-      name: 'mock',
-      chat: async () => ({ message: { role: 'assistant', content: '' } }),
-      async *stream(req: ChatRequest) {
-        capturedRequests.push(req)
-        yield { type: 'done' as const }
-      },
-    }
-    const loop = new AgentLoop({
-      provider: customProvider,
-      tools: new ToolRegistry(),
-      model: 'test',
-      thinking: 'high',
-      thinkingStrategy: (iteration) => iteration === 1 ? 'high' : 'low',
-    })
-    await loop.run([{ role: 'user', content: 'hi' }])
-    expect(capturedRequests[0]?.thinking).toBe('high')
-  })
-
-  it('thinkingStrategy returning undefined falls back to static thinking', async () => {
-    const capturedRequests: ChatRequest[] = []
-    const customProvider: IProvider = {
-      name: 'mock',
-      chat: async () => ({ message: { role: 'assistant', content: '' } }),
-      async *stream(req: ChatRequest) {
-        capturedRequests.push(req)
-        yield { type: 'done' as const }
-      },
-    }
-    const loop = new AgentLoop({
-      provider: customProvider,
-      tools: new ToolRegistry(),
-      model: 'test',
-      thinking: 'medium',
-      thinkingStrategy: () => undefined,
-    })
-    await loop.run([{ role: 'user', content: 'hi' }])
-    expect(capturedRequests[0]?.thinking).toBe('medium')
+    // Head+tail: should contain both early lines and late lines
+    expect(toolResult?.content).toContain('line 0000')
+    expect(toolResult?.content).toContain('line 0019')
+    expect(toolResult?.content).toContain('chars omitted')
   })
 
   it('adaptiveToolResponseSize reduces truncation limit at high context usage', async () => {
@@ -888,6 +846,6 @@ describe('AgentLoop', () => {
     const result = await loop.run([{ role: 'user', content: 'go' }])
     const toolResult = result.messages.find(m => m.role === 'tool')
     // At >75% usage, effective limit = 25000 * 0.25 = 6250, output is 20000 so it must be truncated
-    expect((toolResult?.content as string)).toContain('<response clipped>')
+    expect((toolResult?.content as string)).toContain('chars omitted')
   })
 })
