@@ -50,8 +50,9 @@ ra's core loop is simple: send messages to the model, stream the response, execu
 The loop tracks token usage per iteration, enforces `maxIterations`, and supports an `AbortController`. Any middleware can call `ctx.stop()` to halt the loop cleanly.
 
 ```yaml
-maxIterations: 50   # default — prevents runaway loops
-toolTimeout: 30000  # per-tool timeout in ms
+agent:
+  maxIterations: 50   # default — prevents runaway loops
+  toolTimeout: 30000  # per-tool timeout in ms
 ```
 
 ```ts

@@ -25,9 +25,10 @@ export default async (ctx) => {
 
 ```yaml
 # ra.config.yml
-middleware:
-  beforeModelCall:
-    - "./middleware/inject-context.ts"
+agent:
+  middleware:
+    beforeModelCall:
+      - "./middleware/inject-context.ts"
 ```
 
 This runs before every model call, so the agent always sees fresh context.
@@ -62,9 +63,10 @@ export default async (ctx) => {
 ```
 
 ```yaml
-middleware:
-  beforeModelCall:
-    - "./middleware/conditional-instructions.ts"
+agent:
+  middleware:
+    beforeModelCall:
+      - "./middleware/conditional-instructions.ts"
 ```
 
 ## Reactive prompt adaptation
@@ -108,9 +110,10 @@ export default async (ctx) => {
 ```
 
 ```yaml
-middleware:
-  beforeModelCall:
-    - "./middleware/adaptive.ts"
+agent:
+  middleware:
+    beforeModelCall:
+      - "./middleware/adaptive.ts"
 ```
 
 ## Dynamic tool filtering
@@ -150,9 +153,10 @@ export default async (ctx) => {
 ```
 
 ```yaml
-middleware:
-  beforeModelCall:
-    - "./middleware/filter-tools.ts"
+agent:
+  middleware:
+    beforeModelCall:
+      - "./middleware/filter-tools.ts"
 ```
 
 ## Composing multiple dynamic prompts
@@ -160,12 +164,13 @@ middleware:
 Middleware runs in array order, so you can layer concerns:
 
 ```yaml
-middleware:
-  beforeModelCall:
-    - "./middleware/inject-context.ts"
-    - "./middleware/conditional-instructions.ts"
-    - "./middleware/adaptive.ts"
-    - "./middleware/filter-tools.ts"
+agent:
+  middleware:
+    beforeModelCall:
+      - "./middleware/inject-context.ts"
+      - "./middleware/conditional-instructions.ts"
+      - "./middleware/adaptive.ts"
+      - "./middleware/filter-tools.ts"
 ```
 
 Each middleware independently reads and modifies the request. Keep each focused on one concern.

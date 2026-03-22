@@ -73,8 +73,9 @@ Each event shows its timestamp, duration, and type. Events are color-coded:
 ## Configuration
 
 ```yaml
-inspector:
-  port: 3002
+app:
+  inspector:
+    port: 3002
 ```
 
 | Field | Env var | CLI flag | Default | Description |
