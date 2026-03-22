@@ -105,9 +105,16 @@ Now Cursor or Claude Desktop has a dedicated code reviewer that uses your projec
 | [REPL](/modes/repl) | Interactive sessions with history, slash commands, file attachments |
 | [HTTP API](/modes/http) | Sync and streaming chat, session management |
 | [MCP](/modes/mcp) | Client (pull tools from MCP servers) and server (expose ra as a tool) |
-| [Built-in Tools](/tools/) | Filesystem, shell, network, and user interaction tools |
-| [Skills](/skills/) | Reusable instruction bundles — roles, behaviors, scripts, and reference docs |
+| [Cron](/modes/cron) | Scheduled agent jobs with cron expressions and per-job config overrides |
+| [Inspector](/modes/inspector) | Web dashboard for debugging sessions — traces, logs, token usage |
+| [GitHub Actions](/modes/github-actions) | Run ra directly in CI/CD workflows with no install step |
+| [Built-in Tools](/tools/) | Filesystem, shell, network, scratchpad, parallelization, and user interaction |
+| [Skills](/skills/) | Reusable instruction bundles — install from npm, GitHub, or URLs |
 | [Middleware](/middleware/) | Hooks at every loop stage — intercept, modify, or stop the loop |
+| [Permissions](/permissions/) | Regex-based allow/deny rules per tool per field |
 | [Sessions](/core/sessions) | Persist conversations as JSONL, resume from any interface, auto-prune |
-| [Memory](/configuration/#memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
-| [Configuration](/configuration/) | Layered: CLI > env > file. The config is the agent |
+| [File Attachments](/core/file-attachments) | Images, PDFs, and text files — provider-aware format handling |
+| [Memory](/tools/#memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
+| [Observability](/observability/) | Structured JSONL logs and span-based traces per session |
+| [Configuration](/configuration/) | Layered: CLI > env > file, with env var interpolation and YAML/JSON/TOML support |
+| [Recipes](/recipes/) | Pre-built agent configurations — coding, code review, research, multi-agent |

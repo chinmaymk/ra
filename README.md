@@ -22,8 +22,11 @@
   <a href="#observability">Observability</a> &middot;
   <a href="#memory">Memory</a> &middot;
   <a href="#context-discovery">Context Discovery</a> &middot;
+  <a href="#sessions">Sessions</a> &middot;
+  <a href="#file-attachments">File Attachments</a> &middot;
   <a href="#interfaces">Interfaces</a> &middot;
-  <a href="#configuration">Configuration</a>
+  <a href="#configuration">Configuration</a> &middot;
+  <a href="#recipes">Recipes</a>
 </p>
 
 <p align="center">
@@ -102,7 +105,7 @@ ra --help
 ## Quick Start
 
 ```bash
-export RA_ANTHROPIC_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-..."
 
 ra "Summarize the key points of this file" --file report.pdf   # one-shot
 ra                                                              # interactive REPL
@@ -123,7 +126,7 @@ User message → [beforeLoopBegin]
   → [afterLoopIteration] → repeat or [afterLoopComplete]
 ```
 
-The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. [Context compaction](https://chinmaymk.github.io/ra/core/context-control/) kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context.
+The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. [Context compaction](https://chinmaymk.github.io/ra/core/context-control/) kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context. [Extended thinking](https://chinmaymk.github.io/ra/core/context-control/) is supported at three budget levels (`low`, `medium`, `high`) for models that support it.
 
 ## [Providers](https://chinmaymk.github.io/ra/providers/anthropic/)
 
@@ -138,11 +141,11 @@ ra --provider bedrock --model anthropic.claude-sonnet-4-6 "Triage this bug"
 ra --provider azure --azure-deployment my-gpt4o "Analyze this log"
 ```
 
-Each provider needs an API key via environment variable (`RA_ANTHROPIC_API_KEY`, `RA_OPENAI_API_KEY`, `RA_GOOGLE_API_KEY`, etc). Bedrock and Azure fall back to their standard credential chains.
+Each provider needs an API key via environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, etc). Bedrock and Azure fall back to their standard credential chains.
 
 ## [Tools](https://chinmaymk.github.io/ra/tools/)
 
-Ra ships with built-in tools for filesystem operations (`Read`, `Write`, `Edit`, `Glob`, `Grep`, ...), shell execution (`Bash`/`PowerShell`), web fetching, and agent interaction (`TodoWrite`, `Agent`). The `Agent` tool forks parallel copies of the agent to work on independent tasks simultaneously.
+Ra ships with built-in tools for filesystem operations (`Read`, `Write`, `Edit`, `AppendFile`, `LS`, `Glob`, `Grep`, `MoveFile`, `CopyFile`, `DeleteFile`), shell execution (`Bash`/`PowerShell`), web fetching (`WebFetch`), and parallelization (`Agent`). An ephemeral [scratchpad](#scratchpad) survives context compaction for plans and checklists. When [memory](#memory) is enabled, `memory_save`, `memory_search`, and `memory_forget` tools are registered for persistence across sessions.
 
 Each tool can be independently configured, constrained, or disabled:
 
@@ -186,6 +189,13 @@ ra --skill debugger --file crash.log "Find the root cause"
 ```
 
 Ra ships with built-in skills (`code-review`, `architect`, `planner`, `debugger`, `code-style`, `writer`) and you can install more from GitHub repos, npm packages, or URLs. Each skill is a `SKILL.md` with YAML frontmatter, optional scripts, and reference docs.
+
+```bash
+ra skill install npm:ra-skill-name          # from npm
+ra skill install github:user/ra-skill-name  # from GitHub
+ra skill list                               # list installed skills
+ra skill remove skill-name                  # uninstall
+```
 
 ## [Middleware](https://chinmaymk.github.io/ra/middleware/)
 
@@ -236,7 +246,7 @@ ra --log-level debug --log-file agent.log "Fix the failing test"
 
 Events include token usage, latency, tool inputs/outputs, and middleware decisions. Pair with the `afterLoopComplete` hook to ship traces to your observability stack.
 
-## [Memory](https://chinmaymk.github.io/ra/memory/)
+## [Memory](https://chinmaymk.github.io/ra/tools/#memory)
 
 SQLite-backed persistent memory that survives across sessions. The agent can store facts, decisions, and learned context — then recall them in future sessions without re-reading files or re-asking questions. Memory is scoped per-project and searchable.
 
@@ -246,7 +256,7 @@ ra "Remember that our API rate limit is 1000 req/min"
 ra "What's our API rate limit?"   # recalls from memory
 ```
 
-## [Context Discovery](https://chinmaymk.github.io/ra/context/)
+## [Context Discovery](https://chinmaymk.github.io/ra/core/context-control/)
 
 Ra automatically discovers and loads project context at startup. It finds `CLAUDE.md` files, `ra.config.yml`, and any files matching configured glob patterns — so the agent starts every session already knowing your repo's conventions, architecture, and rules.
 
@@ -259,7 +269,27 @@ agent:
       - "src/**/*.prompt.md"
 ```
 
-No manual copy-pasting of instructions. Check your context files into the repo and every engineer — and every agent session — gets the same baseline.
+No manual copy-pasting of instructions. Check your context files into the repo and every engineer — and every agent session — gets the same baseline. Context files also support inline resolvers — `@src/auth.ts` inlines file contents and `url:https://example.com/api-docs` fetches and inlines URLs before the model sees the message.
+
+## [Sessions](https://chinmaymk.github.io/ra/core/sessions/)
+
+Conversations are persisted as JSONL — one message per line, easy to inspect and grep. Resume from any interface with `--resume` (latest session) or `--resume=<id>` (specific session). Sessions auto-prune by age (default 30 days) and count (default 100).
+
+```bash
+ra --resume                    # resume latest session
+ra --resume=abc123             # resume specific session
+ra                             # REPL: use /resume [id]
+```
+
+## [File Attachments](https://chinmaymk.github.io/ra/core/file-attachments/)
+
+Attach images, PDFs, and text files to any prompt. Images are sent as vision content, PDFs as document blocks, and text files are inlined. Provider support varies — see the [docs](https://chinmaymk.github.io/ra/core/file-attachments/) for the full matrix.
+
+```bash
+ra --file screenshot.png "What's wrong with this UI?"
+ra --file report.pdf "Summarize the key findings"
+ra --file src/auth.ts --file src/routes.ts "Review these files"
+```
 
 ## Interfaces
 
@@ -300,47 +330,40 @@ ra --interface cron
 
 Jobs can override the base agent config (model, maxIterations, thinking) or point to a recipe YAML file. The scheduler emits structured logs and tracer spans (`cron.scheduler`, `cron.job`) for full observability.
 
-## [Configuration](https://chinmaymk.github.io/ra/configuration/)
-
-Layered config — each layer overrides the one to its right.
-
-```
-CLI flags > env vars > config file
-```
-
-Supports YAML, JSON, and TOML config files. Environment variables use the `RA_` prefix. CLI flags override everything.
-
 ## [Recipes](https://chinmaymk.github.io/ra/recipes/)
 
 Pre-built agent configurations you can fork and commit to your repo.
 
 - **[Coding Agent](recipes/coding-agent/)** — file editing, shell execution, extended thinking, context compaction
-- **[Code Review Agent](recipes/code-review-agent/)** — GitHub MCP, style guide, token budget middleware
+- **[Code Review Agent](recipes/code-review-agent/)** — GitHub MCP, style guide, diff-gathering script, token budget middleware
+- **[Auto-Research Agent](recipes/karpathy-autoresearch/)** — autonomous ML research: modifies training scripts, runs experiments, evaluates results, keeps or discards changes
+- **[Multi-Agent Orchestrator](recipes/multi-agent/)** — creates and manages persistent specialist agents as independent CLI processes with resumable conversations
+- **[Claude Code Agent](recipes/ra-claude-code/)** — expert software engineer with autonomous execution, debugging, refactoring, and code understanding
 
 ```bash
-ra --config recipes/coding-agent/ra.config.yaml
-```
-
-### [Code Review Agent](recipes/code-review-agent/)
-
-Reviews diffs for correctness, style, and performance. Connects to GitHub via MCP, includes a diff-gathering script and style guide, and enforces a token budget via middleware.
-
-```bash
+ra --config recipes/coding-agent/ra.config.yaml "Fix the failing test"
 ra --config recipes/code-review-agent/ra.config.yaml --file diff.patch "Review this"
 ```
 
-## Configuration
+## [Configuration](https://chinmaymk.github.io/ra/configuration/)
 
-Layered config. Each layer overrides the previous.
+Layered config — each layer overrides the previous.
 
 ```
 defaults → config file → env vars → CLI flags
 ```
 
+Supports YAML, JSON, and TOML config files (`ra.config.yml`, `ra.config.json`, `ra.config.toml`). Config is organized into `app` (infrastructure — skills, permissions, MCP, storage, observability) and `agent` (LLM behavior — provider, model, thinking, tools, middleware, compaction, context, memory).
+
 ```yaml
 # ra.config.yml — all sections are optional
 app:
-  skills: [code-review]
+  skillDirs: [./skills]
+  permissions:
+    rules:
+      - tool: execute_bash
+        command:
+          allow: ["^git ", "^bun "]
 
 agent:
   provider: anthropic
@@ -348,9 +371,14 @@ agent:
   systemPrompt: You are a helpful coding assistant.
   maxIterations: 50
   thinking: medium
+  memory:
+    enabled: true
+  compaction:
+    enabled: true
+    threshold: 0.8
 ```
 
-Config is organized into `app` (infrastructure) and `agent` (LLM behavior) sections. Every option shown above goes in this file. Environment variables use the `RA_` prefix (`RA_PROVIDER`, `RA_MODEL`, `RA_ANTHROPIC_API_KEY`), and CLI flags override everything:
+Environment variables are interpolated in config files with `${VAR}`, `${VAR:-default}`, and `${VAR-default}` syntax. CLI flags override everything:
 
 ```bash
 ra --provider openai --model gpt-4.1 --thinking high --max-iterations 10 "Review this"
@@ -386,7 +414,7 @@ Use ra directly in your CI/CD workflows. No install step needed — the action d
     provider: anthropic
     model: claude-sonnet-4-6
   env:
-    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 ## Documentation
