@@ -146,4 +146,22 @@ describe('createResolverMiddleware', () => {
     const afterSecond = ctx.request.messages[0]!.content as string
     expect(afterSecond).toBe(afterFirst) // unchanged
   })
+
+  it('preserves _messageId across resolution (spread copies the ID)', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const messages = [
+      { role: 'system', content: 'See @config', _messageId: 'sys-1' },
+      { role: 'user', content: 'look at @readme', _messageId: 'usr-1' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+
+    // _messageId must survive even if the resolver creates a new object
+    // (via spread). The history middleware tracks by ID, not object identity.
+    expect(ctx.request.messages[0]!._messageId).toBe('sys-1')
+    expect(ctx.request.messages[1]!._messageId).toBe('usr-1')
+    // Content should still be resolved
+    expect((ctx.request.messages[0]!.content as string)).toContain('content of config')
+    expect((ctx.request.messages[1]!.content as string)).toContain('content of readme')
+  })
 })
