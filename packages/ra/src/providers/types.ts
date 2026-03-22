@@ -42,6 +42,8 @@ export interface TokenUsage {
   inputTokens: number
   outputTokens: number
   thinkingTokens?: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
 }
 
 export type StreamChunk =

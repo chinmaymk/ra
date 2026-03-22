@@ -3,6 +3,14 @@ import { extractSystemMessages, mergeConsecutiveRoles, parseToolArguments, seria
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 
+/** Anthropic usage with cache fields that may not be in the SDK types yet. */
+type RawAnthropicUsage = {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+}
+
 export interface AnthropicProviderOptions {
   apiKey: string
   baseURL?: string
@@ -30,7 +38,13 @@ export class AnthropicProvider implements IProvider {
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const response = await this.client.messages.create(this.buildParams(request) as Anthropic.MessageCreateParamsNonStreaming)
-    const usage: TokenUsage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
+    const raw = response.usage as unknown as RawAnthropicUsage
+    const usage: TokenUsage = {
+      inputTokens: raw.input_tokens,
+      outputTokens: raw.output_tokens,
+      ...(raw.cache_read_input_tokens && { cacheReadTokens: raw.cache_read_input_tokens }),
+      ...(raw.cache_creation_input_tokens && { cacheCreationTokens: raw.cache_creation_input_tokens }),
+    }
     return { message: this.mapResponseToMessage(response), usage }
   }
 
@@ -42,14 +56,20 @@ export class AnthropicProvider implements IProvider {
 
     let usage: TokenUsage | undefined
     let inputTokens = 0
+    let cacheReadTokens = 0
+    let cacheCreationTokens = 0
     let emittedDone = false
     const activeToolCalls = new Map<number, string>()
 
     for await (const event of stream as AsyncIterable<Anthropic.MessageStreamEvent>) {
       switch (event.type) {
-        case 'message_start':
-          inputTokens = (event as Anthropic.RawMessageStartEvent).message.usage?.input_tokens ?? 0
+        case 'message_start': {
+          const raw = (event as Anthropic.RawMessageStartEvent).message?.usage as unknown as RawAnthropicUsage | undefined
+          inputTokens = raw?.input_tokens ?? 0
+          cacheReadTokens = raw?.cache_read_input_tokens ?? 0
+          cacheCreationTokens = raw?.cache_creation_input_tokens ?? 0
           break
+        }
         case 'content_block_start':
           if (event.content_block.type === 'tool_use') {
             activeToolCalls.set(event.index, event.content_block.id)
@@ -61,9 +81,12 @@ export class AnthropicProvider implements IProvider {
           else if (event.delta.type === 'input_json_delta') yield { type: 'tool_call_delta', id: activeToolCalls.get(event.index) ?? '', argsDelta: event.delta.partial_json }
           else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as any).thinking }
           break
-        case 'message_delta':
+        case 'message_delta': {
           usage = { inputTokens, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
+          if (cacheReadTokens) usage.cacheReadTokens = cacheReadTokens
+          if (cacheCreationTokens) usage.cacheCreationTokens = cacheCreationTokens
           break
+        }
         case 'message_stop':
           emittedDone = true
           yield { type: 'done', usage }

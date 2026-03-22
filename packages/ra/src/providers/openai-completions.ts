@@ -26,11 +26,12 @@ export class OpenAICompletionsProvider implements IProvider {
     return params
   }
 
-  toUsage(u: { prompt_tokens: number; completion_tokens: number; completion_tokens_details?: { reasoning_tokens?: number } }): TokenUsage {
+  toUsage(u: { prompt_tokens: number; completion_tokens: number; completion_tokens_details?: { reasoning_tokens?: number }; prompt_tokens_details?: { cached_tokens?: number } }): TokenUsage {
     return {
       inputTokens: u.prompt_tokens,
       outputTokens: u.completion_tokens,
       ...(u.completion_tokens_details?.reasoning_tokens && { thinkingTokens: u.completion_tokens_details.reasoning_tokens }),
+      ...(u.prompt_tokens_details?.cached_tokens && { cacheReadTokens: u.prompt_tokens_details.cached_tokens }),
     }
   }
 

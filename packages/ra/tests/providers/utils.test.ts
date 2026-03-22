@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, extractTextContent, serializeContent, parseToolArguments, resolveThinkingBudget, THINKING_BUDGETS } from '@chinmaymk/ra'
+import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, cacheHitPercent, extractTextContent, serializeContent, parseToolArguments, resolveThinkingBudget, THINKING_BUDGETS } from '@chinmaymk/ra'
 import type { TokenUsage, ContentPart } from '@chinmaymk/ra'
 
 describe('mergeConsecutiveRoles', () => {
@@ -144,6 +144,49 @@ describe('accumulateUsage', () => {
     const target: TokenUsage = { inputTokens: 0, outputTokens: 0 }
     accumulateUsage(target, { inputTokens: 1, outputTokens: 1 })
     expect(target.thinkingTokens).toBeUndefined()
+  })
+
+  it('accumulates cacheReadTokens when source has it', () => {
+    const target: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+    accumulateUsage(target, { inputTokens: 20, outputTokens: 10, cacheReadTokens: 15 })
+    expect(target.cacheReadTokens).toBe(15)
+  })
+
+  it('accumulates cacheCreationTokens when source has it', () => {
+    const target: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+    accumulateUsage(target, { inputTokens: 20, outputTokens: 10, cacheCreationTokens: 8 })
+    expect(target.cacheCreationTokens).toBe(8)
+  })
+
+  it('accumulates cache tokens across multiple calls', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 10 }
+    accumulateUsage(target, { inputTokens: 5, outputTokens: 5, cacheReadTokens: 20, cacheCreationTokens: 3 })
+    expect(target.cacheReadTokens).toBe(30)
+    expect(target.cacheCreationTokens).toBe(3)
+  })
+
+  it('does not set cache tokens when source lacks them', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0 }
+    accumulateUsage(target, { inputTokens: 1, outputTokens: 1 })
+    expect(target.cacheReadTokens).toBeUndefined()
+    expect(target.cacheCreationTokens).toBeUndefined()
+  })
+})
+
+describe('cacheHitPercent', () => {
+  it('returns percentage with one decimal place', () => {
+    expect(cacheHitPercent(100, 80)).toBe(80)
+    expect(cacheHitPercent(200, 150)).toBe(75)
+    expect(cacheHitPercent(300, 100)).toBe(33.3)
+  })
+
+  it('returns null when no cache reads', () => {
+    expect(cacheHitPercent(100, 0)).toBeNull()
+    expect(cacheHitPercent(100, undefined)).toBeNull()
+  })
+
+  it('returns null when input is zero', () => {
+    expect(cacheHitPercent(0, 50)).toBeNull()
   })
 })
 

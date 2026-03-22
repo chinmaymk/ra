@@ -28,11 +28,12 @@ export class OpenAIResponsesProvider implements IProvider {
     return params as OpenAI.Responses.ResponseCreateParams
   }
 
-  toUsage(u: { input_tokens: number; output_tokens: number; output_tokens_details?: { reasoning_tokens?: number } }): TokenUsage {
+  toUsage(u: { input_tokens: number; output_tokens: number; output_tokens_details?: { reasoning_tokens?: number }; input_tokens_details?: { cached_tokens?: number } }): TokenUsage {
     return {
       inputTokens: u.input_tokens,
       outputTokens: u.output_tokens,
       ...(u.output_tokens_details?.reasoning_tokens && { thinkingTokens: u.output_tokens_details.reasoning_tokens }),
+      ...(u.input_tokens_details?.cached_tokens && { cacheReadTokens: u.input_tokens_details.cached_tokens }),
     }
   }
 

@@ -2,10 +2,15 @@ import { join } from 'path'
 import type { AppContext } from '../bootstrap'
 import { discoverContextFiles } from '../context'
 import { parseJsonlFile } from '../utils/files'
+import { cacheHitPercent } from '@chinmaymk/ra'
 import inspectorHtml from './inspector.html' with { type: 'text' }
 import faviconSvg from './favicon.svg' with { type: 'text' }
 
 // ── Helpers ───────────────────────────────────────────────────────────
+
+function numAttr(attrs: Record<string, unknown>, key: string): number {
+  return (attrs[key] as number) || 0
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -34,19 +39,20 @@ function buildStats(traces: TraceSpan[], messages: Array<{ role?: string; toolCa
   const toolExecs = traces.filter(s => s.name === 'agent.tool_execution')
 
   // Token totals from loop span or sum from model calls
-  let inputTokens = 0
-  let outputTokens = 0
+  const la = loopSpan?.attributes || {}
+  let inputTokens = numAttr(la, 'inputTokens')
+  let outputTokens = numAttr(la, 'outputTokens')
   let thinkingTokens = 0
-  if (loopSpan?.attributes) {
-    inputTokens = (loopSpan.attributes.inputTokens as number) || 0
-    outputTokens = (loopSpan.attributes.outputTokens as number) || 0
-  }
+  let cacheReadTokens = numAttr(la, 'cacheReadTokens')
+  let cacheCreationTokens = numAttr(la, 'cacheCreationTokens')
   for (const mc of modelCalls) {
-    const attrs = mc.attributes || {}
-    thinkingTokens += (attrs.thinkingTokens as number) || 0
+    const a = mc.attributes || {}
+    thinkingTokens += numAttr(a, 'thinkingTokens')
     // Fall back to summing if loop span didn't have totals
-    if (!inputTokens) inputTokens += (attrs.inputTokens as number) || 0
-    if (!outputTokens) outputTokens += (attrs.outputTokens as number) || 0
+    if (!inputTokens) inputTokens += numAttr(a, 'inputTokens')
+    if (!outputTokens) outputTokens += numAttr(a, 'outputTokens')
+    if (!cacheReadTokens) cacheReadTokens += numAttr(a, 'cacheReadTokens')
+    if (!cacheCreationTokens) cacheCreationTokens += numAttr(a, 'cacheCreationTokens')
   }
 
   // Tool frequency map
@@ -64,18 +70,22 @@ function buildStats(traces: TraceSpan[], messages: Array<{ role?: string; toolCa
 
   // Per-iteration breakdown
   const iterationStats = iterations.map((it, i) => {
-    const mc = modelCalls.find(m => m.parentSpanId === it.spanId)
-    const attrs = mc?.attributes || {}
-    const itTools = toolExecs.filter(t => t.parentSpanId === it.spanId)
+    const a = modelCalls.find(m => m.parentSpanId === it.spanId)?.attributes || {}
+    const input = numAttr(a, 'inputTokens')
+    const cacheRead = numAttr(a, 'cacheReadTokens')
+    const tools = toolExecs.filter(t => t.parentSpanId === it.spanId)
     return {
       iteration: i + 1,
       durationMs: it.durationMs || 0,
-      inputTokens: (attrs.inputTokens as number) || 0,
-      outputTokens: (attrs.outputTokens as number) || 0,
-      thinkingTokens: (attrs.thinkingTokens as number) || 0,
-      toolCalls: itTools.length,
-      toolErrors: itTools.filter(t => t.status === 'error').length,
-      toolNames: itTools.map(t => (t.attributes?.tool as string) || '?'),
+      inputTokens: input,
+      outputTokens: numAttr(a, 'outputTokens'),
+      thinkingTokens: numAttr(a, 'thinkingTokens'),
+      cacheReadTokens: cacheRead,
+      cacheCreationTokens: numAttr(a, 'cacheCreationTokens'),
+      cacheHitPercent: cacheHitPercent(input, cacheRead || undefined),
+      toolCalls: tools.length,
+      toolErrors: tools.filter(t => t.status === 'error').length,
+      toolNames: tools.map(t => (t.attributes?.tool as string) || '?'),
     }
   })
 
@@ -88,6 +98,9 @@ function buildStats(traces: TraceSpan[], messages: Array<{ role?: string; toolCa
     inputTokens,
     outputTokens,
     thinkingTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
+    cacheHitPercent: cacheHitPercent(inputTokens, cacheReadTokens || undefined),
     totalTokens: inputTokens + outputTokens + thinkingTokens,
     totalToolCalls: toolExecs.length,
     totalToolErrors: toolExecs.filter(t => t.status === 'error').length,
@@ -121,12 +134,16 @@ function buildTimeline(traces: TraceSpan[], logs: LogEntry[]) {
       const it = (span.attributes?.iteration as number) ?? '?'
       events.push({ ts: span.timestamp, type: 'iteration', label: 'Iteration ' + it, status: span.status, durationMs: span.durationMs })
     } else if (name === 'agent.model_call') {
-      const model = (span.attributes?.model as string) || ''
-      const inTok = (span.attributes?.inputTokens as number) || 0
-      const outTok = (span.attributes?.outputTokens as number) || 0
+      const a = span.attributes || {}
+      const model = (a.model as string) || ''
+      const inTok = numAttr(a, 'inputTokens')
+      const outTok = numAttr(a, 'outputTokens')
+      const cacheRead = numAttr(a, 'cacheReadTokens')
+      const cachePct = cacheHitPercent(inTok, cacheRead || undefined)
+      const cacheDetail = cachePct ? ' (' + cachePct + '% cached)' : ''
       events.push({
         ts: span.timestamp, type: 'model_call', label: 'Model call' + (model ? ' (' + model + ')' : ''),
-        detail: inTok + ' in / ' + outTok + ' out tokens',
+        detail: inTok + ' in / ' + outTok + ' out tokens' + cacheDetail,
         status: span.status, durationMs: span.durationMs,
       })
     } else if (name === 'agent.tool_execution') {

@@ -35,6 +35,19 @@ export function accumulateUsage(target: TokenUsage, source: TokenUsage): void {
   if (source.thinkingTokens) {
     target.thinkingTokens = (target.thinkingTokens ?? 0) + source.thinkingTokens
   }
+  if (source.cacheReadTokens) {
+    target.cacheReadTokens = (target.cacheReadTokens ?? 0) + source.cacheReadTokens
+  }
+  if (source.cacheCreationTokens) {
+    target.cacheCreationTokens = (target.cacheCreationTokens ?? 0) + source.cacheCreationTokens
+  }
+}
+
+/** Compute cache hit percentage (one decimal place), or null if not applicable. */
+export function cacheHitPercent(inputTokens: number, cacheReadTokens: number | undefined): number | null {
+  return inputTokens > 0 && cacheReadTokens
+    ? Math.round((cacheReadTokens / inputTokens) * 1000) / 10
+    : null
 }
 
 /** Extract text from string or ContentPart[] content. */
