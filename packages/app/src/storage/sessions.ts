@@ -139,6 +139,19 @@ export class SessionStorage {
     await Promise.all([...toDelete].map(id => rm(this.sessionDir(id), { recursive: true, force: true })))
   }
 
+  /** Delete a single session by ID. */
+  async delete(id: string): Promise<void> {
+    await rm(this.sessionDir(id), { recursive: true, force: true })
+    this.logger.info('session deleted', { sessionId: id })
+  }
+
+  /** Delete all sessions in this storage directory. */
+  async deleteAll(): Promise<void> {
+    const sessions = await this.list()
+    await Promise.all(sessions.map(s => rm(this.sessionDir(s.id), { recursive: true, force: true })))
+    this.logger.info('all sessions deleted', { count: sessions.length })
+  }
+
   /** List sessions across all namespaces under a global directory (e.g. ~/.ra/). */
   static async listAll(globalDir: string): Promise<Session[]> {
     const glob = new Bun.Glob('*/sessions/*/meta.json')
@@ -150,5 +163,26 @@ export class SessionStorage {
       } catch { /* skip corrupt entries */ }
     }
     return sessions
+  }
+
+  /** Delete a session from a specific namespace under the global directory. */
+  static async deleteFromNamespace(globalDir: string, namespace: string, id: string): Promise<void> {
+    const sanitized = id.replace(UNSAFE_SESSION_ID_CHARS, '')
+    if (!sanitized) throw new Error('Invalid session ID')
+    await rm(join(globalDir, namespace, 'sessions', sanitized), { recursive: true, force: true })
+  }
+
+  /** Delete an entire handle directory (all sessions + data for a project). */
+  static async deleteHandle(globalDir: string, namespace: string): Promise<void> {
+    await rm(join(globalDir, namespace), { recursive: true, force: true })
+  }
+
+  /** Delete all sessions across all namespaces under the global directory. */
+  static async deleteAllGlobal(globalDir: string): Promise<void> {
+    const sessions = await SessionStorage.listAll(globalDir)
+    await Promise.all(sessions.map(s => {
+      if (!s.meta.namespace) return Promise.resolve()
+      return SessionStorage.deleteFromNamespace(globalDir, s.meta.namespace, s.id)
+    }))
   }
 }

@@ -224,37 +224,72 @@ export class InspectorServer {
         const url = new URL(req.url)
         const path = url.pathname
 
+        const globalDir = join(homeDir(), '.ra')
+
         // ── Session-scoped API ──
         if (path === '/api/sessions') {
+          if (req.method === 'DELETE') {
+            const all = url.searchParams.get('all') === 'true'
+            if (all) {
+              await SessionStorage.deleteAllGlobal(globalDir)
+            } else {
+              await storage.deleteAll()
+            }
+            return json({ ok: true })
+          }
           const all = url.searchParams.get('all') === 'true'
           const sessions = all
-            ? await SessionStorage.listAll(join(homeDir(), '.ra'))
+            ? await SessionStorage.listAll(globalDir)
             : await storage.list()
           sessions.sort((a, b) => new Date(b.meta.created).getTime() - new Date(a.meta.created).getTime())
           return json(sessions)
         }
 
-        // Namespace-aware route: /api/sessions/:namespace/:id/:view
-        const nsSessionMatch = path.match(/^\/api\/sessions\/([^/]+)\/([^/]+)\/(\w+)$/)
+        // Delete handle: DELETE /api/handles/:namespace
+        const handleMatch = path.match(/^\/api\/handles\/([^/]+)$/)
+        if (handleMatch && req.method === 'DELETE') {
+          const ns = handleMatch[1] as string
+          await SessionStorage.deleteHandle(globalDir, ns)
+          return json({ ok: true })
+        }
+
+        // Namespace-aware route: /api/sessions/:namespace/:id (DELETE or /:view GET)
+        const nsSessionMatch = path.match(/^\/api\/sessions\/([^/]+)\/([^/]+)(?:\/(\w+))?$/)
         if (nsSessionMatch) {
           const [, ns, id, view] = nsSessionMatch
-          const dir = join(homeDir(), '.ra', ns as string, 'sessions', id as string)
-          try {
-            return await serveSessionView(dir, id as string, view as string, storage)
-          } catch {
-            return json({ error: 'Session not found' }, 404)
+          if (req.method === 'DELETE' && !view) {
+            await SessionStorage.deleteFromNamespace(globalDir, ns as string, id as string)
+            return json({ ok: true })
+          }
+          if (view) {
+            const dir = join(globalDir, ns as string, 'sessions', id as string)
+            try {
+              return await serveSessionView(dir, id as string, view, storage)
+            } catch {
+              return json({ error: 'Session not found' }, 404)
+            }
           }
         }
 
-        // Legacy route: /api/sessions/:id/:view (current namespace)
-        const sessionMatch = path.match(/^\/api\/sessions\/([^/]+)\/(\w+)$/)
+        // Legacy route: /api/sessions/:id/:view or DELETE /api/sessions/:id
+        const sessionMatch = path.match(/^\/api\/sessions\/([^/]+)(?:\/(\w+))?$/)
         if (sessionMatch) {
           const [, id, view] = sessionMatch
-          const dir = storage.sessionDir(id as string)
-          try {
-            return await serveSessionView(dir, id as string, view as string, storage)
-          } catch {
-            return json({ error: 'Session not found' }, 404)
+          if (req.method === 'DELETE' && !view) {
+            try {
+              await storage.delete(id as string)
+              return json({ ok: true })
+            } catch {
+              return json({ error: 'Session not found' }, 404)
+            }
+          }
+          if (view) {
+            const dir = storage.sessionDir(id as string)
+            try {
+              return await serveSessionView(dir, id as string, view, storage)
+            } catch {
+              return json({ error: 'Session not found' }, 404)
+            }
           }
         }
 

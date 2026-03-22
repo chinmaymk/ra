@@ -38,11 +38,19 @@
   .sidebar-header .toggle-all { font-size: 10px; cursor: pointer; color: var(--accent); text-transform: none; letter-spacing: normal; opacity: 0.8; }
   .sidebar-header .toggle-all:hover { opacity: 1; }
   .session-item .namespace { font-size: 10px; color: var(--purple); margin-bottom: 1px; }
-  .session-item { padding: 10px 14px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.1s; }
+  .session-item { padding: 10px 14px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.1s; position: relative; }
   .session-item:hover { background: var(--bg3); }
   .session-item.active { background: var(--bg3); border-left-color: var(--accent); }
   .session-item .id { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .session-item .meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .session-item .delete-btn { position: absolute; top: 8px; right: 8px; display: none; background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; opacity: 0.6; }
+  .session-item .delete-btn:hover { opacity: 1; background: rgba(248,81,73,0.15); }
+  .session-item:hover .delete-btn { display: block; }
+  .sidebar-actions { padding: 8px 14px; display: flex; gap: 6px; border-bottom: 1px solid var(--border); }
+  .sidebar-actions button { font-size: 10px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text2); cursor: pointer; font-family: var(--font); }
+  .sidebar-actions button:hover { background: var(--bg3); color: var(--text); }
+  .sidebar-actions .btn-clear-all { color: var(--red); border-color: var(--red); opacity: 0.7; }
+  .sidebar-actions .btn-clear-all:hover { opacity: 1; background: rgba(248,81,73,0.1); }
 
   /* Messages */
   .message { margin-bottom: 12px; border-radius: 8px; padding: 12px 16px; max-width: 100%; }
@@ -225,6 +233,9 @@
   </header>
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header"><span>Sessions</span><span class="toggle-all" id="toggle-all">All projects</span></div>
+    <div class="sidebar-actions">
+      <button class="btn-clear-all" id="btn-clear-all">Clear all</button>
+    </div>
     <div id="session-list"><div class="loading">Loading…</div></div>
   </div>
   <div class="main" id="main">
@@ -279,6 +290,17 @@
     loadSessions();
   });
 
+  document.getElementById('btn-clear-all').addEventListener('click', async function() {
+    const scope = showAllProjects ? 'ALL sessions across ALL projects' : 'all sessions in the current project';
+    if (!confirm('Delete ' + scope + '? This cannot be undone.')) return;
+    const url = showAllProjects ? '/api/sessions?all=true' : '/api/sessions';
+    await apiFetch(url, { method: 'DELETE' });
+    currentSession = null;
+    currentNamespace = null;
+    main.innerHTML = '<div class="empty">Select a session to inspect</div>';
+    loadSessions();
+  });
+
   async function loadSessions() {
     const url = showAllProjects ? '/api/sessions?all=true' : '/api/sessions';
     const result = await apiFetch(url);
@@ -294,12 +316,14 @@
         ? '<div class="namespace">' + esc(s.meta.namespace) + '</div>'
         : '';
       return '<div class="session-item" data-id="' + esc(s.id) + '" data-ns="' + esc(s.meta.namespace || '') + '">' +
+        '<button class="delete-btn" data-del-id="' + esc(s.id) + '" data-del-ns="' + esc(s.meta.namespace || '') + '" title="Delete session">\u00d7</button>' +
         nsLine +
         '<div class="id">' + esc(s.id.slice(0, 8)) + '… <span class="badge">' + esc(s.meta.provider) + '/' + esc(s.meta.model) + '</span></div>' +
         '<div class="meta">' + esc(s.meta.interface) + ' · ' + esc(time) + '</div></div>';
     }).join('');
     $$('.session-item', list).forEach(el => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.delete-btn')) return;
         $$('.session-item').forEach(e => e.classList.remove('active'));
         el.classList.add('active');
         currentSession = el.dataset.id;
@@ -312,6 +336,20 @@
           updateLayout();
         }
         loadSessionView(currentSession, currentView);
+      });
+    });
+    $$('.delete-btn', list).forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.delId;
+        const ns = btn.dataset.delNs;
+        if (!confirm('Delete session ' + id.slice(0, 8) + '…?')) return;
+        const url = ns
+          ? '/api/sessions/' + encodeURIComponent(ns) + '/' + id
+          : '/api/sessions/' + id;
+        await apiFetch(url, { method: 'DELETE' });
+        if (currentSession === id) { currentSession = null; currentNamespace = null; main.innerHTML = '<div class="empty">Select a session to inspect</div>'; }
+        loadSessions();
       });
     });
   }
