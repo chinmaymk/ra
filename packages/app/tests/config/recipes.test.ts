@@ -2,6 +2,8 @@ import { describe, it, expect } from 'bun:test'
 import { loadConfig } from '../../src/config'
 import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
+import { tmpdir } from 'os'
+import { mkdtempSync, writeFileSync, mkdirSync } from 'fs'
 
 const recipesDir = join(import.meta.dir, '..', '..', '..', '..', 'recipes')
 
@@ -54,5 +56,42 @@ describe('recipe configs', () => {
       const config = await loadConfig({ cwd: dir, env: {} })
       expect(config.agent.maxIterations).toBeGreaterThan(0)
     })
+
+    it(`${name}: does not contain app stanza`, async () => {
+      const configPath = join(dir, 'ra.config.yaml')
+      const content = await Bun.file(configPath).text()
+      const yaml = await import('js-yaml')
+      const raw = yaml.load(content) as Record<string, unknown>
+      expect(raw.app).toBeUndefined()
+    })
   }
+})
+
+describe('recipe validation', () => {
+  it('rejects recipe with app stanza', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ra-recipe-test-'))
+    writeFileSync(join(dir, 'ra.config.yaml'), [
+      'app:',
+      '  interface: http',
+      'agent:',
+      '  provider: anthropic',
+      '  model: claude-sonnet-4-6',
+    ].join('\n'))
+
+    await expect(
+      loadConfig({ recipeName: dir, cwd: dir, env: {} })
+    ).rejects.toThrow('contains an "app" stanza')
+  })
+
+  it('accepts recipe with only agent stanza', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ra-recipe-test-'))
+    writeFileSync(join(dir, 'ra.config.yaml'), [
+      'agent:',
+      '  provider: anthropic',
+      '  model: claude-sonnet-4-6',
+    ].join('\n'))
+
+    const config = await loadConfig({ recipeName: dir, cwd: dir, env: {} })
+    expect(config.agent.provider).toBe('anthropic')
+  })
 })

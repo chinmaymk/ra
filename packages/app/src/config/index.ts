@@ -324,6 +324,11 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
     const recipeConfig = interpolateEnvVars(recipeRaw, env) as Record<string, unknown>
     normalizeLayer(recipeConfig)
 
+    // Recipes must only define agent configuration — reject app stanza
+    if (recipeConfig.app !== undefined) {
+      throw new Error(`Recipe "${recipeName}" contains an "app" stanza. Recipes may only define "agent" configuration.`)
+    }
+
     // Pre-resolve recipe paths against its directory
     const recipeAgent = (recipeConfig.agent ?? recipeConfig) as Record<string, unknown>
     preResolveRecipePaths(recipeAgent, resolved.recipeDir)
