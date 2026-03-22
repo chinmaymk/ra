@@ -17,6 +17,17 @@ import type { SessionStorage } from '../storage/sessions'
 import type { SkillIndex } from '../skills/types'
 import { createSessionMiddleware } from '../agent/session'
 import { buildMessagePrefix, buildThreadMessages } from './messages'
+import { timingSafeEqual } from 'crypto'
+
+function timingSafeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  if (bufA.length !== bufB.length) {
+    timingSafeEqual(bufA, bufA) // constant-time regardless of length mismatch
+    return false
+  }
+  return timingSafeEqual(bufA, bufB)
+}
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -68,7 +79,7 @@ export class HttpServer {
         if (opts.token) {
           const authHeader = req.headers.get('Authorization') ?? ''
           const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-          if (provided !== opts.token) {
+          if (!timingSafeCompare(provided, opts.token)) {
             return jsonResponse({ error: 'Unauthorized' }, 401)
           }
         }
