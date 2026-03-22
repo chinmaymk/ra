@@ -49,7 +49,11 @@ The config lives in your repo — skills, permissions, middleware — versioned 
 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
-app:
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  maxIterations: 50
+  thinking: medium
   skillDirs:
     - ./skills
   permissions:
@@ -58,12 +62,6 @@ app:
         command:
           allow: ["^git ", "^bun "]
           deny: ["--force", "--hard"]
-
-agent:
-  provider: anthropic
-  model: claude-sonnet-4-6
-  maxIterations: 50
-  thinking: medium
 ```
 
 Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](https://chinmaymk.github.io/ra/middleware/) intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](https://chinmaymk.github.io/ra/observability/).
@@ -125,7 +123,7 @@ User message → [beforeLoopBegin]
   → [afterLoopIteration] → repeat or [afterLoopComplete]
 ```
 
-The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. [Context compaction](https://chinmaymk.github.io/ra/core/context-control/) kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context. [Extended thinking](https://chinmaymk.github.io/ra/core/context-control/) is supported at three budget levels (`low`, `medium`, `high`) for models that support it.
+The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. [Context compaction](https://chinmaymk.github.io/ra/core/context-control/) kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context. [Extended thinking](https://chinmaymk.github.io/ra/core/context-control/) is supported at five levels (`off`, `low`, `medium`, `high`, `adaptive`) for models that support it — `adaptive` starts with high thinking and lowers it as the loop progresses.
 
 ## [Providers](https://chinmaymk.github.io/ra/providers/anthropic/)
 
@@ -356,20 +354,18 @@ Supports YAML, JSON, and TOML config files (`ra.config.yml`, `ra.config.json`, `
 
 ```yaml
 # ra.config.yml — all sections are optional
-app:
-  skillDirs: [./skills]
-  permissions:
-    rules:
-      - tool: Bash
-        command:
-          allow: ["^git ", "^bun "]
-
 agent:
   provider: anthropic
   model: claude-sonnet-4-6
   systemPrompt: You are a helpful coding assistant.
   maxIterations: 50
   thinking: medium
+  skillDirs: [./skills]
+  permissions:
+    rules:
+      - tool: Bash
+        command:
+          allow: ["^git ", "^bun "]
   memory:
     enabled: true
   compaction:
