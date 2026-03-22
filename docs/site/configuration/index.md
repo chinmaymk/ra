@@ -207,14 +207,25 @@ All runtime data is organized under `dataDir`: sessions in `{dataDir}/sessions/`
 | `app.logLevel` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
 | `app.tracesEnabled` | `true` | Enable session traces |
 
-### App — MCP
+### App — MCP Client
 
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
 | `app.mcpServers` | — | `[]` | External MCP servers to connect to |
-| `app.mcpLazySchemas` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
+| `app.mcpLazySchemas` | — | `true` | Lazy schema loading — register MCP tools with minimal schemas. First call returns full schema; model retries with correct params. |
 
 See [MCP](/modes/mcp#lazy-schema-loading) for details.
+
+### App — MCP Server (ra as MCP tool)
+
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `app.raMcpServer.enabled` | `--mcp-server-enabled` | `false` | Enable ra's MCP server endpoint |
+| `app.raMcpServer.port` | `--mcp-server-port` | `3001` | MCP server port |
+| `app.raMcpServer.tool.name` | `--mcp-server-tool-name` | `ra` | Tool name exposed to MCP clients |
+| `app.raMcpServer.tool.description` | `--mcp-server-tool-description` | `Ra AI agent` | Tool description exposed to MCP clients |
+
+See [MCP](/modes/mcp#ra-as-mcp-server) for details.
 
 ### App — HTTP
 

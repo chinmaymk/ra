@@ -577,6 +577,78 @@ describe('env var interpolation in config files', () => {
   })
 })
 
+describe('MCP config', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-mcp-config-${Date.now()}`)
+    mkdirSync(tmp, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('defaults mcpServers to empty array and mcpLazySchemas to true', async () => {
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.mcpServers).toEqual([])
+    expect(c.app.mcpLazySchemas).toBe(true)
+  })
+
+  it('loads canonical app.mcpServers config', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: {
+        mcpServers: [{ name: 'test', transport: 'stdio', command: 'echo' }],
+        mcpLazySchemas: false,
+      },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.mcpServers).toEqual([{ name: 'test', transport: 'stdio', command: 'echo' }])
+    expect(c.app.mcpLazySchemas).toBe(false)
+  })
+
+  it('migrates legacy agent.mcp.servers to app.mcpServers', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: {
+        mcp: {
+          servers: [{ name: 'legacy', transport: 'stdio', command: 'echo' }],
+          lazySchemas: false,
+        },
+      },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.mcpServers).toEqual([{ name: 'legacy', transport: 'stdio', command: 'echo' }])
+    expect(c.app.mcpLazySchemas).toBe(false)
+  })
+
+  it('migrates legacy app.mcp.client to app.mcpServers', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { mcp: { client: [{ name: 'old', transport: 'sse', url: 'http://localhost' }] } },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.mcpServers).toEqual([{ name: 'old', transport: 'sse', url: 'http://localhost' }])
+  })
+
+  it('migrates legacy app.mcpServer to app.raMcpServer', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { mcpServer: { enabled: true, port: 4000, tool: { name: 'bot', description: 'A bot' } } },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.raMcpServer.enabled).toBe(true)
+    expect(c.app.raMcpServer.port).toBe(4000)
+    expect(c.app.raMcpServer.tool.name).toBe('bot')
+  })
+
+  it('canonical app.mcpServers takes priority over legacy agent.mcp.servers', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { mcpServers: [{ name: 'canonical', transport: 'stdio', command: 'a' }] },
+      agent: { mcp: { servers: [{ name: 'legacy', transport: 'stdio', command: 'b' }] } },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.mcpServers).toEqual([{ name: 'canonical', transport: 'stdio', command: 'a' }])
+  })
+})
+
 describe('recipe resolution', () => {
   let tmp: string
   let recipeDir: string
