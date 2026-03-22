@@ -83,12 +83,27 @@ export function stopSpinner(silent = false): void {
     clearInterval(spinnerTimer)
     spinnerTimer = null
   }
-  if (silent) {
-    if (wasRunning) process.stdout.write('\r\x1b[K')
-  } else {
-    // Clear spinner/current line then indent prefix for model response
-    process.stdout.write(`\r\x1b[K${RESPONSE_PREFIX}`)
+  if (wasRunning) {
+    if (silent) {
+      process.stdout.write('\r\x1b[K')
+    } else {
+      // Clear spinner line and write response prefix in one shot
+      process.stdout.write(`\r\x1b[K${RESPONSE_PREFIX}`)
+    }
+  } else if (!silent) {
+    process.stdout.write(RESPONSE_PREFIX)
   }
+}
+
+/** Stop the spinner and return the clear sequence instead of writing it.
+ *  Lets callers batch the clear with their first write for a seamless transition. */
+function stopSpinnerGetClearSequence(): string {
+  if (spinnerTimer) {
+    clearInterval(spinnerTimer)
+    spinnerTimer = null
+    return '\r\x1b[K'
+  }
+  return ''
 }
 
 export function closeAssistantBox(): void {
@@ -171,6 +186,8 @@ export interface TuiStreamState {
   toolStartTimes: Map<string, number>
   /** Tool names shown during streaming (before execution starts). */
   pendingToolNames: string[]
+  /** Pending escape sequence to prepend to the first text token (spinner clear + prefix). */
+  transitionPrefix: string | null
 }
 
 /** Create a new TUI streaming state for a single agent loop run. */
@@ -179,7 +196,7 @@ export function createStreamState(): TuiStreamState {
     boxOpened: false, thinkingOpened: false, thinkingCollapsed: false,
     thinkingLines: 0, thinkingStartTime: 0,
     streamBuf: null, thinkingBuf: null, toolStartTimes: new Map(),
-    pendingToolNames: [],
+    pendingToolNames: [], transitionPrefix: null,
   }
 }
 
@@ -194,8 +211,9 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
   if (chunkType === 'thinking') {
     if (state.thinkingCollapsed) return
     if (!state.thinkingOpened) {
-      stopSpinner(true)
-      printThinkingStart()
+      // Batch spinner-clear + thinking header into one write
+      const clear = stopSpinnerGetClearSequence()
+      process.stdout.write(`${clear}  ${ansi.dim}╌╌ thinking ╌╌${ansi.reset}\n  ${ansi.dim}`)
       state.thinkingOpened = true
       state.thinkingStartTime = Date.now()
       state.thinkingLines = 1 // printThinkingStart writes 1 \n
@@ -212,12 +230,21 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
   } else if (chunkType === 'text') {
     if (state.thinkingOpened) collapseThinking(state)
     if (!state.boxOpened) {
-      stopSpinner()
+      // Batch spinner-clear + prefix + first token into one write
+      state.transitionPrefix = stopSpinnerGetClearSequence() + RESPONSE_PREFIX
       state.boxOpened = true
       const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
       state.streamBuf = new StreamBuffer(contentWidth)
     }
-    if (delta && state.streamBuf) process.stdout.write(state.streamBuf.write(delta))
+    if (delta && state.streamBuf) {
+      const text = state.streamBuf.write(delta)
+      if (state.transitionPrefix) {
+        process.stdout.write(state.transitionPrefix + text)
+        state.transitionPrefix = null
+      } else {
+        process.stdout.write(text)
+      }
+    }
   } else if (chunkType === 'tool_call_start' && toolName) {
     // Show tool names immediately so users see activity during arg streaming
     if (state.thinkingOpened) collapseThinking(state)
@@ -227,10 +254,10 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
       state.boxOpened = false
       state.streamBuf = null
     }
-    stopSpinner(true)
     state.pendingToolNames.push(toolName)
-    // Each tool name on its own line
-    process.stdout.write(`  ${ansi.yellow}◆ ${toolName}${ansi.reset}\n`)
+    // Batch spinner-clear + tool name into one write
+    const clear = stopSpinnerGetClearSequence()
+    process.stdout.write(`${clear}  ${ansi.yellow}◆ ${toolName}${ansi.reset}\n`)
   }
 }
 
@@ -275,6 +302,3 @@ export function flushStreamState(state: TuiStreamState): void {
   else process.stdout.write('\n\n')
 }
 
-function printThinkingStart(): void {
-  process.stdout.write(`  ${ansi.dim}╌╌ thinking ╌╌${ansi.reset}\n  ${ansi.dim}`)
-}

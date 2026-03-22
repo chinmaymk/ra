@@ -57,11 +57,11 @@ describe('spinner', () => {
     expect(output).toContain('\x1b[K')
   })
 
-  it('stopSpinner clears line even when no spinner running', () => {
+  it('stopSpinner writes prefix even when no spinner running', () => {
     const output = captureStdout(() => {
-      stopSpinner() // no spinner running, should still clear and add blank line
+      stopSpinner() // no spinner running, just writes response prefix
     })
-    expect(output).toContain('\x1b[K')
+    expect(output).toBe('  ')
   })
 })
 
