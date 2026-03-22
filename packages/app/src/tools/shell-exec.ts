@@ -12,8 +12,12 @@ function shellExec(
         reject(new Error(`Command timed out after ${options.timeout}ms`))
         return
       }
-      const output = [stdout, stderr].filter(Boolean).join('\n').trim()
-      resolve(output || (error ? `Exit code: ${error.code}` : '(no output)'))
+      const exitCode = error ? (error.code as number ?? 1) : 0
+      const parts: string[] = []
+      if (stdout.trim()) parts.push(`<stdout>\n${stdout.trim()}\n</stdout>`)
+      if (stderr.trim()) parts.push(`<stderr>\n${stderr.trim()}\n</stderr>`)
+      parts.push(`<exit_code>${exitCode}</exit_code>`)
+      resolve(parts.join('\n'))
     })
   })
 }
@@ -41,10 +45,10 @@ export function shellTool(name: string, shell: string, shellArgs: (cmd: string) 
 export function executeBashTool(): ITool {
   const platform = process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows (WSL/Git Bash)' : 'Linux'
   return shellTool('Bash', 'bash', cmd => ['-c', cmd],
-    `Run a bash command on this ${platform} system. Returns stdout and stderr combined. Default timeout: 30s.`)
+    `Run a bash command on this ${platform} system. Returns stdout, stderr, and exit code. Default timeout: 30s.`)
 }
 
 export function executePowershellTool(): ITool {
   return shellTool('PowerShell', 'powershell', cmd => ['-NoProfile', '-Command', cmd],
-    'Run a PowerShell command on this Windows system. Returns stdout and stderr combined. Uses -NoProfile for fast startup. Default timeout: 30s.')
+    'Run a PowerShell command on this Windows system. Returns stdout, stderr, and exit code. Uses -NoProfile for fast startup. Default timeout: 30s.')
 }
