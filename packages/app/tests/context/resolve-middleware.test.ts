@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { createResolverMiddleware } from '../../src/context/resolve-middleware'
 import { NoopLogger } from '@chinmaymk/ra'
-import type { ModelCallContext } from '@chinmaymk/ra'
+import type { ModelCallContext, ContentPart } from '@chinmaymk/ra'
 import type { PatternResolver } from '../../src/context/resolvers'
 
 const logger = new NoopLogger()
@@ -14,7 +14,7 @@ const echoResolver: PatternResolver = {
   },
 }
 
-function makeCtx(messages: { role: string; content: string }[]): ModelCallContext {
+function makeCtx(messages: { role: string; content: string | ContentPart[] }[]): ModelCallContext {
   const controller = new AbortController()
   return {
     stop: () => controller.abort(),
@@ -163,5 +163,104 @@ describe('createResolverMiddleware', () => {
     // Content should still be resolved
     expect((ctx.request.messages[0]!.content as string)).toContain('content of config')
     expect((ctx.request.messages[1]!.content as string)).toContain('content of readme')
+  })
+
+  it('resolves references in system message with ContentPart[] content', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      {
+        role: 'system',
+        content: [
+          { type: 'text', text: 'You are helpful. See @config' },
+        ] as ContentPart[],
+      },
+      { role: 'user', content: 'hello' },
+    ])
+    await mw(ctx)
+    const parts = ctx.request.messages[0]!.content as ContentPart[]
+    expect(Array.isArray(parts)).toBe(true)
+    // Original text part preserved
+    expect(parts[0]).toEqual({ type: 'text', text: 'You are helpful. See @config' })
+    // Resolved content appended as new text part
+    const resolvedPart = parts[1] as { type: 'text'; text: string }
+    expect(resolvedPart.type).toBe('text')
+    expect(resolvedPart.text).toContain('<resolved-context ref="@config">')
+    expect(resolvedPart.text).toContain('content of config')
+  })
+
+  it('resolves references across multiple text parts in ContentPart[]', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      {
+        role: 'system',
+        content: [
+          { type: 'text', text: 'First part with @rules' },
+          { type: 'text', text: 'Second part with @config' },
+        ] as ContentPart[],
+      },
+      { role: 'user', content: 'hello' },
+    ])
+    await mw(ctx)
+    const parts = ctx.request.messages[0]!.content as ContentPart[]
+    // Original parts + one appended resolved part
+    expect(parts).toHaveLength(3)
+    const resolvedPart = parts[2] as { type: 'text'; text: string }
+    expect(resolvedPart.text).toContain('content of rules')
+    expect(resolvedPart.text).toContain('content of config')
+  })
+
+  it('skips already-resolved ContentPart[] system message on subsequent iterations', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      {
+        role: 'system',
+        content: [
+          { type: 'text', text: 'See @config' },
+        ] as ContentPart[],
+      },
+      { role: 'user', content: 'hello' },
+    ])
+    await mw(ctx)
+    const afterFirst = ctx.request.messages[0]!.content as ContentPart[]
+    expect(afterFirst).toHaveLength(2) // original + resolved
+
+    // Second call — should skip (marker present in appended part)
+    await mw(ctx)
+    const afterSecond = ctx.request.messages[0]!.content as ContentPart[]
+    expect(afterSecond).toEqual(afterFirst)
+  })
+
+  it('skips ContentPart[] with non-text parts (no text to resolve)', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      {
+        role: 'system',
+        content: [
+          { type: 'image', source: { type: 'url', url: 'https://example.com/img.png' } },
+        ] as ContentPart[],
+      },
+      { role: 'user', content: 'hello' },
+    ])
+    await mw(ctx)
+    const parts = ctx.request.messages[0]!.content as ContentPart[]
+    // Should remain unchanged — no text parts to resolve
+    expect(parts).toHaveLength(1)
+    expect(parts[0]!.type).toBe('image')
+  })
+
+  it('preserves _messageId for ContentPart[] system messages', async () => {
+    const mw = createResolverMiddleware([echoResolver], '/tmp')
+    const ctx = makeCtx([
+      {
+        role: 'system',
+        content: [{ type: 'text', text: 'See @config' }] as ContentPart[],
+      },
+      { role: 'user', content: 'hello' },
+    ])
+    ctx.request.messages[0]!._messageId = 'sys-parts-1'
+    await mw(ctx)
+    expect(ctx.request.messages[0]!._messageId).toBe('sys-parts-1')
+    const parts = ctx.request.messages[0]!.content as ContentPart[]
+    expect(parts).toHaveLength(2)
   })
 })
