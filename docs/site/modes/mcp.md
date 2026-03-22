@@ -8,36 +8,35 @@ Connect ra to external MCP servers. Their tools become available to the model au
 
 ```yaml
 # ra.config.yml
-agent:
-  mcp:
-    servers:
-      - name: filesystem
-        transport: stdio
-        command: npx
-        args: ["-y", "@anthropic/mcp-filesystem"]
-      - name: database
-        transport: sse
-        url: http://localhost:8080/mcp
-      - name: github
-        transport: stdio
-        command: npx
-        args: ["-y", "@modelcontextprotocol/server-github"]
-        env:
-          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+app:
+  mcpServers:
+    - name: filesystem
+      transport: stdio
+      command: npx
+      args: ["-y", "@anthropic/mcp-filesystem"]
+    - name: database
+      transport: sse
+      url: http://localhost:8080/mcp
+    - name: github
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
 ```
 
 To use only MCP tools (without built-in tools), disable them via the `tools` section:
 
 ```yaml
+app:
+  mcpServers:
+    - name: my-tools
+      transport: stdio
+      command: ./my-mcp-server
+
 agent:
   tools:
     builtin: false
-
-  mcp:
-    servers:
-      - name: my-tools
-        transport: stdio
-        command: ./my-mcp-server
 ```
 
 ### Server-prefixed tool names
@@ -70,22 +69,20 @@ This is especially effective when connecting to multiple MCP servers with many t
 
 ```yaml
 # ra.config.yml
-agent:
-  mcp:
-    lazySchemas: true   # default: true
+app:
+  mcpLazySchemas: true   # default: true
 ```
 
 To disable lazy loading and send full schemas every time (the pre-optimization behavior):
 
 ```yaml
-agent:
-  mcp:
-    lazySchemas: false
+app:
+  mcpLazySchemas: false
 ```
 
 | Field | Env var | Default | Description |
 |-------|---------|---------|-------------|
-| `agent.mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | `true` | Enable lazy schema loading for MCP tools |
+| `app.mcpLazySchemas` | `RA_MCP_LAZY_SCHEMAS` | `true` | Enable lazy schema loading for MCP tools |
 
 ## ra as MCP server
 

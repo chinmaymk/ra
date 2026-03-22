@@ -72,7 +72,7 @@ Or in a config file:
 app:
   providers:
     openai-completions:
-      baseUrl: https://api.together.xyz/v1
+      baseURL: https://api.together.xyz/v1
       apiKey: ${OPENAI_API_KEY}
 
 agent:

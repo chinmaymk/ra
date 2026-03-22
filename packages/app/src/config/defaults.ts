@@ -21,7 +21,9 @@ export const defaultConfig: RaConfig = {
       bedrock: { region: '${AWS_REGION:-us-east-1}' },
       azure: { endpoint: '${AZURE_OPENAI_ENDPOINT:-}', deployment: '${AZURE_OPENAI_DEPLOYMENT:-}', apiKey: '${AZURE_OPENAI_API_KEY:-}' },
     },
-    mcpServer: {
+    mcpServers: [],
+    mcpLazySchemas: true,
+    raMcpServer: {
       enabled: false,
       port: 3001,
       tool: {
@@ -50,10 +52,6 @@ export const defaultConfig: RaConfig = {
       maxResponseSize: 25000,
     },
     skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
-    mcp: {
-      servers: [],
-      lazySchemas: true,
-    },
     permissions: {},
     middleware: {},
     context: {

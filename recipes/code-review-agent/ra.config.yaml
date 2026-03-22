@@ -3,14 +3,6 @@ agent:
   model: ${MODEL:-claude-sonnet-4-6}
   skillDirs:
     - ./skills
-  mcp:
-    servers:
-      - name: github
-        transport: stdio
-        command: npx
-        args: ["-y", "@modelcontextprotocol/server-github"]
-        env:
-          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
   middleware:
     afterModelResponse:
       - ./middleware/token-budget.ts

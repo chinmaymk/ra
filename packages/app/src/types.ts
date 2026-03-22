@@ -11,7 +11,7 @@ export type {
   ProviderName,
   RaConfig,
   McpServerEntry,
-  McpServerConfig,
+  RaMcpServerConfig,
   LoadConfigOptions,
   ToolsConfig,
   ToolSettings,
