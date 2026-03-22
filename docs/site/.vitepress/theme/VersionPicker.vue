@@ -30,7 +30,6 @@ const filteredVersions = computed(() => {
 
 function versionUrl(version: string): string {
   if (version === 'dev') return withBase('/dev/')
-  if (versions.value && version === versions.value.latest) return withBase('/')
   return withBase(`/v/${version}/`)
 }
 
