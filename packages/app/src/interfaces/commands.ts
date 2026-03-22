@@ -92,11 +92,6 @@ export async function runSubCommand(cmd: SubCommand): Promise<void> {
   }
 }
 
-/** @deprecated Use runSubCommand instead */
-export const runSkillCommand = runSubCommand
-/** @deprecated Use runSubCommand instead */
-export const runRecipeCommand = runSubCommand
-
 /** Handle --show-context */
 export function showContext(contextMessages: IMessage[]): void {
   if (contextMessages.length === 0) {

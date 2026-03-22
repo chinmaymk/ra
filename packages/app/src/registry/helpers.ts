@@ -1,11 +1,24 @@
 import { join } from 'path'
-import { mkdirSync, rmSync } from 'fs'
+import { mkdirSync, cpSync, rmSync, writeFileSync } from 'fs'
 
 export interface SourceInfo {
   registry: 'npm' | 'github' | 'url'
   identifier: string
   version?: string
 }
+
+/** Source metadata written to .source.json for installed skills and recipes. */
+export interface RegistrySource {
+  registry: 'npm' | 'github' | 'url'
+  package?: string
+  repo?: string
+  url?: string
+  version?: string
+  installedAt: string
+}
+
+/** Config file names in priority order (YAML preferred). */
+export const CONFIG_FILES = ['ra.config.yaml', 'ra.config.yml', 'ra.config.json', 'ra.config.toml']
 
 /**
  * Parse a source string into a registry type and identifier.
@@ -98,4 +111,11 @@ export async function resolveNpmTarball(packageName: string, version: string | u
   if (!dist?.tarball) throw new Error(`npm: no tarball URL for "${packageName}@${resolvedVersion}"`)
 
   return { tarballUrl: dist.tarball, resolvedVersion }
+}
+
+/** Copy extracted content to target and write .source.json metadata. */
+export function copyAndWriteSource(sourceDir: string, targetDir: string, source: Omit<RegistrySource, 'installedAt'>): void {
+  mkdirSync(join(targetDir, '..'), { recursive: true })
+  cpSync(sourceDir, targetDir, { recursive: true })
+  writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
 }

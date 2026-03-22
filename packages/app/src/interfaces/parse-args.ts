@@ -8,11 +8,6 @@ export interface SubCommand {
   args: string[]
 }
 
-/** @deprecated Use SubCommand instead */
-export type SkillCommand = SubCommand
-/** @deprecated Use SubCommand instead */
-export type RecipeCommand = SubCommand
-
 export interface ParsedArgsMeta {
   help: boolean
   version: boolean

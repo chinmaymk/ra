@@ -4,20 +4,13 @@ import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
 import { interpolateEnvVars, coerceTypes } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
-import { resolveRecipePath } from '../recipes/registry'
+import { CONFIG_FILES } from '../registry/helpers'
 import { NoopLogger } from '@chinmaymk/ra'
 import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
 export { defaultConfig } from './defaults'
 export type { RaConfig, LoadConfigOptions, McpServerEntry, McpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
-
-const CONFIG_FILES = [
-  'ra.config.json',
-  'ra.config.yaml',
-  'ra.config.yml',
-  'ra.config.toml',
-]
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -211,18 +204,9 @@ function normalizeToolsSection(obj: Record<string, unknown>): void {
 
 // ── Recipe resolution helpers ───────────────────────────────────────
 
-/** Check if a string looks like a local path (as opposed to an owner/repo name). */
-function looksLikeLocalPath(value: string): boolean {
-  return /^(\.\.?[/\\]|[/\\]|~[/\\]|[A-Za-z]:[/\\])/.test(value)
-}
-
-/**
- * Resolve a recipe config file path from a name or local path.
- * Returns { configPath, recipeDir } or null if not found.
- */
+/** Resolve a recipe config file from an installed name or local path. */
 async function resolveRecipe(nameOrPath: string, cwd: string): Promise<{ configPath: string; recipeDir: string } | null> {
-  if (looksLikeLocalPath(nameOrPath)) {
-    // Local path — resolve and look for config file
+  if (looksLikePath(nameOrPath)) {
     const resolved = resolvePath(nameOrPath, cwd)
     for (const name of CONFIG_FILES) {
       const full = join(resolved, name)
@@ -230,36 +214,24 @@ async function resolveRecipe(nameOrPath: string, cwd: string): Promise<{ configP
     }
     return null
   }
-  // Installed recipe name
+  const { resolveRecipePath } = await import('../recipes/registry')
   const configPath = await resolveRecipePath(nameOrPath)
   return configPath ? { configPath, recipeDir: dirname(configPath) } : null
 }
 
-/**
- * Pre-resolve a recipe's relative paths against its directory so they survive merging.
- * Mutates the config in place.
- */
+/** Pre-resolve a recipe's relative paths against its directory so they survive merging. */
 function preResolveRecipePaths(agent: Record<string, unknown>, recipeDir: string): void {
-  // Resolve skillDirs
   if (Array.isArray(agent.skillDirs)) {
     agent.skillDirs = (agent.skillDirs as string[]).map(d => resolvePath(d, recipeDir))
   }
-
-  // Resolve systemPrompt file path
   if (typeof agent.systemPrompt === 'string' && looksLikePath(agent.systemPrompt, ['.txt', '.md'])) {
     agent.systemPrompt = resolvePath(agent.systemPrompt, recipeDir)
   }
-
-  // Resolve middleware file paths
   if (isPlainObject(agent.middleware)) {
     const mw = agent.middleware as Record<string, unknown>
     for (const [hook, entries] of Object.entries(mw)) {
       if (Array.isArray(entries)) {
-        mw[hook] = (entries as string[]).map(e =>
-          (e.startsWith('./') || e.startsWith('../') || e.startsWith('/'))
-            ? resolvePath(e, recipeDir)
-            : e,
-        )
+        mw[hook] = (entries as string[]).map(e => looksLikePath(e) ? resolvePath(e, recipeDir) : e)
       }
     }
   }

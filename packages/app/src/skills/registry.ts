@@ -1,7 +1,7 @@
 import { join, basename } from 'path'
-import { mkdirSync, cpSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, rmSync } from 'fs'
 import { homeDir, firstSegment } from '../utils/paths'
-import { parseSource, withTempExtract, findExtractedRoot, resolveNpmTarball } from '../registry/helpers'
+import { parseSource, withTempExtract, findExtractedRoot, resolveNpmTarball, copyAndWriteSource } from '../registry/helpers'
 import type { SkillSource } from './types'
 
 /** Default directory for installed skills */
@@ -9,15 +9,8 @@ export function defaultSkillInstallDir(): string {
   return join(homeDir(), '.ra', 'skills')
 }
 
-/**
- * Parse a skill source string into a registry type and identifier.
- * Skills default to npm for bare names (unlike recipes which default to github).
- */
-export function parseSkillSource(source: string) {
-  return parseSource(source)
-}
-
-// ── Skill-specific helpers ──────────────────────────────────────────
+/** @deprecated Use parseSource from registry/helpers instead */
+export const parseSkillSource = parseSource
 
 /** Find all directories containing a SKILL.md within a root directory (one level deep + skills/ convention). */
 async function findSkillDirsIn(root: string): Promise<string[]> {
@@ -45,19 +38,14 @@ async function installSkillDirs(
 
   for (const skillDir of skillDirs) {
     const skillName = basename(skillDir)
-    const targetDir = join(installDir, skillName)
-    cpSync(skillDir, targetDir, { recursive: true })
-    writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
+    copyAndWriteSource(skillDir, join(installDir, skillName), source)
     installed.push(skillName)
   }
 
   // Root-as-skill fallback: if no subdirectory skills found, check if root itself is a skill
   if (installed.length === 0 && rootFallbackName) {
-    const rootSkill = Bun.file(join(extractedRoot, 'SKILL.md'))
-    if (await rootSkill.exists()) {
-      const targetDir = join(installDir, rootFallbackName)
-      cpSync(extractedRoot, targetDir, { recursive: true })
-      writeFileSync(join(targetDir, '.source.json'), JSON.stringify({ ...source, installedAt: new Date().toISOString() }, null, 2))
+    if (await Bun.file(join(extractedRoot, 'SKILL.md')).exists()) {
+      copyAndWriteSource(extractedRoot, join(installDir, rootFallbackName), source)
       installed.push(rootFallbackName)
     }
   }
@@ -117,7 +105,7 @@ export async function installSkill(source: string, installDir?: string): Promise
   const dir = installDir ?? defaultSkillInstallDir()
   mkdirSync(dir, { recursive: true })
 
-  const parsed = parseSkillSource(source)
+  const parsed = parseSource(source)
   switch (parsed.registry) {
     case 'npm':
       return installFromNpm(parsed.identifier, parsed.version, dir)
