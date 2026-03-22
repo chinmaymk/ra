@@ -49,7 +49,11 @@ The config lives in your repo — skills, permissions, middleware — versioned 
 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
-app:
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  maxIterations: 50
+  thinking: medium
   skillDirs:
     - ./skills
   permissions:
@@ -58,15 +62,9 @@ app:
         command:
           allow: ["^git ", "^bun "]
           deny: ["--force", "--hard"]
-
-agent:
-  provider: anthropic
-  model: claude-sonnet-4-6
-  maxIterations: 50
-  thinking: medium
 ```
 
-Ra doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](https://chinmaymk.github.io/ra/middleware/) intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](https://chinmaymk.github.io/ra/observability/).
+Ra ships with a minimal default system prompt that you can override or replace entirely. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](https://chinmaymk.github.io/ra/middleware/) intercept every step — model calls, tool execution, streaming, all of it. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](https://chinmaymk.github.io/ra/observability/).
 
 It talks to [multiple providers](https://chinmaymk.github.io/ra/providers/anthropic/) — Anthropic, OpenAI, Google, Ollama, Bedrock, Azure. Switch with a flag or lock it in config. Use a local Ollama model for code that shouldn't leave your machine, a frontier model when you need the reasoning.
 
@@ -125,7 +123,7 @@ User message → [beforeLoopBegin]
   → [afterLoopIteration] → repeat or [afterLoopComplete]
 ```
 
-The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. [Context compaction](https://chinmaymk.github.io/ra/core/context-control/) kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context. [Extended thinking](https://chinmaymk.github.io/ra/core/context-control/) is supported at three budget levels (`low`, `medium`, `high`) for models that support it.
+The loop tracks token usage, enforces `maxIterations`, and any middleware can call `ctx.stop()` to halt it. [Context compaction](https://chinmaymk.github.io/ra/core/context-control/) kicks in automatically when conversations grow — summarizing older turns with a cheap model while preserving system prompts and recent context. [Extended thinking](https://chinmaymk.github.io/ra/core/context-control/) is supported at five levels (`off`, `low`, `medium`, `high`, `adaptive`) for models that support it — `adaptive` starts with high thinking and lowers it as the loop progresses.
 
 ## [Providers](https://chinmaymk.github.io/ra/providers/anthropic/)
 
@@ -165,7 +163,7 @@ agent:
 Control what tools can do with regex-based [allow/deny rules](https://chinmaymk.github.io/ra/permissions/):
 
 ```yaml
-app:
+agent:
   permissions:
     rules:
       - tool: Bash
@@ -217,7 +215,7 @@ Ra can run as an MCP server, turning any skill into a tool that Cursor, Claude D
 
 ```bash
 ra --mcp-stdio --skill code-review          # expose as a stdio MCP server
-ra --mcp --mcp-port 4000 --skill architect   # expose over HTTP
+ra --mcp --mcp-server-port 4000 --skill architect   # expose over HTTP
 ```
 
 Ra also speaks MCP as a client — connect to external MCP servers and their tools become available to the model alongside the built-in ones.
@@ -240,7 +238,8 @@ agent:
 Every model call, tool execution, and middleware hook emits structured events. Stream them to stdout, a file, or an external collector. When something goes wrong — or someone asks what the agent did — you have a complete, machine-readable trace.
 
 ```bash
-ra --log-level debug --log-file agent.log "Fix the failing test"
+ra --inspector                                   # web dashboard with full traces
+ra --show-config                                 # inspect resolved config
 ```
 
 Events include token usage, latency, tool inputs/outputs, and middleware decisions. Pair with the `afterLoopComplete` hook to ship traces to your observability stack.
@@ -352,24 +351,22 @@ Layered config — each layer overrides the previous.
 defaults → config file → env vars → CLI flags
 ```
 
-Supports YAML, JSON, and TOML config files (`ra.config.yml`, `ra.config.json`, `ra.config.toml`). Config is organized into `app` (infrastructure — skills, permissions, MCP, storage, observability) and `agent` (LLM behavior — provider, model, thinking, tools, middleware, compaction, context, memory).
+Supports YAML, JSON, and TOML config files (`ra.config.yml`, `ra.config.json`, `ra.config.toml`). Config is organized into `app` (infrastructure — MCP, storage, observability, provider credentials) and `agent` (LLM behavior — provider, model, thinking, tools, skills, permissions, middleware, compaction, context, memory).
 
 ```yaml
 # ra.config.yml — all sections are optional
-app:
-  skillDirs: [./skills]
-  permissions:
-    rules:
-      - tool: Bash
-        command:
-          allow: ["^git ", "^bun "]
-
 agent:
   provider: anthropic
   model: claude-sonnet-4-6
   systemPrompt: You are a helpful coding assistant.
   maxIterations: 50
   thinking: medium
+  skillDirs: [./skills]
+  permissions:
+    rules:
+      - tool: Bash
+        command:
+          allow: ["^git ", "^bun "]
   memory:
     enabled: true
   compaction:
