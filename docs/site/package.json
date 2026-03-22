@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
-    "preview": "vitepress preview"
+    "build:all": "./build-docs.sh",
+    "preview": "vitepress preview",
+    "preview:all": "./build-docs.sh preview"
   },
   "devDependencies": {
     "vitepress": "^1.6.3"
