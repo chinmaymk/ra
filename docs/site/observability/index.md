@@ -29,9 +29,9 @@ Structured JSONL log entries with timestamps, levels, and contextual data.
 ```jsonl
 {"timestamp":"2026-03-11T10:00:00.000Z","level":"info","message":"agent loop starting","maxIterations":50,"messageCount":1}
 {"timestamp":"2026-03-11T10:00:01.000Z","level":"info","message":"calling model","iteration":1,"model":"claude-sonnet-4-6","messageCount":1}
-{"timestamp":"2026-03-11T10:00:03.000Z","level":"info","message":"model responded","iteration":1,"inputTokens":1200,"outputTokens":350,"toolCallCount":1,"toolNames":["execute_bash"]}
-{"timestamp":"2026-03-11T10:00:04.000Z","level":"info","message":"executing tool","tool":"execute_bash","toolCallId":"call_abc"}
-{"timestamp":"2026-03-11T10:00:05.000Z","level":"info","message":"tool execution complete","tool":"execute_bash","toolCallId":"call_abc","resultLength":42}
+{"timestamp":"2026-03-11T10:00:03.000Z","level":"info","message":"model responded","iteration":1,"inputTokens":1200,"outputTokens":350,"toolCallCount":1,"toolNames":["Bash"]}
+{"timestamp":"2026-03-11T10:00:04.000Z","level":"info","message":"executing tool","tool":"Bash","toolCallId":"call_abc"}
+{"timestamp":"2026-03-11T10:00:05.000Z","level":"info","message":"tool execution complete","tool":"Bash","toolCallId":"call_abc","resultLength":42}
 {"timestamp":"2026-03-11T10:00:08.000Z","level":"info","message":"agent loop complete","iterations":2,"inputTokens":2400,"outputTokens":700,"totalMessages":5}
 ```
 
@@ -54,7 +54,7 @@ agent.loop
 
 ```jsonl
 {"type":"span","timestamp":"2026-03-11T10:00:03.000Z","traceId":"abc-123","spanId":"span-1","name":"agent.model_call","durationMs":1523.4,"status":"ok","attributes":{"model":"claude-sonnet-4-6","inputTokens":1200,"outputTokens":350,"toolCallCount":1}}
-{"type":"span","timestamp":"2026-03-11T10:00:05.000Z","traceId":"abc-123","spanId":"span-2","parentSpanId":"span-iter-1","name":"agent.tool_execution","durationMs":812.1,"status":"ok","attributes":{"tool":"execute_bash","resultLength":42}}
+{"type":"span","timestamp":"2026-03-11T10:00:05.000Z","traceId":"abc-123","spanId":"span-2","parentSpanId":"span-iter-1","name":"agent.tool_execution","durationMs":812.1,"status":"ok","attributes":{"tool":"Bash","resultLength":42}}
 ```
 
 ### Span attributes

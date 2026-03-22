@@ -50,12 +50,11 @@ The config lives in your repo — skills, permissions, middleware — versioned 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
 app:
-  skills:
-    - code-review
-    - architect
+  skillDirs:
+    - ./skills
   permissions:
     rules:
-      - tool: execute_bash
+      - tool: Bash
         command:
           allow: ["^git ", "^bun "]
           deny: ["--force", "--hard"]
@@ -169,11 +168,11 @@ Control what tools can do with regex-based [allow/deny rules](https://chinmaymk.
 app:
   permissions:
     rules:
-      - tool: execute_bash
+      - tool: Bash
         command:
           allow: ["^git ", "^bun "]
           deny: ["--force", "--hard", "--no-verify"]
-      - tool: write_file
+      - tool: Write
         path:
           deny: ["\\.env"]
 ```
@@ -361,7 +360,7 @@ app:
   skillDirs: [./skills]
   permissions:
     rules:
-      - tool: execute_bash
+      - tool: Bash
         command:
           allow: ["^git ", "^bun "]
 
