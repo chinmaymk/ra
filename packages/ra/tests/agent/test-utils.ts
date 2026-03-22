@@ -45,16 +45,13 @@ export function makeModelCallCtx(messages: import('@chinmaymk/ra').IMessage[], o
   const logger = new NoopLogger()
   const controller = new AbortController()
   const request: ChatRequest = { model: 'test', messages: [...messages], tools: [] }
-  const drain = () => {}
   return {
     stop: () => controller.abort(),
-    drain,
     signal: controller.signal,
     logger,
     request,
     loop: {
       stop: () => controller.abort(),
-      drain,
       signal: controller.signal,
       logger,
       messages,

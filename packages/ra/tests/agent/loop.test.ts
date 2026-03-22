@@ -224,7 +224,7 @@ describe('AgentLoop', () => {
     }
     const loop = new AgentLoop({
       provider: countProvider, tools: new ToolRegistry(),
-      middleware: { beforeLoopBegin: [async (ctx) => { ctx.stop() }] },
+      middleware: { beforeLoopBegin: [async (ctx) => { ctx.stop(undefined, { immediate: true }) }] },
     })
     const result = await loop.run([{ role: 'user', content: 'hi' }])
     expect(modelCalls).toBe(0)
@@ -244,7 +244,7 @@ describe('AgentLoop', () => {
     tools.register({ name: 'count', description: '', inputSchema: {}, execute: async () => { toolCalls++; return 'ok' } })
     const loop = new AgentLoop({
       provider, tools,
-      middleware: { afterModelResponse: [async (ctx) => { ctx.stop() }] },
+      middleware: { afterModelResponse: [async (ctx) => { ctx.stop(undefined, { immediate: true }) }] },
     })
     await loop.run([{ role: 'user', content: 'go' }])
     expect(toolCalls).toBe(0)

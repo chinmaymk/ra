@@ -40,6 +40,7 @@ export { createProvider, buildProviderConfig, type ProviderConfig } from './prov
 
 // ── Agent / middleware types ────────────────────────────────────────
 export type {
+  StopOptions,
   StoppableContext,
   LoopContext,
   ModelCallContext,

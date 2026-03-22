@@ -1,10 +1,14 @@
 import type { IToolCall, IToolResult, StreamChunk, IMessage, ChatRequest, TokenUsage } from '../providers/types'
 import type { Logger } from '../observability/logger'
 
+export interface StopOptions {
+  /** When true, abort immediately (cancel current stream/tool). When false (default), finish the current iteration then stop. */
+  immediate?: boolean
+}
+
 export interface StoppableContext {
-  stop: (reason?: string) => void
-  /** Request graceful shutdown: finish the current iteration, then stop. */
-  drain: (reason?: string) => void
+  /** Stop the loop. By default graceful: finishes the current iteration, then exits. Pass { immediate: true } to abort mid-stream. */
+  stop: (reason?: string, options?: StopOptions) => void
   signal: AbortSignal
   logger: Logger
 }

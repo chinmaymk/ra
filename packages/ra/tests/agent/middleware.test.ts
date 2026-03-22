@@ -8,7 +8,6 @@ function makeCtx(controller: AbortController): LoopContext {
   return {
     messages: [], iteration: 0, maxIterations: 10, sessionId: 'test', usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false, elapsedMs: 0,
     stop: () => controller.abort(),
-    drain: () => {},
     signal: controller.signal,
     logger,
   }

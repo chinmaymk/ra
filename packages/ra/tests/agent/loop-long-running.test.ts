@@ -184,8 +184,8 @@ describe('Token budget enforcement', () => {
   })
 })
 
-describe('Graceful drain', () => {
-  it('finishes the current iteration then stops when drain is called', async () => {
+describe('Graceful stop', () => {
+  it('finishes the current iteration then stops when stop is called', async () => {
     let iterationCount = 0
     const provider: IProvider = {
       name: 'mock',
@@ -207,7 +207,7 @@ describe('Graceful drain', () => {
       maxIterations: 100,
       middleware: {
         afterLoopIteration: [async (ctx) => {
-          if (ctx.iteration >= 2) ctx.drain('enough')
+          if (ctx.iteration >= 2) ctx.stop('enough')
         }],
       },
     })
@@ -218,7 +218,7 @@ describe('Graceful drain', () => {
     expect(result.iterations).toBe(2)
   })
 
-  it('drain does not abort the current stream — loop finishes normally', async () => {
+  it('graceful stop does not abort the current stream — loop finishes normally', async () => {
     const events: string[] = []
     const provider: IProvider = {
       name: 'mock',
@@ -237,7 +237,7 @@ describe('Graceful drain', () => {
       middleware: {
         beforeModelCall: [async (ctx) => {
           events.push('beforeModelCall')
-          ctx.drain('draining')
+          ctx.stop('draining')
         }],
         afterModelResponse: [async () => { events.push('afterModelResponse') }],
         afterLoopIteration: [async () => { events.push('afterLoopIteration') }],

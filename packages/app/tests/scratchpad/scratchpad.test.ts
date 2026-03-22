@@ -123,7 +123,7 @@ describe('scratchpad middleware', () => {
         resumed: false,
         elapsedMs: 0,
         stop: () => {},
-        drain: () => {},
+
         signal: new AbortController().signal,
         logger: { debug() {}, info() {}, warn() {}, error() {}, flush: async () => {} } as any,
       },

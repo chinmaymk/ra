@@ -40,7 +40,7 @@ test('ctx.stop(reason) includes stopReason in result', async () => {
     tools: new ToolRegistry(),
     model: 'test',
     middleware: {
-      beforeModelCall: [async (ctx) => { ctx.stop('token budget exceeded') }]
+      beforeModelCall: [async (ctx) => { ctx.stop('token budget exceeded', { immediate: true }) }]
     }
   })
 
@@ -56,7 +56,7 @@ test('stopReason is undefined when stop() called without reason', async () => {
     tools: new ToolRegistry(),
     model: 'test',
     middleware: {
-      beforeModelCall: [async (ctx) => { ctx.stop() }]
+      beforeModelCall: [async (ctx) => { ctx.stop(undefined, { immediate: true }) }]
     }
   })
 

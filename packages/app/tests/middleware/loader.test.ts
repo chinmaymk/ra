@@ -105,7 +105,7 @@ test('file middleware reads context properties', async () => {
   const mw = await loadMiddleware(config, cwd)
   const ctx: any = {
     iteration: 3, maxIterations: 10, sessionId: 'sess-abc',
-    messages: [], stop: () => {}, drain: () => {}, signal: new AbortController().signal,
+    messages: [], stop: () => {}, signal: new AbortController().signal,
   }
   await mw.beforeLoopBegin![0]!(ctx)
   expect(ctx.__saw).toBe('iter=3,max=10,sid=sess-abc')
@@ -117,7 +117,7 @@ test('file middleware calls stop() and observes signal', async () => {
   const ac = new AbortController()
   const ctx: any = {
     iteration: 0, maxIterations: 1, sessionId: 's', messages: [],
-    stop: () => ac.abort(), drain: () => {}, signal: ac.signal,
+    stop: () => ac.abort(), signal: ac.signal,
   }
   await mw.beforeLoopBegin![0]!(ctx)
   expect(ctx.__beforeStop).toBe(false)
@@ -131,7 +131,7 @@ test('file middleware mutates messages array', async () => {
   const messages: any[] = [{ role: 'user', content: 'original' }]
   const ctx: any = {
     iteration: 0, maxIterations: 1, sessionId: 's', messages,
-    stop: () => {}, drain: () => {}, signal: new AbortController().signal,
+    stop: () => {}, signal: new AbortController().signal,
   }
   await mw.beforeLoopBegin![0]!(ctx)
   expect(messages).toHaveLength(2)
@@ -145,7 +145,7 @@ test('inline middleware reads nested loop context', async () => {
   const mw = await loadMiddleware(config, cwd)
   const ctx: any = {
     request: {}, loop: { sessionId: 'x', iteration: 5, messages: [], maxIterations: 10 },
-    stop: () => {}, drain: () => {}, signal: new AbortController().signal,
+    stop: () => {}, signal: new AbortController().signal,
   }
   await mw.beforeModelCall![0]!(ctx)
   expect(ctx.__nested).toBe('x:5')

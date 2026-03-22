@@ -36,7 +36,7 @@ test('inline middleware is called during loop run', async () => {
 
 test('inline middleware ctx.stop() halts the loop', async () => {
   const config = withMiddleware({
-    beforeModelCall: [`async (ctx) => { ctx.stop() }`],
+    beforeModelCall: [`async (ctx) => { ctx.stop(undefined, { immediate: true }) }`],
   })
   const mw = await loadMiddleware(config, process.cwd())
   const loop = new AgentLoop({

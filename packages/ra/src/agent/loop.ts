@@ -1,6 +1,6 @@
 import { errorMessage, withRetry } from '../utils/errors'
 import type { IProvider, IMessage, IToolCall, TokenUsage, ToolExecuteOptions } from '../providers/types'
-import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext, ProgressInfo, CheckpointEvent } from './types'
+import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext, StopOptions, ProgressInfo, CheckpointEvent } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
@@ -137,22 +137,21 @@ export class AgentLoop {
     let draining = false
     const startTime = Date.now()
 
-    const stop = (reason?: string) => {
+    const stop = (reason?: string, options?: StopOptions) => {
       stoppedInternally = true
       stopReason = reason
-      if (reason) this.logger.info('loop stopped', { reason })
-      controller.abort()
-    }
-
-    const drain = (reason?: string) => {
-      draining = true
-      stopReason = reason ?? 'drain'
-      this.logger.info('loop draining', { reason: stopReason })
+      if (options?.immediate) {
+        if (reason) this.logger.info('loop stopped immediately', { reason })
+        controller.abort()
+      } else {
+        draining = true
+        if (reason) this.logger.info('loop stopping', { reason })
+      }
     }
 
     const { signal } = controller
 
-    const stoppable: StoppableContext = { stop, drain, signal, logger: this.logger }
+    const stoppable: StoppableContext = { stop, signal, logger: this.logger }
 
     const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
     let lastUsage: TokenUsage | undefined
@@ -175,9 +174,9 @@ export class AgentLoop {
       if (signal.aborted) return { messages, iterations, usage, ...(stopReason && { stopReason }) }
 
       while (iterations < this.maxIterations) {
-        // Check drain flag at iteration boundary
+        // Check graceful stop flag at iteration boundary
         if (draining) {
-          this.logger.info('loop drained', { iteration: iterations, reason: stopReason })
+          this.logger.info('loop stopped gracefully', { iteration: iterations, reason: stopReason })
           break
         }
 
