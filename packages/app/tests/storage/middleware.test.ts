@@ -5,7 +5,7 @@ import { createHistoryMiddleware } from '../../src/storage/middleware'
 import { createResolverMiddleware } from '../../src/context/resolve-middleware'
 import { createSessionMiddleware } from '../../src/agent/session'
 import { mergeMiddleware, AgentLoop, ToolRegistry } from '@chinmaymk/ra'
-import type { IProvider, IMessage } from '@chinmaymk/ra'
+import type { IProvider, IMessage, ModelCallContext } from '@chinmaymk/ra'
 import type { PatternResolver } from '../../src/context/resolvers'
 import { mockProvider, mockSequenceProvider } from '../fixtures'
 import { tmpdir } from '../tmpdir'
@@ -282,7 +282,7 @@ describe('SessionHistoryMiddleware', () => {
 
     // Middleware that replaces the system message object (simulating resolver spread)
     let modelCallCount = 0
-    const replacer = async (ctx: any) => {
+    const replacer = async (ctx: ModelCallContext) => {
       modelCallCount++
       if (modelCallCount === 1) {
         const msgs = ctx.request.messages
@@ -290,7 +290,7 @@ describe('SessionHistoryMiddleware', () => {
         if (sys?.role === 'system') {
           // Replace with a NEW object (spread) — simulates resolver middleware.
           // The _messageId should be copied, preventing duplicate storage.
-          msgs[0] = { ...sys, content: sys.content + '\n[resolved]' }
+          msgs[0] = { ...sys, content: (sys.content as string) + '\n[resolved]' }
         }
       }
     }

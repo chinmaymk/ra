@@ -158,8 +158,8 @@ describe('createResolverMiddleware', () => {
 
     // _messageId must survive even if the resolver creates a new object
     // (via spread). The history middleware tracks by ID, not object identity.
-    expect((ctx.request.messages[0] as { _messageId?: string })._messageId).toBe('sys-1')
-    expect((ctx.request.messages[1] as { _messageId?: string })._messageId).toBe('usr-1')
+    expect(ctx.request.messages[0]!._messageId).toBe('sys-1')
+    expect(ctx.request.messages[1]!._messageId).toBe('usr-1')
     // Content should still be resolved
     expect((ctx.request.messages[0]!.content as string)).toContain('content of config')
     expect((ctx.request.messages[1]!.content as string)).toContain('content of readme')

@@ -99,12 +99,9 @@ describe('Agentic flow integration', () => {
       expect(msg._messageId).toBeUndefined()
     }
 
-    // Exact role sequence: user(hello) → assistant(first) → user(follow up)
     // Anthropic mergeConsecutiveRoles may merge adjacent user messages from
-    // context injection, so extract only assistant messages to check count
-    const roles = messages.map(m => m.role)
-    const assistantCount = roles.filter(r => r === 'assistant').length
-    expect(assistantCount).toBe(1) // exactly one prior assistant turn
+    // context injection, so check assistant count to verify no duplication
+    expect(messages.filter(m => m.role === 'assistant')).toHaveLength(1)
 
     // Both user messages must appear exactly once in the conversation
     const allContent = JSON.stringify(messages)
@@ -247,13 +244,13 @@ describe('Agentic flow integration', () => {
 
     // Verify the model request for turn 2 also has no duplicate messages
     const turn2Req = env.mock.requests()[0]?.body as Record<string, unknown>
-    const turn2Messages = (turn2Req?.messages ?? []) as { role: string; content: unknown }[]
+    const turn2Messages = (turn2Req?.messages ?? []) as { role: string; content: unknown; _messageId?: string }[]
     const turn2AssistantMsgs = turn2Messages.filter(m => m.role === 'assistant')
     expect(turn2AssistantMsgs).toHaveLength(1) // only one assistant turn from prior history
 
     // _messageId must NOT leak to the provider
     for (const msg of turn2Messages) {
-      expect((msg as any)._messageId).toBeUndefined()
+      expect(msg._messageId).toBeUndefined()
     }
   })
 
