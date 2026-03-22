@@ -74,7 +74,6 @@ export class SessionStorage {
     if (messages.length === 0) return
     const data = messages.map(m => JSON.stringify(m)).join('\n') + '\n'
     await appendFile(join(this.sessionDir(id), 'messages.jsonl'), data)
-    this.logger.debug('messages persisted', { sessionId: id, messageCount: messages.length })
   }
 
   async readMessages(id: string): Promise<IMessage[]> {
