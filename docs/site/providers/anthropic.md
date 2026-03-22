@@ -65,7 +65,7 @@ Or in a config file:
 app:
   providers:
     anthropic:
-      baseUrl: https://my-proxy.example.com/v1
+      baseURL: https://my-proxy.example.com/v1
 ```
 
 ## See also
