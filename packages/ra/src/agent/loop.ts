@@ -1,5 +1,5 @@
 import { errorMessage, withRetry } from '../utils/errors'
-import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
+import type { IProvider, IMessage, IToolCall, TokenUsage, ThinkingMode, ThinkingLevel } from '../providers/types'
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
@@ -16,7 +16,9 @@ export interface AgentLoopOptions {
   model?: string
   middleware?: Partial<MiddlewareConfig>
   sessionId?: string
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingMode
+  /** Absolute cap on thinking budget tokens sent to the provider. */
+  thinkingBudgetCap?: number
   compaction?: CompactionConfig
   toolTimeout?: number
   logger?: Logger
@@ -47,6 +49,14 @@ const DEFAULT_MAX_ITERATIONS = 10
 const DEFAULT_MAX_RETRIES = 3
 const MAX_COMPACTION_RETRIES = 3
 const DEFAULT_MAX_TOOL_RESPONSE_SIZE = 25_000
+const ADAPTIVE_HIGH_TURNS = 5
+
+/** Resolve a ThinkingMode to the concrete ThinkingLevel for a given iteration. */
+export function resolveThinking(mode: ThinkingMode | undefined, iteration: number): ThinkingLevel | undefined {
+  if (!mode || mode === 'off') return undefined
+  if (mode === 'adaptive') return iteration <= ADAPTIVE_HIGH_TURNS ? 'high' : 'low'
+  return mode
+}
 
 /** Truncate tool output that exceeds maxChars, appending a notice for the model. */
 export function truncateToolOutput(content: string, maxChars: number): string {
@@ -67,7 +77,8 @@ export class AgentLoop {
   private model: string
   private middleware: MiddlewareConfig
   private sessionId: string
-  private thinking: 'low' | 'medium' | 'high' | undefined
+  private thinking: ThinkingMode | undefined
+  private thinkingBudgetCap: number | undefined
   private toolTimeout: number
   private logger: Logger
   private compactionConfig: CompactionConfig | undefined
@@ -85,6 +96,7 @@ export class AgentLoop {
     this.sessionId = options.sessionId ?? randomUUID()
     this.middleware = { ...emptyMiddleware(), ...options.middleware }
     this.thinking = options.thinking
+    this.thinkingBudgetCap = options.thinkingBudgetCap
     this.toolTimeout = options.toolTimeout ?? 0
     this.logger = options.logger ?? new NoopLogger()
     this.resumed = options.resumed ?? false
@@ -137,11 +149,13 @@ export class AgentLoop {
         iterations++
         this.logger.debug('iteration starting', { iteration: iterations, messageCount: messages.length })
 
+        const resolved = resolveThinking(this.thinking, iterations)
         const request = {
           model: this.model,
           messages,
           tools: this.tools.all(),
-          ...(this.thinking && { thinking: this.thinking }),
+          ...(resolved && { thinking: resolved }),
+          ...(resolved && this.thinkingBudgetCap && { thinkingBudgetCap: this.thinkingBudgetCap }),
           signal,
         }
         const modelCallCtx: ModelCallContext = { ...stoppable, request, loop: loopCtx() }
@@ -247,9 +261,10 @@ export class AgentLoop {
       // Attempt recovery via compaction when a provider rejects due to context length.
       if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err) && _compactionRetries < MAX_COMPACTION_RETRIES) {
         this.logger.info('context length exceeded, attempting compaction recovery', { attempt: _compactionRetries + 1, maxRetries: MAX_COMPACTION_RETRIES })
+        const recoveryThinking = resolveThinking(this.thinking, iterations)
         const modelCallCtx: ModelCallContext = {
           ...stoppable,
-          request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }), signal },
+          request: { model: this.model, messages, tools: this.tools.all(), ...(recoveryThinking && { thinking: recoveryThinking }), ...(recoveryThinking && this.thinkingBudgetCap && { thinkingBudgetCap: this.thinkingBudgetCap }), signal },
           loop: loopCtx(),
         }
         const compacted = await forceCompact(this.provider, this.compactionConfig, modelCallCtx)

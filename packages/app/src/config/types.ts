@@ -2,6 +2,7 @@ import type { ContextConfig } from '../context/types'
 import type {
   LogLevel,
   ProviderName,
+  ThinkingMode,
   AnthropicProviderOptions,
   OpenAIProviderOptions,
   GoogleProviderOptions,
@@ -86,7 +87,9 @@ export interface AppConfig {
 export interface AgentConfig {
   provider: ProviderName
   model: string
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingMode
+  /** Absolute cap on thinking budget tokens. When set, providers use min(levelBudget, cap). */
+  thinkingBudgetCap?: number
   systemPrompt: string
   maxIterations: number
   maxRetries: number

@@ -15,6 +15,7 @@ import {
   type CompactionConfig,
   type Logger,
   type LogLevel,
+  type ThinkingMode,
 } from '@chinmaymk/ra'
 import { fileToContentPart } from '../utils/files'
 import type { SessionStorage } from '../storage/sessions'
@@ -41,7 +42,8 @@ export interface ReplOptions {
   maxToolResponseSize?: number
   sessionId?: string
   resumed?: boolean
-  thinking?: 'low' | 'medium' | 'high'
+  thinking?: ThinkingMode
+  thinkingBudgetCap?: number
   compaction?: CompactionConfig
   contextMessages?: IMessage[]
   memoryStore?: MemoryStore
@@ -210,6 +212,7 @@ export class Repl {
       maxToolResponseSize: this.options.maxToolResponseSize,
       sessionId: this.sessionId,
       thinking: this.options.thinking,
+      thinkingBudgetCap: this.options.thinkingBudgetCap,
       compaction: this.options.compaction,
       logger: session.logger,
       middleware: mergeMiddleware(tuiHooks, session.middleware),

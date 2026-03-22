@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI, type Content, type Part, type Tool as GeminiTool, type GenerateContentResponse } from '@google/generative-ai'
 import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent } from './utils'
-import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
+import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage, ThinkingLevel } from './types'
 
 const THINKING_BUDGETS_GOOGLE = { low: 1024, medium: 8192, high: 24576 } as const
 
@@ -50,14 +50,16 @@ export class GoogleProvider implements IProvider {
     return { inputTokens: meta.promptTokenCount ?? 0, outputTokens: meta.candidatesTokenCount ?? 0 }
   }
 
-  private buildGenerationConfig(thinking?: 'low' | 'medium' | 'high'): Record<string, unknown> | undefined {
+  private buildGenerationConfig(thinking?: ThinkingLevel, budgetCap?: number): Record<string, unknown> | undefined {
     if (!thinking) return undefined
-    return { thinkingConfig: { thinkingBudget: THINKING_BUDGETS_GOOGLE[thinking] } }
+    const base = THINKING_BUDGETS_GOOGLE[thinking]
+    const budget = budgetCap ? Math.min(base, budgetCap) : base
+    return { thinkingConfig: { thinkingBudget: budget } }
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const { model, contents, tools } = this.buildModel(request)
-    const generationConfig = this.buildGenerationConfig(request.thinking)
+    const generationConfig = this.buildGenerationConfig(request.thinking, request.thinkingBudgetCap)
     const result = await model.generateContent({
       contents,
       ...(tools && { tools }),
@@ -71,7 +73,7 @@ export class GoogleProvider implements IProvider {
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
     const { model, contents, tools } = this.buildModel(request)
-    const generationConfig = this.buildGenerationConfig(request.thinking)
+    const generationConfig = this.buildGenerationConfig(request.thinking, request.thinkingBudgetCap)
     const result = await model.generateContentStream(
       {
         contents,
