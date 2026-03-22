@@ -39,7 +39,30 @@ export async function resolveRecipePath(name: string, installDir?: string): Prom
 
 // ── Registry installers ─────────────────────────────────────────────
 
-async function installFromGithub(repo: string, installDir: string): Promise<string> {
+/** Find recipe directories inside an extracted root (checks recipes/ subdirectory, then root). */
+async function findRecipeDirsIn(root: string): Promise<Array<{ name: string; dir: string }>> {
+  const results: Array<{ name: string; dir: string }> = []
+
+  // Multi-recipe repo: recipes/<name>/ra.config.*
+  const recipesDir = join(root, 'recipes')
+  try {
+    for await (const rel of new Bun.Glob('*/ra.config.{yaml,yml,json,toml}').scan({ cwd: recipesDir, onlyFiles: true })) {
+      const name = rel.split(/[/\\]/)[0] as string
+      if (!results.some(r => r.name === name)) {
+        results.push({ name, dir: join(recipesDir, name) })
+      }
+    }
+  } catch { /* no recipes/ dir */ }
+
+  // Fallback: root itself has a config file (single-recipe repo)
+  if (results.length === 0 && await findConfigFile(root)) {
+    results.push({ name: '', dir: root })
+  }
+
+  return results
+}
+
+async function installFromGithub(repo: string, installDir: string): Promise<string[]> {
   const [owner, name] = repo.split('/')
   if (!owner || !name) throw new Error(`github: invalid repo format "${repo}", expected "owner/repo"`)
 
@@ -47,44 +70,62 @@ async function installFromGithub(repo: string, installDir: string): Promise<stri
 
   return withTempExtract(installDir, tarballUrl, 'github', async (tmpDir) => {
     const extractedRoot = await findExtractedRoot(tmpDir)
-    if (!await findConfigFile(extractedRoot)) throw new Error(`github: no ra.config.{yaml,yml,json,toml} found in "${repo}"`)
+    const recipeDirs = await findRecipeDirsIn(extractedRoot)
+    if (recipeDirs.length === 0) throw new Error(`github: no recipes found in "${repo}"`)
 
-    copyAndWriteSource(extractedRoot, join(installDir, owner, name), { registry: 'github', repo })
-    return `${owner}/${name}`
+    const installed: string[] = []
+    for (const recipe of recipeDirs) {
+      const recipeName = recipe.name ? `${owner}/${recipe.name}` : `${owner}/${name}`
+      copyAndWriteSource(recipe.dir, join(installDir, ...recipeName.split('/')), { registry: 'github', repo })
+      installed.push(recipeName)
+    }
+    return installed
   })
 }
 
-async function installFromNpm(packageName: string, version: string | undefined, installDir: string): Promise<string> {
+async function installFromNpm(packageName: string, version: string | undefined, installDir: string): Promise<string[]> {
   const { tarballUrl, resolvedVersion } = await resolveNpmTarball(packageName, version)
   const recipeName = packageName.startsWith('@') ? packageName.slice(1) : packageName
 
   return withTempExtract(installDir, tarballUrl, 'npm', async (tmpDir) => {
     const packageDir = join(tmpDir, 'package')
-    if (!await findConfigFile(packageDir)) throw new Error(`npm: no ra.config.{yaml,yml,json,toml} found in "${packageName}@${resolvedVersion}"`)
+    const recipeDirs = await findRecipeDirsIn(packageDir)
+    if (recipeDirs.length === 0) throw new Error(`npm: no recipes found in "${packageName}@${resolvedVersion}"`)
 
-    copyAndWriteSource(packageDir, join(installDir, recipeName), { registry: 'npm', package: packageName, version: resolvedVersion })
-    return recipeName
+    const installed: string[] = []
+    for (const recipe of recipeDirs) {
+      const name = recipe.name ? `${recipeName}/${recipe.name}` : recipeName
+      copyAndWriteSource(recipe.dir, join(installDir, ...name.split('/')), { registry: 'npm', package: packageName, version: resolvedVersion })
+      installed.push(name)
+    }
+    return installed
   })
 }
 
-async function installFromUrl(url: string, installDir: string): Promise<string> {
+async function installFromUrl(url: string, installDir: string): Promise<string[]> {
   return withTempExtract(installDir, url, 'url', async (tmpDir) => {
     const extractedRoot = await findExtractedRoot(tmpDir)
-    if (!await findConfigFile(extractedRoot)) throw new Error(`url: no ra.config.{yaml,yml,json,toml} found at "${url}"`)
+    const recipeDirs = await findRecipeDirsIn(extractedRoot)
+    if (recipeDirs.length === 0) throw new Error(`url: no recipes found at "${url}"`)
 
     const segments = new URL(url).pathname.split('/').filter(Boolean)
-    const recipeName = segments.length >= 2
+    const baseName = segments.length >= 2
       ? `${segments[segments.length - 2]}/${segments[segments.length - 1]}`.replace(/\.tar\.gz$|\.tgz$/, '')
       : segments[segments.length - 1]?.replace(/\.tar\.gz$|\.tgz$/, '') ?? 'recipe'
 
-    copyAndWriteSource(extractedRoot, join(installDir, recipeName), { registry: 'url', url })
-    return recipeName
+    const installed: string[] = []
+    for (const recipe of recipeDirs) {
+      const recipeName = recipe.name ? `${baseName}/${recipe.name}` : baseName
+      copyAndWriteSource(recipe.dir, join(installDir, ...recipeName.split('/')), { registry: 'url', url })
+      installed.push(recipeName)
+    }
+    return installed
   })
 }
 
 // ── Public API ──────────────────────────────────────────────────────
 
-export async function installRecipe(source: string, installDir?: string): Promise<string> {
+export async function installRecipe(source: string, installDir?: string): Promise<string[]> {
   const dir = installDir ?? defaultRecipeInstallDir()
   mkdirSync(dir, { recursive: true })
 

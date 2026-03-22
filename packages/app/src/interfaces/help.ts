@@ -80,15 +80,18 @@ RECIPE MANAGEMENT
   ra recipe list                      List installed recipes
 
   Sources:
-    ra recipe install user/repo              GitHub repository (default for owner/repo)
+    ra recipe install user/repo              GitHub repo with recipes/ folder
     ra recipe install npm:ra-recipe-foo      npm package
     ra recipe install github:user/repo       GitHub (explicit)
 
+  Repos should contain a recipes/ folder with subdirectories, each having
+  a ra.config.{yaml,yml,json,toml}. Falls back to root-level config.
+
   Usage:
-    ra --recipe user/repo "prompt"           Use installed recipe
+    ra --recipe owner/recipe-name "prompt"   Use installed recipe
     ra --recipe ./local/recipe "prompt"      Use local recipe directory
     agent:
-      recipe: user/repo                      Reference in ra.config.yaml
+      recipe: owner/recipe-name              Reference in ra.config.yaml
 
 ENV VARS
   Config files and defaults support Docker Compose–style interpolation:
