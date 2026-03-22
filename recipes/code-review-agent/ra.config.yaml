@@ -11,11 +11,11 @@ app:
         command: npx
         args: ["-y", "@modelcontextprotocol/server-github"]
         env:
-          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
 
 agent:
-  provider: anthropic
-  model: claude-sonnet-4-6
+  provider: ${PROVIDER:-anthropic}
+  model: ${MODEL:-claude-sonnet-4-6}
   middleware:
     afterModelResponse:
       - ./middleware/token-budget.ts

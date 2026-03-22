@@ -74,20 +74,20 @@ SKILL MANAGEMENT
     ra skill install https://example.com/s.tgz  URL tarball
 
 ENV VARS
-  RA_PROVIDER, RA_MODEL, RA_INTERFACE, RA_SYSTEM_PROMPT, RA_MAX_ITERATIONS
-  RA_HTTP_PORT, RA_HTTP_TOKEN
-  RA_MCP_SERVER_ENABLED, RA_MCP_SERVER_PORT
-  RA_MCP_SERVER_TOOL_NAME, RA_MCP_SERVER_TOOL_DESCRIPTION
-  RA_DATA_DIR, RA_STORAGE_MAX_SESSIONS, RA_STORAGE_TTL_DAYS
-  RA_SKILL_DIRS=dir1,dir2  RA_SKILLS=skill1,skill2
-  RA_ANTHROPIC_API_KEY, RA_ANTHROPIC_BASE_URL
-  RA_OPENAI_API_KEY, RA_OPENAI_BASE_URL
-  RA_GOOGLE_API_KEY, RA_OLLAMA_HOST
-  RA_BUILTIN_TOOLS
-  RA_THINKING
-  RA_MEMORY_ENABLED, RA_MEMORY_MAX_MEMORIES
-  RA_MEMORY_TTL_DAYS, RA_MEMORY_INJECT_LIMIT
-  RA_LOGS_ENABLED, RA_LOG_LEVEL, RA_TRACES_ENABLED
+  Config files and defaults support Docker Compose–style interpolation:
+    \${VAR}              required — errors if unset
+    \${VAR:-default}     use default if unset or empty
+    \${VAR-default}      use default if unset
+
+  Provider API keys are resolved from standard env vars by default:
+    ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY
+    OLLAMA_HOST, AWS_REGION
+    AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_API_KEY
+
+  To override any config field via env, use \${} in ra.config.yml:
+    agent:
+      model: \${MODEL:-claude-sonnet-4-6}
+      maxIterations: \${MAX_ITERS:-50}
 
 STDIN
   When input is piped, ra reads stdin and auto-switches to CLI mode.

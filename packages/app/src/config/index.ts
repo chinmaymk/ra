@@ -2,7 +2,7 @@ import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath } from '../utils/paths'
-import { applyRule, type CoercionRule } from '../utils/config-helpers'
+import { interpolateEnvVars, coerceTypes } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
 import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
 
@@ -58,64 +58,6 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
   if (path.endsWith('.yaml') || path.endsWith('.yml')) return yaml.load(content) as Partial<RaConfig>
   if (path.endsWith('.toml')) return parseToml(content) as Partial<RaConfig>
   return {}
-}
-
-const ENV_RULES: Record<string, CoercionRule> = {
-  // ── app section ──────────────────────────────────────────────────────
-  RA_DATA_DIR:       { type: 'string', path: ['app', 'dataDir'] },
-  RA_INTERFACE:      { type: 'string', path: ['app', 'interface'] },
-  RA_HTTP_PORT:      { type: 'int',    path: ['app', 'http', 'port'] },
-  RA_HTTP_TOKEN:     { type: 'string', path: ['app', 'http', 'token'] },
-  RA_STORAGE_MAX_SESSIONS: { type: 'int',    path: ['app', 'storage', 'maxSessions'] },
-  RA_STORAGE_TTL_DAYS:     { type: 'int',    path: ['app', 'storage', 'ttlDays'] },
-  RA_SKILL_DIRS:           { type: 'csv',    path: ['app', 'skillDirs'] },
-  RA_MCP_SERVER_ENABLED:          { type: 'bool',   path: ['app', 'mcp', 'server', 'enabled'] },
-  RA_MCP_SERVER_PORT:             { type: 'int',    path: ['app', 'mcp', 'server', 'port'] },
-  RA_MCP_SERVER_TOOL_NAME:        { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'name'] },
-  RA_MCP_SERVER_TOOL_DESCRIPTION: { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'description'] },
-  RA_MCP_LAZY_SCHEMAS:            { type: 'bool',   path: ['app', 'mcp', 'lazySchemas'] },
-  RA_LOGS_ENABLED:      { type: 'bool',   path: ['app', 'logsEnabled'] },
-  RA_LOG_LEVEL:         { type: 'enum',   path: ['app', 'logLevel'], values: ['debug', 'info', 'warn', 'error'] },
-  RA_TRACES_ENABLED:    { type: 'bool',   path: ['app', 'tracesEnabled'] },
-  // ── agent section ────────────────────────────────────────────────────
-  RA_PROVIDER:       { type: 'string', path: ['agent', 'provider'] },
-  RA_MODEL:          { type: 'string', path: ['agent', 'model'] },
-  RA_SYSTEM_PROMPT:  { type: 'string', path: ['agent', 'systemPrompt'] },
-  RA_MAX_ITERATIONS: { type: 'int',    path: ['agent', 'maxIterations'] },
-  RA_MAX_RETRIES:    { type: 'int',    path: ['agent', 'maxRetries'] },
-  RA_THINKING:       { type: 'enum',   path: ['agent', 'thinking'], values: ['low', 'medium', 'high'] },
-  RA_TOOL_TIMEOUT:   { type: 'int',    path: ['agent', 'toolTimeout'] },
-  RA_MAX_TOOL_RESPONSE_SIZE: { type: 'int', path: ['agent', 'tools', 'maxResponseSize'] },
-  RA_TOOLS_BUILTIN:  { type: 'bool',   path: ['agent', 'tools', 'builtin'] },
-  RA_MEMORY_ENABLED:      { type: 'bool',   path: ['agent', 'memory', 'enabled'] },
-  RA_MEMORY_MAX_MEMORIES: { type: 'int',    path: ['agent', 'memory', 'maxMemories'] },
-  RA_MEMORY_TTL_DAYS:     { type: 'int',    path: ['agent', 'memory', 'ttlDays'] },
-  RA_MEMORY_INJECT_LIMIT: { type: 'int',    path: ['agent', 'memory', 'injectLimit'] },
-  // Provider credentials (env-only — not CLI flags, to avoid leaking in process list/shell history)
-  RA_ANTHROPIC_API_KEY:  { type: 'string', path: ['app', 'providers', 'anthropic', 'apiKey'] },
-  RA_ANTHROPIC_BASE_URL: { type: 'string', path: ['app', 'providers', 'anthropic', 'baseURL'] },
-  RA_OPENAI_API_KEY:     { type: 'string', path: ['app', 'providers', 'openai', 'apiKey'] },
-  RA_OPENAI_BASE_URL:    { type: 'string', path: ['app', 'providers', 'openai', 'baseURL'] },
-  RA_OPENAI_COMPLETIONS_API_KEY:  { type: 'string', path: ['app', 'providers', 'openai-completions', 'apiKey'] },
-  RA_OPENAI_COMPLETIONS_BASE_URL: { type: 'string', path: ['app', 'providers', 'openai-completions', 'baseURL'] },
-  RA_GOOGLE_API_KEY:     { type: 'string', path: ['app', 'providers', 'google', 'apiKey'] },
-  RA_GOOGLE_BASE_URL:    { type: 'string', path: ['app', 'providers', 'google', 'baseURL'] },
-  RA_OLLAMA_HOST:        { type: 'string', path: ['app', 'providers', 'ollama', 'host'] },
-  RA_BEDROCK_REGION:     { type: 'string', path: ['app', 'providers', 'bedrock', 'region'] },
-  RA_BEDROCK_API_KEY:    { type: 'string', path: ['app', 'providers', 'bedrock', 'apiKey'] },
-  RA_AZURE_API_KEY:      { type: 'string', path: ['app', 'providers', 'azure', 'apiKey'] },
-  RA_AZURE_ENDPOINT:     { type: 'string', path: ['app', 'providers', 'azure', 'endpoint'] },
-  RA_AZURE_DEPLOYMENT:   { type: 'string', path: ['app', 'providers', 'azure', 'deployment'] },
-  RA_AZURE_API_VERSION:  { type: 'string', path: ['app', 'providers', 'azure', 'apiVersion'] },
-}
-
-function loadEnvVars(env: Record<string, string | undefined>): Record<string, unknown> {
-  const r: Record<string, unknown> = {}
-  for (const [key, rule] of Object.entries(ENV_RULES)) {
-    const val = env[key]
-    if (val !== undefined) applyRule(r, rule, val)
-  }
-  return r
 }
 
 // Keys that belong under `agent` when found at the top level (legacy flat config)
@@ -211,22 +153,25 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<RaCon
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
 
-  const { config: fileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
+  const { config: rawFileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
   const configDir = configFilePath ? dirname(configFilePath) : cwd
-  const envConfig = loadEnvVars(env)
-  const cliArgs = options.cliArgs ?? {}
 
-  // Migrate legacy flat config keys into app/agent sections, then normalize tools
-  const layers = [fileConfig, envConfig, cliArgs] as Record<string, unknown>[]
-  for (const layer of layers) {
+  const rawDefaults = JSON.parse(JSON.stringify(defaultConfig))
+  const fileConfig = interpolateEnvVars(rawFileConfig, env) as Record<string, unknown>
+  const cliArgs = (options.cliArgs ?? {}) as Record<string, unknown>
+
+  // Normalize first so flat keys land at their proper nested paths
+  for (const layer of [fileConfig, cliArgs]) {
     normalizeFlatConfig(layer)
     normalizeToolsConfig(layer)
   }
 
-  // defaults < file < env < CLI
-  // Deep clone defaults to prevent mutation of the shared defaultConfig object
-  const defaults = JSON.parse(JSON.stringify(defaultConfig)) as Record<string, unknown>
-  const merged = layers.reduce(
+  // Coerce after normalization so schema paths match (e.g. "50" → 50)
+  const coercedFileConfig = coerceTypes(fileConfig, rawDefaults) as Record<string, unknown>
+
+  // defaults < file < CLI
+  const defaults = interpolateEnvVars(rawDefaults, env) as Record<string, unknown>
+  const merged = [coercedFileConfig, cliArgs].reduce(
     (acc, layer) => deepMerge(acc, layer),
     defaults,
   )

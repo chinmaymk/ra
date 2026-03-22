@@ -7,7 +7,7 @@ Anthropic is the default provider. If no `--provider` flag is set, ra uses Anthr
 ## Setup
 
 ```bash
-export RA_ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=sk-ant-...
 ra "Hello"
 ```
 
@@ -15,8 +15,7 @@ ra "Hello"
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RA_ANTHROPIC_API_KEY` | Yes | Anthropic API key |
-| `RA_ANTHROPIC_BASE_URL` | No | Custom base URL (for proxies or compatible APIs) |
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key (standard Anthropic env var) |
 
 ## Models
 
@@ -56,14 +55,16 @@ ra automatically applies cache hints to system prompts and tool definitions when
 Point ra at an Anthropic-compatible API proxy:
 
 ```bash
-export RA_ANTHROPIC_BASE_URL=https://my-proxy.example.com/v1
-ra "Hello"
+ra --anthropic-base-url https://my-proxy.example.com/v1 "Hello"
 ```
 
-Or via CLI flag:
+Or in a config file:
 
-```bash
-ra --anthropic-base-url https://my-proxy.example.com/v1 "Hello"
+```yaml
+app:
+  providers:
+    anthropic:
+      baseUrl: https://my-proxy.example.com/v1
 ```
 
 ## See also

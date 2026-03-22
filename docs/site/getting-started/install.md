@@ -44,7 +44,7 @@ Use ra directly in CI/CD workflows — no install step needed:
   with:
     prompt: "Review this PR for bugs and security issues"
   env:
-    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 See [GitHub Actions](/modes/github-actions) for all inputs, outputs, and examples.
@@ -54,7 +54,7 @@ See [GitHub Actions](/modes/github-actions) for all inputs, outputs, and example
 ra needs at least one LLM provider configured. The fastest way to get started:
 
 ```bash
-export RA_ANTHROPIC_API_KEY="sk-ant-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
 ra "Hello"
 ```
 

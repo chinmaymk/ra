@@ -30,29 +30,36 @@ export interface BinaryEnv {
   extra?: Record<string, string>
 }
 
+/** Build CLI args from BinaryEnv */
+function buildArgs(opts: BinaryEnv): string[] {
+  const args: string[] = []
+  if (opts.provider) args.push('--provider', opts.provider)
+  if (opts.storageDir) args.push('--data-dir', opts.storageDir)
+  if (opts.anthropicBaseURL) args.push('--anthropic-base-url', opts.anthropicBaseURL)
+  if (opts.openaiBaseURL) args.push('--openai-base-url', opts.openaiBaseURL)
+  if (opts.googleBaseURL) args.push('--google-base-url', opts.googleBaseURL)
+  return args
+}
+
+/** Build env vars from BinaryEnv (credentials, base URLs) */
 function buildEnv(opts: BinaryEnv): Record<string, string> {
   const env: Record<string, string> = {
     PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
     HOME: process.env.HOME ?? '/tmp',
   }
-  if (opts.provider) env['RA_PROVIDER'] = opts.provider
   if (opts.apiKey) {
     const p = opts.provider ?? 'anthropic'
-    if (p === 'anthropic') env['RA_ANTHROPIC_API_KEY'] = opts.apiKey
-    else if (p === 'openai') env['RA_OPENAI_API_KEY'] = opts.apiKey
-    else if (p === 'google') env['RA_GOOGLE_API_KEY'] = opts.apiKey
+    if (p === 'anthropic') env['ANTHROPIC_API_KEY'] = opts.apiKey
+    else if (p === 'openai') env['OPENAI_API_KEY'] = opts.apiKey
+    else if (p === 'google') env['GOOGLE_API_KEY'] = opts.apiKey
   }
-  if (opts.anthropicBaseURL) env['RA_ANTHROPIC_BASE_URL'] = opts.anthropicBaseURL
-  if (opts.openaiBaseURL) env['RA_OPENAI_BASE_URL'] = opts.openaiBaseURL
-  if (opts.googleBaseURL) env['RA_GOOGLE_BASE_URL'] = opts.googleBaseURL
-  if (opts.storageDir) env['RA_DATA_DIR'] = opts.storageDir
   if (opts.extra) Object.assign(env, opts.extra)
   return env
 }
 
 /** Run binary to completion, return stdout/stderr/exitCode */
 export async function runBinary(args: string[], binaryEnv: BinaryEnv): Promise<BinaryRunResult> {
-  const proc = Bun.spawn([BINARY_PATH, ...args], {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -69,7 +76,7 @@ export async function runBinary(args: string[], binaryEnv: BinaryEnv): Promise<B
 
 /** Run binary with piped stdin */
 export async function runBinaryWithStdin(args: string[], input: string, binaryEnv: BinaryEnv): Promise<BinaryRunResult> {
-  const proc = Bun.spawn([BINARY_PATH, ...args], {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -94,7 +101,7 @@ export interface InteractiveProcess {
 
 /** Spawn an interactive binary process (for REPL tests) */
 export function spawnBinary(args: string[], binaryEnv: BinaryEnv): InteractiveProcess {
-  const proc = Bun.spawn([BINARY_PATH, ...args], {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -130,7 +137,7 @@ export function spawnBinary(args: string[], binaryEnv: BinaryEnv): InteractivePr
 
 /** Spawn HTTP server binary with port 0, read actual port from stderr */
 export async function spawnHttpServer(args: string[], binaryEnv: BinaryEnv): Promise<{ proc: InteractiveProcess; port: number }> {
-  const proc = Bun.spawn([BINARY_PATH, ...args, '--http-port', '0'], {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args, '--http-port', '0'], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',

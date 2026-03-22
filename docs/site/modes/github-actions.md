@@ -9,7 +9,7 @@ Run ra in your CI/CD workflows. The action downloads the binary, builds the CLI 
   with:
     prompt: "Review this PR for bugs and security issues"
   env:
-    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 ## Inputs
@@ -101,7 +101,7 @@ jobs:
           model: claude-sonnet-4-6
           skills: code-review
         env:
-          RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 ### Using a custom config file
@@ -112,7 +112,7 @@ jobs:
     prompt: "Analyze the codebase and suggest improvements"
     config: ./ra.config.yml
   env:
-    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 ### Using OpenAI
@@ -124,7 +124,7 @@ jobs:
     provider: openai
     model: gpt-4.1
   env:
-    RA_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
 ### Capturing output
@@ -135,7 +135,7 @@ jobs:
   with:
     prompt: "Generate a changelog from recent commits"
   env:
-    RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
 - name: Use the result
   run: echo "${{ steps.agent.outputs.result }}"
@@ -155,9 +155,9 @@ Pass provider API keys as environment variables using GitHub secrets:
 
 ```yaml
 env:
-  RA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-  RA_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-  RA_GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
 ```
 
 For AWS Bedrock, configure AWS credentials using the standard `aws-actions/configure-aws-credentials` action before the ra step.

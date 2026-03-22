@@ -1,12 +1,12 @@
 # Configuration Reference
 
-ra uses a layered config system: **CLI > env > file**. Each layer overrides the one to its right.
+ra uses a layered config system: **CLI > config file > defaults**. Each layer overrides the one to its right.
 
 ```
-CLI flags > env vars > config file
+CLI flags > config file > defaults
 ```
 
-Commit a `ra.config.yml` for a team or project baseline. Use environment variables for secrets and per-environment settings. Use CLI flags for one-off overrides.
+Commit a `ra.config.yml` for a team or project baseline. Use `${VAR}` interpolation for secrets and per-environment settings. Use CLI flags for one-off overrides.
 
 ## Config file
 
@@ -29,20 +29,26 @@ app:
   skillDirs:
     - ./skills
 
+  providers:
+    anthropic:
+      apiKey: ${ANTHROPIC_API_KEY}    # resolved from env at load time
+
   storage:
     maxSessions: 100
     ttlDays: 30
 
   mcp:
     client:
-      - name: filesystem
+      - name: github
         transport: stdio
         command: npx
-        args: ["-y", "@anthropic/mcp-filesystem"]
+        args: ["-y", "@modelcontextprotocol/server-github"]
+        env:
+          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
 
 agent:
-  provider: anthropic
-  model: claude-sonnet-4-6
+  provider: ${PROVIDER:-anthropic}     # env override with default
+  model: ${MODEL:-claude-sonnet-4-6}
   systemPrompt: You are a helpful coding assistant.
   maxIterations: 50
   thinking: medium
@@ -82,25 +88,25 @@ agent:
 
 ### Agent — Core
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `agent.provider` | `RA_PROVIDER` | `--provider` | `anthropic` | LLM provider |
-| `agent.model` | `RA_MODEL` | `--model` | provider default | Model name |
-| `agent.systemPrompt` | `RA_SYSTEM_PROMPT` | `--system-prompt` | — | System prompt text |
-| `agent.maxIterations` | `RA_MAX_ITERATIONS` | `--max-iterations` | `50` | Max agent loop iterations |
-| `agent.thinking` | `RA_THINKING` | `--thinking` | — | Extended thinking: `low`, `medium`, `high` |
-| `agent.toolTimeout` | — | — | `30000` | Per-tool and middleware timeout (ms) |
-| `agent.tools.builtin` | `RA_TOOLS_BUILTIN` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `agent.provider` | `--provider` | `anthropic` | LLM provider |
+| `agent.model` | `--model` | provider default | Model name |
+| `agent.systemPrompt` | `--system-prompt` | — | System prompt text |
+| `agent.maxIterations` | `--max-iterations` | `50` | Max agent loop iterations |
+| `agent.thinking` | `--thinking` | — | Extended thinking: `low`, `medium`, `high` |
+| `agent.toolTimeout` | — | `30000` | Per-tool and middleware timeout (ms) |
+| `agent.tools.builtin` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
 
 ### App — Permissions
 
 Regex-based rules controlling what tools can do. See the [Permissions guide](/permissions/) for full details and examples.
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `app.permissions.no_rules_rules` | — | — | `false` | Disable all permission checks |
-| `app.permissions.default_action` | — | — | `allow` | Action when no rule matches: `allow` or `deny` |
-| `app.permissions.rules` | — | — | `[]` | Array of per-tool regex rules |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `app.permissions.no_rules_rules` | — | `false` | Disable all permission checks |
+| `app.permissions.default_action` | — | `allow` | Action when no rule matches: `allow` or `deny` |
+| `app.permissions.rules` | — | `[]` | Array of per-tool regex rules |
 
 ```yaml
 app:
@@ -117,26 +123,26 @@ app:
 
 ### App — Skills
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `app.skills` | — | `--skill` | `[]` | Skills to activate (always-on) |
-| `app.skillDirs` | — | — | `["./skills"]` | Directories to scan for skills |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `app.skills` | `--skill` | `[]` | Skills to activate (always-on) |
+| `app.skillDirs` | — | `["./skills"]` | Directories to scan for skills |
 
 ### Agent — Compaction
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `agent.compaction.enabled` | — | — | `true` | Enable automatic context compaction |
-| `agent.compaction.threshold` | — | — | `0.8` | Trigger at this fraction of context window |
-| `agent.compaction.model` | — | — | provider default | Model for summarization |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `agent.compaction.enabled` | — | `true` | Enable automatic context compaction |
+| `agent.compaction.threshold` | — | `0.8` | Trigger at this fraction of context window |
+| `agent.compaction.model` | — | provider default | Model for summarization |
 
 ### Agent — Context
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `agent.context.enabled` | — | — | `true` | Enable context file discovery |
-| `agent.context.patterns` | — | — | `[]` | Glob patterns for context files |
-| `agent.context.resolvers` | — | — | built-in | Pattern resolvers for `@file` and `url:` |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `agent.context.enabled` | — | `true` | Enable context file discovery |
+| `agent.context.patterns` | — | `[]` | Glob patterns for context files |
+| `agent.context.resolvers` | — | built-in | Pattern resolvers for `@file` and `url:` |
 
 ### Agent — Tools
 
@@ -167,57 +173,57 @@ agent:
 
 The `Agent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`. Concurrency can be set via `agent.tools.Agent.maxConcurrency` (see above) or the top-level `agent.maxConcurrency` as a fallback.
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `agent.maxConcurrency` | — | — | `4` | Fallback max parallel subagent tasks (overridden by `agent.tools.Agent.maxConcurrency`) |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `agent.maxConcurrency` | — | `4` | Fallback max parallel subagent tasks (overridden by `agent.tools.Agent.maxConcurrency`) |
 
 ### App — Data directory
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `app.dataDir` | `RA_DATA_DIR` | `--data-dir` | `.ra` | Root directory for all runtime data (sessions, memory, etc.) |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `app.dataDir` | `--data-dir` | `.ra` | Root directory for all runtime data (sessions, memory, etc.) |
 
 All runtime data is organized under `dataDir`: sessions in `{dataDir}/sessions/`, memory in `{dataDir}/memory.db`.
 
 ### App — Storage
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `app.storage.maxSessions` | `RA_STORAGE_MAX_SESSIONS` | `--storage-max-sessions` | `100` | Max sessions before auto-pruning |
-| `app.storage.ttlDays` | `RA_STORAGE_TTL_DAYS` | `--storage-ttl-days` | `30` | Auto-expire sessions older than this |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `app.storage.maxSessions` | `--storage-max-sessions` | `100` | Max sessions before auto-pruning |
+| `app.storage.ttlDays` | `--storage-ttl-days` | `30` | Auto-expire sessions older than this |
 
 ### Agent — Memory
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `agent.memory.enabled` | `RA_MEMORY_ENABLED` | `--memory` | `false` | Enable persistent memory |
-| `agent.memory.maxMemories` | `RA_MEMORY_MAX_MEMORIES` | — | `1000` | Max stored memories (oldest trimmed) |
-| `agent.memory.ttlDays` | `RA_MEMORY_TTL_DAYS` | — | `90` | Auto-prune memories older than this |
-| `agent.memory.injectLimit` | `RA_MEMORY_INJECT_LIMIT` | — | `5` | Memories to inject as context per loop (0 to disable) |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `agent.memory.enabled` | `--memory` | `false` | Enable persistent memory |
+| `agent.memory.maxMemories` | — | `1000` | Max stored memories (oldest trimmed) |
+| `agent.memory.ttlDays` | — | `90` | Auto-prune memories older than this |
+| `agent.memory.injectLimit` | — | `5` | Memories to inject as context per loop (0 to disable) |
 
 ### App — Observability
 
-| Field | Env var | Default | Description |
-|-------|---------|---------|-------------|
-| `app.logsEnabled` | `RA_LOGS_ENABLED` | `true` | Enable session logs |
-| `app.logLevel` | `RA_LOG_LEVEL` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
-| `app.tracesEnabled` | `RA_TRACES_ENABLED` | `true` | Enable session traces |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `app.logsEnabled` | `true` | Enable session logs |
+| `app.logLevel` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
+| `app.tracesEnabled` | `true` | Enable session traces |
 
 ### App — MCP
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| `app.mcp.lazySchemas` | `RA_MCP_LAZY_SCHEMAS` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| `app.mcp.lazySchemas` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
 
 See [MCP](/modes/mcp#lazy-schema-loading) for details.
 
 ### App — HTTP
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| — | — | `--http` | — | Start HTTP server |
-| `app.http.port` | — | `--http-port` | `3000` | Server port |
-| `app.http.token` | — | `--http-token` | — | Bearer token for authentication |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| — | `--http` | — | Start HTTP server |
+| `app.http.port` | `--http-port` | `3000` | Server port |
+| `app.http.token` | `--http-token` | — | Bearer token for authentication |
 
 ### Cron
 
@@ -247,39 +253,54 @@ See [Cron](/modes/cron) for details.
 
 ### App — Interface
 
-| Field | Env var | CLI flag | Default | Description |
-|-------|---------|----------|---------|-------------|
-| — | — | `--interface` | auto | `cli`, `repl`, `http`, `cron` |
-| — | — | `--mcp-stdio` | — | Start as MCP server (stdio) |
-| — | — | `--mcp` | — | Start as MCP server (HTTP) |
-| — | — | `--resume` | — | Resume the latest session (or `--resume=<id>` for a specific one) |
-| — | — | `--file` | — | Attach files to the prompt |
-| — | — | `--exec` | — | Run a script file |
-| — | — | `--show-config` | — | Show resolved configuration and exit |
-| — | — | `--config` | — | Path to config file |
+| Field | CLI flag | Default | Description |
+|-------|----------|---------|-------------|
+| — | `--interface` | auto | `cli`, `repl`, `http`, `cron` |
+| — | `--mcp-stdio` | — | Start as MCP server (stdio) |
+| — | `--mcp` | — | Start as MCP server (HTTP) |
+| — | `--resume` | — | Resume the latest session (or `--resume=<id>` for a specific one) |
+| — | `--file` | — | Attach files to the prompt |
+| — | `--exec` | — | Run a script file |
+| — | `--show-config` | — | Show resolved configuration and exit |
+| — | `--config` | — | Path to config file |
 
-## Environment variables
+## Environment variable interpolation
+
+Config files and defaults support Docker Compose–style `${VAR}` interpolation. Three forms are supported:
+
+| Syntax | Behavior |
+|--------|----------|
+| `${VAR}` | **Required** — errors if not set |
+| `${VAR:-default}` | Use default if unset **or** empty |
+| `${VAR-default}` | Use default if unset (empty string is kept) |
+
+Interpolation runs on both the config file and the built-in defaults, so standard provider env vars work out of the box:
 
 ```bash
-# Provider
-export RA_PROVIDER=anthropic
-export RA_MODEL=claude-sonnet-4-6
-export RA_SYSTEM_PROMPT="You are a helpful assistant"
-export RA_MAX_ITERATIONS=50
-
-# API keys (env-only — kept out of shell history)
-export RA_ANTHROPIC_API_KEY=sk-...
-export RA_OPENAI_API_KEY=sk-...
-export RA_GOOGLE_API_KEY=...
-export RA_OLLAMA_HOST=http://localhost:11434
-export RA_BEDROCK_REGION=us-east-1
-
-# Azure OpenAI (RA_AZURE_API_KEY optional — omit to use DefaultAzureCredential)
-export RA_AZURE_ENDPOINT=https://myresource.openai.azure.com/
-export RA_AZURE_DEPLOYMENT=my-gpt4o
-export RA_AZURE_API_KEY=...
-export RA_AZURE_API_VERSION=2024-12-01-preview
+# These are resolved by the defaults — no config file needed
+export ANTHROPIC_API_KEY=sk-...
+export OPENAI_API_KEY=sk-...
+export GOOGLE_API_KEY=...
+export OLLAMA_HOST=http://localhost:11434
+export AWS_REGION=us-east-1
+export AZURE_OPENAI_ENDPOINT=https://myresource.openai.azure.com/
+export AZURE_OPENAI_DEPLOYMENT=my-gpt4o
+export AZURE_OPENAI_API_KEY=...
 ```
+
+To make any config field env-driven, use `${}` in your config file:
+
+```yaml
+agent:
+  provider: ${PROVIDER:-anthropic}
+  model: ${MODEL:-claude-sonnet-4-6}
+  maxIterations: ${MAX_ITERS:-50}     # coerced to number automatically
+app:
+  http:
+    token: ${HTTP_TOKEN:-}
+```
+
+String values produced by `${}` are automatically coerced to match the expected type (number, boolean) based on the schema.
 
 ## CLI flags
 
@@ -298,20 +319,20 @@ ra --provider openai \
 
 ## Provider credentials
 
-Credentials are env-only — never exposed as CLI flags to keep them out of shell history.
+Provider API keys are resolved from standard environment variables by default. No `RA_` prefix needed.
 
 | Provider | Env var(s) | Docs |
 |----------|-----------|------|
-| Anthropic | `RA_ANTHROPIC_API_KEY`, `RA_ANTHROPIC_BASE_URL` | [Setup](/providers/anthropic) |
-| OpenAI | `RA_OPENAI_API_KEY`, `RA_OPENAI_BASE_URL` | [Setup](/providers/openai) |
-| Google | `RA_GOOGLE_API_KEY` | [Setup](/providers/google) |
-| Azure | `RA_AZURE_ENDPOINT`, `RA_AZURE_DEPLOYMENT`, `RA_AZURE_API_KEY`, `RA_AZURE_API_VERSION` | [Setup](/providers/azure) |
-| Bedrock | `RA_BEDROCK_API_KEY`, `RA_BEDROCK_REGION` | [Setup](/providers/bedrock) |
-| Ollama | `RA_OLLAMA_HOST` | [Setup](/providers/ollama) |
+| Anthropic | `ANTHROPIC_API_KEY` | [Setup](/providers/anthropic) |
+| OpenAI | `OPENAI_API_KEY` | [Setup](/providers/openai) |
+| Google | `GOOGLE_API_KEY` | [Setup](/providers/google) |
+| Azure | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_KEY` | [Setup](/providers/azure) |
+| Bedrock | `AWS_REGION` | [Setup](/providers/bedrock) |
+| Ollama | `OLLAMA_HOST` | [Setup](/providers/ollama) |
 
 ## Inspect
 
-Use `--show-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, config file, env vars, and CLI flags. Sensitive values (tokens, API keys) are redacted.
+Use `--show-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, config file, and CLI flags. Sensitive values (tokens, API keys) are redacted.
 
 ```bash
 ra --show-config

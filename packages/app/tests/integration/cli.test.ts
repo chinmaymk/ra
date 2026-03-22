@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test'
+import { writeFileSync } from 'fs'
+import { join } from 'path'
 import { createTestEnv, type TestEnv } from './helpers/setup'
 import { runBinaryWithStdin } from './helpers/binary'
 
@@ -35,10 +37,12 @@ describe('CLI integration', () => {
 
   it('provider error → exit nonzero, stderr contains error', async () => {
     env.mock.enqueue([{ type: 'error', status: 500, message: 'Internal Server Error' }])
+    const configPath = join(env.storageDir, 'ra.config.json')
+    writeFileSync(configPath, JSON.stringify({ agent: { maxRetries: 0 } }))
     const { stderr, exitCode } = await runBinaryWithStdin(
-      ['--cli', 'hello'],
+      ['--cli', '--config', configPath, 'hello'],
       '',
-      { ...env.binaryEnv, extra: { RA_MAX_RETRIES: '0' } },
+      env.binaryEnv,
     )
     expect(exitCode).not.toBe(0)
     expect(stderr.length).toBeGreaterThan(0)
