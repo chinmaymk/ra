@@ -48,6 +48,7 @@ export type {
   ErrorContext,
   Middleware,
   MiddlewareConfig,
+  ThinkingStrategy,
 } from './agent/types'
 
 // ── Agent runtime ───────────────────────────────────────────────────
@@ -57,6 +58,7 @@ export { runMiddlewareChain, mergeMiddleware } from './agent/middleware'
 export { createCompactionMiddleware, forceCompact, isContextLengthError, splitMessageZones, type CompactionConfig, type MessageZones } from './agent/context-compaction'
 export { withTimeout, TimeoutError } from './agent/timeout'
 export { estimateTokens } from './agent/token-estimator'
+export { createToolFilterMiddleware, createRecentlyUsedFilter, type ToolFilterFn, type RecentlyUsedFilterOptions } from './agent/tool-filter'
 export { getContextWindowSize, getDefaultCompactionModel } from './agent/model-registry'
 
 // ── Observability ───────────────────────────────────────────────────

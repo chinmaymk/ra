@@ -821,4 +821,73 @@ describe('AgentLoop', () => {
     const clippedContent = (toolResult!.content as string).split('\n\n<response clipped>')[0]!
     expect(clippedContent.endsWith('\n') || !clippedContent.includes('\n') || lines.some(l => clippedContent.endsWith(l))).toBe(true)
   })
+
+  it('thinkingStrategy overrides static thinking level per iteration', async () => {
+    const capturedRequests: ChatRequest[] = []
+    const customProvider: IProvider = {
+      name: 'mock',
+      chat: async () => ({ message: { role: 'assistant', content: '' } }),
+      async *stream(req: ChatRequest) {
+        capturedRequests.push(req)
+        yield { type: 'done' as const }
+      },
+    }
+    const loop = new AgentLoop({
+      provider: customProvider,
+      tools: new ToolRegistry(),
+      model: 'test',
+      thinking: 'high',
+      thinkingStrategy: (iteration) => iteration === 1 ? 'high' : 'low',
+    })
+    await loop.run([{ role: 'user', content: 'hi' }])
+    expect(capturedRequests[0]?.thinking).toBe('high')
+  })
+
+  it('thinkingStrategy returning undefined falls back to static thinking', async () => {
+    const capturedRequests: ChatRequest[] = []
+    const customProvider: IProvider = {
+      name: 'mock',
+      chat: async () => ({ message: { role: 'assistant', content: '' } }),
+      async *stream(req: ChatRequest) {
+        capturedRequests.push(req)
+        yield { type: 'done' as const }
+      },
+    }
+    const loop = new AgentLoop({
+      provider: customProvider,
+      tools: new ToolRegistry(),
+      model: 'test',
+      thinking: 'medium',
+      thinkingStrategy: () => undefined,
+    })
+    await loop.run([{ role: 'user', content: 'hi' }])
+    expect(capturedRequests[0]?.thinking).toBe('medium')
+  })
+
+  it('adaptiveToolResponseSize reduces truncation limit at high context usage', async () => {
+    const provider = mockProvider([
+      [
+        { type: 'tool_call_start', id: 'tc1', name: 'big' },
+        { type: 'tool_call_delta', id: 'tc1', argsDelta: '{}' },
+        // Report high input token usage to trigger adaptive sizing
+        { type: 'done', usage: { inputTokens: 160_000, outputTokens: 50 } },
+      ],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const tools = new ToolRegistry()
+    const bigOutput = 'x'.repeat(20_000)
+    tools.register({ name: 'big', description: '', inputSchema: {}, execute: async () => bigOutput })
+    // contextWindow defaults to 200k for claude-sonnet, so 160k/200k = 80% > 75% threshold
+    const loop = new AgentLoop({
+      provider, tools,
+      model: 'claude-sonnet-4-6',
+      maxIterations: 10,
+      maxToolResponseSize: 25_000,
+      adaptiveToolResponseSize: true,
+    })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    // At >75% usage, effective limit = 25000 * 0.25 = 6250, output is 20000 so it must be truncated
+    expect((toolResult?.content as string)).toContain('<response clipped>')
+  })
 })

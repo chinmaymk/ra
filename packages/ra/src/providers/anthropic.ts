@@ -30,7 +30,15 @@ export class AnthropicProvider implements IProvider {
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const response = await this.client.messages.create(this.buildParams(request) as Anthropic.MessageCreateParamsNonStreaming)
-    const usage: TokenUsage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
+    const rawUsage = response.usage as unknown as Record<string, number | undefined>
+    const cacheRead = rawUsage.cache_read_input_tokens ?? 0
+    const cacheCreate = rawUsage.cache_creation_input_tokens ?? 0
+    const usage: TokenUsage = {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      ...(cacheRead > 0 && { cacheReadTokens: cacheRead }),
+      ...(cacheCreate > 0 && { cacheCreationTokens: cacheCreate }),
+    }
     return { message: this.mapResponseToMessage(response), usage }
   }
 
@@ -42,14 +50,20 @@ export class AnthropicProvider implements IProvider {
 
     let usage: TokenUsage | undefined
     let inputTokens = 0
+    let cacheReadTokens = 0
+    let cacheCreationTokens = 0
     let emittedDone = false
     const activeToolCalls = new Map<number, string>()
 
     for await (const event of stream as AsyncIterable<Anthropic.MessageStreamEvent>) {
       switch (event.type) {
-        case 'message_start':
-          inputTokens = (event as Anthropic.RawMessageStartEvent).message.usage?.input_tokens ?? 0
+        case 'message_start': {
+          const msgUsage = (event as Anthropic.RawMessageStartEvent).message.usage as unknown as Record<string, number> | undefined
+          inputTokens = msgUsage?.input_tokens ?? 0
+          cacheReadTokens = msgUsage?.cache_read_input_tokens ?? 0
+          cacheCreationTokens = msgUsage?.cache_creation_input_tokens ?? 0
           break
+        }
         case 'content_block_start':
           if (event.content_block.type === 'tool_use') {
             activeToolCalls.set(event.index, event.content_block.id)
@@ -62,7 +76,12 @@ export class AnthropicProvider implements IProvider {
           else if (event.delta.type === 'thinking_delta') yield { type: 'thinking', delta: (event.delta as any).thinking }
           break
         case 'message_delta':
-          usage = { inputTokens, outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens }
+          usage = {
+            inputTokens,
+            outputTokens: (event as Anthropic.RawMessageDeltaEvent).usage.output_tokens,
+            ...(cacheReadTokens > 0 && { cacheReadTokens }),
+            ...(cacheCreationTokens > 0 && { cacheCreationTokens }),
+          }
           break
         case 'message_stop':
           emittedDone = true
@@ -96,7 +115,32 @@ export class AnthropicProvider implements IProvider {
         ? { role, content: msg.content }
         : { role, content: this.mapContentParts(msg.content) }
     })
-    return mergeConsecutiveRoles(mapped)
+    const merged = mergeConsecutiveRoles(mapped)
+    this.addConversationCacheBreakpoints(merged)
+    return merged
+  }
+
+  /** Add cache_control to the second-to-last user message to cache the conversation prefix.
+   *  System prompt and last tool already use 2 of 4 Anthropic cache slots. */
+  private addConversationCacheBreakpoints(messages: Anthropic.MessageParam[]): void {
+    if (messages.length < 3) return
+    let userCount = 0
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      if (msg?.role === 'user') {
+        userCount++
+        if (userCount === 2) {
+          const content = msg.content
+          if (Array.isArray(content) && content.length > 0) {
+            const lastBlock = content[content.length - 1]
+            if (lastBlock && typeof lastBlock === 'object') {
+              (lastBlock as unknown as Record<string, unknown>).cache_control = { type: 'ephemeral' }
+            }
+          }
+          break
+        }
+      }
+    }
   }
 
   mapTools(tools: ITool[]): Anthropic.Tool[] {

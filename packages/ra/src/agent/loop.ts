@@ -1,10 +1,12 @@
 import { errorMessage, withRetry } from '../utils/errors'
 import type { IProvider, IMessage, IToolCall, TokenUsage } from '../providers/types'
-import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
+import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext, ThinkingStrategy } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
 import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
 import { accumulateUsage, parseToolArguments } from '../providers/utils'
+import { getContextWindowSize } from './model-registry'
+import { estimateTokens } from './token-estimator'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'node:crypto'
 import { type Logger, NoopLogger } from '../observability/logger'
@@ -26,6 +28,10 @@ export interface AgentLoopOptions {
   maxToolResponseSize?: number
   /** True when the loop is running against a resumed session (prior messages loaded from storage). */
   resumed?: boolean
+  /** When true, reduce maxToolResponseSize as context usage grows. Default false. */
+  adaptiveToolResponseSize?: boolean
+  /** Dynamic thinking level per iteration. Overrides static `thinking` when provided. */
+  thinkingStrategy?: ThinkingStrategy
 }
 
 export interface LoopResult {
@@ -74,6 +80,8 @@ export class AgentLoop {
   private maxRetries: number
   private maxToolResponseSize: number
   private resumed: boolean
+  private adaptiveToolResponseSize: boolean
+  private thinkingStrategy: ThinkingStrategy | undefined
 
   private externalAbort: AbortController | null = null
 
@@ -91,6 +99,8 @@ export class AgentLoop {
     this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
+    this.adaptiveToolResponseSize = options.adaptiveToolResponseSize ?? false
+    this.thinkingStrategy = options.thinkingStrategy
 
     if (options.compaction?.enabled) {
       this.middleware.beforeModelCall.unshift(
@@ -133,15 +143,40 @@ export class AgentLoop {
       await runMiddlewareChain(loopCtx(), this.middleware.beforeLoopBegin, this.toolTimeout)
       if (signal.aborted) return { messages, iterations, usage, ...(stopReason && { stopReason }) }
 
+      // Proactive compaction on resumed sessions to avoid context-length errors on first model call
+      if (this.resumed && this.compactionConfig) {
+        const estimated = estimateTokens(messages)
+        const ctxWindow = getContextWindowSize(this.model, this.compactionConfig.contextWindow)
+        const triggerThreshold = this.compactionConfig.maxTokens ?? Math.floor(ctxWindow * this.compactionConfig.threshold)
+        if (estimated > triggerThreshold * 0.8) {
+          this.logger.info('proactive compaction on resume', { estimatedTokens: estimated, threshold: triggerThreshold })
+          const compactCtx: ModelCallContext = {
+            ...stoppable,
+            request: { model: this.model, messages, tools: this.tools.all(), ...(this.thinking && { thinking: this.thinking }), signal },
+            loop: loopCtx(),
+          }
+          await forceCompact(this.provider, this.compactionConfig, compactCtx)
+        }
+      }
+      if (signal.aborted) return { messages, iterations, usage, ...(stopReason && { stopReason }) }
+
       while (iterations < this.maxIterations) {
         iterations++
         this.logger.debug('iteration starting', { iteration: iterations, messageCount: messages.length })
+
+        // Resolve thinking level: strategy callback overrides static setting
+        let thinkingLevel = this.thinking
+        if (this.thinkingStrategy) {
+          const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && m.toolCalls)
+          const lastToolCalls = lastAssistant?.toolCalls?.map(tc => tc.name) ?? []
+          thinkingLevel = this.thinkingStrategy(iterations, lastToolCalls) ?? this.thinking
+        }
 
         const request = {
           model: this.model,
           messages,
           tools: this.tools.all(),
-          ...(this.thinking && { thinking: this.thinking }),
+          ...(thinkingLevel && { thinking: thinkingLevel }),
           signal,
         }
         const modelCallCtx: ModelCallContext = { ...stoppable, request, loop: loopCtx() }
@@ -210,10 +245,18 @@ export class AgentLoop {
                 ? await withTimeout(this.tools.execute(tc.name, input), effectiveTimeout, `Tool '${tc.name}'`)
                 : await this.tools.execute(tc.name, input)
               content = typeof value === 'string' ? value : JSON.stringify(value)
+              // Adaptive truncation: reduce limit when context is filling up
+              let effectiveMaxResponseSize = this.maxToolResponseSize
+              if (this.adaptiveToolResponseSize && lastUsage?.inputTokens) {
+                const ctxWindow = getContextWindowSize(this.model, this.compactionConfig?.contextWindow)
+                const usageRatio = lastUsage.inputTokens / ctxWindow
+                if (usageRatio > 0.75) effectiveMaxResponseSize = Math.floor(this.maxToolResponseSize * 0.25)
+                else if (usageRatio > 0.5) effectiveMaxResponseSize = Math.floor(this.maxToolResponseSize * 0.5)
+              }
               const originalLength = content.length
-              content = truncateToolOutput(content, this.maxToolResponseSize)
+              content = truncateToolOutput(content, effectiveMaxResponseSize)
               if (content.length !== originalLength) {
-                this.logger.warn('tool output truncated', { tool: tc.name, toolCallId: tc.id, originalLength, maxChars: this.maxToolResponseSize })
+                this.logger.warn('tool output truncated', { tool: tc.name, toolCallId: tc.id, originalLength, maxChars: effectiveMaxResponseSize })
               }
               // Roll up child usage (e.g. from subagent tool) into parent totals
               if (value && typeof value === 'object' && 'usage' in value) {

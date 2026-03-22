@@ -243,6 +243,49 @@ describe('AnthropicProvider', () => {
   })
 })
 
+describe('AnthropicProvider - conversation caching', () => {
+  it('adds cache_control to second-to-last user message when 3+ messages', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'first question' }] },
+      { role: 'assistant' as const, content: 'answer' },
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'second question' }] },
+      { role: 'assistant' as const, content: 'answer 2' },
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'latest question' }] },
+    ]
+    const mapped = provider.mapMessages(messages) as any[]
+    // Find the second-to-last user message (the one with 'second question')
+    const userMessages = mapped.filter((m: any) => m.role === 'user')
+    // The second-to-last user message should have cache_control on its last content block
+    const secondToLast = userMessages[userMessages.length - 2]
+    const lastBlock = secondToLast.content[secondToLast.content.length - 1]
+    expect(lastBlock.cache_control).toEqual({ type: 'ephemeral' })
+  })
+
+  it('does not add cache_control when fewer than 3 messages', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: 'only question' },
+    ]
+    const mapped = provider.mapMessages(messages) as any[]
+    // String content, no cache_control possible
+    expect(mapped[0].content).toBe('only question')
+  })
+
+  it('does not add cache_control to the latest user message', () => {
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const messages = [
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'first' }] },
+      { role: 'assistant' as const, content: 'ok' },
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'latest' }] },
+    ]
+    const mapped = provider.mapMessages(messages) as any[]
+    const lastUser = mapped.filter((m: any) => m.role === 'user').at(-1)
+    const lastBlock = lastUser.content[lastUser.content.length - 1]
+    expect(lastBlock.cache_control).toBeUndefined()
+  })
+})
+
 describe('AnthropicProvider - chat()', () => {
   beforeEach(() => mockMessagesCreate.mockReset())
 
@@ -261,6 +304,36 @@ describe('AnthropicProvider - chat()', () => {
     expect(result.message.content).toBe('Hello from chat')
     expect(result.usage?.inputTokens).toBe(10)
     expect(result.usage?.outputTokens).toBe(5)
+  })
+
+  it('returns cache token metrics when present in usage', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'cached response' }],
+      usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 500, cache_creation_input_tokens: 100 },
+    })
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const result = await provider.chat({
+      model: 'claude-3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.usage?.cacheReadTokens).toBe(500)
+    expect(result.usage?.cacheCreationTokens).toBe(100)
+  })
+
+  it('omits cache fields when zero', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'no cache' }],
+      usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+    })
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const result = await provider.chat({
+      model: 'claude-3',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.usage?.cacheReadTokens).toBeUndefined()
+    expect(result.usage?.cacheCreationTokens).toBeUndefined()
   })
 })
 
@@ -397,6 +470,23 @@ describe('AnthropicProvider - stream() input token tracking', () => {
     expect(deltas).toHaveLength(2)
     expect(deltas[0].id).toBe('tool_1')
     expect(deltas[1].id).toBe('tool_2')
+  })
+
+  it('captures cache token metrics from message_start', async () => {
+    mockMessagesCreate.mockResolvedValue((async function* () {
+      yield { type: 'message_start', message: { usage: { input_tokens: 100, cache_read_input_tokens: 800, cache_creation_input_tokens: 200 } } }
+      yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } }
+      yield { type: 'message_delta', usage: { output_tokens: 5 } }
+      yield { type: 'message_stop' }
+    })())
+    const provider = new AnthropicProvider({ apiKey: 'test' })
+    const chunks: any[] = []
+    for await (const chunk of provider.stream({ model: 'claude-3', messages: [{ role: 'user', content: 'hi' }] })) {
+      chunks.push(chunk)
+    }
+    const done = chunks.find(c => c.type === 'done')
+    expect(done.usage.cacheReadTokens).toBe(800)
+    expect(done.usage.cacheCreationTokens).toBe(200)
   })
 
   it('defaults inputTokens to 0 when message_start has no usage', async () => {

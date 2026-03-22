@@ -323,6 +323,25 @@ describe('OpenAIResponsesProvider - toUsage', () => {
     expect(usage.outputTokens).toBe(50)
     expect(usage.thinkingTokens).toBeUndefined()
   })
+
+  it('maps cached input tokens to cacheReadTokens', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const usage = provider.toUsage({
+      input_tokens: 100,
+      output_tokens: 50,
+      input_tokens_details: { cached_tokens: 80 },
+    })
+    expect(usage.cacheReadTokens).toBe(80)
+  })
+
+  it('omits cacheReadTokens when not present', () => {
+    const provider = new OpenAIResponsesProvider({ apiKey: 'test' })
+    const usage = provider.toUsage({
+      input_tokens: 100,
+      output_tokens: 50,
+    })
+    expect(usage.cacheReadTokens).toBeUndefined()
+  })
 })
 
 describe('OpenAIResponsesProvider - chat()', () => {

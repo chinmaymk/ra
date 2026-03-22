@@ -145,6 +145,37 @@ describe('accumulateUsage', () => {
     accumulateUsage(target, { inputTokens: 1, outputTokens: 1 })
     expect(target.thinkingTokens).toBeUndefined()
   })
+
+  it('adds cacheReadTokens when source has it but target does not', () => {
+    const target: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+    accumulateUsage(target, { inputTokens: 1, outputTokens: 1, cacheReadTokens: 500 })
+    expect(target.cacheReadTokens).toBe(500)
+  })
+
+  it('accumulates cacheReadTokens when both have it', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 200 }
+    accumulateUsage(target, { inputTokens: 0, outputTokens: 0, cacheReadTokens: 300 })
+    expect(target.cacheReadTokens).toBe(500)
+  })
+
+  it('adds cacheCreationTokens when source has it but target does not', () => {
+    const target: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+    accumulateUsage(target, { inputTokens: 1, outputTokens: 1, cacheCreationTokens: 100 })
+    expect(target.cacheCreationTokens).toBe(100)
+  })
+
+  it('accumulates cacheCreationTokens when both have it', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 50 }
+    accumulateUsage(target, { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 75 })
+    expect(target.cacheCreationTokens).toBe(125)
+  })
+
+  it('does not set cache fields when source lacks them', () => {
+    const target: TokenUsage = { inputTokens: 0, outputTokens: 0 }
+    accumulateUsage(target, { inputTokens: 1, outputTokens: 1 })
+    expect(target.cacheReadTokens).toBeUndefined()
+    expect(target.cacheCreationTokens).toBeUndefined()
+  })
 })
 
 describe('extractTextContent', () => {

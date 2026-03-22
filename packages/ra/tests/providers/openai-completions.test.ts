@@ -192,6 +192,25 @@ describe('OpenAIProvider - toUsage', () => {
     expect(usage.outputTokens).toBe(50)
     expect(usage.thinkingTokens).toBeUndefined()
   })
+
+  it('maps cached prompt tokens to cacheReadTokens', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const usage = provider.toUsage({
+      prompt_tokens: 100,
+      completion_tokens: 50,
+      prompt_tokens_details: { cached_tokens: 60 },
+    })
+    expect(usage.cacheReadTokens).toBe(60)
+  })
+
+  it('omits cacheReadTokens when not present', () => {
+    const provider = new OpenAIProvider({ apiKey: 'test' })
+    const usage = provider.toUsage({
+      prompt_tokens: 100,
+      completion_tokens: 50,
+    })
+    expect(usage.cacheReadTokens).toBeUndefined()
+  })
 })
 
 describe('OpenAIProvider - content parts edge cases', () => {
