@@ -3,7 +3,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import type { ToolRegistry, Logger } from '@chinmaymk/ra'
 import { NoopLogger } from '@chinmaymk/ra'
-import type { McpClientConfig } from '../config/types'
+import type { McpServerEntry } from '../config/types'
 import { wrapMcpToolsLazy, prefixToolName, type McpToolEntry } from './lazy-tools'
 
 export interface McpConnectOptions {
@@ -18,15 +18,15 @@ export class McpClient {
     this.clients = clients
   }
 
-  async connect(configs: McpClientConfig[], registry: ToolRegistry, options?: McpConnectOptions): Promise<void> {
+  async connect(configs: McpServerEntry[], registry: ToolRegistry, options?: McpConnectOptions): Promise<void> {
     const logger = options?.logger ?? new NoopLogger()
 
     try {
       const mcpTools: McpToolEntry[] = []
 
       for (const config of configs) {
-        if (config.transport === 'stdio' && !config.command) throw new Error(`McpClientConfig "${config.name}" requires a command for stdio transport`)
-        if (config.transport === 'sse' && !config.url) throw new Error(`McpClientConfig "${config.name}" requires a url for sse transport`)
+        if (config.transport === 'stdio' && !config.command) throw new Error(`McpServerEntry "${config.name}" requires a command for stdio transport`)
+        if (config.transport === 'sse' && !config.url) throw new Error(`McpServerEntry "${config.name}" requires a url for sse transport`)
 
         logger.debug('connecting to MCP server', { server: config.name, transport: config.transport })
 

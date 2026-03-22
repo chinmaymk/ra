@@ -23,7 +23,7 @@ skills/<name>/
 
 ## How Skills Work
 
-1. `loadSkills()` scans `skillDirs` for `SKILL.md` files
+1. `loadSkills()` scans `agent.skillDirs` for `SKILL.md` files
 2. Parses YAML frontmatter for metadata (name, description)
 3. Markdown body becomes the skill's instructions (injected into system prompt)
 4. If `scripts/` exists, scripts run at activation and their stdout is appended as context

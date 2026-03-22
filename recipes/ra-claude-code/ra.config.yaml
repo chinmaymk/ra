@@ -1,11 +1,14 @@
-app:
-  interface: repl
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+  tools:
+    builtin: true
   skillDirs:
     - ./skills
 
   # Uncomment to add GitHub MCP server for PR/issue context:
   # mcp:
-  #   client:
+  #   servers:
   #     - name: github
   #       transport: stdio
   #       command: npx
@@ -13,11 +16,6 @@ app:
   #       env:
   #         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
 
-agent:
-  provider: anthropic
-  model: claude-opus-4-6
-  tools:
-    builtin: true
   maxIterations: 200
   thinking: high
   systemPrompt: |

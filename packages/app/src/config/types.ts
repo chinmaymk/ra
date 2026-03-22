@@ -65,7 +65,6 @@ export interface AppConfig {
     maxSessions: number
     ttlDays: number
   }
-  skillDirs: string[]
   /** Provider credentials and connection options. Agent selects which one to use via `agent.provider`. */
   providers: {
     anthropic: AnthropicProviderOptions
@@ -76,20 +75,14 @@ export interface AppConfig {
     bedrock: BedrockProviderOptions
     azure: AzureProviderOptions
   }
-  mcp: {
-    client: McpClientConfig[]
-    server: McpServerConfig
-    /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
-     *  First call returns full schema; model retries with correct params. Saves tokens. */
-    lazySchemas: boolean
-  }
-  permissions: PermissionsConfig
+  /** Ra's own MCP server endpoint configuration. */
+  mcpServer: McpServerConfig
   logsEnabled: boolean
   logLevel: LogLevel
   tracesEnabled: boolean
 }
 
-/** Agent behavior settings — LLM config, tools, context, memory. */
+/** Agent behavior settings — LLM config, tools, context, memory, capabilities. */
 export interface AgentConfig {
   provider: ProviderName
   model: string
@@ -100,6 +93,15 @@ export interface AgentConfig {
   toolTimeout: number
   maxConcurrency: number
   tools: ToolsConfig
+  skillDirs: string[]
+  /** MCP servers the agent can connect to. */
+  mcp: {
+    servers: McpServerEntry[]
+    /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
+     *  First call returns full schema; model retries with correct params. Saves tokens. */
+    lazySchemas: boolean
+  }
+  permissions: PermissionsConfig
   middleware: Record<string, string[]>
   context: ContextConfig
   compaction: {
@@ -138,7 +140,7 @@ export interface RaConfig {
   cron?: CronJob[]
 }
 
-export interface McpClientConfig {
+export interface McpServerEntry {
   name: string
   transport: 'stdio' | 'sse'
   command?: string

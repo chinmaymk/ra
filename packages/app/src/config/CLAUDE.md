@@ -34,6 +34,8 @@ Provider credentials are resolved from standard env vars by default (e.g. `ANTHR
 
 ### `app` — Application settings (AppConfig)
 
+Infrastructure, deployment, and observability. Recipes typically don't set these.
+
 | Field | Default | Purpose |
 |-------|---------|---------|
 | `app.interface` | `'repl'` | Entry point: cli, repl, http, mcp |
@@ -42,16 +44,15 @@ Provider credentials are resolved from standard env vars by default (e.g. `ANTHR
 | `app.http` | `{ port: 3000, token: '' }` | HTTP server settings |
 | `app.inspector` | `{ port: 3002 }` | Inspector server settings |
 | `app.storage` | `{ maxSessions: 100, ttlDays: 30 }` | Session storage settings |
-| `app.skillDirs` | `['.claude/skills', ...]` | Directories to scan for skills |
-| `app.skills` | `[]` | Active skill names |
-| `app.mcp` | `{ client: [], server: {...} }` | MCP client/server config |
-| `app.permissions` | `{}` | Tool permission rules |
 | `app.providers` | `{ anthropic: {...}, ... }` | Per-provider credentials and connection options |
+| `app.mcpServer` | `{ enabled: false, port: 3001, ... }` | Ra's own MCP server endpoint |
 | `app.logsEnabled` | `true` | Enable session logs |
 | `app.logLevel` | `'info'` | Minimum log level |
 | `app.tracesEnabled` | `true` | Enable session traces |
 
-### `agent` — Agent behavior (AgentConfig)
+### `agent` — Agent behavior and capabilities (AgentConfig)
+
+Everything a recipe defines: brain, tools, skills, MCP, permissions.
 
 | Field | Default | Purpose |
 |-------|---------|---------|
@@ -65,6 +66,10 @@ Provider credentials are resolved from standard env vars by default (e.g. `ANTHR
 | `agent.maxConcurrency` | `4` | Parallel tool execution limit |
 | `agent.tools.builtin` | `true` | Register built-in tools (master switch) |
 | `agent.tools.overrides` | `{}` | Per-tool settings |
+| `agent.skillDirs` | `['.claude/skills', ...]` | Directories to scan for skills |
+| `agent.mcp.servers` | `[]` | MCP servers the agent connects to |
+| `agent.mcp.lazySchemas` | `true` | Register MCP tools with minimal schemas (saves tokens) |
+| `agent.permissions` | `{}` | Tool permission rules |
 | `agent.middleware` | `{}` | Custom middleware hooks |
 | `agent.context` | `{ enabled: true, ... }` | Context file discovery |
 | `agent.compaction` | `{ enabled: true, threshold: 0.80 }` | Auto-summarize old messages |

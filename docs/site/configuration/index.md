@@ -24,10 +24,6 @@ Full example:
 # ra.config.yml
 app:
   dataDir: .ra              # root for all runtime data
-  skills:
-    - code-review
-  skillDirs:
-    - ./skills
 
   providers:
     anthropic:
@@ -37,15 +33,6 @@ app:
     maxSessions: 100
     ttlDays: 30
 
-  mcp:
-    client:
-      - name: github
-        transport: stdio
-        command: npx
-        args: ["-y", "@modelcontextprotocol/server-github"]
-        env:
-          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
-
 agent:
   provider: ${PROVIDER:-anthropic}     # env override with default
   model: ${MODEL:-claude-sonnet-4-6}
@@ -53,6 +40,18 @@ agent:
   maxIterations: 50
   thinking: medium
   toolTimeout: 30000
+
+  skillDirs:
+    - ./skills
+
+  mcp:
+    servers:
+      - name: github
+        transport: stdio
+        command: npx
+        args: ["-y", "@modelcontextprotocol/server-github"]
+        env:
+          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
 
   compaction:
     enabled: true
@@ -98,18 +97,18 @@ agent:
 | `agent.toolTimeout` | — | `30000` | Per-tool and middleware timeout (ms) |
 | `agent.tools.builtin` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
 
-### App — Permissions
+### Agent — Permissions
 
 Regex-based rules controlling what tools can do. See the [Permissions guide](/permissions/) for full details and examples.
 
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
-| `app.permissions.no_rules_rules` | — | `false` | Disable all permission checks |
-| `app.permissions.default_action` | — | `allow` | Action when no rule matches: `allow` or `deny` |
-| `app.permissions.rules` | — | `[]` | Array of per-tool regex rules |
+| `agent.permissions.no_rules_rules` | — | `false` | Disable all permission checks |
+| `agent.permissions.default_action` | — | `allow` | Action when no rule matches: `allow` or `deny` |
+| `agent.permissions.rules` | — | `[]` | Array of per-tool regex rules |
 
 ```yaml
-app:
+agent:
   permissions:
     rules:
       - tool: execute_bash
@@ -121,12 +120,11 @@ app:
           allow: ["^src/", "^tests/"]
 ```
 
-### App — Skills
+### Agent — Skills
 
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
-| `app.skills` | `--skill` | `[]` | Skills to activate (always-on) |
-| `app.skillDirs` | — | `["./skills"]` | Directories to scan for skills |
+| `agent.skillDirs` | `--skill-dir` | `['.claude/skills', ...]` | Directories to scan for skills |
 
 ### Agent — Compaction
 
@@ -209,11 +207,12 @@ All runtime data is organized under `dataDir`: sessions in `{dataDir}/sessions/`
 | `app.logLevel` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
 | `app.tracesEnabled` | `true` | Enable session traces |
 
-### App — MCP
+### Agent — MCP
 
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
-| `app.mcp.lazySchemas` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
+| `agent.mcp.servers` | — | `[]` | MCP servers the agent connects to |
+| `agent.mcp.lazySchemas` | — | `true` | Lazy schema loading — register MCP tools with server-prefixed names and minimal schemas. First call to each tool returns the full schema; model retries with correct params. |
 
 See [MCP](/modes/mcp#lazy-schema-loading) for details.
 

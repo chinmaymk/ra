@@ -21,7 +21,7 @@ describe('loadConfig', () => {
     expect(c.agent.provider).toBe('anthropic')
     expect(c.app.interface).toBe('repl')
     expect(c.agent.maxIterations).toBe(50)
-    expect(c.app.skillDirs).toEqual(['.claude/skills', '.agents/skills', '.opencode/skills'])
+    expect(c.agent.skillDirs).toEqual(['.claude/skills', '.agents/skills', '.opencode/skills'])
   })
 
   it('includes azure provider defaults', async () => {
@@ -131,9 +131,9 @@ describe('loadConfig', () => {
     const c = await loadConfig({
       cwd: tmp,
       env: {},
-      cliArgs: { app: { skillDirs: ['/new/dir'] } } as any,
+      cliArgs: { agent: { skillDirs: ['/new/dir'] } } as any,
     })
-    expect(c.app.skillDirs).toEqual(['/new/dir'])
+    expect(c.agent.skillDirs).toEqual(['/new/dir'])
   })
 
   it('deepMerge: nested objects are merged, not replaced', async () => {
@@ -536,7 +536,7 @@ describe('env var interpolation in config files', () => {
       '          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"',
     ].join('\n'))
     const c = await loadConfig({ cwd: tmp, env: { GITHUB_TOKEN: 'ghp_abc123' } })
-    expect(c.app.mcp.client[0]?.env?.GITHUB_PERSONAL_ACCESS_TOKEN).toBe('ghp_abc123')
+    expect(c.agent.mcp.servers[0]?.env?.GITHUB_PERSONAL_ACCESS_TOKEN).toBe('ghp_abc123')
   })
 
   it('throws when a required variable is missing', async () => {
@@ -622,14 +622,14 @@ describe('legacy flat config migration', () => {
     expect(c.agent.provider).toBe('openai')
   })
 
-  it('migrates flat app keys: skillDirs, permissions, storage', async () => {
+  it('migrates flat agent keys: skillDirs, permissions', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       skillDirs: ['/custom/skills'],
       logsEnabled: false,
       storage: { format: 'jsonl', maxSessions: 10, ttlDays: 5 },
     }))
     const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.skillDirs).toEqual(['/custom/skills'])
+    expect(c.agent.skillDirs).toEqual(['/custom/skills'])
     expect(c.app.logsEnabled).toBe(false)
     expect(c.app.storage.maxSessions).toBe(10)
   })
