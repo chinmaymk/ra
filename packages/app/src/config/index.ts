@@ -298,12 +298,12 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   const fileConfig = interpolateEnvVars(rawFileConfig, env) as Record<string, unknown>
   const cliArgs = (options.cliArgs ?? {}) as Record<string, unknown>
 
-  // Normalize first so flat keys land at their proper nested paths
-  for (const layer of [fileConfig, cliArgs]) {
+  const normalizeLayer = (layer: Record<string, unknown>) => {
     normalizeFlatConfig(layer)
     normalizeMcpConfig(layer)
     normalizeToolsConfig(layer)
   }
+  for (const layer of [fileConfig, cliArgs]) normalizeLayer(layer)
 
   // Coerce after normalization so schema paths match (e.g. "50" → 50)
   const coercedFileConfig = coerceTypes(fileConfig, rawDefaults) as Record<string, unknown>
@@ -322,9 +322,7 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
     }
     const recipeRaw = await parseFile(resolved.configPath)
     const recipeConfig = interpolateEnvVars(recipeRaw, env) as Record<string, unknown>
-    normalizeFlatConfig(recipeConfig)
-    normalizeMcpConfig(recipeConfig)
-    normalizeToolsConfig(recipeConfig)
+    normalizeLayer(recipeConfig)
 
     // Pre-resolve recipe paths against its directory
     const recipeAgent = (recipeConfig.agent ?? recipeConfig) as Record<string, unknown>

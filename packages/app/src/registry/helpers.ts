@@ -27,20 +27,13 @@ export const CONFIG_FILES = ['ra.config.yaml', 'ra.config.yml', 'ra.config.json'
  *   npm:<package>[@version]     → npm registry
  *   github:<owner>/<repo>       → GitHub tarball
  *   https://...                 → raw URL (tarball or git)
- *   <package>                   → defaults to npm
+ *   <bare-name>                 → defaults to GitHub
  */
 export function parseSource(source: string): SourceInfo {
-  if (source.startsWith('npm:')) {
-    return splitNpmVersion(source.slice(4))
-  }
-  if (source.startsWith('github:')) {
-    return { registry: 'github', identifier: source.slice(7) }
-  }
-  if (source.startsWith('https://') || source.startsWith('http://')) {
-    return { registry: 'url', identifier: source }
-  }
-  // Default: treat as npm package
-  return splitNpmVersion(source)
+  if (source.startsWith('npm:')) return splitNpmVersion(source.slice(4))
+  if (source.startsWith('github:')) return { registry: 'github', identifier: source.slice(7) }
+  if (source.startsWith('https://') || source.startsWith('http://')) return { registry: 'url', identifier: source }
+  return { registry: 'github', identifier: source }
 }
 
 export function splitNpmVersion(pkg: string): { registry: 'npm'; identifier: string; version?: string } {

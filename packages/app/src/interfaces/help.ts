@@ -64,14 +64,13 @@ PROVIDER OPTIONS
   --help, -h                          Print this help message
 
 SKILL MANAGEMENT
-  ra skill install <source>           Install skill from npm, GitHub, or URL
+  ra skill install <source>           Install skill from GitHub, npm, or URL
   ra skill remove <name>              Remove an installed skill
   ra skill list                       List installed skills
 
   Sources:
-    ra skill install code-review             npm package "code-review"
+    ra skill install user/repo               GitHub repository (default)
     ra skill install npm:ra-skill-lint@1.0   npm with version
-    ra skill install github:user/repo        GitHub repository
     ra skill install https://example.com/s.tgz  URL tarball
 
 RECIPE MANAGEMENT
@@ -80,7 +79,7 @@ RECIPE MANAGEMENT
   ra recipe list                      List installed recipes
 
   Sources:
-    ra recipe install user/repo              GitHub repo with recipes/ folder
+    ra recipe install user/repo              GitHub repo (default)
     ra recipe install npm:ra-recipe-foo      npm package
     ra recipe install github:user/repo       GitHub (explicit)
 

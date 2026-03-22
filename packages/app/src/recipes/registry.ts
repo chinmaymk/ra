@@ -2,24 +2,13 @@ import { join } from 'path'
 import { mkdirSync, rmSync } from 'fs'
 import { homeDir } from '../utils/paths'
 import {
-  parseSource, splitNpmVersion, withTempExtract, findExtractedRoot,
+  parseSource, withTempExtract, findExtractedRoot,
   resolveNpmTarball, copyAndWriteSource, CONFIG_FILES,
 } from '../registry/helpers'
-import type { SourceInfo, RegistrySource } from '../registry/helpers'
+import type { RegistrySource } from '../registry/helpers'
 
 export function defaultRecipeInstallDir(): string {
   return join(homeDir(), '.ra', 'recipes')
-}
-
-/**
- * Parse a recipe source string. Unlike skills (which default to npm),
- * bare names with a slash default to GitHub.
- */
-export function parseRecipeSource(source: string): SourceInfo {
-  if (source.includes('/') && !source.includes(':')) {
-    return { registry: 'github', identifier: source }
-  }
-  return parseSource(source)
 }
 
 /** Find a ra.config.* file in a directory. Returns the filename or null. */
@@ -62,65 +51,31 @@ async function findRecipeDirsIn(root: string): Promise<Array<{ name: string; dir
   return results
 }
 
-async function installFromGithub(repo: string, installDir: string): Promise<string[]> {
-  const [owner, name] = repo.split('/')
-  if (!owner || !name) throw new Error(`github: invalid repo format "${repo}", expected "owner/repo"`)
+/** Install all recipes found under extractedRoot into installDir. */
+async function installRecipeDirs(
+  extractedRoot: string,
+  installDir: string,
+  baseName: string,
+  source: Omit<RegistrySource, 'installedAt'>,
+  errorContext: string,
+): Promise<string[]> {
+  const recipeDirs = await findRecipeDirsIn(extractedRoot)
+  if (recipeDirs.length === 0) throw new Error(`${errorContext}: no recipes found`)
 
-  const tarballUrl = `https://api.github.com/repos/${owner}/${name}/tarball`
-
-  return withTempExtract(installDir, tarballUrl, 'github', async (tmpDir) => {
-    const extractedRoot = await findExtractedRoot(tmpDir)
-    const recipeDirs = await findRecipeDirsIn(extractedRoot)
-    if (recipeDirs.length === 0) throw new Error(`github: no recipes found in "${repo}"`)
-
-    const installed: string[] = []
-    for (const recipe of recipeDirs) {
-      const recipeName = recipe.name ? `${owner}/${recipe.name}` : `${owner}/${name}`
-      copyAndWriteSource(recipe.dir, join(installDir, ...recipeName.split('/')), { registry: 'github', repo })
-      installed.push(recipeName)
-    }
-    return installed
+  return recipeDirs.map(recipe => {
+    const name = recipe.name ? `${baseName}/${recipe.name}` : baseName
+    copyAndWriteSource(recipe.dir, join(installDir, ...name.split('/')), source)
+    return name
   })
 }
 
-async function installFromNpm(packageName: string, version: string | undefined, installDir: string): Promise<string[]> {
-  const { tarballUrl, resolvedVersion } = await resolveNpmTarball(packageName, version)
-  const recipeName = packageName.startsWith('@') ? packageName.slice(1) : packageName
-
-  return withTempExtract(installDir, tarballUrl, 'npm', async (tmpDir) => {
-    const packageDir = join(tmpDir, 'package')
-    const recipeDirs = await findRecipeDirsIn(packageDir)
-    if (recipeDirs.length === 0) throw new Error(`npm: no recipes found in "${packageName}@${resolvedVersion}"`)
-
-    const installed: string[] = []
-    for (const recipe of recipeDirs) {
-      const name = recipe.name ? `${recipeName}/${recipe.name}` : recipeName
-      copyAndWriteSource(recipe.dir, join(installDir, ...name.split('/')), { registry: 'npm', package: packageName, version: resolvedVersion })
-      installed.push(name)
-    }
-    return installed
-  })
-}
-
-async function installFromUrl(url: string, installDir: string): Promise<string[]> {
-  return withTempExtract(installDir, url, 'url', async (tmpDir) => {
-    const extractedRoot = await findExtractedRoot(tmpDir)
-    const recipeDirs = await findRecipeDirsIn(extractedRoot)
-    if (recipeDirs.length === 0) throw new Error(`url: no recipes found at "${url}"`)
-
-    const segments = new URL(url).pathname.split('/').filter(Boolean)
-    const baseName = segments.length >= 2
-      ? `${segments[segments.length - 2]}/${segments[segments.length - 1]}`.replace(/\.tar\.gz$|\.tgz$/, '')
-      : segments[segments.length - 1]?.replace(/\.tar\.gz$|\.tgz$/, '') ?? 'recipe'
-
-    const installed: string[] = []
-    for (const recipe of recipeDirs) {
-      const recipeName = recipe.name ? `${baseName}/${recipe.name}` : baseName
-      copyAndWriteSource(recipe.dir, join(installDir, ...recipeName.split('/')), { registry: 'url', url })
-      installed.push(recipeName)
-    }
-    return installed
-  })
+/** Derive a human-readable base name from a URL path. */
+function baseNameFromUrl(url: string): string {
+  const segments = new URL(url).pathname.split('/').filter(Boolean)
+  const raw = segments.length >= 2
+    ? `${segments[segments.length - 2]}/${segments[segments.length - 1]}`
+    : segments[segments.length - 1] ?? 'recipe'
+  return raw.replace(/\.tar\.gz$|\.tgz$/, '')
 }
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -129,11 +84,31 @@ export async function installRecipe(source: string, installDir?: string): Promis
   const dir = installDir ?? defaultRecipeInstallDir()
   mkdirSync(dir, { recursive: true })
 
-  const parsed = parseRecipeSource(source)
+  const parsed = parseSource(source)
+
   switch (parsed.registry) {
-    case 'npm':    return installFromNpm(parsed.identifier, parsed.version, dir)
-    case 'github': return installFromGithub(parsed.identifier, dir)
-    case 'url':    return installFromUrl(parsed.identifier, dir)
+    case 'github': {
+      const [owner, name] = parsed.identifier.split('/')
+      if (!owner || !name) throw new Error(`github: invalid repo "${parsed.identifier}", expected "owner/repo"`)
+      const tarballUrl = `https://api.github.com/repos/${owner}/${name}/tarball`
+      return withTempExtract(dir, tarballUrl, 'github', async (tmpDir) => {
+        const root = await findExtractedRoot(tmpDir)
+        return installRecipeDirs(root, dir, `${owner}/${name}`, { registry: 'github', repo: parsed.identifier }, `github: "${parsed.identifier}"`)
+      })
+    }
+    case 'npm': {
+      const { tarballUrl, resolvedVersion } = await resolveNpmTarball(parsed.identifier, parsed.version)
+      const baseName = parsed.identifier.startsWith('@') ? parsed.identifier.slice(1) : parsed.identifier
+      return withTempExtract(dir, tarballUrl, 'npm', async (tmpDir) =>
+        installRecipeDirs(join(tmpDir, 'package'), dir, baseName, { registry: 'npm', package: parsed.identifier, version: resolvedVersion }, `npm: "${parsed.identifier}@${resolvedVersion}"`),
+      )
+    }
+    case 'url': {
+      return withTempExtract(dir, parsed.identifier, 'url', async (tmpDir) => {
+        const root = await findExtractedRoot(tmpDir)
+        return installRecipeDirs(root, dir, baseNameFromUrl(parsed.identifier), { registry: 'url', url: parsed.identifier }, `url: "${parsed.identifier}"`)
+      })
+    }
   }
 }
 

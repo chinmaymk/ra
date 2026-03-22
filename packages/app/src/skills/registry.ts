@@ -9,9 +9,6 @@ export function defaultSkillInstallDir(): string {
   return join(homeDir(), '.ra', 'skills')
 }
 
-/** @deprecated Use parseSource from registry/helpers instead */
-export const parseSkillSource = parseSource
-
 /** Find all directories containing a SKILL.md within a root directory (one level deep + skills/ convention). */
 async function findSkillDirsIn(root: string): Promise<string[]> {
   const dirs = new Set<string>()

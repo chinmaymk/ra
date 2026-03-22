@@ -2,45 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { parseRecipeSource, resolveRecipePath, installRecipe, removeRecipe, listInstalledRecipes } from '../../src/recipes/registry'
-
-describe('parseRecipeSource', () => {
-  it('bare name with slash defaults to github', () => {
-    expect(parseRecipeSource('user/repo')).toEqual({ registry: 'github', identifier: 'user/repo' })
-  })
-
-  it('bare name without slash defaults to npm', () => {
-    expect(parseRecipeSource('my-recipe')).toEqual({ registry: 'npm', identifier: 'my-recipe' })
-  })
-
-  it('github: prefix', () => {
-    expect(parseRecipeSource('github:user/repo')).toEqual({ registry: 'github', identifier: 'user/repo' })
-  })
-
-  it('npm: prefix', () => {
-    expect(parseRecipeSource('npm:my-recipe')).toEqual({ registry: 'npm', identifier: 'my-recipe' })
-  })
-
-  it('npm: prefix with version', () => {
-    expect(parseRecipeSource('npm:my-recipe@1.0.0')).toEqual({ registry: 'npm', identifier: 'my-recipe', version: '1.0.0' })
-  })
-
-  it('npm: scoped package', () => {
-    expect(parseRecipeSource('npm:@scope/recipe')).toEqual({ registry: 'npm', identifier: '@scope/recipe' })
-  })
-
-  it('npm: scoped package with version', () => {
-    expect(parseRecipeSource('npm:@scope/recipe@2.0')).toEqual({ registry: 'npm', identifier: '@scope/recipe', version: '2.0' })
-  })
-
-  it('https url', () => {
-    expect(parseRecipeSource('https://example.com/recipe.tgz')).toEqual({ registry: 'url', identifier: 'https://example.com/recipe.tgz' })
-  })
-
-  it('http url', () => {
-    expect(parseRecipeSource('http://example.com/recipe.tgz')).toEqual({ registry: 'url', identifier: 'http://example.com/recipe.tgz' })
-  })
-})
+import { resolveRecipePath, installRecipe, removeRecipe, listInstalledRecipes } from '../../src/recipes/registry'
 
 describe('resolveRecipePath', () => {
   let tmp: string
