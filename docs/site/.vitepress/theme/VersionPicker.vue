@@ -29,6 +29,10 @@ const filteredVersions = computed(() => {
   return versions.value.versions.filter(meetsMinVersion)
 })
 
+const hasMenu = computed(() => {
+  return filteredVersions.value.length > 0 || currentVersion !== 'dev'
+})
+
 const displayLabel = computed(() => {
   if (currentVersion === 'dev') return 'dev'
   return `v${currentVersion}`
@@ -49,7 +53,7 @@ onMounted(async () => {
 })
 
 function toggle() {
-  open.value = !open.value
+  if (hasMenu.value) open.value = !open.value
 }
 
 function close() {
@@ -59,13 +63,13 @@ function close() {
 
 <template>
   <div class="version-picker" @mouseleave="close">
-    <button class="version-picker-button" @click="toggle" :disabled="!versions">
+    <button class="version-picker-button" @click="toggle" :class="{ interactive: hasMenu }">
       {{ displayLabel }}
-      <svg v-if="versions" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <svg v-if="hasMenu" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
         <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
-    <div class="version-picker-menu" v-show="open && versions">
+    <div class="version-picker-menu" v-show="open">
       <a
         v-if="currentVersion !== 'dev'"
         class="version-picker-item"
@@ -99,20 +103,19 @@ function close() {
   color: var(--vp-c-text-2);
   font-size: 13px;
   font-family: var(--vp-font-family-mono);
-  cursor: pointer;
+  cursor: default;
   transition: border-color 0.2s, color 0.2s;
   white-space: nowrap;
   line-height: 28px;
 }
 
-.version-picker-button:hover:not(:disabled) {
-  border-color: var(--vp-c-brand-1);
-  color: var(--vp-c-text-1);
+.version-picker-button.interactive {
+  cursor: pointer;
 }
 
-.version-picker-button:disabled {
-  cursor: default;
-  opacity: 0.7;
+.version-picker-button.interactive:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-text-1);
 }
 
 .version-picker-menu {

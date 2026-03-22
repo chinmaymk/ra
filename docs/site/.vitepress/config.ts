@@ -1,6 +1,40 @@
 import { defineConfig } from 'vitepress'
+import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+
+const MIN_VERSION = '0.0.5'
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pb[i] || 0) - (pa[i] || 0)
+  }
+  return 0
+}
+
+function generateVersionsJson() {
+  try {
+    const tags = execSync("git tag -l 'v*'", { encoding: 'utf-8' })
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((t) => t.replace(/^v/, ''))
+      .filter((v) => compareVersions(v, MIN_VERSION) <= 0)
+      .sort(compareVersions)
+
+    const latest = tags[0] || ''
+    const data = { latest, versions: tags }
+    const publicDir = path.resolve(__dirname, '../public')
+    fs.mkdirSync(publicDir, { recursive: true })
+    fs.writeFileSync(path.join(publicDir, 'versions.json'), JSON.stringify(data, null, 2) + '\n')
+  } catch {
+    // Not in a git repo or no tags — skip
+  }
+}
+
+generateVersionsJson()
 
 export default defineConfig({
   title: 'ra',
