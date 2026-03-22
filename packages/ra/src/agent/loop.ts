@@ -65,16 +65,25 @@ export function resolveThinking(mode: ThinkingMode | undefined, iteration: numbe
   return mode
 }
 
-/** Truncate tool output that exceeds maxChars, appending a notice for the model. */
+/** Truncate tool output that exceeds maxChars, keeping top and bottom portions with a notice in between. */
 export function truncateToolOutput(content: string, maxChars: number): string {
   if (content.length <= maxChars) return content
-  const truncated = content.slice(0, maxChars)
-  // Try to cut at a newline boundary to avoid splitting a line
-  const lastNewline = truncated.lastIndexOf('\n')
-  const cutPoint = lastNewline > maxChars * 0.8 ? lastNewline : maxChars
-  return content.slice(0, cutPoint) +
-    `\n\n<response clipped>\nOutput truncated: ${content.length.toLocaleString()} chars exceeded limit of ${maxChars.toLocaleString()}. ` +
-    'Use more targeted queries (e.g. offset/limit, specific paths, narrower search patterns) to get the information you need.'
+  const topSize = Math.floor(maxChars * 0.8)
+  const bottomSize = maxChars - topSize
+  // Try to cut at newline boundaries to avoid splitting lines
+  const topSlice = content.slice(0, topSize)
+  const lastNewline = topSlice.lastIndexOf('\n')
+  const topEnd = lastNewline > topSize * 0.8 ? lastNewline : topSize
+  const bottomSlice = content.slice(-bottomSize)
+  const firstNewline = bottomSlice.indexOf('\n')
+  const bottomStart = firstNewline >= 0 && firstNewline <= bottomSize * 0.2
+    ? content.length - bottomSize + firstNewline + 1
+    : content.length - bottomSize
+  const omitted = bottomStart - topEnd
+  return content.slice(0, topEnd) +
+    `\n\n<response clipped>\nOutput truncated: ${omitted.toLocaleString()} chars omitted out of ${content.length.toLocaleString()} total (limit ${maxChars.toLocaleString()}). ` +
+    'Use more targeted queries (e.g. offset/limit, specific paths, narrower search patterns) to get the information you need.\n\n' +
+    content.slice(bottomStart)
 }
 
 export class AgentLoop {
