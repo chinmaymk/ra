@@ -136,6 +136,25 @@ describe('collapseThinking', () => {
   })
 })
 
+describe('handleStreamChunk text', () => {
+  it('outputs each text chunk immediately to stdout', () => {
+    const state = createStreamState()
+    // First text chunk should open the box AND output the text
+    const out1 = captureStdout(() => handleStreamChunk(state, 'text', 'Hello'))
+    expect(out1).toContain('Hello')
+    expect(state.boxOpened).toBe(true)
+
+    // Subsequent chunks also appear immediately (no buffering until newline)
+    const out2 = captureStdout(() => handleStreamChunk(state, 'text', ' world'))
+    expect(out2).toContain(' world')
+
+    // Newline chunk also appears immediately
+    const out3 = captureStdout(() => handleStreamChunk(state, 'text', '\nline two'))
+    expect(out3).toContain('\n')
+    expect(out3).toContain('line two')
+  })
+})
+
 describe('StreamBuffer', () => {
   const P = RESPONSE_PREFIX
 
