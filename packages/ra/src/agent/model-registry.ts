@@ -19,8 +19,18 @@ const SORTED_FAMILIES = MODEL_FAMILIES.sort((a, b) => b[0].length - a[0].length)
 
 const DEFAULT_CONTEXT_WINDOW = 200_000
 
-export function getContextWindowSize(model: string, userOverride?: number): number {
+export interface ContextWindowSource {
+  contextWindow?(model: string): number | undefined
+}
+
+/**
+ * Resolve context window size.
+ * Priority: userOverride → provider.contextWindow() → model family registry → fallback.
+ */
+export function getContextWindowSize(model: string, userOverride?: number, provider?: ContextWindowSource): number {
   if (userOverride !== undefined) return userOverride
+  const fromProvider = provider?.contextWindow?.(model)
+  if (fromProvider !== undefined) return fromProvider
   for (const [prefix, size] of SORTED_FAMILIES) {
     if (model.startsWith(prefix)) return size
   }

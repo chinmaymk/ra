@@ -190,10 +190,10 @@ export class AgentLoop {
     return { role: 'tool', content, toolCallId: tc.id, ...(isError && { isError: true }) }
   }
 
-  async run(initialMessages: IMessage[], _compactionRetries = 0): Promise<LoopResult> {
-    const startTime = Date.now()
+  async run(initialMessages: IMessage[], _compactionRetries = 0, _priorState?: { iterations: number; usage: TokenUsage; startTime: number }): Promise<LoopResult> {
+    const startTime = _priorState?.startTime ?? Date.now()
     const messages = initialMessages
-    let iterations = 0
+    let iterations = _priorState?.iterations ?? 0
     const controller = new AbortController()
     this.externalAbort = controller
     let stopReason: string | undefined
@@ -208,7 +208,7 @@ export class AgentLoop {
 
     const stoppable: StoppableContext = { stop, signal, logger: this.logger }
 
-    const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
+    const usage: TokenUsage = _priorState?.usage ?? { inputTokens: 0, outputTokens: 0 }
     let lastUsage: TokenUsage | undefined
 
     const loopCtx = (): LoopContext => ({ ...stoppable, messages, iteration: iterations, maxIterations: this.maxIterations, sessionId: this.sessionId, usage, lastUsage, resumed: this.resumed })
@@ -320,7 +320,7 @@ export class AgentLoop {
         if (compacted) {
           this.logger.info('compaction recovery succeeded, restarting loop', { messageCount: messages.length, attempt: _compactionRetries + 1 })
           this.externalAbort = null
-          return this.run(messages, _compactionRetries + 1)
+          return this.run(messages, _compactionRetries + 1, { iterations, usage, startTime })
         }
         this.logger.error('compaction recovery failed', { attempt: _compactionRetries + 1 })
       }

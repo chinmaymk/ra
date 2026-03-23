@@ -594,6 +594,138 @@ describe('createCompactionMiddleware', () => {
     await mw(ctx)
     expect(ctx.request.messages).toEqual(messages)
   })
+
+  it('replaces existing summary instead of stacking on repeated compaction', async () => {
+    let callCount = 0
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => {
+        callCount++
+        return { message: { role: 'assistant' as const, content: `Summary v${callCount}.` } }
+      },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'System prompt' },
+      { role: 'user', content: 'First message' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'Latest message' },
+    ]
+    // First compaction
+    const ctx1 = makeCtx(messages)
+    await mw(ctx1)
+    const afterFirst = ctx1.request.messages
+
+    // Simulate resume: add more messages to the compacted result
+    afterFirst.push(
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'Another message' },
+    )
+    // Second compaction
+    const ctx2 = makeCtx(afterFirst)
+    await mw(ctx2)
+    const afterSecond = ctx2.request.messages
+
+    // Count [Context Summary] occurrences — should be exactly 1, not 2
+    const allContent = afterSecond.map(m =>
+      typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+    ).join('\n')
+    const summaryCount = (allContent.match(/\[Context Summary\]/g) || []).length
+    expect(summaryCount).toBe(1)
+    // Should contain the latest summary, not the first
+    expect(allContent).toContain('Summary v2')
+  })
+
+  it('uses provider.contextWindow() for threshold when available', async () => {
+    let chatCalled = false
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => {
+        chatCalled = true
+        return { message: { role: 'assistant' as const, content: 'Summary.' } }
+      },
+      async *stream() { yield { type: 'done' as const } },
+      // Provider reports a very large context window — compaction should NOT trigger
+      contextWindow: () => 10_000_000,
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages, 'unknown-model')
+    await mw(ctx)
+    // Provider says 10M window → threshold is 8M → ~250 tokens won't trigger
+    expect(chatCalled).toBe(false)
+  })
+
+  it('provider.contextWindow() is overridden by config.contextWindow', async () => {
+    let chatCalled = false
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => {
+        chatCalled = true
+        return { message: { role: 'assistant' as const, content: 'Summary.' } }
+      },
+      async *stream() { yield { type: 'done' as const } },
+      // Provider reports large window, but config overrides it
+      contextWindow: () => 10_000_000,
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages, 'unknown-model')
+    await mw(ctx)
+    // config.maxTokens=10 overrides provider, so compaction SHOULD trigger
+    expect(chatCalled).toBe(true)
+  })
+
+  it('reports accurate post-compaction token estimate in onCompact', async () => {
+    let reportedTokens = 0
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => ({
+        message: { role: 'assistant' as const, content: 'Short summary.' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const longText = 'word '.repeat(200)
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      onCompact: (info) => { reportedTokens = info.estimatedTokens },
+    })
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    // Set a stale lastUsage that's much higher than actual post-compaction size
+    ctx.loop.lastUsage = { inputTokens: 999_999, outputTokens: 0 }
+    await mw(ctx)
+    // Post-compaction estimate should reflect the new (smaller) messages, not the stale 999_999
+    expect(reportedTokens).toBeLessThan(999_999)
+    expect(reportedTokens).toBeGreaterThan(0)
+  })
 })
 
 describe('isContextLengthError', () => {
