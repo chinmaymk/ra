@@ -20,6 +20,25 @@ Key properties:
 - **Pinned zones** — System prompts and initial context never get compacted.
 - **Tool-call-aware** — Boundaries never split an assistant message from its tool results.
 - **Provider-portable** — Works the same across all providers. Default compaction models: Haiku for Anthropic, GPT-4o-mini for OpenAI, Gemini Flash for Google.
+- **Dynamic context window learning** — For unknown models (custom fine-tunes, local models, new releases), ra learns the real context window from provider errors. The first time a model hits a context limit, ra parses the actual size from the error message and caches it — all future compaction thresholds use the correct value automatically.
+
+### Context window resolution
+
+ra resolves the context window in this order:
+
+1. **Config override** — `compaction.contextWindow` in your config
+2. **Learned from errors** — cached from a previous context length error
+3. **Model registry** — built-in lookup by model name prefix
+
+If none of these match, ra **skips proactive compaction** and relies on the error-driven path. The first time the model rejects a request for exceeding its context limit, ra parses the real size from the error, caches it, and compacts. From that point on, proactive compaction works correctly.
+
+For best results with unknown models, set the context window explicitly:
+
+```yaml
+agent:
+  compaction:
+    contextWindow: 32000   # for a 32k model
+```
 
 ## Token tracking
 

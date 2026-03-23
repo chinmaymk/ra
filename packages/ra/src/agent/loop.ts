@@ -3,7 +3,8 @@ import type { IProvider, IMessage, IToolCall, TokenUsage, ThinkingMode, Thinking
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
 import type { ToolRegistry } from './tool-registry'
-import { createCompactionMiddleware, forceCompact, isContextLengthError, type CompactionConfig } from './context-compaction'
+import { createCompactionMiddleware, forceCompact, isContextLengthError, parseContextWindowFromError, type CompactionConfig } from './context-compaction'
+import { setLearnedContextWindow } from './model-registry'
 import { accumulateUsage, parseToolArguments } from '../providers/utils'
 import { withTimeout } from './timeout'
 import { randomUUID } from 'node:crypto'
@@ -310,6 +311,12 @@ export class AgentLoop {
       }
       // Attempt recovery via compaction when a provider rejects due to context length.
       if (this.compactionConfig && currentPhase === 'stream' && isContextLengthError(err) && _compactionRetries < MAX_COMPACTION_RETRIES) {
+        // Learn the real context window from the error so future compactions trigger at the right time
+        const parsedLimit = parseContextWindowFromError(err)
+        if (parsedLimit && this.model) {
+          this.logger.info('learned context window from error', { model: this.model, contextWindow: parsedLimit })
+          setLearnedContextWindow(this.model, parsedLimit)
+        }
         this.logger.info('context length exceeded, attempting compaction recovery', { attempt: _compactionRetries + 1, maxRetries: MAX_COMPACTION_RETRIES })
         const modelCallCtx: ModelCallContext = {
           ...stoppable,
