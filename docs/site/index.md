@@ -113,6 +113,8 @@ ra --mcp-stdio
 
 Now Cursor or Claude Desktop has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt.
 
+New to ra? Start with [Concepts](/concepts/) to understand how the pieces fit together.
+
 ## What's in the box
 
 | Feature | Description |

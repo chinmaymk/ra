@@ -81,6 +81,8 @@ export default defineConfig({
           { text: 'Middleware', link: '/concepts/middleware' },
           { text: 'Skills', link: '/concepts/skills' },
           { text: 'Recipes', link: '/concepts/recipes' },
+          { text: 'Configuration', link: '/concepts/configuration' },
+          { text: 'Sessions & Memory', link: '/concepts/sessions' },
         ],
       },
       {
