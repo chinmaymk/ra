@@ -1,6 +1,6 @@
 # Inspector
 
-A standalone web dashboard for debugging agent sessions. Serves a single-page app that lets you browse sessions, inspect messages, view token usage, and trace every tool call the agent made.
+A standalone web dashboard for debugging agent sessions. Every action the model takes — every tool call, every iteration, every token spent — is captured automatically and presented in a single UI. Run your agent, then open the inspector to see exactly what happened and why.
 
 ```bash
 ra --inspector                          # launch on default port 3002
@@ -11,47 +11,45 @@ ra --inspector --inspector-port 8080    # custom port
 
 Open `http://localhost:3002` in your browser.
 
-## Views
+## Overview dashboard
 
 ![Inspector Overview](/inspector-overview.png)
 
-### Session views
+The Overview tab gives you the full picture of any session at a glance. At the top, a session header shows the provider, model, interface, and timestamp. Below that, stats cards surface the key numbers:
+
+- **Duration** — total wall-clock time for the session
+- **Iterations** — how many loop iterations the agent completed
+- **Total tokens** — cumulative input + output across all model calls
+- **Input / Output tokens** — broken out separately so you can see the ratio
+- **Cache hit %** — what fraction of input tokens came from the prompt cache (higher = cheaper)
+- **Tool calls / Tool errors** — how many tools were invoked and how many failed
+- **Messages** — total message count in the conversation
+- **Status** — final loop status (OK or error)
+
+The **Tokens per Iteration** chart is a horizontal bar for every iteration, showing input (blue), output (green), and thinking (purple) tokens. Each bar is annotated with duration, total tokens, and tool count. You can see exactly where the model was thinking hardest, where cache hits kicked in (bars shrink as prefix caching warms up), and which iterations triggered tool calls.
+
+The **Tool Usage** table lists every tool used in the session, sorted by call count, with columns for errors, total execution time, and average execution time. Spot slow tools, frequent failures, or unexpected usage patterns at a glance.
+
+## Session views
 
 Select a session from the sidebar to see its data across five tabs:
 
 | Tab | What it shows |
 |-----|---------------|
-| **Overview** | Stats dashboard — duration, iterations, token totals, tool call counts, per-iteration token bar chart, tool usage table |
-| **Timeline** | Chronological event stream — model calls, tool executions, warnings, and errors merged into a single timeline |
-| **Messages** | Full message history — user, assistant, system, and tool messages with collapsible thinking blocks |
-| **Logs** | Structured log entries — timestamp, level, message, and metadata fields |
-| **Traces** | Hierarchical span tree — OpenTelemetry-style view with duration, status, and attributes per span |
+| **Overview** | Stats dashboard — duration, iterations, token totals, cache hit %, tool call/error counts, per-iteration token chart, tool usage table |
+| **Timeline** | Chronological event stream — every model call (with token delta and cache %), every tool execution (with inputs/outputs), warnings and errors |
+| **Messages** | Full message history — user, assistant, system, and tool messages with collapsible thinking blocks. See exactly what the model saw and said at each turn |
+| **Logs** | Structured log entries — timestamp, level, message, and metadata fields from every subsystem |
+| **Traces** | Hierarchical span tree — `agent.loop` → `agent.iteration` → `agent.model_call` / `agent.tool_execution` with duration, status, and attributes |
 
-### Global views
+## Global views
 
 | Tab | What it shows |
 |-----|---------------|
-| **Config** | Resolved configuration (API keys redacted) |
-| **Context** | Discovered context files and glob patterns |
+| **Config** | Resolved configuration (API keys redacted) — see exactly what settings the agent ran with |
+| **Context** | Discovered context files and glob patterns — verify what the model was given as context |
 | **Middleware** | Active middleware hooks and registered functions |
 | **Memory** | Browse, search, add, and delete persistent memories |
-
-## Overview dashboard
-
-![Overview dashboard](/inspector-overview.png)
-
-The Overview tab aggregates trace data into an at-a-glance summary:
-
-- **Stats cards** — total duration, iteration count, input/output/thinking tokens, tool calls, tool errors, message count, and loop status (ok/error)
-- **Token chart** — horizontal bar per iteration showing input (blue), output (green), and thinking (purple) token usage relative to the most expensive iteration
-- **Tool table** — every tool used in the session, sorted by call count, with error count and total/average execution time
-
-> The Overview tab requires observability traces. Traces are enabled by default — if you see "No trace data available", check that tracing hasn't been disabled:
->
-> ```yaml
-> tracesEnabled: true   # default: true
-> logsEnabled: true     # default: true
-> ```
 
 ## Timeline
 
