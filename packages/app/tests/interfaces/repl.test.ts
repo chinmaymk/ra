@@ -80,15 +80,25 @@ describe('Repl', () => {
     expect(output).toContain('hello')
   })
 
-  it('handleCommand /clear resets messages and creates new session', async () => {
+  it('handleCommand /clear resets messages, clears pending state, and creates new session', async () => {
     const storage = await makeStorage()
-    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage })
+    const { skillIndex } = createTestSkill('test-skill', 'skill body')
+    const repl = new Repl({ model: 'test', provider: mockProvider('hello'), tools: new ToolRegistry(), storage, skillIndex })
 
-    // First process some input to build history
+    // Build up state: process input, set pending skill
     await repl.processInput('first message')
+    const oldSessionId = (repl as any).sessionId
+    await repl.handleCommand('/skill test-skill')
 
     const response = await repl.handleCommand('/clear')
-    expect(response).toBe('Message history cleared.')
+    const newSessionId = (repl as any).sessionId
+
+    expect(response).toContain('Session cleared')
+    expect(response).toContain(newSessionId)
+    expect(newSessionId).not.toBe(oldSessionId)
+    expect((repl as any).messages).toEqual([])
+    expect((repl as any).pendingSkill).toBeUndefined()
+    expect((repl as any).pendingAttachments).toEqual([])
   })
 
   it('handleCommand /save returns session info', async () => {
@@ -675,5 +685,63 @@ describe('Repl.start()', () => {
     expect(stored.filter(m => m.role === 'system').length).toBe(1)
     expect(stored.filter(m => m.role === 'user').length).toBe(2)
     expect(stored.filter(m => m.role === 'assistant').length).toBe(2)
+  })
+
+  it('/clear creates a new session and isolates messages on disk', async () => {
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider: mockProvider('ok'), tools: new ToolRegistry(), storage, systemPrompt: 'sys' })
+
+    // First turn in original session
+    await repl.processInput('before clear')
+    const oldSessionId = (repl as any).sessionId as string
+    const oldStored = await storage.readMessages(oldSessionId)
+    expect(oldStored.length).toBe(3) // system + user + assistant
+
+    // Clear and start a new session
+    await repl.handleCommand('/clear')
+    const newSessionId = (repl as any).sessionId as string
+    expect(newSessionId).not.toBe(oldSessionId)
+
+    // New session should have no messages yet
+    const newStoredBefore = await storage.readMessages(newSessionId)
+    expect(newStoredBefore.length).toBe(0)
+
+    // Send a message in the new session
+    await repl.processInput('after clear')
+    const newStored = await storage.readMessages(newSessionId)
+    expect(newStored.length).toBe(3) // system + user + assistant
+    expect(newStored.some(m => typeof m.content === 'string' && m.content.includes('before clear'))).toBe(false)
+    expect(newStored.some(m => typeof m.content === 'string' && m.content.includes('after clear'))).toBe(true)
+
+    // Old session should be unchanged
+    const oldStoredAfter = await storage.readMessages(oldSessionId)
+    expect(oldStoredAfter.length).toBe(3)
+  })
+
+  it('/clear prevents old messages from reaching the model', async () => {
+    const requestMessages: IMessage[][] = []
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error() },
+      async *stream(req) {
+        requestMessages.push([...req.messages])
+        yield { type: 'text', delta: 'ok' }
+        yield { type: 'done' }
+      },
+    }
+    const storage = await makeStorage()
+    const repl = new Repl({ model: 'test', provider, tools: new ToolRegistry(), storage, systemPrompt: 'sys' })
+
+    await repl.processInput('first turn')
+    await repl.handleCommand('/clear')
+    await repl.processInput('fresh start')
+
+    // The second model call (after /clear) should only have system + user — no prior history
+    const postClearReq = requestMessages[1]!
+    expect(postClearReq.filter(m => m.role === 'system').length).toBe(1)
+    const userMsgs = postClearReq.filter(m => m.role === 'user')
+    expect(userMsgs.length).toBe(1)
+    expect(JSON.stringify(userMsgs[0]?.content)).toContain('fresh start')
+    expect(JSON.stringify(postClearReq)).not.toContain('first turn')
   })
 })

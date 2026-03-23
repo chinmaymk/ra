@@ -55,6 +55,35 @@ describe('REPL integration', () => {
     expect(msgs.filter(hasUserText).length).toBe(1)
   })
 
+  it('/clear command — creates a new session and prints new session ID', async () => {
+    env.mock.enqueue([{ type: 'text', content: 'Before clear.' }])
+    env.mock.enqueue([{ type: 'text', content: 'After clear.' }])
+
+    const proc = spawnBinary(['--repl', '--model', 'claude-sonnet-4-6'], env.binaryEnv)
+    await delay(500)
+    proc.write('first message\n')
+    await delay(800)
+    proc.write('/clear\n')
+    await delay(300)
+    const clearOutput = await proc.readAvailable()
+    proc.write('second message\n')
+    await delay(800)
+    proc.kill()
+
+    // The /clear output should contain the new session ID
+    expect(clearOutput).toContain('Session cleared')
+
+    // Both requests should have been made (one before clear, one after)
+    const reqs = env.mock.requests()
+    expect(reqs.length).toBeGreaterThanOrEqual(2)
+
+    // The second request must not contain any content from the first turn
+    const secondReqBody = reqs[1]?.body as any
+    const secondReqStr = JSON.stringify(secondReqBody)
+    expect(secondReqStr).not.toContain('first message')
+    expect(secondReqStr).toContain('second message')
+  })
+
   it('/attach <file> includes file content in next request', async () => {
     const tmpDir = join(tmpdir(), `ra-repl-attach-${Date.now()}`)
     mkdirSync(tmpDir, { recursive: true })
