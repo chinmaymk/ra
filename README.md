@@ -47,34 +47,35 @@ ra                    # interactive REPL
 
 ## What can you do with ra?
 
-**Automate your dev workflow.** Point ra at your codebase and tell it to fix a bug, write tests, or refactor a module. It reads the code, makes changes, runs the tests, and iterates until they pass — all without you watching.
+**Automate your dev workflow.** Fix bugs, write tests, refactor — ra reads the code, makes changes, runs the tests, and iterates until they pass.
 
 ```bash
 ra "Fix the failing tests and open a PR"
 ```
 
-**Debug issues faster.** Pipe a log file or error trace into ra and get an explanation in seconds. Chain it with `--skill` to apply specialized analysis like code review or security auditing.
+**Research and analyze.** Survey a technology landscape, compare options, or pipe in logs and documents for analysis. ra fetches pages, reads files, cross-references sources, and writes up findings.
 
 ```bash
-cat error.log | ra "Explain this error"
-ra --skill debugger --file crash.log "Find the root cause"
+ra "Compare the top 3 vector databases for a 10M-document RAG pipeline. \
+    Write findings to report.md"
+ra --file quarterly-report.pdf "Extract key metrics and summarize the outlook"
+cat access.log | ra "Find the top 10 IPs by request count and flag anomalies"
 ```
 
-**Run agents on a schedule.** Set up cron jobs that monitor your APIs, check for stale dependencies, or generate daily reports — each run gets its own session and logs.
+**Generate content from your repo.** Changelogs, release notes, migration guides — anything grounded in your actual code and git history.
+
+```bash
+ra "Write a changelog for v3.0 based on commits since the v2.9 tag"
+```
+
+**Run unattended.** Cron jobs for monitoring, reports, or triage — each run gets its own session and logs. Or plug ra into your editor as an [MCP server](https://chinmaymk.github.io/ra/modes/mcp/).
 
 ```bash
 ra --interface cron
-```
-
-**Plug into your editor.** Run ra as an [MCP server](https://chinmaymk.github.io/ra/modes/mcp/) and connect it to Cursor, Claude Desktop, or any MCP-compatible tool. Your editor gets a specialist that knows your project's conventions.
-
-```bash
 ra --mcp-stdio
 ```
 
-**Build custom agents.** A single config file turns ra into a purpose-built agent. Add [skills](https://chinmaymk.github.io/ra/skills/) (reusable instruction sets), [middleware](https://chinmaymk.github.io/ra/middleware/) (hooks that intercept every step), and [permissions](https://chinmaymk.github.io/ra/permissions/) (rules that constrain what tools can do). Everything is plain files — YAML config, Markdown skills, TypeScript middleware — so the agent itself can extend its own capabilities at runtime.
-
-**Orchestrate multiple agents.** Spawn persistent specialist agents as independent processes with resumable conversations. One agent coordinates, others execute.
+**Build custom agents.** A single [config file](https://chinmaymk.github.io/ra/configuration/) with [skills](https://chinmaymk.github.io/ra/skills/), [middleware](https://chinmaymk.github.io/ra/middleware/), and [permissions](https://chinmaymk.github.io/ra/permissions/) turns ra into a purpose-built agent. Spawn [multiple agents](https://chinmaymk.github.io/ra/recipes/) as independent processes when one isn't enough.
 
 ## Why ra?
 
@@ -105,7 +106,6 @@ agent:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
-ra --help
 ```
 
 ## Quick Start

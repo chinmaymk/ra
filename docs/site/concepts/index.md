@@ -70,6 +70,33 @@ ra
 
 Attach files, ask follow-ups, keep context. Resume the session tomorrow with `/resume`.
 
+### Research a topic
+
+```bash
+ra "Survey the current state of WebTransport support across browsers and CDNs. \
+    Write a summary with a recommendation to research.md"
+```
+
+Fetches pages, reads specs, compares options, and writes a structured report you can share with your team.
+
+### Analyze a dataset
+
+```bash
+ra --file survey-results.csv "Find the three strongest correlations, \
+    flag any obvious outliers, and write a one-page summary"
+```
+
+Reads the file, runs shell commands to slice the data, and delivers findings in plain language.
+
+### Generate release notes
+
+```bash
+ra "Write a changelog for v3.0 based on commits since the v2.9 tag. \
+    Group by feature, fix, and breaking change."
+```
+
+Walks git history, categorizes commits, and produces a polished changelog — works for release notes, migration guides, or any structured writing grounded in your repo.
+
 ### Your product needs AI
 
 ```bash
