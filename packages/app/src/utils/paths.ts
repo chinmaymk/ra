@@ -1,5 +1,6 @@
 import { join, isAbsolute, basename, normalize, sep, resolve } from 'path'
 import { homedir } from 'os'
+import { createHash } from 'node:crypto'
 
 /**
  * Cross-platform home directory.
@@ -44,6 +45,19 @@ export function looksLikePath(s: string, extraExtensions?: string[]): boolean {
  */
 export function firstSegment(relPath: string): string {
   return relPath.split(/[/\\]/)[0] ?? ''
+}
+
+/**
+ * Deterministic, human-readable handle for a config directory.
+ * Format: `{basename}-{hash8}` where hash8 is the first 8 hex chars of
+ * SHA-256 of the normalized absolute path.  Used to namespace centralized
+ * data (sessions, memory) under ~/.ra/.
+ */
+export function configHandle(configDir: string): string {
+  const normalized = normalize(configDir)
+  const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 8)
+  const name = basename(normalized) || 'root'
+  return `${name}-${hash}`
 }
 
 export { isAbsolute, join, basename, normalize, sep, resolve }

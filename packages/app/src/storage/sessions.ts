@@ -13,6 +13,8 @@ export interface SessionMeta {
   provider: string
   model: string
   interface: string
+  namespace?: string
+  configDir?: string
 }
 
 export interface Session {
@@ -24,6 +26,8 @@ export interface CreateSessionOptions {
   provider: string
   model: string
   interface: string
+  namespace?: string
+  configDir?: string
 }
 
 export interface PruneOptions {
@@ -133,5 +137,62 @@ export class SessionStorage {
     }
 
     await Promise.all([...toDelete].map(id => rm(this.sessionDir(id), { recursive: true, force: true })))
+  }
+
+  /** Delete a single session by ID. */
+  async delete(id: string): Promise<void> {
+    await rm(this.sessionDir(id), { recursive: true, force: true })
+    this.logger.info('session deleted', { sessionId: id })
+  }
+
+  /** Delete all sessions in this storage directory. */
+  async deleteAll(): Promise<void> {
+    const sessions = await this.list()
+    await Promise.all(sessions.map(s => rm(this.sessionDir(s.id), { recursive: true, force: true })))
+    this.logger.info('all sessions deleted', { count: sessions.length })
+  }
+
+  /** List sessions across all namespaces under a global directory (e.g. ~/.ra/). */
+  static async listAll(globalDir: string): Promise<Session[]> {
+    const glob = new Bun.Glob('*/sessions/*/meta.json')
+    const sessions: Session[] = []
+    for await (const rel of glob.scan({ cwd: globalDir, onlyFiles: true })) {
+      try {
+        const meta = JSON.parse(await Bun.file(join(globalDir, rel)).text()) as SessionMeta
+        sessions.push({ id: meta.id, meta })
+      } catch { /* skip corrupt entries */ }
+    }
+    return sessions
+  }
+
+  /** List all handle (namespace) directories under the global directory. */
+  static async listHandles(globalDir: string): Promise<string[]> {
+    const glob = new Bun.Glob('*/sessions')
+    const handles: string[] = []
+    for await (const rel of glob.scan({ cwd: globalDir, onlyFiles: false })) {
+      handles.push(rel.replace(/\/sessions$/, ''))
+    }
+    return handles.sort()
+  }
+
+  /** Delete a session from a specific namespace under the global directory. */
+  static async deleteFromNamespace(globalDir: string, namespace: string, id: string): Promise<void> {
+    const sanitized = id.replace(UNSAFE_SESSION_ID_CHARS, '')
+    if (!sanitized) throw new Error('Invalid session ID')
+    await rm(join(globalDir, namespace, 'sessions', sanitized), { recursive: true, force: true })
+  }
+
+  /** Delete an entire handle directory (all sessions + data for a project). */
+  static async deleteHandle(globalDir: string, namespace: string): Promise<void> {
+    await rm(join(globalDir, namespace), { recursive: true, force: true })
+  }
+
+  /** Delete all sessions across all namespaces under the global directory. */
+  static async deleteAllGlobal(globalDir: string): Promise<void> {
+    const sessions = await SessionStorage.listAll(globalDir)
+    await Promise.all(sessions.map(s => {
+      if (!s.meta.namespace) return Promise.resolve()
+      return SessionStorage.deleteFromNamespace(globalDir, s.meta.namespace, s.id)
+    }))
   }
 }

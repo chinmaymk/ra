@@ -1,7 +1,7 @@
 import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
-import { resolvePath, looksLikePath } from '../utils/paths'
+import { resolvePath, looksLikePath, homeDir, configHandle } from '../utils/paths'
 import { interpolateEnvVars, coerceTypes } from '../utils/config-helpers'
 import { defaultConfig } from './defaults'
 import { CONFIG_FILES } from '../registry/helpers'
@@ -362,8 +362,12 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   const config = merged as unknown as RaConfig
   config.app.configDir = configDir
 
-  // Resolve dataDir against configDir
-  config.app.dataDir = resolvePath(config.app.dataDir, configDir)
+  // Resolve dataDir: empty default → centralized ~/.ra/<handle>/, explicit → relative to configDir
+  if (config.app.dataDir === '') {
+    config.app.dataDir = join(homeDir(), '.ra', configHandle(configDir))
+  } else {
+    config.app.dataDir = resolvePath(config.app.dataDir, configDir)
+  }
 
   // Prepend recipe arrays (they were lost during deepMerge)
   if (recipeArrays) prependRecipeArrays(config, recipeArrays)

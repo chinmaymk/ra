@@ -39,7 +39,7 @@ Infrastructure, deployment, and observability. Recipes typically don't set these
 | Field | Default | Purpose |
 |-------|---------|---------|
 | `app.interface` | `'repl'` | Entry point: cli, repl, http, mcp |
-| `app.dataDir` | `'.ra'` | Root directory for all runtime data (sessions, memory) |
+| `app.dataDir` | `~/.ra/<handle>/` | Root directory for all runtime data (sessions, memory), centralized and namespaced by project |
 | `app.configDir` | cwd | Directory containing the config file |
 | `app.http` | `{ port: 3000, token: '' }` | HTTP server settings |
 | `app.inspector` | `{ port: 3002 }` | Inspector server settings |

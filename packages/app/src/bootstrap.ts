@@ -3,7 +3,7 @@
  * memory, MCP, observability) from a resolved config.  Returns a single
  * `AppContext` that the interface layer can consume.
  */
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import {
   ToolRegistry,
   getDefaultCompactionModel,
@@ -29,9 +29,23 @@ import { loadSkillIndex, buildAvailableSkillsXml } from './skills/loader'
 import type { SkillIndex } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
-import { resolvePath } from './utils/paths'
+import { resolvePath, configHandle } from './utils/paths'
 import type { Tracer } from './observability/tracer'
 import type { Middleware } from '@chinmaymk/ra'
+
+/** Sanitize config for snapshot (mask secrets). */
+function sanitizeConfigSnapshot(config: RaConfig): unknown {
+  const copy = JSON.parse(JSON.stringify(config))
+  if (copy.app?.providers) {
+    for (const p of Object.values(copy.app.providers)) {
+      if (p && typeof p === 'object' && 'apiKey' in (p as Record<string, unknown>)) {
+        (p as Record<string, unknown>).apiKey = '***'
+      }
+    }
+  }
+  if (copy.app?.http?.token) copy.app.http.token = '***'
+  return copy
+}
 
 /** Prepend a middleware to a hook array (creates the array if needed). */
 function prepend<T>(arr: Middleware<T>[] | undefined, mw: Middleware<T>): Middleware<T>[] {
@@ -49,6 +63,7 @@ export interface AppContext {
   middleware: Partial<MiddlewareConfig>
   skillIndex: Map<string, SkillIndex>
   storage: SessionStorage
+  namespace: string
   sessionId: string
   resumed: boolean
   contextMessages: IMessage[]
@@ -70,11 +85,20 @@ export async function bootstrap(
   const { join } = await import('path')
   const storagePath = join(app.dataDir, 'sessions')
   const memoryPath = join(app.dataDir, 'memory.db')
+  const namespace = configHandle(app.configDir)
 
   // ── Storage & session ──────────────────────────────────────────────
   // Storage is created before observability — logger will be set after createObservability()
   const storage = new SessionStorage(storagePath)
   await storage.init()
+
+  const sessionOpts = {
+    provider: agent.provider,
+    model: agent.model,
+    interface: app.interface,
+    namespace,
+    configDir: app.configDir,
+  }
 
   let sessionId: string
   let sessionDir: string | undefined
@@ -86,21 +110,13 @@ export async function bootstrap(
       if (!latest) throw new Error('No sessions to resume')
       sessionId = latest.id
     } else {
-      const ensured = await storage.ensureSession(opts.resume, {
-        provider: agent.provider,
-        model: agent.model,
-        interface: app.interface,
-      })
+      const ensured = await storage.ensureSession(opts.resume, sessionOpts)
       sessionId = ensured.id
     }
     sessionDir = storage.sessionDir(sessionId)
     await mkdir(sessionDir, { recursive: true })
   } else {
-    sessionId = (await storage.create({
-      provider: agent.provider,
-      model: agent.model,
-      interface: app.interface,
-    })).id
+    sessionId = (await storage.create(sessionOpts)).id
     sessionDir = storage.sessionDir(sessionId)
     await mkdir(sessionDir, { recursive: true })
   }
@@ -313,6 +329,26 @@ export async function bootstrap(
     })
   }
 
+  // ── Handle snapshot (for inspector cross-handle views) ────────────
+  {
+    const snapshot = {
+      config: sanitizeConfigSnapshot(config),
+      context: {
+        patterns: agent.context.patterns,
+        files: contextFiles.map(f => ({ path: f.path, relativePath: f.relativePath, content: f.content })),
+      },
+      middleware: {
+        hooks: Object.fromEntries(
+          Object.entries(middleware)
+            .filter(([, fns]) => fns && fns.length > 0)
+            .map(([name, fns]) => [name, fns!.map(fn => fn.name || '(anonymous)')]),
+        ),
+        configMiddleware: agent.middleware,
+      },
+    }
+    writeFile(join(app.dataDir, 'handle-snapshot.json'), JSON.stringify(snapshot, null, 2)).catch(() => {})
+  }
+
   // ── Shutdown ───────────────────────────────────────────────────────
   const shutdown = async () => {
     logger.info('shutting down')
@@ -329,6 +365,7 @@ export async function bootstrap(
     middleware,
     skillIndex,
     storage,
+    namespace,
     sessionId,
     resumed: !!opts.resume,
     contextMessages,
