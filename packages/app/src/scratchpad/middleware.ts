@@ -75,16 +75,9 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
       lines.join('\n\n') +
       `\n${SCRATCHPAD_MARKER_END}`
 
-    // Append just before the final user message so the scratchpad lives in the
-    // tail region. This avoids shifting the stable prefix that providers cache.
-    let insertIdx = messages.length
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i]?.role === 'user') {
-        insertIdx = i
-        break
-      }
-    }
-
-    messages.splice(insertIdx, 0, { role: 'user', content: block })
+    // Append as the final message so the scratchpad is the last thing the model
+    // sees before generating. This keeps the entire prefix byte-identical across
+    // turns, maximizing provider prompt-cache hit rates.
+    messages.push({ role: 'user', content: block })
   }
 }
