@@ -575,7 +575,7 @@ describe('AgentLoop', () => {
       provider,
       tools,
       maxIterations: 10,
-      compaction: { enabled: true, threshold: 0.8, maxTokens: 200, contextWindow: 1000 },
+      compaction: { enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 200, contextWindow: 1000 },
     })
 
     const result = await loop.run([

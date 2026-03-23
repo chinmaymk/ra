@@ -57,8 +57,8 @@ agent:
 
   compaction:
     enabled: true
-    threshold: 0.70
-    model: claude-haiku-4-5-20251001
+    threshold: 0.90
+    strategy: truncate           # or 'summarize'
 
   context:
     enabled: true
@@ -137,8 +137,9 @@ agent:
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
 | `agent.compaction.enabled` | — | `true` | Enable automatic context compaction |
-| `agent.compaction.threshold` | — | `0.70` | Trigger at this fraction of context window |
-| `agent.compaction.model` | — | provider default | Model for summarization |
+| `agent.compaction.threshold` | — | `0.90` | Trigger at this fraction of context window |
+| `agent.compaction.strategy` | — | `'truncate'` | `'truncate'` drops old messages (free, cache-friendly); `'summarize'` calls a model |
+| `agent.compaction.model` | — | provider default | Model for summarization (only used with `strategy: 'summarize'`) |
 
 ### Agent — Context
 

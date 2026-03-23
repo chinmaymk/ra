@@ -116,6 +116,7 @@ export interface AgentConfig {
   compaction: {
     enabled: boolean
     threshold: number      // 0-1, trigger ratio of context window
+    strategy?: 'truncate' | 'summarize' // 'truncate' drops old messages (free, cache-friendly), 'summarize' calls the model
     maxTokens?: number     // absolute token trigger, overrides threshold * contextWindow
     contextWindow?: number // per-provider override for context window size
     model?: string         // cheaper model for summarization, defaults per provider

@@ -25,7 +25,7 @@ describe('forceCompact', () => {
       { role: 'user' as const, content: 'latest' },
     ]
     const ctx = makeModelCallCtx(messages)
-    const result = await forceCompact(summaryProvider(), { enabled: true, threshold: 0.99, contextWindow: 100 }, ctx)
+    const result = await forceCompact(summaryProvider(), { enabled: true, threshold: 0.99, strategy: 'summarize', contextWindow: 100 }, ctx)
     expect(result).toBe(true)
     const hasSummary = ctx.request.messages.some(
       m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
@@ -45,7 +45,7 @@ describe('AgentLoop context-length error recovery', () => {
       { role: 'assistant' as const, content: longContent },
       { role: 'user' as const, content: 'latest' },
     ]
-    const config = { enabled: true, threshold: 0.8, maxTokens: 99999, contextWindow: 100 }
+    const config = { enabled: true, threshold: 0.8, strategy: 'summarize' as const, maxTokens: 99999, contextWindow: 100 }
 
     expect(isContextLengthError(new Error('This request has too many tokens'))).toBe(true)
 

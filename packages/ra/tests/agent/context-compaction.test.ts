@@ -205,7 +205,7 @@ describe('createCompactionMiddleware', () => {
       }),
       async *stream() { yield { type: 'done' as const } },
     }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100 })
     const longText = 'word '.repeat(200)
     const messages: IMessage[] = [
       { role: 'system', content: 'System prompt here' },
@@ -248,7 +248,7 @@ describe('createCompactionMiddleware', () => {
       }),
       async *stream() { yield { type: 'done' as const } },
     }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100 })
     const longText = 'word '.repeat(200)
     const messages: IMessage[] = [
       { role: 'system', content: 'System prompt' },
@@ -280,7 +280,7 @@ describe('createCompactionMiddleware', () => {
       chat: async () => { throw new Error('API rate limit') },
       async *stream() { yield { type: 'done' as const } },
     }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100 })
     const longText = 'word '.repeat(200)
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
@@ -302,7 +302,7 @@ describe('createCompactionMiddleware', () => {
       }),
       async *stream() { yield { type: 'done' as const } },
     }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100 })
     const longText = 'word '.repeat(200)
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
@@ -335,7 +335,7 @@ describe('createCompactionMiddleware', () => {
       }),
       async *stream() { yield { type: 'done' as const } },
     }
-    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100 })
     const longText = 'word '.repeat(200)
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
@@ -375,7 +375,7 @@ describe('createCompactionMiddleware', () => {
       async *stream() { yield { type: 'done' as const } },
     }
     const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100,
       model: 'claude-haiku-4-5-20251001',
     })
     const longText = 'word '.repeat(200)
@@ -428,7 +428,7 @@ describe('createCompactionMiddleware', () => {
       async *stream() { yield { type: 'done' as const } },
     }
     const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100,
       onCompact: (info) => { compactInfo = info },
     })
     const longText = 'word '.repeat(200)
@@ -477,7 +477,7 @@ describe('createCompactionMiddleware', () => {
       async *stream() { yield { type: 'done' as const } },
     }
     const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100,
       onCompact: () => { called = true },
     })
     const longText = 'word '.repeat(200)
@@ -511,7 +511,7 @@ describe('createCompactionMiddleware', () => {
     ]
     const ctx = makeCtx(messages)
     // Very high threshold that would never trigger normally, but small contextWindow so messages are compactable
-    const result = await forceCompact(provider, { enabled: true, threshold: 0.99, contextWindow: 100 }, ctx)
+    const result = await forceCompact(provider, { enabled: true, threshold: 0.99, strategy: 'summarize', contextWindow: 100 }, ctx)
     expect(result).toBe(true)
     const hasSummary = ctx.request.messages.some(
       m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
@@ -532,7 +532,7 @@ describe('createCompactionMiddleware', () => {
     }
     const customPrompt = 'You are a custom summarizer. Summarize everything in bullet points.'
     const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100,
       prompt: customPrompt,
     })
     const longText = 'word '.repeat(200)
@@ -562,7 +562,7 @@ describe('createCompactionMiddleware', () => {
       async *stream() { yield { type: 'done' as const } },
     }
     const mw = createCompactionMiddleware(provider, {
-      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100,
     })
     const longText = 'word '.repeat(200)
     const messages: IMessage[] = [
@@ -577,6 +577,108 @@ describe('createCompactionMiddleware', () => {
     await mw(ctx)
     expect(receivedPrompt).toContain('<instructions>')
     expect(receivedPrompt).toContain('<conversation>')
+  })
+
+  it('truncate strategy drops old messages without API call', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'System prompt here' },
+      { role: 'user', content: 'First user message here' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'Latest message' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    // Should have fewer messages (compactable zone dropped)
+    expect(ctx.request.messages.length).toBeLessThan(messages.length)
+    // No summary injected (no API call made)
+    const hasSummary = ctx.request.messages.some(
+      m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
+    )
+    expect(hasSummary).toBe(false)
+    // Pinned zone preserved exactly
+    expect(ctx.request.messages[0]).toEqual({ role: 'system', content: 'System prompt here' })
+    expect(ctx.request.messages[1]).toEqual({ role: 'user', content: 'First user message here' })
+  })
+
+  it('truncate strategy preserves pinned zone immutably', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: [{ type: 'text' as const, text: 'look at this image' }] },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    // Pinned user message should be unchanged (not mutated with summary)
+    const pinnedUser = ctx.request.messages.find(m => m.role === 'user' && Array.isArray(m.content))
+    expect(pinnedUser).toBeDefined()
+    expect(pinnedUser!.content).toEqual([{ type: 'text', text: 'look at this image' }])
+  })
+
+  it('truncate strategy calls onCompact callback', async () => {
+    let compactInfo: Record<string, unknown> | undefined
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.8, maxTokens: 10, contextWindow: 100,
+      onCompact: (info) => { compactInfo = info },
+    })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    expect(compactInfo).toBeDefined()
+    expect(compactInfo!.originalMessages).toBe(6)
+    expect(compactInfo!.compactedMessages).toBeLessThan(6)
+  })
+
+  it('forceCompact with truncate strategy drops without API call', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: longText },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    const result = await forceCompact(provider, { enabled: true, threshold: 0.99, contextWindow: 100 }, ctx)
+    expect(result).toBe(true)
+    expect(ctx.request.messages.length).toBeLessThan(messages.length)
   })
 
   it('skips when nothing to compact (all pinned)', async () => {
