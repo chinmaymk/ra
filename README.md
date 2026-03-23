@@ -23,7 +23,7 @@
 
 ---
 
-Give ra a task and watch it work — step by step, tool by tool.
+When an agent run fails, you want to know what it actually did. ra shows you.
 
 ```bash
 ra "Fix the failing tests and open a PR"
@@ -35,7 +35,7 @@ iteration 2  Edit src/auth.ts · Bash bun test → passed
 iteration 3  Bash git commit + push
 ```
 
-Every iteration logged, every tool call visible. Middleware hooks at every step so you can redirect, constrain, or stop the loop before anything goes wrong.
+Every iteration, every tool call, every decision — logged and inspectable. And you can hook into any step.
 
 ```bash
 ra --provider anthropic --model claude-sonnet-4-6 "Review this PR"
@@ -47,15 +47,17 @@ ra                    # interactive REPL
 
 ## Why ra
 
-Most agent tools give you a prompt and a result. ra gives you the loop — explicit, observable, and yours to control.
+Agents fail in ways that are hard to debug — silent retries, unexpected tool calls, runaway loops. Most tools give you the output; you don't see the loop.
 
-Not a framework. Not prompt chains. Just the loop, with hooks at every step.
+ra makes the loop the thing. Every step is explicit. Every step has a hook.
+
+Not a framework. Not prompt chains. Just the loop, with control at every step.
 
 ```ts
-// stop before anything destructive runs
+// block destructive commands before they run
 export default async (ctx) => {
   if (ctx.tool.name === 'Bash' && ctx.tool.input.includes('--force')) {
-    ctx.stop("Blocked: destructive flag")
+    ctx.stop("Blocked")
   }
 }
 ```
