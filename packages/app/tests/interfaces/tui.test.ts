@@ -199,8 +199,11 @@ describe('StreamBuffer', () => {
   it('outputs text immediately without buffering', () => {
     const b = new StreamBuffer(40)
     expect(b.write('hello world')).toBe('hello world')
-    // end() is a no-op since everything was already written
-    expect(b.end()).toBe('')
+    // end() clears raw output and returns markdown-rendered version
+    const out = b.end()
+    expect(out).toContain('hello world')
+    // Should start with ANSI cursor-clear sequence
+    expect(out).toContain('\x1b[K')
   })
 
   it('replaces newlines with newline + prefix', () => {

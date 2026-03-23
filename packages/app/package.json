@@ -1,12 +1,6 @@
 {
   "name": "ra-app",
   "version": "0.0.5",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "ra": "bun run src/index.ts",
-    "compile": "bun build src/index.ts --compile --target bun --outfile dist/ra --define __RA_VERSION__='\"'$(bun -e \"process.stdout.write(require('../ra/package.json').version)\")'\"' --define __RA_COMMIT__='\"'$(git rev-parse --short HEAD)'\"'"
-  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1001.0",
@@ -17,9 +11,17 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "cron-parser": "^5.5.0",
     "js-yaml": "^4.1.1",
+    "marked": "^17.0.5",
+    "marked-terminal": "^7.3.0",
     "ollama": "^0.6.3",
     "openai": "^6.25.0",
     "smol-toml": "^1.6.0",
     "zod": "^3.25 || ^4.0"
-  }
+  },
+  "private": true,
+  "scripts": {
+    "ra": "bun run src/index.ts",
+    "compile": "bun build src/index.ts --compile --target bun --outfile dist/ra --define __RA_VERSION__='\"'$(bun -e \"process.stdout.write(require('../ra/package.json').version)\")'\"' --define __RA_COMMIT__='\"'$(git rev-parse --short HEAD)'\"'"
+  },
+  "type": "module"
 }

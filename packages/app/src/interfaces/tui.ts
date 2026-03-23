@@ -1,4 +1,9 @@
-// Pure ANSI TUI utilities — no external dependencies
+// TUI utilities — terminal rendering with markdown support
+
+import { marked } from 'marked'
+import { markedTerminal } from 'marked-terminal'
+
+marked.use(markedTerminal())
 
 export const ansi = {
   reset: '\x1b[0m',
@@ -95,20 +100,42 @@ export const RESPONSE_PREFIX = `  `
 /** Visible column width of RESPONSE_PREFIX. */
 export const RESPONSE_PREFIX_LEN = 2
 
-/** Pass-through stream writer that outputs text immediately for responsive
- * token display. Newlines are re-prefixed with RESPONSE_PREFIX so each new
- * line retains the proper indent. No buffering — tokens appear as they arrive. */
+/** Render a markdown string to ANSI-styled terminal output. */
+export function renderMarkdown(text: string): string {
+  const rendered = marked.parse(text) as string
+  // Add RESPONSE_PREFIX to each line and trim trailing blank lines
+  return rendered
+    .replace(/\n+$/, '')
+    .split('\n')
+    .map((line) => RESPONSE_PREFIX + line)
+    .join('\n')
+}
+
+/** Stream writer that outputs raw text during streaming for responsiveness,
+ * then re-renders with markdown formatting on completion. Accumulates all
+ * text so `end()` can clear raw output and replace with styled markdown. */
 export class StreamBuffer {
+  private accumulated = ''
+  private linesWritten = 0
+
   constructor(private readonly contentWidth: number) {}
 
-  /** Write text immediately, replacing newlines with newline + indent prefix. */
+  /** Write text immediately (raw), accumulating for later re-render. */
   write(text: string): string {
-    return text.replaceAll('\n', '\n' + RESPONSE_PREFIX)
+    this.accumulated += text
+    const output = text.replaceAll('\n', '\n' + RESPONSE_PREFIX)
+    this.linesWritten += countNewlines(output)
+    return output
   }
 
-  /** No-op — all content was already written during streaming. */
+  /** Clear raw streamed output and replace with markdown-rendered version. */
   end(): string {
-    return ''
+    if (!this.accumulated) return ''
+    // Move cursor up to the start of streamed text, clear below
+    const clearSequence = this.linesWritten > 0
+      ? `\r\x1b[${this.linesWritten}A\x1b[J`
+      : '\r\x1b[K'
+    return clearSequence + renderMarkdown(this.accumulated)
   }
 }
 
