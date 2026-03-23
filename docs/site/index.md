@@ -1,20 +1,25 @@
 # ra
 
-ra is the predictable, observable agent harness — built to run autonomously. Nothing hidden behind abstractions you can't reach. Every part of the loop is exposed via config and extensible with plain TypeScript. [Middleware hooks](/middleware/) intercept every step — model calls, tool execution, streaming. [Permissions](/permissions/) constrain what tools can do with regex allow/deny rules.
+ra is an open-source agent harness — give it a task, point it at an LLM, and let it work. It reads files, runs commands, calls APIs, and loops until the job is done. You stay in control through a simple config file that defines what the agent can and can't do.
 
-You get full control over [context engineering](/core/context-control). Automatic discovery walks your repo for `CLAUDE.md`, `AGENTS.md`, and configured patterns. Inline resolvers expand `@file` references and `url:` links before the model sees the prompt. Cache-aware [compaction](/core/context-control) manages long conversations — truncating from the back to keep prompt caches warm, or summarizing when you need semantic preservation. When a provider returns a context-length error, ra learns the real window size and adjusts.
+## What can you build with ra?
 
-It's designed for long-running, unattended operation. The loop runs until the task is done — no arbitrary iteration caps. [Adaptive thinking](/core/context-control) scales reasoning depth with the task. [Token budgets and duration limits](/core/agent-loop) set hard guardrails.
+**Automate your dev workflow.** Point ra at your codebase and tell it to fix a bug, write tests, or refactor a module. It reads the code, makes changes, runs the tests, and iterates until they pass — all without you watching.
 
-It comes with [built-in tools](/tools/) for filesystem, shell, network, and parallelization. Tool calls execute concurrently by default. The [Agent tool](/tools/#agent) spawns independent sub-agents for parallel workstreams. Connect to [MCP servers](/modes/mcp) for additional tools — or expose ra itself as an MCP server for Cursor, Claude Desktop, or anything that speaks the protocol.
+**Debug issues faster.** Pipe a log file or error trace into ra and get an explanation in seconds. Chain it with `--skill` to apply specialized analysis like code review or security auditing.
 
-Because everything is plain files — skills are Markdown, middleware is TypeScript, config is YAML — the model itself can extend its own capabilities at runtime. It can write new [skills](/skills/), add [middleware](/middleware/), create scripts. You set the guardrails; it builds what it needs within them.
+**Run agents on a schedule.** Set up cron jobs that monitor your APIs, check for stale dependencies, or generate daily reports — each run gets its own session and logs.
 
-Every action is observable. Structured JSONL logs and trace spans are written per-session automatically. The built-in [inspector](/modes/inspector) gives you a full dashboard — per-iteration token breakdown, tool call frequency, cache hit rates, timeline of every model call and tool execution, the complete message history. When someone asks "what did the agent do?" — open the inspector and see for yourself.
+**Plug into your editor.** Run ra as an [MCP server](/modes/mcp) and connect it to Cursor, Claude Desktop, or any MCP-compatible tool. Your editor gets a specialist that knows your project's conventions.
 
-It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), [MCP server](/modes/mcp), or on a [cron schedule](/modes/cron). Persistent [sessions](/core/sessions) via JSONL, scoped per-project. An FTS5 [memory](/tools/#memory) backed by SQLite. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch providers with a flag. No runtime dependencies.
+**Build custom agents.** A single config file turns ra into a purpose-built agent. Add [skills](/skills/) (reusable instruction sets), [middleware](/middleware/) (hooks that intercept every step), and [permissions](/permissions/) (rules that constrain what tools can do). Everything is plain files — YAML config, Markdown skills, TypeScript middleware — so the agent itself can extend its own capabilities at runtime.
 
-All of this is [configurable](/configuration/) via a layered config system — env vars, config files (JSON, YAML, TOML), or CLI flags. Each layer overrides the last.
+## Why ra?
+
+- **Predictable.** No magic. The [agent loop](/core/agent-loop) is explicit: call the model, execute tools, repeat. [Middleware hooks](/middleware/) let you intercept, modify, or block any step.
+- **Observable.** Every run produces structured logs, trace spans, and token metrics. The built-in [inspector](/modes/inspector) shows you exactly what the agent did — every model call, tool execution, and decision.
+- **Runs anywhere.** Use it as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), [MCP server](/modes/mcp), or [cron job](/modes/cron). Works with Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch providers with a flag.
+- **No limits on autonomy.** The loop runs until the task is done — no arbitrary iteration caps. [Token budgets](/core/agent-loop) and [duration limits](/core/agent-loop) set the guardrails you choose.
 
 ## Install
 
