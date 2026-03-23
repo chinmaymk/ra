@@ -41,6 +41,8 @@ ra --mcp-stdio                                                  # MCP server for
 ra --interface cron                                             # scheduled autonomous jobs
 ```
 
+New to ra? Start with [Concepts](/concepts/) to understand how the pieces fit together.
+
 ## The config is the agent
 
 Drop a `ra.config.yml` in a repo and that directory becomes a project-specific assistant. Set env vars for a different persona. Pass `--skill` to inject a role at runtime. Run `--mcp-stdio` to expose it as a tool for Cursor or Claude Desktop. Run `--interface cron` for scheduled unattended jobs. Same binary, different agent — every time.

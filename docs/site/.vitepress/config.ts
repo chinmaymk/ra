@@ -72,9 +72,22 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Core',
+        text: 'Concepts',
         items: [
           { text: 'What is ra?', link: '/concepts/' },
+          { text: 'The Agent Loop', link: '/concepts/agent-loop' },
+          { text: 'Providers', link: '/concepts/providers' },
+          { text: 'Tools', link: '/concepts/tools' },
+          { text: 'Middleware', link: '/concepts/middleware' },
+          { text: 'Skills', link: '/concepts/skills' },
+          { text: 'Recipes', link: '/concepts/recipes' },
+          { text: 'Configuration', link: '/concepts/configuration' },
+          { text: 'Sessions & Memory', link: '/concepts/sessions' },
+        ],
+      },
+      {
+        text: 'Core',
+        items: [
           { text: 'The Agent Loop', link: '/core/agent-loop' },
           { text: 'Context Control', link: '/core/context-control' },
           { text: 'Sessions', link: '/core/sessions' },
