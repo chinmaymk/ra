@@ -52,10 +52,26 @@ function onChange() {
   window.location.href = window.location.origin + base + page
 }
 
+// True when the user is on the root /ra/ build (not under /dev/ or /v/).
+function isRootBuild(): boolean {
+  return !window.location.pathname.match(/^\/ra\/(?:dev|v\/)/)
+}
+
 onMounted(async () => {
   try {
     const res = await fetch(`${SITE_ROOT}versions.json`)
-    if (res.ok) versions.value = await res.json()
+    if (res.ok) {
+      versions.value = await res.json()
+
+      // Root build serves the latest release — redirect to the canonical
+      // versioned URL so the picker stays in sync with the address bar.
+      if (versions.value?.latest && isRootBuild()) {
+        const page = currentPagePath()
+        const target = versionBase(versions.value.latest) + page
+        window.location.replace(window.location.origin + target)
+        return
+      }
+    }
   } catch {
     // versions.json unavailable — picker shows current version only
   }
