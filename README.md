@@ -37,14 +37,13 @@ ra "Fix the failing tests and open a PR"
 iteration 1  Read src/auth.ts · Bash bun test → 12 failures
 iteration 2  Edit src/auth.ts · Bash bun test → 3 failures
 iteration 3  Edit src/auth.ts · Bash bun test → passed
-iteration 4  Bash git commit + push
+iteration 4  Bash git add · git commit · git push
 ```
 
 ## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
-export ANTHROPIC_API_KEY="sk-..."
 ```
 
 Works with Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch with `--provider`.
@@ -73,12 +72,11 @@ agent:
 Intercept any step in the loop. Full context at every step — read it, mutate it, stop it.
 
 ```ts
-// log every tool call with its duration
+// log every tool call
 export const hook = 'afterToolExecution'
 export default async (ctx) => {
-  const { name, input } = ctx.tool
-  const ms = Date.now() - ctx.tool.startedAt
-  logger.info('tool', { name, input, ms })
+  const { name, arguments: args } = ctx.toolCall
+  ctx.logger.info('tool', { name, args })
 }
 ```
 
@@ -86,8 +84,8 @@ export default async (ctx) => {
 // block destructive commands
 export const hook = 'beforeToolExecution'
 export default async (ctx) => {
-  if (ctx.tool.name === 'Bash' && ctx.tool.input.includes('--force')) {
-    ctx.stop("Blocked")
+  if (ctx.toolCall.name === 'Bash' && ctx.toolCall.arguments.includes('--force')) {
+    ctx.deny("Blocked: --force not allowed")
   }
 }
 ```
@@ -96,7 +94,7 @@ Hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelRespons
 
 ## Observability
 
-Every model call, tool execution, and decision is logged automatically.
+Every model call, tool execution, and decision is captured automatically.
 
 `ra --inspector` shows the full run: iterations, tokens, tools, traces, message history.
 
@@ -164,13 +162,6 @@ ra --config recipes/coding-agent/ra.config.yaml "Fix the failing test"
 [**GitHub Actions**](https://chinmaymk.github.io/ra/modes/github-actions/) — `uses: chinmaymk/ra@latest`, no install step.
 
 Full reference in the [docs](https://chinmaymk.github.io/ra/).
-
-## Building from Source
-
-```bash
-git clone https://github.com/chinmaymk/ra.git && cd ra
-bun install && bun run compile
-```
 
 ## License
 
