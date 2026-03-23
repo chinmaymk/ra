@@ -5,6 +5,8 @@ import {
   type ContentPart,
   type MiddlewareConfig,
   type StreamChunkContext,
+  type ToolExecutionContext,
+  type ToolResultContext,
 } from '@chinmaymk/ra'
 import { buildThreadMessages, createSessionLoop, type BaseLoopOptions } from './messages'
 import { fileToContentPart } from '../utils/files'
@@ -36,16 +38,33 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   const content: string | ContentPart[] = parts.length === 1 ? prompt : parts
   initialMessages.push({ role: 'user', content })
 
-  const thinkingState = tui.createStreamState()
-  const streamHook: Partial<MiddlewareConfig> = {
+  const tuiState = tui.createStreamState()
+  const tuiHooks: Partial<MiddlewareConfig> = {
     onStreamChunk: [async (ctx: StreamChunkContext) => {
-      if (ctx.chunk.type === 'thinking') {
-        tui.handleStreamChunk(thinkingState, ctx.chunk.type, ctx.chunk.delta)
-      } else if (ctx.chunk.type === 'text') {
-        if (thinkingState.thinkingOpened) tui.collapseThinking(thinkingState)
-        onChunk(ctx.chunk.delta)
+      const chunk = ctx.chunk
+      const delta = 'delta' in chunk ? chunk.delta : undefined
+      const toolName = chunk.type === 'tool_call_start' ? chunk.name : undefined
+      if (chunk.type === 'text' && delta) {
+        if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
+        if (!tuiState.boxOpened) { tuiState.boxOpened = true }
+        onChunk(delta)
+      } else {
+        tui.handleStreamChunk(tuiState, chunk.type, delta, toolName)
       }
     }],
+    beforeToolExecution: [
+      async (ctx: ToolExecutionContext) => {
+        tui.clearPendingTools(tuiState)
+        if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
+        tuiState.toolStartTimes.set(ctx.toolCall.id, Date.now())
+        tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
+      },
+    ],
+    afterToolExecution: [
+      async (ctx: ToolResultContext) => {
+        tui.printToolResult(ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
+      },
+    ],
   }
 
   let loop: AgentLoop
@@ -55,7 +74,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
       sessionId: options.sessionId,
       priorCount,
       resumed: sessionMessages.length > 0,
-      extraMiddleware: streamHook,
+      extraMiddleware: tuiHooks,
     })
     loop = result.loop
   } else {
@@ -74,13 +93,13 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
       compaction: options.compaction,
       sessionId: options.sessionId,
       logger: session.logger,
-      middleware: mergeMiddleware(streamHook, session.middleware),
+      middleware: mergeMiddleware(tuiHooks, session.middleware),
       resumed: sessionMessages.length > 0,
     })
   }
 
   const result = await loop.run(initialMessages)
-  if (thinkingState.thinkingOpened) tui.collapseThinking(thinkingState)
+  if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
 
   return { messages: result.messages, priorCount }
 }
