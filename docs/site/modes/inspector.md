@@ -1,6 +1,6 @@
 # Inspector
 
-A standalone web dashboard for debugging and replaying agent sessions. Every action the model takes — every tool call, every iteration, every token spent — is captured automatically and presented in a single UI. Run your agent, then open the inspector to see exactly what happened and why.
+A standalone web dashboard for debugging agent sessions. Every action the model takes — every tool call, every iteration, every token spent — is captured automatically and presented in a single UI. Run your agent, then open the inspector to see exactly what happened and why.
 
 ```bash
 ra --inspector                          # launch on default port 3002

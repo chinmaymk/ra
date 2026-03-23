@@ -10,7 +10,7 @@ It comes with [built-in tools](/tools/) for filesystem, shell, network, and para
 
 Because everything is plain files — skills are Markdown, middleware is TypeScript, config is YAML — the model itself can extend its own capabilities at runtime. It can write new [skills](/skills/), add [middleware](/middleware/), create scripts. You set the guardrails; it builds what it needs within them.
 
-Every action is observable. Structured JSONL logs and trace spans are written per-session automatically. The built-in [inspector](/modes/inspector) gives you a full dashboard — per-iteration token breakdown, tool call frequency, cache hit rates, timeline of every model call and tool execution, the complete message history. When someone asks "what did the agent do?" — you can replay the entire run.
+Every action is observable. Structured JSONL logs and trace spans are written per-session automatically. The built-in [inspector](/modes/inspector) gives you a full dashboard — per-iteration token breakdown, tool call frequency, cache hit rates, timeline of every model call and tool execution, the complete message history. When someone asks "what did the agent do?" — open the inspector and see for yourself.
 
 It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), [MCP server](/modes/mcp), or on a [cron schedule](/modes/cron). Persistent [sessions](/core/sessions) via JSONL, scoped per-project. An FTS5 [memory](/tools/#memory) backed by SQLite. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch providers with a flag. No runtime dependencies.
 
@@ -108,7 +108,7 @@ Runs every 30 minutes with its own session, logs, and traces.
 ### Your editor needs a specialist
 
 ```bash
-ra --mcp-stdio --skill code-review
+ra --mcp-stdio
 ```
 
 Now Cursor or Claude Desktop has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt.

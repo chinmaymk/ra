@@ -72,7 +72,7 @@ Six [providers](https://chinmaymk.github.io/ra/providers/anthropic/) — Anthrop
 
 ```bash
 ra "Why is this test failing?" --file test-output.log    # coding agent
-ra --mcp-stdio --skill code-review                       # MCP tool for Cursor
+ra --mcp-stdio                                            # MCP tool for Cursor
 ra --http --http-port 3000                               # streaming HTTP API
 ra --interface cron                                      # scheduled jobs
 ```
@@ -136,7 +136,7 @@ agent:
 
 **Scheduled jobs.** The [cron interface](https://chinmaymk.github.io/ra/modes/cron/) runs agent jobs on a schedule — health checks, reports, triage — each with its own session, logs, and traces.
 
-**Full audit trail.** Every model call, tool execution, and middleware decision is captured in structured logs and traces. When an autonomous agent runs for 45 minutes at 2am, you can [replay exactly what it did](https://chinmaymk.github.io/ra/observability/).
+**Full audit trail.** Every model call, tool execution, and middleware decision is captured in structured logs and traces. When an autonomous agent runs for 45 minutes at 2am, you can [see exactly what it did](https://chinmaymk.github.io/ra/observability/).
 
 ## [Providers](https://chinmaymk.github.io/ra/providers/anthropic/)
 
@@ -226,8 +226,8 @@ Hooks for every phase: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `a
 Ra speaks MCP both ways. Run as an MCP server to expose any skill as a tool for Cursor, Claude Desktop, or other agents. Connect to external MCP servers to pull in their tools.
 
 ```bash
-ra --mcp-stdio --skill code-review          # expose as a stdio MCP server
-ra --mcp --mcp-server-port 4000 --skill architect   # expose over HTTP
+ra --mcp-stdio                              # expose as a stdio MCP server
+ra --mcp --mcp-server-port 4000             # expose over HTTP
 ```
 
 ```yaml
@@ -308,19 +308,7 @@ Every model call, tool execution, and middleware decision emits structured event
 
 ### [Inspector](https://chinmaymk.github.io/ra/modes/inspector/)
 
-`ra --inspector` launches a web dashboard that lets you replay and debug any session.
-
-The **Overview** tab gives you the full picture at a glance — total duration, iteration count, token breakdown (input, output, thinking, cache read, cache creation), cache hit percentage, tool call and error counts, loop status. A per-iteration bar chart shows exactly how tokens were spent across the run: where the model was thinking hardest, where cache hits kicked in, and where tool calls spiked.
-
-| Tab | What it shows |
-|-----|---------------|
-| **Overview** | Session stats, per-iteration token/tool breakdown chart, tool frequency table with call counts, errors, and timing |
-| **Timeline** | Chronological event stream — every model call (with token delta and cache %), every tool execution (with inputs/outputs), warnings and errors |
-| **Messages** | Full message history with collapsible thinking blocks — see exactly what the model saw and said at each turn |
-| **Logs** | Structured log entries with timestamp, level, message, and metadata — every subsystem logs here |
-| **Traces** | Hierarchical span tree — `agent.loop` → `agent.iteration` → `agent.model_call` / `agent.tool_execution` with duration and status |
-
-The inspector also shows resolved config (with API keys redacted), discovered context files, active middleware hooks, and persistent memories. Everything you need to answer "what did the agent do and why?"
+`ra --inspector` launches a web dashboard that lets you browse and debug any session. The overview shows total duration, iteration count, token breakdown (input, output, thinking, cache), cache hit percentage, tool call and error counts, loop status — plus a per-iteration chart showing exactly how tokens were spent across the run. Drill into the timeline for a chronological stream of every model call and tool execution, or the full message history to see what the model saw and said at each turn. Structured logs and hierarchical trace spans round out the picture.
 
 ```bash
 ra --inspector                  # launch the dashboard
