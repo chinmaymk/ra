@@ -37,7 +37,6 @@ ra "Fix the failing tests and open a PR"
 iteration 1  Read src/auth.ts · Bash bun test → 12 failures
 iteration 2  Edit src/auth.ts · Bash bun test → 3 failures
 iteration 3  Edit src/auth.ts · Bash bun test → passed
-iteration 4  Bash git add · git commit · git push
 ```
 
 ## Install
