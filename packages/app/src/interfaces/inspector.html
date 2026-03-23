@@ -76,11 +76,6 @@
   .tool-call { background: var(--bg); border-radius: 8px; padding: 10px 14px; margin-top: 8px; font-size: 12px; }
   .tool-call .name { color: var(--orange); font-weight: 600; }
   .tool-call .args { color: var(--text2); margin-top: 6px; max-height: 200px; overflow-y: auto; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-  .json-key { color: var(--accent); }
-  .json-str { color: var(--accent2); }
-  .json-num { color: var(--orange); }
-  .json-bool { color: var(--purple); }
-  .json-null { color: var(--red); opacity: 0.7; }
 
   /* Logs */
   .log-entry { display: grid; grid-template-columns: 180px 50px 1fr; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 12px; align-items: start; }
@@ -818,15 +813,13 @@
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   function highlightJson(obj) {
-    const raw = JSON.stringify(obj, null, 2);
-    if (raw == null) return '';
-    const escaped = esc(raw);
-    return escaped
-      .replace(/(&quot;(?:\\.|[^&]|&amp;)*?&quot;)\s*:/g, '<span class="json-key">$1</span>:')
-      .replace(/:\s*(&quot;(?:\\.|[^&]|&amp;)*?&quot;)/g, ': <span class="json-str">$1</span>')
-      .replace(/:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g, ': <span class="json-num">$1</span>')
-      .replace(/:\s*(true|false)\b/g, ': <span class="json-bool">$1</span>')
-      .replace(/:\s*(null)\b/g, ': <span class="json-null">$1</span>');
+    if (obj == null) return '';
+    // tc.arguments is a JSON string — parse it first so we can pretty-print
+    let parsed = obj;
+    if (typeof obj === 'string') {
+      try { parsed = JSON.parse(obj); } catch { return esc(obj); }
+    }
+    return esc(JSON.stringify(parsed, null, 2));
   }
 
   // ── Auto-refresh ──
