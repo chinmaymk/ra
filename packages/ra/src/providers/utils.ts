@@ -1,4 +1,4 @@
-import type { IMessage, TokenUsage, ContentPart } from './types'
+import type { IMessage, TokenUsage, ContentPart, StreamChunk } from './types'
 
 /**
  * Merge consecutive messages with the same role using a caller-supplied merge function.
@@ -82,6 +82,20 @@ export const DEFAULT_MAX_TOKENS = 4096
 export function parseToolArguments(args: string | Record<string, unknown>): Record<string, unknown> {
   if (typeof args !== 'string') return args
   try { return JSON.parse(args) } catch { return {} }
+}
+
+/**
+ * Wraps an async iterable of StreamChunks to guarantee a `{ type: 'done' }` is always
+ * yielded exactly once at the end, even if the underlying stream exits early.
+ * Providers that emit 'done' themselves will have it forwarded and no duplicate emitted.
+ */
+export async function* withDoneGuard(stream: AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk> {
+  let emittedDone = false
+  for await (const chunk of stream) {
+    if (chunk.type === 'done') emittedDone = true
+    yield chunk
+  }
+  if (!emittedDone) yield { type: 'done' }
 }
 
 export function extractSystemMessages(messages: IMessage[]): { system: string | undefined; filtered: IMessage[] } {

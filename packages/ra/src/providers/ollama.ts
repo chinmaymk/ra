@@ -1,5 +1,5 @@
 import { Ollama, type ChatRequest as OllamaChatRequest, type Message as OllamaMessage, type Tool as OllamaTool, type ToolCall as OllamaToolCall } from 'ollama'
-import { extractTextContent, parseToolArguments, serializeContent } from './utils'
+import { extractTextContent, parseToolArguments, serializeContent, withDoneGuard } from './utils'
 import type { IProvider, IMessage, ITool, ChatRequest, ChatResponse, StreamChunk } from './types'
 
 export interface OllamaProviderOptions {
@@ -32,8 +32,12 @@ export class OllamaProvider implements IProvider {
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
     const stream = await this.client.chat({ ...this.buildParams(request), stream: true })
+
+    yield* withDoneGuard(this.parseStream(stream))
+  }
+
+  private async *parseStream(stream: AsyncIterable<{ message?: { thinking?: string; content?: string; tool_calls?: Array<{ function: { name?: string; arguments?: Record<string, unknown> } }> }; done?: boolean; prompt_eval_count?: number; eval_count?: number }>): AsyncIterable<StreamChunk> {
     let toolCallIndex = 0
-    let emittedDone = false
 
     for await (const chunk of stream) {
       const msg = chunk.message
@@ -52,11 +56,9 @@ export class OllamaProvider implements IProvider {
         const usage = chunk.prompt_eval_count != null && chunk.eval_count != null
           ? { inputTokens: chunk.prompt_eval_count, outputTokens: chunk.eval_count }
           : undefined
-        emittedDone = true
         yield { type: 'done', usage }
       }
     }
-    if (!emittedDone) yield { type: 'done' }
   }
 
   mapMessages(messages: IMessage[]): OllamaMessage[] {

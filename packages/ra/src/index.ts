@@ -26,6 +26,7 @@ export {
   extractTextContent,
   serializeContent,
   extractSystemMessages,
+  withDoneGuard,
   THINKING_BUDGETS,
   resolveThinkingBudget,
 } from './providers/utils'

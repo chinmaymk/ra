@@ -25,25 +25,17 @@ function maybeRegister(registry: ToolRegistry, tool: ITool, config: ToolsConfig)
 export function registerBuiltinTools(registry: ToolRegistry, config?: ToolsConfig): void {
   const cfg: ToolsConfig = config ?? { builtin: true, overrides: {} }
 
-  // Filesystem — file tools accept optional rootDir constraint
-  const fsNames = ['Read', 'Write', 'Edit', 'AppendFile', 'LS', 'Grep', 'Glob', 'MoveFile', 'CopyFile', 'DeleteFile'] as const
-  const fsFactories: Record<string, (opts: { rootDir?: string }) => ITool> = {
-    Read:       (o) => readFileTool(o),
-    Write:      (o) => writeFileTool(o),
-    Edit:       (o) => updateFileTool(o),
-    AppendFile: (o) => appendFileTool(o),
-    LS:         (o) => listDirectoryTool(o),
-    Grep:       (o) => searchFilesTool(o),
-    Glob:       (o) => globFilesTool(o),
-    MoveFile:   (o) => moveFileTool(o),
-    CopyFile:   (o) => copyFileTool(o),
-    DeleteFile: (o) => deleteFileTool(o),
-  }
+  // Filesystem — each factory accepts optional rootDir constraint
+  const fsTools: Array<[string, (opts: { rootDir?: string }) => ITool]> = [
+    ['Read', readFileTool], ['Write', writeFileTool], ['Edit', updateFileTool],
+    ['AppendFile', appendFileTool], ['LS', listDirectoryTool], ['Grep', searchFilesTool],
+    ['Glob', globFilesTool], ['MoveFile', moveFileTool], ['CopyFile', copyFileTool],
+    ['DeleteFile', deleteFileTool],
+  ]
 
-  for (const name of fsNames) {
+  for (const [name, factory] of fsTools) {
     const rootDir = cfg.overrides[name]?.rootDir as string | undefined
-    const factory = fsFactories[name]
-    if (factory) maybeRegister(registry, factory(rootDir ? { rootDir } : {}), cfg)
+    maybeRegister(registry, factory(rootDir ? { rootDir } : {}), cfg)
   }
 
   // Shell — platform-specific

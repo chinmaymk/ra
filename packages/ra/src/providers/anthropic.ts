@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { extractSystemMessages, mergeConsecutiveRoles, parseToolArguments, serializeContent, THINKING_BUDGETS, resolveThinkingBudget, DEFAULT_MAX_TOKENS } from './utils'
+import { extractSystemMessages, mergeConsecutiveRoles, parseToolArguments, serializeContent, THINKING_BUDGETS, resolveThinkingBudget, DEFAULT_MAX_TOKENS, withDoneGuard } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 
@@ -56,14 +56,17 @@ export class AnthropicProvider implements IProvider {
       ...(request.signal ? [{ signal: request.signal }] : []),
     )
 
+    yield* withDoneGuard(this.parseStream(stream as AsyncIterable<Anthropic.MessageStreamEvent>))
+  }
+
+  private async *parseStream(stream: AsyncIterable<Anthropic.MessageStreamEvent>): AsyncIterable<StreamChunk> {
     let usage: TokenUsage | undefined
     let inputTokens = 0
     let cacheReadTokens = 0
     let cacheCreationTokens = 0
-    let emittedDone = false
     const activeToolCalls = new Map<number, string>()
 
-    for await (const event of stream as AsyncIterable<Anthropic.MessageStreamEvent>) {
+    for await (const event of stream) {
       switch (event.type) {
         case 'message_start': {
           const raw = (event as Anthropic.RawMessageStartEvent).message?.usage as unknown as RawAnthropicUsage | undefined
@@ -98,12 +101,10 @@ export class AnthropicProvider implements IProvider {
           break
         }
         case 'message_stop':
-          emittedDone = true
           yield { type: 'done', usage }
           break
       }
     }
-    if (!emittedDone) yield { type: 'done', usage }
   }
 
   mapMessages(messages: IMessage[]): Anthropic.MessageParam[] {

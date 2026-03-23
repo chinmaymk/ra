@@ -1,22 +1,12 @@
 import {
-  AgentLoop,
-  mergeMiddleware,
   extractTextContent,
   errorMessage,
-  type IProvider,
   type IMessage,
   type MiddlewareConfig,
   type StreamChunkContext,
-  type ToolRegistry,
-  type CompactionConfig,
-  type Logger,
-  type LogLevel,
-  type ThinkingMode,
 } from '@chinmaymk/ra'
 import type { SessionStorage } from '../storage/sessions'
-import type { SkillIndex } from '../skills/types'
-import { createSessionMiddleware } from '../agent/session'
-import { buildMessagePrefix, buildThreadMessages } from './messages'
+import { buildMessagePrefix, buildThreadMessages, createSessionLoop, type BaseLoopOptions } from './messages'
 import { timingSafeEqual } from 'crypto'
 
 function timingSafeCompare(a: string, b: string): boolean {
@@ -33,28 +23,10 @@ function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-export interface HttpOptions {
+export interface HttpOptions extends BaseLoopOptions {
   port: number
   token?: string
-  model: string
-  provider: IProvider
-  tools: ToolRegistry
   storage: SessionStorage
-  systemPrompt?: string
-  skillIndex?: Map<string, SkillIndex>
-  middleware?: Partial<MiddlewareConfig>
-  maxIterations?: number
-  maxRetries?: number
-  toolTimeout?: number
-  maxToolResponseSize?: number
-  thinking?: ThinkingMode
-  thinkingBudgetCap?: number
-  compaction?: CompactionConfig
-  contextMessages?: IMessage[]
-  logger?: Logger
-  logsEnabled?: boolean
-  logLevel?: LogLevel
-  tracesEnabled?: boolean
 }
 
 export class HttpServer {
@@ -177,32 +149,14 @@ export class HttpServer {
   }
 
   /** Create a session-scoped AgentLoop. */
-  private createLoop(sessionId: string, priorCount: number, extraMiddleware?: Partial<MiddlewareConfig>, resumed = false): AgentLoop {
-    const session = createSessionMiddleware(this.options.middleware, {
+  private createLoop(sessionId: string, priorCount: number, extraMiddleware?: Partial<MiddlewareConfig>, resumed = false) {
+    return createSessionLoop(this.options, {
       storage: this.options.storage,
       sessionId,
       priorCount,
-      logsEnabled: this.options.logsEnabled,
-      logLevel: this.options.logLevel,
-      tracesEnabled: this.options.tracesEnabled,
-      logger: this.options.logger,
-    })
-    return new AgentLoop({
-      provider: this.options.provider,
-      tools: this.options.tools,
-      model: this.options.model,
-      middleware: mergeMiddleware(extraMiddleware, session.middleware),
-      maxIterations: this.options.maxIterations,
-      maxRetries: this.options.maxRetries,
-      toolTimeout: this.options.toolTimeout,
-      maxToolResponseSize: this.options.maxToolResponseSize,
-      sessionId,
-      thinking: this.options.thinking,
-      thinkingBudgetCap: this.options.thinkingBudgetCap,
-      compaction: this.options.compaction,
-      logger: session.logger,
       resumed,
-    })
+      extraMiddleware,
+    }).loop
   }
 
   private async handleChatSync(req: Request): Promise<Response> {

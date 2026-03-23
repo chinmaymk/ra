@@ -1,56 +1,29 @@
 import readline from 'readline'
 import {
   AgentLoop,
-  mergeMiddleware,
   errorMessage,
   estimateTokens,
-  type ToolRegistry,
   type MiddlewareConfig,
   type StreamChunkContext,
   type ToolExecutionContext,
   type ToolResultContext,
   type IMessage,
-  type IProvider,
   type ContentPart,
-  type CompactionConfig,
-  type Logger,
-  type LogLevel,
-  type ThinkingMode,
 } from '@chinmaymk/ra'
 import { fileToContentPart } from '../utils/files'
 import type { SessionStorage } from '../storage/sessions'
-import { createSessionMiddleware } from '../agent/session'
 import type { Skill, SkillIndex } from '../skills/types'
 import { loadSkill, buildActiveSkillXml, readSkillReference } from '../skills/loader'
-import { buildThreadMessages } from './messages'
+import { buildThreadMessages, createSessionLoop, type BaseLoopOptions } from './messages'
 import type { MemoryStore } from '../memory/store'
 import { runSkillScriptByName } from '../skills/runner'
 import { extractContextFilePath } from '../context'
 import * as tui from './tui'
 
-export interface ReplOptions {
-  model: string
-  provider: IProvider
-  tools: ToolRegistry
+export interface ReplOptions extends BaseLoopOptions {
   storage: SessionStorage
-  systemPrompt?: string
-  skillIndex?: Map<string, SkillIndex>
-  middleware?: Partial<MiddlewareConfig>
-  maxIterations?: number
-  maxRetries?: number
-  toolTimeout?: number
-  maxToolResponseSize?: number
-  sessionId?: string
   resumed?: boolean
-  thinking?: ThinkingMode
-  thinkingBudgetCap?: number
-  compaction?: CompactionConfig
-  contextMessages?: IMessage[]
   memoryStore?: MemoryStore
-  logger?: Logger
-  logsEnabled?: boolean
-  logLevel?: LogLevel
-  tracesEnabled?: boolean
 }
 
 const DOUBLE_PRESS_TIMEOUT_MS = 1000
@@ -166,15 +139,6 @@ export class Repl {
 
     const tuiState = tui.createStreamState()
     tui.startSpinner()
-    const session = createSessionMiddleware(this.options.middleware, {
-      storage: this.options.storage,
-      sessionId: this.sessionId as string,
-      priorCount,
-      logsEnabled: this.options.logsEnabled,
-      logLevel: this.options.logLevel,
-      tracesEnabled: this.options.tracesEnabled,
-      logger: this.options.logger,
-    })
 
     const tuiHooks: Partial<MiddlewareConfig> = {
       onStreamChunk: [
@@ -206,21 +170,12 @@ export class Repl {
       ],
     }
 
-    const loop = new AgentLoop({
-      provider: this.options.provider,
-      tools: this.options.tools,
-      model: this.options.model,
-      maxIterations: this.options.maxIterations,
-      maxRetries: this.options.maxRetries,
-      toolTimeout: this.options.toolTimeout,
-      maxToolResponseSize: this.options.maxToolResponseSize,
-      sessionId: this.sessionId,
-      thinking: this.options.thinking,
-      thinkingBudgetCap: this.options.thinkingBudgetCap,
-      compaction: this.options.compaction,
-      logger: session.logger,
-      middleware: mergeMiddleware(tuiHooks, session.middleware),
+    const { loop } = createSessionLoop(this.options, {
+      storage: this.options.storage,
+      sessionId: this.sessionId as string,
+      priorCount,
       resumed: priorCount > 0,
+      extraMiddleware: tuiHooks,
     })
 
     this.activeLoop = loop

@@ -6,8 +6,9 @@ import {
   type ContentBlock,
   type Tool as BedrockTool,
   type ToolInputSchema,
+  type ConverseStreamOutput,
 } from '@aws-sdk/client-bedrock-runtime'
-import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, resolveThinkingBudget, DEFAULT_MAX_TOKENS } from './utils'
+import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, resolveThinkingBudget, DEFAULT_MAX_TOKENS, withDoneGuard } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
 
@@ -59,11 +60,14 @@ export class BedrockProvider implements IProvider {
     )
     if (!response.stream) return
 
+    yield* withDoneGuard(this.parseStream(response.stream))
+  }
+
+  private async *parseStream(stream: AsyncIterable<ConverseStreamOutput>): AsyncIterable<StreamChunk> {
     let usage: TokenUsage | undefined
     let currentToolCallId = ''
-    let emittedDone = false
 
-    for await (const event of response.stream) {
+    for await (const event of stream) {
       if (event.contentBlockStart?.start?.toolUse) {
         const { toolUseId, name } = event.contentBlockStart.start.toolUse
         currentToolCallId = toolUseId ?? ''
@@ -80,11 +84,9 @@ export class BedrockProvider implements IProvider {
       } else if (event.metadata?.usage) {
         usage = { inputTokens: event.metadata.usage.inputTokens ?? 0, outputTokens: event.metadata.usage.outputTokens ?? 0 }
       } else if (event.messageStop) {
-        emittedDone = true
         yield { type: 'done', usage }
       }
     }
-    if (!emittedDone) yield { type: 'done', usage }
   }
 
   mapMessages(messages: IMessage[]): BedrockMessage[] {
