@@ -47,54 +47,20 @@ ra                    # interactive REPL
 
 ## What can you do with ra?
 
-**Automate your dev workflow.** Point ra at your codebase and tell it to fix a bug, write tests, or refactor a module. It reads the code, makes changes, runs the tests, and iterates until they pass — all without you watching.
+ra loops over an LLM with tools until the job is done. That loop works for anything the model can reason about — not just code.
 
 ```bash
-ra "Fix the failing tests and open a PR"
+ra "Fix the failing tests and open a PR"                              # code
+ra "Compare the top 3 vector databases for our RAG pipeline. \
+    Write findings to report.md"                                      # research
+cat access.log | ra "Find the top 10 IPs and flag anomalies"          # analysis
+ra --file quarterly-report.pdf "Summarize the key metrics"            # documents
+ra "Write a changelog for v3.0 from commits since the v2.9 tag"      # writing
+ra --interface cron                                                   # scheduled jobs
+ra --mcp-stdio                                                       # editor integration
 ```
 
-**Research anything.** Give ra a question and let it work — it fetches web pages, reads documents, cross-references sources, and synthesizes findings. Use it to survey a technology landscape, compare API options, or compile competitive analysis.
-
-```bash
-ra "Compare the top 3 vector databases for a 10M-document RAG pipeline. \
-    Evaluate cost, latency, and managed hosting. Write findings to report.md"
-```
-
-**Debug issues faster.** Pipe a log file or error trace into ra and get an explanation in seconds. Chain it with `--skill` to apply specialized analysis like code review or security auditing.
-
-```bash
-cat error.log | ra "Explain this error"
-ra --skill debugger --file crash.log "Find the root cause"
-```
-
-**Analyze data and documents.** Attach a CSV, PDF, or log dump and ask questions. ra reads the content, runs shell commands to slice and transform it, and reports back with summaries, anomalies, or trends.
-
-```bash
-ra --file quarterly-report.pdf "Extract the key financial metrics and summarize the outlook"
-cat access.log | ra "Find the top 10 IPs by request count and flag any anomalies"
-```
-
-**Generate content from your repo.** Changelogs, release notes, migration guides, API docs — anything that should be grounded in your actual code and history.
-
-```bash
-ra "Write a changelog for v3.0 based on commits since the v2.9 tag"
-```
-
-**Run agents on a schedule.** Set up cron jobs that monitor your APIs, check for stale dependencies, or generate daily reports — each run gets its own session and logs.
-
-```bash
-ra --interface cron
-```
-
-**Plug into your editor.** Run ra as an [MCP server](https://chinmaymk.github.io/ra/modes/mcp/) and connect it to Cursor, Claude Desktop, or any MCP-compatible tool. Your editor gets a specialist that knows your project's conventions.
-
-```bash
-ra --mcp-stdio
-```
-
-**Build custom agents.** A single config file turns ra into a purpose-built agent. Add [skills](https://chinmaymk.github.io/ra/skills/) (reusable instruction sets), [middleware](https://chinmaymk.github.io/ra/middleware/) (hooks that intercept every step), and [permissions](https://chinmaymk.github.io/ra/permissions/) (rules that constrain what tools can do). Everything is plain files — YAML config, Markdown skills, TypeScript middleware — so the agent itself can extend its own capabilities at runtime.
-
-**Orchestrate multiple agents.** Spawn persistent specialist agents as independent processes with resumable conversations. One agent coordinates, others execute.
+A single [config file](https://chinmaymk.github.io/ra/configuration/) turns ra into a purpose-built agent — add [skills](https://chinmaymk.github.io/ra/skills/), [middleware](https://chinmaymk.github.io/ra/middleware/), and [permissions](https://chinmaymk.github.io/ra/permissions/) to shape what it can do. Spawn [multiple agents](https://chinmaymk.github.io/ra/recipes/) as independent processes when one isn't enough.
 
 ## Why ra?
 
