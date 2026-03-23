@@ -127,11 +127,11 @@ export function printToolCall(name: string, args: string): void {
   const prefix = `  ◆ ${name} `
   const maxFlat = cols - prefix.length - 1  // -1 for the ellipsis if truncated
   const truncated = flat.length > maxFlat ? flat.slice(0, maxFlat) + '…' : flat
-  process.stdout.write(`  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${truncated}${ansi.reset}`)
+  process.stdout.write(`  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${truncated}${ansi.reset}\n`)
 }
 
 export function printToolResult(name: string, ms: number): void {
-  process.stdout.write(`\r\x1b[K  ${ansi.greenBright}✔ ${name}${ansi.dim} (${ms}ms)${ansi.reset}\n`)
+  process.stdout.write(`  ${ansi.greenBright}✔ ${name}${ansi.dim} (${ms}ms)${ansi.reset}\n`)
 }
 
 export function printStatus(msg: string): void {
@@ -266,6 +266,6 @@ export function flushStreamState(state: TuiStreamState): void {
   const out = state.streamBuf?.end()
   if (out) process.stdout.write(out)
   if (state.boxOpened) closeAssistantBox()
-  else process.stdout.write('\n\n')
+  else process.stdout.write('\n')
 }
 
