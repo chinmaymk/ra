@@ -31,9 +31,10 @@ export function createSessionMiddleware(
 
   const hasObs = logsEnabled || tracesEnabled
   const obsHooks = hasObs ? createObservabilityMiddleware(logger, tracer) : undefined
+  const flush = async () => { await logger.flush(); await tracer.flush() }
   const flushHooks = hasObs ? {
-    afterLoopComplete: [async () => { await logger.flush(); await tracer.flush() }],
-    onError: [async () => { await logger.flush(); await tracer.flush() }],
+    afterLoopComplete: [flush],
+    onError: [flush],
   } as Partial<MiddlewareConfig> : undefined
 
   const historyHooks = createHistoryMiddleware(options.storage, options.priorCount)

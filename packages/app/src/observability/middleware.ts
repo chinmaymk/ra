@@ -2,6 +2,12 @@ import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContex
 import { cacheHitPercent } from '@chinmaymk/ra'
 import type { Tracer, Span } from './tracer'
 
+/** Safely parse JSON, returning undefined on failure. */
+function tryParseJson(text: string | undefined): Record<string, unknown> | undefined {
+  if (!text) return undefined
+  try { return JSON.parse(text) } catch { return undefined }
+}
+
 /**
  * Creates a complete set of observability middleware hooks.
  * This is the single integration point — no logger/tracer params
@@ -163,16 +169,14 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     }
 
     // For Agent calls, parse and log the task list
-    if (ctx.toolCall.name === 'Agent' && ctx.toolCall.arguments) {
-      try {
-        const parsed = JSON.parse(ctx.toolCall.arguments)
-        if (Array.isArray(parsed.tasks)) {
-          attrs.taskCount = parsed.tasks.length
-          attrs.tasks = parsed.tasks.map((t: { task: string }) =>
-            t.task.length > 100 ? t.task.slice(0, 100) + '…' : t.task
-          )
-        }
-      } catch { /* not valid JSON yet — streaming may be incomplete */ }
+    if (ctx.toolCall.name === 'Agent') {
+      const parsed = tryParseJson(ctx.toolCall.arguments)
+      if (parsed && Array.isArray(parsed.tasks)) {
+        attrs.taskCount = parsed.tasks.length
+        attrs.tasks = (parsed.tasks as { task: string }[]).map(t =>
+          t.task.length > 100 ? t.task.slice(0, 100) + '…' : t.task
+        )
+      }
     }
 
     const span = tracer.startSpan('agent.tool_execution', attrs, iterationSpan?.spanId)
@@ -192,29 +196,24 @@ export function createObservabilityMiddleware(logger: Logger, tracer: Tracer): P
     // For Agent calls, extract per-task results and aggregate usage
     let agentAttrs: Record<string, unknown> | undefined
     if (ctx.toolCall.name === 'Agent' && !ctx.result.isError && typeof ctx.result.content === 'string') {
-      try {
-        const parsed = JSON.parse(ctx.result.content)
-        if (Array.isArray(parsed.results)) {
-          const completed = parsed.results.filter((r: { status: string }) => r.status === 'completed').length
-          const errored = parsed.results.filter((r: { status: string }) => r.status === 'error').length
-          agentAttrs = {
-            taskCount: parsed.results.length,
-            tasksCompleted: completed,
-            tasksErrored: errored,
-            totalInputTokens: parsed.usage?.inputTokens,
-            totalOutputTokens: parsed.usage?.outputTokens,
-          }
-
-          logger.info('Agent tasks complete', {
-            toolCallId: ctx.toolCall.id,
-            taskCount: parsed.results.length,
-            tasksCompleted: completed,
-            tasksErrored: errored,
-            inputTokens: parsed.usage?.inputTokens,
-            outputTokens: parsed.usage?.outputTokens,
-          })
+      const parsed = tryParseJson(ctx.result.content)
+      if (parsed && Array.isArray(parsed.results)) {
+        const results = parsed.results as { status: string }[]
+        const completed = results.filter(r => r.status === 'completed').length
+        const errored = results.filter(r => r.status === 'error').length
+        agentAttrs = {
+          taskCount: results.length,
+          tasksCompleted: completed,
+          tasksErrored: errored,
+          totalInputTokens: (parsed.usage as Record<string, unknown> | undefined)?.inputTokens,
+          totalOutputTokens: (parsed.usage as Record<string, unknown> | undefined)?.outputTokens,
         }
-      } catch { /* result may not be JSON */ }
+
+        logger.info('Agent tasks complete', {
+          toolCallId: ctx.toolCall.id,
+          ...agentAttrs,
+        })
+      }
     }
 
     if (span) {

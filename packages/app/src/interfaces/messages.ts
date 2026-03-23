@@ -1,6 +1,43 @@
-import type { IMessage } from '@chinmaymk/ra'
+import {
+  AgentLoop,
+  mergeMiddleware,
+  type IMessage,
+  type IProvider,
+  type ToolRegistry,
+  type MiddlewareConfig,
+  type CompactionConfig,
+  type Logger,
+  type LogLevel,
+  type ThinkingMode,
+} from '@chinmaymk/ra'
 import type { SkillIndex } from '../skills/types'
+import type { SessionStorage } from '../storage/sessions'
+import { createSessionMiddleware } from '../agent/session'
 import { buildAvailableSkillsXml } from '../skills/loader'
+
+/** Fields shared by all interface option types (CLI, REPL, HTTP). */
+export interface BaseLoopOptions {
+  model: string
+  provider: IProvider
+  tools: ToolRegistry
+  systemPrompt?: string
+  skillIndex?: Map<string, SkillIndex>
+  middleware?: Partial<MiddlewareConfig>
+  maxIterations?: number
+  maxRetries?: number
+  toolTimeout?: number
+  maxToolResponseSize?: number
+  thinking?: ThinkingMode
+  thinkingBudgetCap?: number
+  compaction?: CompactionConfig
+  contextMessages?: IMessage[]
+  logger?: Logger
+  logsEnabled?: boolean
+  logLevel?: LogLevel
+  tracesEnabled?: boolean
+  storage?: SessionStorage
+  sessionId?: string
+}
 
 /**
  * Build the standard message prefix shared across all interfaces:
@@ -69,4 +106,46 @@ export function buildThreadMessages(options: {
     messages: [...options.storedMessages],
     priorCount: options.storedMessages.length,
   }
+}
+
+/**
+ * Create an AgentLoop with session middleware, extracting common fields from BaseLoopOptions.
+ * Consolidates the repeated pattern across CLI, REPL, and HTTP interfaces.
+ */
+export function createSessionLoop(
+  options: BaseLoopOptions,
+  params: {
+    storage: SessionStorage
+    sessionId: string
+    priorCount: number
+    resumed: boolean
+    extraMiddleware?: Partial<MiddlewareConfig>
+  },
+): { loop: AgentLoop; logger: Logger } {
+  const session = createSessionMiddleware(options.middleware, {
+    storage: params.storage,
+    sessionId: params.sessionId,
+    priorCount: params.priorCount,
+    logsEnabled: options.logsEnabled,
+    logLevel: options.logLevel,
+    tracesEnabled: options.tracesEnabled,
+    logger: options.logger,
+  })
+  const loop = new AgentLoop({
+    provider: options.provider,
+    tools: options.tools,
+    model: options.model,
+    maxIterations: options.maxIterations,
+    maxRetries: options.maxRetries,
+    toolTimeout: options.toolTimeout,
+    maxToolResponseSize: options.maxToolResponseSize,
+    thinking: options.thinking,
+    thinkingBudgetCap: options.thinkingBudgetCap,
+    compaction: options.compaction,
+    sessionId: params.sessionId,
+    logger: session.logger,
+    middleware: mergeMiddleware(params.extraMiddleware, session.middleware),
+    resumed: params.resumed,
+  })
+  return { loop, logger: session.logger }
 }

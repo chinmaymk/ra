@@ -6,13 +6,13 @@ export async function runMiddlewareChain<T extends StoppableContext>(
   chain: Middleware<T>[],
   timeoutMs: number = 0,
 ): Promise<void> {
-  for (const mw of chain) {
+  for (let i = 0; i < chain.length; i++) {
     if (ctx.signal.aborted) break
     try {
-      await (timeoutMs > 0 ? withTimeout(mw(ctx), timeoutMs, 'middleware') : mw(ctx))
+      await (timeoutMs > 0 ? withTimeout(chain[i]!(ctx), timeoutMs, 'middleware') : chain[i]!(ctx))
     } catch (err) {
       if (err instanceof TimeoutError) {
-        ctx.logger.warn('middleware timed out', { timeoutMs, middlewareIndex: chain.indexOf(mw) })
+        ctx.logger.warn('middleware timed out', { timeoutMs, middlewareIndex: i })
         continue
       }
       throw err

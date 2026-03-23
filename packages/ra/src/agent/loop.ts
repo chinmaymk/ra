@@ -243,7 +243,7 @@ export class AgentLoop {
         if (signal.aborted) break
 
         let textAccumulator = ''
-        const toolCallBuf: { id: string; name: string; argsRaw: string }[] = []
+        const toolCallBuf = new Map<string, { id: string; name: string; argsRaw: string }>()
 
         currentPhase = 'stream'
         await withRetry(async () => {
@@ -259,8 +259,8 @@ export class AgentLoop {
 
             // Accumulate stream data
             if (chunk.type === 'text') textAccumulator += chunk.delta
-            else if (chunk.type === 'tool_call_start') toolCallBuf.push({ id: chunk.id, name: chunk.name, argsRaw: '' })
-            else if (chunk.type === 'tool_call_delta') { const tc = toolCallBuf.find(t => t.id === chunk.id); if (tc) tc.argsRaw += chunk.argsDelta }
+            else if (chunk.type === 'tool_call_start') toolCallBuf.set(chunk.id, { id: chunk.id, name: chunk.name, argsRaw: '' })
+            else if (chunk.type === 'tool_call_delta') { const tc = toolCallBuf.get(chunk.id); if (tc) tc.argsRaw += chunk.argsDelta }
           }
         }, {
           maxRetries: this.maxRetries,
@@ -268,14 +268,14 @@ export class AgentLoop {
           onRetry: (error, attempt) => {
             // Reset accumulators on retry since the stream will restart
             textAccumulator = ''
-            toolCallBuf.length = 0
+            toolCallBuf.clear()
             this.logger.info('provider error, retrying', { category: error.category, attempt, maxRetries: this.maxRetries, error: error.message })
           },
         })
 
         if (signal.aborted) break
 
-        const toolCalls: IToolCall[] = toolCallBuf.map(tc => ({ id: tc.id, name: tc.name, arguments: tc.argsRaw }))
+        const toolCalls: IToolCall[] = [...toolCallBuf.values()].map(tc => ({ id: tc.id, name: tc.name, arguments: tc.argsRaw }))
         messages.push({ role: 'assistant', content: textAccumulator, ...(toolCalls.length && { toolCalls }) })
         modelCallCtx.loop = loopCtx()
         await runMiddlewareChain(modelCallCtx, this.middleware.afterModelResponse, this.toolTimeout)

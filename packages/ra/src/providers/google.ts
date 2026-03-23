@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, type Content, type Part, type Tool as GeminiTool, type GenerateContentResponse } from '@google/generative-ai'
-import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent } from './utils'
+import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, resolveThinkingBudget } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage, ThinkingLevel } from './types'
 
 const THINKING_BUDGETS_GOOGLE = { low: 1024, medium: 8192, high: 24576 } as const
@@ -56,9 +56,7 @@ export class GoogleProvider implements IProvider {
 
   private buildGenerationConfig(thinking?: ThinkingLevel, budgetCap?: number): Record<string, unknown> | undefined {
     if (!thinking) return undefined
-    const base = THINKING_BUDGETS_GOOGLE[thinking]
-    const budget = budgetCap ? Math.min(base, budgetCap) : base
-    return { thinkingConfig: { thinkingBudget: budget } }
+    return { thinkingConfig: { thinkingBudget: resolveThinkingBudget(THINKING_BUDGETS_GOOGLE, thinking, budgetCap) } }
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
