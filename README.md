@@ -65,8 +65,7 @@ agent:
 Intercept any step in the loop. Full context at every step — read it, mutate it, stop it.
 
 ```ts
-// log every tool call
-export const hook = 'afterToolExecution'
+// middleware/audit.ts — log every tool call
 export default async (ctx) => {
   const { name, arguments: args } = ctx.toolCall
   ctx.logger.info('tool', { name, args })
@@ -74,8 +73,7 @@ export default async (ctx) => {
 ```
 
 ```ts
-// block destructive commands
-export const hook = 'beforeToolExecution'
+// middleware/guard.ts — block destructive commands
 export default async (ctx) => {
   if (ctx.toolCall.name === 'Bash' && ctx.toolCall.arguments.includes('--force')) {
     ctx.deny("Blocked: --force not allowed")
@@ -83,7 +81,18 @@ export default async (ctx) => {
 }
 ```
 
-Hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelResponse`, `beforeToolExecution`, `afterToolExecution`, `afterLoopIteration`, `afterLoopComplete`, `onError`.
+Wire them to hooks in config:
+
+```yaml
+agent:
+  middleware:
+    afterToolExecution:
+      - ./middleware/audit.ts
+    beforeToolExecution:
+      - ./middleware/guard.ts
+```
+
+Available hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelResponse`, `beforeToolExecution`, `afterToolExecution`, `afterLoopIteration`, `afterLoopComplete`, `onError`.
 
 ## Observability
 
