@@ -252,8 +252,10 @@ export class Repl {
     switch (cmd) {
       case '/clear': {
         this.messages = []
+        this.pendingSkill = undefined
+        this.pendingAttachments = []
         this.sessionId = await this.newSession()
-        return 'Message history cleared.'
+        return `Session cleared. New session: ${this.sessionId}`
       }
       case '/save':
         return `Session ${this.sessionId} saved (auto-saved after each turn).`
