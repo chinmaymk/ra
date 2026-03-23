@@ -20,8 +20,13 @@ function stripBlock(text: string): string | null {
  * state into the message list. Runs after compaction so the state is always
  * present regardless of how many messages have been summarized.
  *
- * The middleware removes any previously injected scratchpad message and
- * re-injects the latest snapshot, keeping the context fresh each turn.
+ * The scratchpad is appended near the tail of the message list (just before
+ * the final user turn) rather than at the top. This keeps the long prefix
+ * (system prompt + context files + conversation history) byte-identical
+ * across turns, maximizing provider prompt-cache hit rates.
+ *
+ * All previously injected scratchpad blocks are stripped first so stale
+ * copies never accumulate — even when compaction merges messages.
  */
 export function createScratchpadMiddleware(store: ScratchpadStore) {
   return async (ctx: ModelCallContext): Promise<void> => {
@@ -29,19 +34,17 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
 
     const messages = ctx.request.messages
 
-    // Remove any previously injected scratchpad message.
-    // It may be a standalone message or embedded inside another (after compaction
-    // merges consecutive user messages). Content may be string or ContentPart[].
+    // Strip ALL previously injected scratchpad blocks (iterate backward so
+    // splice indices stay valid).
     for (let i = messages.length - 1; i >= 0; i--) {
       const content = messages[i]?.content
 
       if (typeof content === 'string') {
         const stripped = stripBlock(content)
         if (stripped === null) continue
-        // Standalone scratchpad message (nothing left after stripping)
-        if (!stripped) { messages.splice(i, 1); break }
+        if (!stripped) { messages.splice(i, 1); continue }
         messages[i] = { ...messages[i] as typeof messages[number], content: stripped }
-        break
+        continue
       }
 
       if (!Array.isArray(content)) continue
@@ -56,7 +59,6 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
         ? content.filter((_, idx) => idx !== partIdx)
         : content.map((p, idx) => idx === partIdx ? { type: 'text' as const, text: stripped } : p)
       messages[i] = { ...messages[i] as typeof messages[number], content: newParts }
-      break
     }
 
     // Build the scratchpad block
@@ -73,12 +75,14 @@ export function createScratchpadMiddleware(store: ScratchpadStore) {
       lines.join('\n\n') +
       `\n${SCRATCHPAD_MARKER_END}`
 
-    // Inject after all system messages and the first user message (the pinned zone)
-    // so it sits right before the conversation history.
-    let insertIdx = 0
-    for (let i = 0; i < messages.length; i++) {
-      insertIdx = i + 1
-      if (messages[i]?.role === 'user') break
+    // Append just before the final user message so the scratchpad lives in the
+    // tail region. This avoids shifting the stable prefix that providers cache.
+    let insertIdx = messages.length
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.role === 'user') {
+        insertIdx = i
+        break
+      }
     }
 
     messages.splice(insertIdx, 0, { role: 'user', content: block })
