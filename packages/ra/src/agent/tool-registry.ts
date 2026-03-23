@@ -12,7 +12,7 @@ export class ToolRegistry {
   }
 
   all(): ITool[] {
-    return Array.from(this.tools.values())
+    return Array.from(this.tools.values()).sort((a, b) => a.name.localeCompare(b.name))
   }
 
   async execute(name: string, input: unknown): Promise<unknown> {

@@ -143,8 +143,8 @@ describe('scratchpad middleware', () => {
     await mw(makeCtx(messages))
 
     expect(messages).toHaveLength(3)
-    // Injected after the first user message (the pinned zone)
-    const injected = messages[2]!
+    // Appended as the final message (tail position for cache efficiency)
+    const injected = messages.at(-1)!
     expect(injected.role).toBe('user')
     const content = injected.content as string
     expect(content).toContain('<scratchpad>')
@@ -177,14 +177,14 @@ describe('scratchpad middleware', () => {
     // First injection
     await mw(makeCtx(messages))
     expect(messages).toHaveLength(3)
-    expect((messages[2]!.content as string)).toContain('v1')
+    expect((messages.at(-1)!.content as string)).toContain('v1')
 
     // Update store and re-inject
     store.set('plan', 'v2')
     await mw(makeCtx(messages))
     expect(messages).toHaveLength(3) // still 3, old one removed
-    expect((messages[2]!.content as string)).toContain('v2')
-    expect((messages[2]!.content as string)).not.toContain('v1')
+    expect((messages.at(-1)!.content as string)).toContain('v2')
+    expect((messages.at(-1)!.content as string)).not.toContain('v1')
   })
 
   it('works with messages that have no system prefix', async () => {
@@ -197,8 +197,8 @@ describe('scratchpad middleware', () => {
     await mw(makeCtx(messages))
 
     expect(messages).toHaveLength(2)
-    expect(messages[1]!.role).toBe('user')
-    expect((messages[1]!.content as string)).toContain('### note')
+    expect(messages.at(-1)!.role).toBe('user')
+    expect((messages.at(-1)!.content as string)).toContain('### note')
   })
 
   it('removes scratchpad embedded inside a merged message (compaction scenario)', async () => {
@@ -252,6 +252,7 @@ describe('scratchpad middleware', () => {
     ]
     await mw(makeCtx(messages))
 
+    // Scratchpad stripped from the embedded message (stays at index 1)
     const cleaned = messages[1]!.content as string
     expect(cleaned).not.toContain('<scratchpad>')
     expect(cleaned).toContain('Before scratchpad')
@@ -311,6 +312,7 @@ describe('scratchpad middleware', () => {
     ]
     await mw(makeCtx(messages))
 
+    // ContentPart[] user msg stays at index 1 after stripping
     const parts = messages[1]!.content as any[]
     const textParts = parts.filter((p: any) => p.type === 'text')
     const allText = textParts.map((p: any) => p.text).join(' ')
