@@ -27,7 +27,7 @@ Agents run loops you can't see.
 
 ra makes the loop explicit — and lets you control every step.
 
-It runs tasks end-to-end like other agents, but unlike them, you can see, constrain, and reproduce everything it does. Not a framework. Not prompt chains. Just the loop, with control around it.
+It runs tasks end-to-end like other agents, but unlike them, you can see, constrain, and reproduce everything it does. Not a framework. Not prompt chains. Just the loop, with control and visibility around it.
 
 ```bash
 ra "Fix the failing tests and open a PR"
