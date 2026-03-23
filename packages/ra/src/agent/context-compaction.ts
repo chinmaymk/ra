@@ -135,6 +135,7 @@ const CONTEXT_LENGTH_PATTERNS = [
   /prompt too long/i,               // Ollama: "prompt too long; exceeded max context length..."
   /too many tokens/i,               // generic / Bedrock
   /exceeds? the maximum/i,          // Google: "... exceeds the maximum number of tokens"
+  /exceeds?.{0,10}max.{0,3}limit/i, // Perplexity: "exceeds the max limit of 8192 tokens"
   /token.{0,3}limit/i,              // generic: "token limit exceeded", "token_limit_exceeded" (not "token rate limit")
   /input.{0,5}too long/i,           // Bedrock: "Input is too long for requested model" / generic
   /sequence.length.exceeds/i,       // Ollama: "Token sequence length exceeds limit (X > Y)"
@@ -147,6 +148,39 @@ export function isContextLengthError(err: unknown): boolean {
   }
   const msg = err instanceof Error ? err.message : String(err)
   return CONTEXT_LENGTH_PATTERNS.some(p => p.test(msg))
+}
+
+// Patterns to extract the actual context window limit from error messages.
+// Each pattern captures the maximum token count as a named group.
+// Ordered from most specific to most general — first match wins.
+const CONTEXT_LIMIT_EXTRACTORS = [
+  /maximum context length is (?<limit>\d+)/i,              // OpenAI/Azure/DeepSeek: "maximum context length is 128000"
+  />\s*(?<limit>\d+)\s*maximum/,                           // Anthropic: "> 200000 maximum"
+  /context.limit:\s*[\d+\s+]*>\s*(?<limit>\d+)/,          // Anthropic: "context limit: 188240 + 21333 > 200000"
+  /exceeds?\s+limit\s*\(\d+\s*>\s*(?<limit>\d+)\)/i,      // Ollama: "exceeds limit (5000 > 4096)"
+  /tokens\s*allowed\s*\(?(?<limit>\d+)\)?/i,                // Gemini: "exceeds the maximum number of tokens allowed (1048576)"
+  /context length of (?<limit>\d+)/i,                      // Mistral: "exceeds the model's maximum context length of 32768"
+  /max limit of (?<limit>\d+)/i,                           // Perplexity: "exceeds the max limit of 8192 tokens"
+  /limit of (?<limit>\d+)\s*tokens/i,                      // Cohere: "exceeds the limit of 4081 tokens"
+  /must not exceed (?<limit>\d+)/i,                        // Together: "must not exceed 4097"
+  /maximum allowed.*?(?<limit>\d+)\s*tokens/i,             // DeepSeek: "maximum allowed length (59862 tokens)"
+  /max.?size:\s*(?<limit>\d+)\s*tokens/i,                  // Cohere: "Max size: 8000 tokens"
+]
+
+/**
+ * Attempt to extract the actual context window size from a provider error message.
+ * Returns undefined if the limit cannot be parsed.
+ */
+export function parseContextWindowFromError(err: unknown): number | undefined {
+  const msg = err instanceof Error ? err.message : String(err)
+  for (const pattern of CONTEXT_LIMIT_EXTRACTORS) {
+    const match = pattern.exec(msg)
+    if (match?.groups?.['limit']) {
+      const limit = parseInt(match.groups['limit'], 10)
+      if (limit > 0 && isFinite(limit)) return limit
+    }
+  }
+  return undefined
 }
 
 export async function forceCompact(
@@ -165,9 +199,16 @@ async function _runCompaction(
 ): Promise<boolean> {
   const messages = ctx.request.messages
 
+  const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
+
   if (!force) {
+    if (contextWindow === undefined) {
+      // Unknown model with no config override — skip proactive compaction.
+      // The error-driven path (forceCompact) will learn the real limit on first overflow.
+      ctx.logger.debug('compaction skipped, unknown context window', { model: ctx.request.model })
+      return false
+    }
     const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
-    const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
     const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
     if (estimated <= triggerThreshold) {
       ctx.logger.debug('compaction not needed', { estimatedTokens: estimated, threshold: triggerThreshold })
@@ -176,11 +217,12 @@ async function _runCompaction(
     ctx.logger.info('compaction triggered', { estimatedTokens: estimated, threshold: triggerThreshold, messageCount: messages.length })
   }
 
-  // Keep 20% of context window as recent messages when we know the window size,
-  // otherwise use a conservative flat budget so we always compact aggressively.
-  const contextWindow = config.contextWindow ?? getContextWindowSize(ctx.request.model)
-  const targetPostCompaction = Math.floor(contextWindow * RECENT_BUDGET_FRACTION)
-  const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
+  // Use known context window for zone sizing, or a conservative flat budget for force compaction
+  // on unknown models (keeps 20% of the estimated tokens as recent).
+  const recentBudget = contextWindow !== undefined
+    ? Math.floor(contextWindow * RECENT_BUDGET_FRACTION)
+    : Math.floor((ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)) * RECENT_BUDGET_FRACTION)
+  const { pinned, compactable, recent } = splitMessageZones(messages, recentBudget)
 
   if (compactable.length === 0) {
     ctx.logger.debug('compaction skipped, no compactable messages', { pinnedCount: pinned.length, recentCount: recent.length })
@@ -238,7 +280,7 @@ async function _runCompaction(
   ctx.request.messages.length = 0
   ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
   const estimatedTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
-  const threshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
+  const threshold = config.maxTokens ?? (contextWindow !== undefined ? Math.floor(contextWindow * config.threshold) : 0)
   ctx.logger.info('compaction complete', {
     originalMessages: originalCount,
     compactedMessages: ctx.request.messages.length,
