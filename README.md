@@ -23,53 +23,44 @@
 
 ---
 
-You gave an agent a task.
-
-It ran 20 tool calls, edited 6 files, and failed.
-
-You have no idea why.
-
-**ra shows you exactly what happened — and lets you stop it next time.**
+Give ra a task and watch it work — step by step, tool by tool.
 
 ```bash
 ra "Fix the failing tests and open a PR"
 ```
 
 ```
-iteration: 1
-  Read: src/auth.ts
-  Bash: bun test (failed)
+iteration 1  Read src/auth.ts · Bash bun test → failed
+iteration 2  Edit src/auth.ts · Bash bun test → passed
+iteration 3  Bash git commit + push
+```
 
-iteration: 2
-  Edit: src/auth.ts
-  Bash: bun test (passed)
+Every iteration logged, every tool call visible. Middleware hooks at every step so you can redirect, constrain, or stop the loop before anything goes wrong.
 
-iteration: 3
-  Bash: git commit + push
+```bash
+ra --provider anthropic --model claude-sonnet-4-6 "Review this PR"
+ra --provider openai --model gpt-4.1 "Refactor auth to use JWT"
+cat server.log | ra "Find the root cause and patch it"
+ra --interface cron   # scheduled agent jobs, unattended
+ra                    # interactive REPL
 ```
 
 ## Why ra
 
-Agents fail in ways you can't see:
-- silent retries
-- bad tool calls
-- runaway loops
-- unclear costs
+Most agent tools give you a prompt and a result. ra gives you the loop — explicit, observable, and yours to control.
 
-ra makes the loop explicit, observable, and controllable.
-
-Not a framework. Not prompt chains. Just the loop, with control around it.
+Not a framework. Not prompt chains. Just the loop, with hooks at every step.
 
 ```ts
-// block destructive commands before they run
+// stop before anything destructive runs
 export default async (ctx) => {
   if (ctx.tool.name === 'Bash' && ctx.tool.input.includes('--force')) {
-    ctx.stop("Blocked")
+    ctx.stop("Blocked: destructive flag")
   }
 }
 ```
 
-Check in your config. Everyone runs the same agent. No hidden prompts.
+Config lives in your repo. Everyone runs the same agent. No hidden prompts.
 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
@@ -100,27 +91,6 @@ ra                                                 # interactive REPL
 cat error.log | ra "Explain this error"            # pipe stdin
 git diff | ra --skill code-review "Review this"   # pipe + skill
 ```
-
-## What can you do with ra?
-
-**Automate your dev workflow.** Fix bugs, write tests, refactor — ra reads the code, makes changes, runs the tests, and iterates until they pass.
-
-**Research and analyze.** Pipe in logs, PDFs, or URLs. ra fetches pages, reads files, cross-references sources, and writes up findings.
-
-```bash
-ra "Compare the top 3 vector databases for a 10M-document RAG pipeline. \
-    Write findings to report.md"
-cat access.log | ra "Find the top 10 IPs by request count and flag anomalies"
-```
-
-**Run unattended.** Cron jobs for monitoring, reports, or triage — each run gets its own session and logs. Or plug ra into your editor as an [MCP server](https://chinmaymk.github.io/ra/modes/mcp/).
-
-```bash
-ra --interface cron
-ra --mcp-stdio
-```
-
-**Build custom agents.** A single [config file](https://chinmaymk.github.io/ra/configuration/) with [skills](https://chinmaymk.github.io/ra/skills/), [middleware](https://chinmaymk.github.io/ra/middleware/), and [permissions](https://chinmaymk.github.io/ra/permissions/) turns ra into a purpose-built agent. Spawn [multiple agents](https://chinmaymk.github.io/ra/recipes/) as independent processes when one isn't enough.
 
 ## [The Agent Loop](https://chinmaymk.github.io/ra/core/agent-loop/)
 
