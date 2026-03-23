@@ -33,12 +33,6 @@ It runs tasks end-to-end like other agents, but unlike them, you can see, constr
 ra "Fix the failing tests and open a PR"
 ```
 
-```
-iteration 1  Read src/auth.ts · Bash bun test → 12 failures
-iteration 2  Edit src/auth.ts · Bash bun test → 3 failures
-iteration 3  Edit src/auth.ts · Bash bun test → passed
-```
-
 ## Install
 
 ```bash
