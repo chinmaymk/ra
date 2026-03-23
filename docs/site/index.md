@@ -1,8 +1,20 @@
 # ra
 
-One config file. Seven interfaces. Zero code changes.
+ra is the predictable, observable agent harness — built to run autonomously. Nothing hidden behind abstractions you can't reach. Every part of the loop is exposed via config and extensible with plain TypeScript. [Middleware hooks](/middleware/) intercept every step — model calls, tool execution, streaming. [Permissions](/permissions/) constrain what tools can do with regex allow/deny rules.
 
-ra is an autonomous AI agent that runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), [MCP server](/modes/mcp), [cron job](/modes/cron), [GitHub Action](/modes/github-actions), or [inspector dashboard](/modes/inspector) — all from the same binary. Give it a task and walk away. It runs to completion with no iteration caps, manages its own context, and logs everything it does. No runtime dependencies.
+You get full control over [context engineering](/core/context-control). Automatic discovery walks your repo for `CLAUDE.md`, `AGENTS.md`, and configured patterns. Inline resolvers expand `@file` references and `url:` links before the model sees the prompt. Cache-aware [compaction](/core/context-control) manages long conversations — truncating from the back to keep prompt caches warm, or summarizing when you need semantic preservation. When a provider returns a context-length error, ra learns the real window size and adjusts.
+
+It's designed for long-running, unattended operation. The loop runs until the task is done — no arbitrary iteration caps. [Adaptive thinking](/core/context-control) scales reasoning depth with the task. [Token budgets and duration limits](/core/agent-loop) set hard guardrails.
+
+It comes with [built-in tools](/tools/) for filesystem, shell, network, and parallelization. Tool calls execute concurrently by default. The [Agent tool](/tools/#agent) spawns independent sub-agents for parallel workstreams. Connect to [MCP servers](/modes/mcp) for additional tools — or expose ra itself as an MCP server for Cursor, Claude Desktop, or anything that speaks the protocol.
+
+Because everything is plain files — skills are Markdown, middleware is TypeScript, config is YAML — the model itself can extend its own capabilities at runtime. It can write new [skills](/skills/), add [middleware](/middleware/), create scripts. You set the guardrails; it builds what it needs within them.
+
+Every action is observable. Structured JSONL logs and trace spans are written per-session automatically. The built-in [inspector](/modes/inspector) gives you a full dashboard — per-iteration token breakdown, tool call frequency, cache hit rates, timeline of every model call and tool execution, the complete message history. When someone asks "what did the agent do?" — open the inspector and see for yourself.
+
+It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), [MCP server](/modes/mcp), or on a [cron schedule](/modes/cron). Persistent [sessions](/core/sessions) via JSONL, scoped per-project. An FTS5 [memory](/tools/#memory) backed by SQLite. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch providers with a flag. No runtime dependencies.
+
+All of this is [configurable](/configuration/) via a layered config system — env vars, config files (JSON, YAML, TOML), or CLI flags. Each layer overrides the last.
 
 ## Install
 
@@ -26,13 +38,51 @@ ra --interface cron                                             # scheduled auto
 
 ## Why ra?
 
-Tools like Claude Code and Aider are interactive — they're designed for a human at the keyboard. ra is designed for the opposite: long-running, unattended operation where nobody is watching. The same agent that runs in your terminal also runs as an HTTP API, an MCP server, or a cron job — with no code changes, just a flag. You get [middleware hooks](/middleware/) at every step, [regex permissions](/permissions/) per tool, structured [JSONL logs](/observability/), and a full [inspector dashboard](/modes/inspector) so that when an autonomous agent runs for 45 minutes at 2am, you can see exactly what it did.
+Most agent tools fall into two camps: **interactive copilots** (Claude Code, Aider, Cursor) that need a human at the keyboard, and **orchestration frameworks** (LangChain, CrewAI) that require you to write Python glue code to wire up chains, tools, and memory.
 
-Unlike interactive tools, ra gives you:
-- **Unattended execution** — token budgets, duration limits, and adaptive thinking depth so it can run safely without supervision
-- **Seven deployment modes** — CLI, REPL, HTTP, MCP, cron, GitHub Actions, inspector — same config, same agent
-- **Full observability** — per-iteration token breakdown, cache hit rates, tool call frequency, complete message history
-- **Middleware at every step** — intercept, modify, or deny any model call or tool execution with plain TypeScript
+ra is neither. It's a single binary that runs your agent across seven interfaces — terminal, HTTP API, MCP server, cron — with no code changes, just a flag. You configure the agent in YAML, not Python. You control it with [middleware hooks](/middleware/) and [permissions](/permissions/), not by subclassing framework abstractions.
+
+| | Interactive copilots | Orchestration frameworks | ra |
+|---|---|---|---|
+| Runs unattended | No — needs human input | Yes — but you write the orchestration | Yes — token budgets and duration limits handle it |
+| Multiple interfaces | Terminal only | You build them | CLI, REPL, HTTP, MCP, cron, GitHub Actions, inspector |
+| Configuration | Flags and dotfiles | Python code | YAML/JSON/TOML config files |
+| Observability | Limited logs | You instrument it | Automatic structured logs, traces, and inspector dashboard |
+| Extensibility | Plugins/extensions | Python classes | Middleware hooks + skills (plain Markdown and TypeScript) |
+
+## How it works
+
+ra's core is a loop: send messages to the model, execute any tool calls, repeat. Every step fires a middleware hook you can intercept.
+
+```
+  Your prompt
+      │
+      ▼
+┌─────────────────────────────────────────┐
+│          beforeModelCall                │
+│              │                          │
+│              ▼                          │
+│     Stream model response               │
+│         (onStreamChunk)                 │
+│              │                          │
+│              ▼                          │
+│        afterModelResponse               │
+│              │                          │
+│     ┌── Has tool calls? ──┐            │
+│     │                     │            │
+│    Yes                    No           │
+│     │                     │            │
+│     ▼                     ▼            │
+│  Execute tools      Loop complete       │
+│     │               (done!)             │
+│     ▼                                  │
+│  afterToolExecution                     │
+│     │                                  │
+│     └──────── next iteration ──────►   │
+└─────────────────────────────────────────┘
+```
+
+The model decides when it's done — when it responds with text instead of tool calls, the loop ends. [Middleware](/middleware/) can intercept any step: log token usage, enforce budgets, modify requests, or stop the loop early. [Read more about the agent loop →](/core/agent-loop)
 
 ## Use cases
 
@@ -58,7 +108,7 @@ Reads the logs, explains the root cause, and exits. Pipe the output to Slack or 
 ra --mcp-stdio
 ```
 
-Now Cursor or Claude Desktop has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt.
+Now Cursor or Claude Desktop has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt. [MCP](/modes/mcp) (Model Context Protocol) is the standard that lets AI tools share capabilities — ra can both consume and expose tools through it.
 
 ### Scheduled health checks
 
@@ -130,52 +180,82 @@ app:
 
 ## Autonomous operation
 
-When an autonomous agent runs for 45 minutes at 2am, you need to know exactly what it did. ra is built for this.
+When an autonomous agent runs for 45 minutes at 2am, you need to know exactly what it did — and you need confidence it didn't do anything it shouldn't have. ra is built for this.
 
 **Token budgets and duration limits** set hard guardrails — the agent stops when it hits either, regardless of where it is in the loop. **Adaptive thinking** scales reasoning depth with the task: deep analysis early when exploring, lighter responses during routine execution. This isn't just about cost — it keeps long runs focused.
 
-**Cache-aware compaction** manages context in long conversations. When the window fills, ra truncates from the back to keep prompt caches warm — your system prompt and early context stay cached, saving both tokens and latency. When you need semantic preservation instead, it summarizes. When a provider returns a context-length error, ra learns the real window size and adjusts automatically.
+**Cache-aware compaction** manages context in long conversations. When the context window fills, ra truncates older messages while keeping your system prompt and recent turns intact — this preserves prompt caches so you don't pay to re-encode the same instructions every call. When you need the meaning of older messages preserved instead, it summarizes them. When a provider returns a context-length error, ra learns the real limit and adjusts automatically.
 
-**Permissions** constrain what tools can do. Regex allow/deny rules per tool, per field. The agent can run `git commit` but not `git push --force`. It can read any file but only write to `src/`. You define the boundaries; the agent works within them.
+## Security best practices
+
+Giving an AI agent shell access is powerful and dangerous. ra provides the guardrails, but you need to configure them.
+
+**Start with deny-all, open selectively.** The default permission mode is `ask` — every tool call requires approval. For autonomous runs, define explicit allow-lists:
+
+```yaml
+permissions:
+  default_action: deny
+  rules:
+    - tool: Bash
+      command:
+        allow: ["^git (?!.*--force)", "^bun test", "^bun tsc"]
+        deny: ["rm -rf", "curl.*\\|.*sh", "sudo"]
+    - tool: Write
+      file_path:
+        allow: ["^src/", "^tests/"]
+        deny: ["\\.env", "credentials", "secrets"]
+```
+
+**Key principles for production use:**
+- **Deny takes priority** — if a command matches both allow and deny, it's denied
+- **Restrict file writes** — limit which directories the agent can modify to prevent it from editing configs, credentials, or its own permissions
+- **Block dangerous shell patterns** — piping curl to shell, `sudo`, `rm -rf /`, force pushes. The agent will see a clear error and adapt its approach
+- **Use token budgets** — `maxTokenBudget` prevents runaway costs; `maxDurationSeconds` prevents runaway execution
+- **Review logs** — every tool call is recorded in structured JSONL logs. The [inspector](/modes/inspector) makes post-run auditing straightforward
+
+[Full permissions reference →](/permissions/)
 
 ## Context engineering
 
 ra manages what the model sees so you don't have to.
 
-**Automatic discovery** walks your repo for `CLAUDE.md`, `AGENTS.md`, and configured glob patterns, injecting relevant context before the first model call. **Inline resolvers** expand `@file` references and `url:` links in your prompt before the model sees them. **Dynamic file discovery** finds files near paths the model has already referenced, surfacing related context without you asking.
+**Automatic discovery** walks your repo for `CLAUDE.md`, `AGENTS.md`, and configured glob patterns, injecting relevant project context before the first model call. **Inline resolvers** expand `@file` references and `url:` links in your prompt before the model sees them — so `ra "Review @src/auth.ts"` sends the actual file contents, not the string "@src/auth.ts". **Dynamic file discovery** finds files near paths the model has already referenced, surfacing related context without you asking.
 
-The three-zone compaction model — **protected** (system prompt, never removed), **compactable** (conversation history, truncated or summarized when needed), and **recent** (last few turns, always kept) — means the model always has the instructions it needs, the recent context it's working with, and as much history as fits.
+The three-zone compaction model keeps the model effective in long conversations:
+- **Protected zone** — system prompt and skills, never removed
+- **Compactable zone** — conversation history, truncated or summarized when space is needed
+- **Recent zone** — last few turns, always kept for continuity
 
 Run with `--show-context` to see exactly what the model receives.
 
 ## Observability
 
-Every action is logged automatically. No instrumentation needed.
+Every action is logged automatically. No instrumentation code needed.
 
 ![ra inspector dashboard showing session overview with token breakdown, tool calls, and timeline](/inspector-overview.png)
 
-The built-in [inspector](/modes/inspector) gives you a full dashboard — per-iteration token breakdown, tool call frequency, cache hit rates, timeline of every model call and tool execution, the complete message history. Structured JSONL logs and trace spans are written per-session automatically.
+The built-in [inspector](/modes/inspector) gives you a web dashboard with per-iteration token breakdown, tool call frequency, cache hit rates, a timeline of every model call and tool execution, and the complete message history. Structured logs and trace spans are written per-session as JSONL files (one JSON object per line, easy to parse with `jq` or any log aggregator).
 
 ## What's in the box
 
 | Feature | Description |
 |---------|-------------|
 | [The Agent Loop](/core/agent-loop) | Model → parallel tool execution → repeat, with adaptive thinking, token budgets, duration limits, and middleware hooks at every step |
-| [Context Engineering](/core/context-control) | Automatic discovery, inline `@file` and `url:` resolvers, cache-aware compaction, dynamic context window learning |
-| [Observability](/observability/) | Structured JSONL logs, trace spans, per-iteration token breakdown, cache metrics — all automatic, no instrumentation needed |
+| [Context Engineering](/core/context-control) | Automatic file discovery, `@file` and `url:` expansion, cache-aware compaction, dynamic context window learning |
+| [Observability](/observability/) | Structured logs, trace spans, per-iteration token breakdown, cache metrics — all automatic |
 | [Inspector](/modes/inspector) | Web dashboard — session overview, iteration-by-iteration breakdown, timeline, messages, logs, traces |
 | [CLI](/modes/cli) | One-shot prompts, piping, chaining, scriptable |
 | [REPL](/modes/repl) | Interactive sessions with history, slash commands, file attachments |
-| [HTTP API](/modes/http) | Sync and streaming chat, session management |
-| [MCP](/modes/mcp) | Client (pull tools from MCP servers) and server (expose ra as a tool) |
-| [Cron](/modes/cron) | Scheduled autonomous jobs with cron expressions, per-job config overrides, isolated sessions |
+| [HTTP API](/modes/http) | Sync and streaming endpoints, session management |
+| [MCP](/modes/mcp) | Connect to external tool servers, or expose ra itself as a tool for other AI apps |
+| [Cron](/modes/cron) | Scheduled autonomous jobs with cron expressions, per-job config, isolated sessions |
 | [GitHub Actions](/modes/github-actions) | Run ra directly in CI/CD workflows with no install step |
-| [Built-in Tools](/tools/) | Filesystem, shell, network, scratchpad, parallel sub-agents |
-| [Skills](/skills/) | Reusable instruction bundles — install from npm, GitHub, or URLs. The model can write new ones at runtime |
-| [Middleware](/middleware/) | Hooks at every loop stage — intercept, modify, deny, or stop |
-| [Permissions](/permissions/) | Regex-based allow/deny rules per tool per field |
-| [Sessions](/core/sessions) | Persist conversations as JSONL, scoped per-project, resume from any interface |
-| [File Attachments](/core/file-attachments) | Images, PDFs, and text files — provider-aware format handling |
-| [Memory](/tools/#memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
-| [Configuration](/configuration/) | Layered: CLI > env > file, with env var interpolation and YAML/JSON/TOML support |
+| [Built-in Tools](/tools/) | File operations, shell commands, web fetching, scratchpad, parallel sub-agents |
+| [Skills](/skills/) | Reusable instruction sets — install from npm, GitHub, or URLs. The model can write new ones at runtime |
+| [Middleware](/middleware/) | TypeScript hooks at every loop stage — intercept, modify, deny, or stop |
+| [Permissions](/permissions/) | Regex-based allow/deny rules per tool, per field |
+| [Sessions](/core/sessions) | Conversations saved as files, scoped per-project, resumable from any interface |
+| [File Attachments](/core/file-attachments) | Images, PDFs, and text files — format handling adapts to each provider |
+| [Memory](/tools/#memory) | Persistent searchable memory backed by SQLite — save, search, forget across conversations |
+| [Configuration](/configuration/) | Layered: CLI flags > environment variables > config file, with YAML/JSON/TOML support |
 | [Recipes](/recipes/) | Pre-built agent configurations — coding, code review, autonomous research, multi-agent orchestration |
