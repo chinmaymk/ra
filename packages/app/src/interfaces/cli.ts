@@ -56,6 +56,8 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
       async (ctx: ToolExecutionContext) => {
         tui.clearPendingTools(tuiState)
         if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
+        if (tuiState.boxOpened) process.stdout.write('\n')
+        tuiState.boxOpened = false
         tuiState.toolStartTimes.set(ctx.toolCall.id, Date.now())
         tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
       },
