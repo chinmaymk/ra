@@ -3,7 +3,7 @@
  * memory, MCP, observability) from a resolved config.  Returns a single
  * `AppContext` that the interface layer can consume.
  */
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import {
   ToolRegistry,
   getDefaultCompactionModel,
@@ -32,6 +32,20 @@ import { registerBuiltinTools, subagentTool } from './tools'
 import { resolvePath, configHandle } from './utils/paths'
 import type { Tracer } from './observability/tracer'
 import type { Middleware } from '@chinmaymk/ra'
+
+/** Sanitize config for snapshot (mask secrets). */
+function sanitizeConfigSnapshot(config: RaConfig): unknown {
+  const copy = JSON.parse(JSON.stringify(config))
+  if (copy.app?.providers) {
+    for (const p of Object.values(copy.app.providers)) {
+      if (p && typeof p === 'object' && 'apiKey' in (p as Record<string, unknown>)) {
+        (p as Record<string, unknown>).apiKey = '***'
+      }
+    }
+  }
+  if (copy.app?.http?.token) copy.app.http.token = '***'
+  return copy
+}
 
 /** Prepend a middleware to a hook array (creates the array if needed). */
 function prepend<T>(arr: Middleware<T>[] | undefined, mw: Middleware<T>): Middleware<T>[] {
@@ -313,6 +327,26 @@ export async function bootstrap(
       toolSchemas: toolSchemaTokens,
       total: totalEstimated,
     })
+  }
+
+  // ── Handle snapshot (for inspector cross-handle views) ────────────
+  {
+    const snapshot = {
+      config: sanitizeConfigSnapshot(config),
+      context: {
+        patterns: agent.context.patterns,
+        files: contextFiles.map(f => ({ path: f.path, relativePath: f.relativePath, content: f.content })),
+      },
+      middleware: {
+        hooks: Object.fromEntries(
+          Object.entries(middleware)
+            .filter(([, fns]) => fns && fns.length > 0)
+            .map(([name, fns]) => [name, fns!.map(fn => fn.name || '(anonymous)')]),
+        ),
+        configMiddleware: agent.middleware,
+      },
+    }
+    writeFile(join(app.dataDir, 'handle-snapshot.json'), JSON.stringify(snapshot, null, 2)).catch(() => {})
   }
 
   // ── Shutdown ───────────────────────────────────────────────────────

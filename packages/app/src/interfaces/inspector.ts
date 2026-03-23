@@ -320,27 +320,42 @@ export class InspectorServer {
           return deleted ? json({ ok: true }) : json({ error: 'Not found' }, 404)
         }
 
-        // ── Global API ──
+        // ── Handle-scoped API ──
 
-        if (path === '/api/config') {
-          return json(sanitizeConfig(config))
-        }
+        if (path === '/api/config' || path === '/api/context' || path === '/api/middleware') {
+          const handle = url.searchParams.get('handle')
+          const view = path.replace('/api/', '')
 
-        if (path === '/api/context') {
-          const files = config.agent.context.enabled
-            ? await discoverContextFiles({ cwd: config.app.configDir, patterns: config.agent.context.patterns })
-            : []
-          return json({ patterns: config.agent.context.patterns, files })
-        }
-
-        if (path === '/api/middleware') {
-          const hooks: Record<string, string[]> = {}
-          for (const [name, fns] of Object.entries(this.app.middleware)) {
-            if (fns && fns.length > 0) {
-              hooks[name] = fns.map(fn => fn.name || '(anonymous)')
+          // Current handle — serve live data
+          if (!handle || handle === this.app.namespace) {
+            if (view === 'config') return json(sanitizeConfig(config))
+            if (view === 'context') {
+              const files = config.agent.context.enabled
+                ? await discoverContextFiles({ cwd: config.app.configDir, patterns: config.agent.context.patterns })
+                : []
+              return json({ patterns: config.agent.context.patterns, files })
+            }
+            if (view === 'middleware') {
+              const hooks: Record<string, string[]> = {}
+              for (const [name, fns] of Object.entries(this.app.middleware)) {
+                if (fns && fns.length > 0) {
+                  hooks[name] = fns.map(fn => fn.name || '(anonymous)')
+                }
+              }
+              return json({ hooks, configMiddleware: config.agent.middleware })
             }
           }
-          return json({ hooks, configMiddleware: config.agent.middleware })
+
+          // Different handle — read from snapshot
+          const snapshotPath = join(globalDir, handle as string, 'handle-snapshot.json')
+          try {
+            const snapshot = JSON.parse(await Bun.file(snapshotPath).text()) as Record<string, unknown>
+            const data = snapshot[view]
+            if (data) return json(data)
+            return json({ error: 'No ' + view + ' data for handle ' + handle }, 404)
+          } catch {
+            return json({ error: 'No snapshot available for handle "' + handle + '". Run that project once to generate data.' }, 404)
+          }
         }
 
         // ── Static assets ──

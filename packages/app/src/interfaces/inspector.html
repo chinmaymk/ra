@@ -31,7 +31,7 @@
   .tab:hover { background: var(--bg3); color: var(--text); }
   .tab.active { background: var(--accent); color: #fff; }
 
-  .sub-tabs { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 6px 24px; display: flex; gap: 4px; }
+  .sub-tabs { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 6px 24px; display: flex; gap: 4px; position: sticky; top: 0; z-index: 10; }
   .sub-tab { padding: 5px 14px; border-radius: 6px; cursor: pointer; color: var(--text2); font-size: 11px; transition: all 0.15s; }
   .sub-tab:hover { background: var(--bg3); color: var(--text); }
   .sub-tab.active { background: var(--bg3); color: var(--text); font-weight: 600; }
@@ -329,7 +329,13 @@
 
   handleSelect.addEventListener('change', function() {
     selectedHandle = this.value;
-    loadSessions();
+    if (currentView === 'sessions') {
+      loadSessions();
+    } else if (currentView === 'memory') {
+      loadMemory();
+    } else {
+      loadHandleView(currentView);
+    }
   });
 
   document.getElementById('btn-clear-all').addEventListener('click', async function() {
@@ -457,7 +463,8 @@
   // ── Load handle-scoped views ──
   async function loadHandleView(view) {
     if (!autoRefreshInterval) mainContent.innerHTML = '<div class="loading">Loading…</div>';
-    const result = await apiFetch('/api/' + view);
+    var handleParam = selectedHandle ? '?handle=' + encodeURIComponent(selectedHandle) : '';
+    const result = await apiFetch('/api/' + view + handleParam);
     if (result.error) { showError(result.error); return; }
     if (view === 'config') renderConfig(result.data);
     else if (view === 'context') renderContext(result.data);
