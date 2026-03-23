@@ -310,10 +310,6 @@ Every model call, tool execution, and middleware decision emits structured event
 
 `ra --inspector` launches a web dashboard that lets you replay and debug any session.
 
-<p align="center">
-  <img src="docs/inspector-overview.png" alt="ra inspector — session overview with per-iteration token breakdown" width="800">
-</p>
-
 The **Overview** tab gives you the full picture at a glance — total duration, iteration count, token breakdown (input, output, thinking, cache read, cache creation), cache hit percentage, tool call and error counts, loop status. A per-iteration bar chart shows exactly how tokens were spent across the run: where the model was thinking hardest, where cache hits kicked in, and where tool calls spiked.
 
 | Tab | What it shows |
