@@ -53,11 +53,31 @@ ra                    # interactive REPL
 ra "Fix the failing tests and open a PR"
 ```
 
+**Research anything.** Give ra a question and let it work — it fetches web pages, reads documents, cross-references sources, and synthesizes findings. Use it to survey a technology landscape, compare API options, or compile competitive analysis.
+
+```bash
+ra "Compare the top 3 vector databases for a 10M-document RAG pipeline. \
+    Evaluate cost, latency, and managed hosting. Write findings to report.md"
+```
+
 **Debug issues faster.** Pipe a log file or error trace into ra and get an explanation in seconds. Chain it with `--skill` to apply specialized analysis like code review or security auditing.
 
 ```bash
 cat error.log | ra "Explain this error"
 ra --skill debugger --file crash.log "Find the root cause"
+```
+
+**Analyze data and documents.** Attach a CSV, PDF, or log dump and ask questions. ra reads the content, runs shell commands to slice and transform it, and reports back with summaries, anomalies, or trends.
+
+```bash
+ra --file quarterly-report.pdf "Extract the key financial metrics and summarize the outlook"
+cat access.log | ra "Find the top 10 IPs by request count and flag any anomalies"
+```
+
+**Generate content from your repo.** Changelogs, release notes, migration guides, API docs — anything that should be grounded in your actual code and history.
+
+```bash
+ra "Write a changelog for v3.0 based on commits since the v2.9 tag"
 ```
 
 **Run agents on a schedule.** Set up cron jobs that monitor your APIs, check for stale dependencies, or generate daily reports — each run gets its own session and logs.
