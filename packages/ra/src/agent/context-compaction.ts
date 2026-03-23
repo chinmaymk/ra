@@ -86,15 +86,16 @@ function adjustToolCallBoundary(messages: IMessage[], boundary: number): number 
 }
 
 /**
- * When dropping messages from the front of the compactable zone, ensure we don't
- * leave orphaned tool results. If the drop boundary lands before tool results whose
- * assistant is already dropped, advance to include them.
+ * When dropping messages from the back of the compactable zone, ensure we don't
+ * split tool call groups. If the boundary lands on a tool result, advance past it
+ * to keep the entire group in the preserved prefix.
  */
-function adjustDropEnd(messages: IMessage[], dropEnd: number): number {
-  while (dropEnd < messages.length && messages[dropEnd]?.role === 'tool') {
-    dropEnd++
+function adjustDropStart(messages: IMessage[], dropStart: number): number {
+  // If boundary lands on a tool result, keep it with its assistant (extends cached prefix)
+  while (dropStart < messages.length && messages[dropStart]?.role === 'tool') {
+    dropStart++
   }
-  return dropEnd
+  return dropStart
 }
 
 /** Append extra text (and optional non-text parts) to a message, preserving its content type. */
@@ -305,29 +306,36 @@ async function _runCompaction(
     }
     // summarize replaces the entire compactable zone with the summary in pinned
   } else {
-    // Truncate strategy: drop only the minimum oldest compactable messages needed
-    // to reach the target. Preserves as much of the message prefix as possible so
-    // that provider prompt caches (Anthropic, OpenAI, Google) keep hitting.
+    // Truncate strategy: drop from the BACK of the compactable zone to preserve
+    // the message prefix. Provider prompt caches (Anthropic, OpenAI, Google) are
+    // prefix-based — every byte of matching prefix is a cache hit. Dropping from
+    // the back keeps [pinned, ...old_compactable] byte-identical to the cached
+    // prefix, giving maximum reuse on the very next model call.
     const currentTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
     const targetTokens = contextWindow !== undefined
       ? Math.floor(contextWindow * Math.max(config.threshold - TRUNCATION_HEADROOM, 0.50))
       : Math.floor(currentTokens * 0.75)
     const neededDrop = currentTokens - targetTokens
 
-    let dropEnd = 0
+    let dropStart = compactable.length
     let droppedTokens = 0
-    while (dropEnd < compactable.length && droppedTokens < neededDrop) {
-      droppedTokens += estimateTokens([compactable[dropEnd]!])
-      dropEnd++
+    while (dropStart > 0 && droppedTokens < neededDrop) {
+      dropStart--
+      droppedTokens += estimateTokens([compactable[dropStart]!])
     }
-    // Don't orphan tool results at the boundary
-    dropEnd = adjustDropEnd(compactable, dropEnd)
+    // Keep tool call groups together in the preserved prefix
+    dropStart = adjustDropStart(compactable, dropStart)
 
-    // If incremental drop freed nothing, drop the entire zone as fallback
-    if (dropEnd === 0) dropEnd = compactable.length
+    // If nothing could be dropped (e.g. single giant tool group), drop everything
+    if (dropStart >= compactable.length) dropStart = 0
 
-    middle = compactable.slice(dropEnd)
-    ctx.logger.debug('truncation drop', { dropped: dropEnd, kept: middle.length, droppedTokens, neededDrop })
+    middle = compactable.slice(0, dropStart)
+    ctx.logger.debug('truncation drop', {
+      kept: middle.length,
+      dropped: compactable.length - dropStart,
+      droppedTokens,
+      neededDrop,
+    })
   }
 
   const originalCount = messages.length

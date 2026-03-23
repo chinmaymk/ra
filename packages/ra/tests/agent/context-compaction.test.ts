@@ -660,39 +660,37 @@ describe('createCompactionMiddleware', () => {
     expect(compactInfo!.compactedMessages).toBeLessThan(6)
   })
 
-  it('truncate strategy drops only the minimum oldest messages needed', async () => {
+  it('truncate drops from back of compactable zone to preserve prefix for caching', async () => {
     const provider: IProvider = {
       name: 'mock',
       chat: async () => { throw new Error('should not be called') },
       async *stream() { yield { type: 'done' as const } },
     }
-    // Build a conversation with many turns, each ~50 tokens (10 words * 5 chars / 4)
-    const shortText = 'word '.repeat(10) // ~12-13 tokens each
+    const shortText = 'word '.repeat(10)
     const messages: IMessage[] = [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'first' },
     ]
-    // Add 20 turn pairs ≈ 500 tokens
     for (let i = 0; i < 20; i++) {
       messages.push({ role: 'assistant', content: `assistant turn ${i} ${shortText}` })
       messages.push({ role: 'user', content: `user turn ${i} ${shortText}` })
     }
     const ctx = makeCtx(messages)
-    // contextWindow=1000, threshold=0.9 → triggers at 900.
-    // Actual tokens ~ 500, but set lastUsage to simulate being right at threshold
     ctx.loop.lastUsage = { inputTokens: 950, outputTokens: 50 }
     const mw = createCompactionMiddleware(provider, {
       enabled: true, threshold: 0.9, contextWindow: 1000,
     })
     await mw(ctx)
-    // Should have dropped some messages but NOT all of them.
-    // target = 1000 * (0.9 - 0.15) = 750 → need to drop ~200 tokens worth
-    // With 42 original messages, incremental drop should keep most of them
-    expect(ctx.request.messages.length).toBeGreaterThan(4) // more than just pinned+recent
-    expect(ctx.request.messages.length).toBeLessThan(42) // some were dropped
+    // Should keep some compactable messages but not all
+    expect(ctx.request.messages.length).toBeGreaterThan(4)
+    expect(ctx.request.messages.length).toBeLessThan(42)
     // Pinned zone preserved exactly
     expect(ctx.request.messages[0]).toEqual({ role: 'system', content: 'sys' })
     expect(ctx.request.messages[1]).toEqual({ role: 'user', content: 'first' })
+    // Prefix preservation: the OLDEST compactable messages (turn 0, 1, ...) should
+    // be right after pinned, NOT the newest. This proves we drop from the back.
+    const thirdMsg = ctx.request.messages[2]!
+    expect(thirdMsg.content).toContain('assistant turn 0')
   })
 
   it('truncate strategy does not orphan tool results at drop boundary', async () => {

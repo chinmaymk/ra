@@ -4,7 +4,7 @@ ra gives you full control over what the model sees and when. Built-in mechanisms
 
 ## Smart context compaction
 
-When conversations grow long, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then incrementally drops the minimum oldest messages needed to free space. The pinned prefix and as many middle messages as possible stay byte-identical, so provider prompt caches (Anthropic, OpenAI, Google) keep hitting.
+When conversations grow long, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then drops the minimum messages from the **back** of the compactable zone needed to free space. This keeps `[pinned, ...early_compactable]` byte-identical to the cached prefix, so provider prompt caches (Anthropic, OpenAI, Google) get maximum reuse on the very next model call.
 
 ```yaml
 agent:
@@ -16,7 +16,7 @@ agent:
 
 Two strategies:
 
-- **`truncate`** (default) — Drops the minimum oldest messages from the compactable zone needed to reach the target (threshold minus headroom). Free, instant, and maximally cache-friendly: pinned content is never mutated, and as much of the message prefix as possible is preserved for provider prefix caching.
+- **`truncate`** (default) — Drops messages from the back of the compactable zone (the transition between old and recent context). Free, instant, and maximally cache-friendly: the message prefix `[system, first_user, early_turns...]` stays byte-identical across compactions, giving maximum prefix cache hits on all providers.
 - **`summarize`** — Calls a cheap model to summarize the entire compactable zone and injects the summary into the pinned user message. Costs an extra API call but preserves more context semantically.
 
 ```yaml
