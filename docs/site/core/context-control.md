@@ -29,9 +29,10 @@ ra resolves the context window in this order:
 1. **Config override** — `compaction.contextWindow` in your config
 2. **Learned from errors** — cached from a previous context length error
 3. **Model registry** — built-in lookup by model name prefix
-4. **Fallback** — 200k tokens
 
-For models not in the built-in registry (e.g. a 32k local model or a 1M context model), set `contextWindow` explicitly or let ra learn it on the first error:
+If none of these match, ra **skips proactive compaction** and relies on the error-driven path. The first time the model rejects a request for exceeding its context limit, ra parses the real size from the error, caches it, and compacts. From that point on, proactive compaction works correctly.
+
+For best results with unknown models, set the context window explicitly:
 
 ```yaml
 agent:

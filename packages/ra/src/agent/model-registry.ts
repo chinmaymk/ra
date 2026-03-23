@@ -32,16 +32,17 @@ export function setLearnedContextWindow(model: string, size: number): void {
 
 /**
  * Resolve context window size.
- * Priority: userOverride → learned from errors → model family registry → fallback.
+ * Priority: userOverride → learned from errors → model family registry.
+ * Returns undefined when the model is unrecognized and no override/learned value exists.
  */
-export function getContextWindowSize(model: string, userOverride?: number): number {
+export function getContextWindowSize(model: string, userOverride?: number): number | undefined {
   if (userOverride !== undefined) return userOverride
   const learned = learnedContextWindows.get(model)
   if (learned !== undefined) return learned
   for (const [prefix, size] of SORTED_FAMILIES) {
     if (model.startsWith(prefix)) return size
   }
-  return DEFAULT_CONTEXT_WINDOW
+  return undefined
 }
 
 const DEFAULT_COMPACTION_MODELS: Record<string, string> = {

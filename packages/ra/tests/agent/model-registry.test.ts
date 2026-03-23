@@ -19,8 +19,8 @@ describe('getContextWindowSize', () => {
     expect(getContextWindowSize('gpt-4-0613')).toBe(8_192)
   })
 
-  it('returns fallback for unknown model', () => {
-    expect(getContextWindowSize('some-unknown-model')).toBe(200_000)
+  it('returns undefined for unknown model', () => {
+    expect(getContextWindowSize('some-unknown-model')).toBeUndefined()
   })
 
   it('accepts user override', () => {
@@ -47,8 +47,8 @@ describe('getContextWindowSize', () => {
     expect(getContextWindowSize('claude-sonnet-custom')).toBe(100_000)
   })
 
-  it('empty model name returns default', () => {
-    expect(getContextWindowSize('')).toBe(200_000)
+  it('empty model name returns undefined', () => {
+    expect(getContextWindowSize('')).toBeUndefined()
   })
 
   it('distinguishes gpt-4o from gpt-4 (longest prefix match)', () => {

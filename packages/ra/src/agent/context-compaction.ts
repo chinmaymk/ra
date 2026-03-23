@@ -194,9 +194,16 @@ async function _runCompaction(
 ): Promise<boolean> {
   const messages = ctx.request.messages
 
+  const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
+
   if (!force) {
+    if (contextWindow === undefined) {
+      // Unknown model with no config override — skip proactive compaction.
+      // The error-driven path (forceCompact) will learn the real limit on first overflow.
+      ctx.logger.debug('compaction skipped, unknown context window', { model: ctx.request.model })
+      return false
+    }
     const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
-    const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
     const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
     if (estimated <= triggerThreshold) {
       ctx.logger.debug('compaction not needed', { estimatedTokens: estimated, threshold: triggerThreshold })
@@ -205,11 +212,12 @@ async function _runCompaction(
     ctx.logger.info('compaction triggered', { estimatedTokens: estimated, threshold: triggerThreshold, messageCount: messages.length })
   }
 
-  // Keep 20% of context window as recent messages when we know the window size,
-  // otherwise use a conservative flat budget so we always compact aggressively.
-  const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
-  const targetPostCompaction = Math.floor(contextWindow * RECENT_BUDGET_FRACTION)
-  const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
+  // Use known context window for zone sizing, or a conservative flat budget for force compaction
+  // on unknown models (keeps 20% of the estimated tokens as recent).
+  const recentBudget = contextWindow !== undefined
+    ? Math.floor(contextWindow * RECENT_BUDGET_FRACTION)
+    : Math.floor((ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)) * RECENT_BUDGET_FRACTION)
+  const { pinned, compactable, recent } = splitMessageZones(messages, recentBudget)
 
   if (compactable.length === 0) {
     ctx.logger.debug('compaction skipped, no compactable messages', { pinnedCount: pinned.length, recentCount: recent.length })
@@ -267,7 +275,7 @@ async function _runCompaction(
   ctx.request.messages.length = 0
   ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
   const estimatedTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
-  const threshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
+  const threshold = config.maxTokens ?? (contextWindow !== undefined ? Math.floor(contextWindow * config.threshold) : 0)
   ctx.logger.info('compaction complete', {
     originalMessages: originalCount,
     compactedMessages: ctx.request.messages.length,
