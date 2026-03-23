@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { getContextWindowSize, getDefaultCompactionModel } from '@chinmaymk/ra'
+import { getContextWindowSize, getDefaultCompactionModel, setLearnedContextWindow } from '@chinmaymk/ra'
 
 describe('getContextWindowSize', () => {
   it('resolves exact family prefix', () => {
@@ -19,8 +19,8 @@ describe('getContextWindowSize', () => {
     expect(getContextWindowSize('gpt-4-0613')).toBe(8_192)
   })
 
-  it('returns fallback for unknown model', () => {
-    expect(getContextWindowSize('some-unknown-model')).toBe(200_000)
+  it('returns undefined for unknown model', () => {
+    expect(getContextWindowSize('some-unknown-model')).toBeUndefined()
   })
 
   it('accepts user override', () => {
@@ -31,8 +31,24 @@ describe('getContextWindowSize', () => {
     expect(getContextWindowSize('claude-sonnet-4-6', 50_000)).toBe(50_000)
   })
 
-  it('empty model name returns default', () => {
-    expect(getContextWindowSize('')).toBe(200_000)
+  it('uses learned context window for unknown models', () => {
+    setLearnedContextWindow('my-custom-model-v1', 32_000)
+    expect(getContextWindowSize('my-custom-model-v1')).toBe(32_000)
+  })
+
+  it('user override takes priority over learned value', () => {
+    setLearnedContextWindow('my-custom-model-v3', 32_000)
+    expect(getContextWindowSize('my-custom-model-v3', 64_000)).toBe(64_000)
+  })
+
+  it('learned value takes priority over registry for known model prefix', () => {
+    // If a model like claude-sonnet-custom has a different real window, learned wins
+    setLearnedContextWindow('claude-sonnet-custom', 100_000)
+    expect(getContextWindowSize('claude-sonnet-custom')).toBe(100_000)
+  })
+
+  it('empty model name returns undefined', () => {
+    expect(getContextWindowSize('')).toBeUndefined()
   })
 
   it('distinguishes gpt-4o from gpt-4 (longest prefix match)', () => {
