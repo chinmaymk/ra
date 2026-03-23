@@ -58,13 +58,17 @@ export class SessionStorage {
     return join(this.storagePath, sanitized)
   }
 
-  async create(options: CreateSessionOptions): Promise<Session> {
-    const id = crypto.randomUUID()
-    const created = new Date().toISOString()
-    const meta: SessionMeta = { id, created, ...options }
+  private async writeMeta(id: string, options: CreateSessionOptions): Promise<SessionMeta> {
+    const meta: SessionMeta = { id, created: new Date().toISOString(), ...options }
     const dir = this.sessionDir(id)
     await mkdir(dir, { recursive: true })
     await Bun.write(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
+    return meta
+  }
+
+  async create(options: CreateSessionOptions): Promise<Session> {
+    const id = crypto.randomUUID()
+    const meta = await this.writeMeta(id, options)
     this.logger.debug('session created', { sessionId: id, provider: options.provider, model: options.model })
     return { id, meta }
   }
@@ -105,13 +109,10 @@ export class SessionStorage {
 
   /** Ensure a session directory exists for a given ID (creates it if needed). */
   async ensureSession(id: string, options: CreateSessionOptions): Promise<{ id: string; isNew: boolean }> {
-    const dir = this.sessionDir(id)
-    await mkdir(dir, { recursive: true })
-    const metaPath = join(dir, 'meta.json')
+    const metaPath = join(this.sessionDir(id), 'meta.json')
     const isNew = !(await Bun.file(metaPath).exists())
     if (isNew) {
-      const meta: SessionMeta = { id, created: new Date().toISOString(), ...options }
-      await Bun.write(metaPath, JSON.stringify(meta, null, 2))
+      await this.writeMeta(id, options)
       this.logger.info('session created', { sessionId: id, provider: options.provider, model: options.model })
     }
     return { id, isNew }

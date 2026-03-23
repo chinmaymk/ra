@@ -23,6 +23,15 @@ function ensureMessageId(msg: IMessage): string {
 export function createHistoryMiddleware(storage: SessionStorage, priorCount = 0): Partial<MiddlewareConfig> {
   const savedIds = new Set<string>()
 
+  /** Save any messages not yet persisted and mark them as saved. */
+  async function persistUnsaved(ctx: LoopContext, messages: IMessage[], label: string): Promise<void> {
+    const unsaved = messages.filter(m => !savedIds.has(ensureMessageId(m)))
+    if (unsaved.length === 0) return
+    await storage.appendMessages(ctx.sessionId, unsaved)
+    for (const msg of unsaved) savedIds.add(msg._messageId!)
+    ctx.logger.debug(label, { count: unsaved.length, sessionId: ctx.sessionId })
+  }
+
   return {
     beforeLoopBegin: [async (ctx: LoopContext) => {
       // Mark prior messages (system, context, session history) as already saved
@@ -31,20 +40,10 @@ export function createHistoryMiddleware(storage: SessionStorage, priorCount = 0)
         if (msg) savedIds.add(ensureMessageId(msg))
       }
       // Save any new initial messages (e.g. user message, skill injections)
-      const newInitial = ctx.messages.slice(priorCount).filter(m => !savedIds.has(ensureMessageId(m)))
-      if (newInitial.length > 0) {
-        await storage.appendMessages(ctx.sessionId, newInitial)
-        for (const msg of newInitial) savedIds.add(ensureMessageId(msg))
-        ctx.logger.debug('initial messages persisted', { count: newInitial.length, sessionId: ctx.sessionId })
-      }
+      await persistUnsaved(ctx, ctx.messages.slice(priorCount), 'initial messages persisted')
     }],
     afterLoopIteration: [async (ctx: LoopContext) => {
-      const unsaved = ctx.messages.filter(m => !savedIds.has(ensureMessageId(m)))
-      if (unsaved.length > 0) {
-        await storage.appendMessages(ctx.sessionId, unsaved)
-        for (const msg of unsaved) savedIds.add(ensureMessageId(msg))
-        ctx.logger.debug('messages persisted', { count: unsaved.length, sessionId: ctx.sessionId })
-      }
+      await persistUnsaved(ctx, ctx.messages, 'messages persisted')
     }],
   }
 }

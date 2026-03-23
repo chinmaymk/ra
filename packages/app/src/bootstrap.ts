@@ -173,14 +173,10 @@ export async function bootstrap(
     logger.info('custom middleware loaded', { hookCount: userHookCount })
   }
 
-  // Pattern resolvers (e.g. @file, url:)
-  if (agent.context.resolvers?.length) {
-    const resolvers = await loadResolvers(agent.context.resolvers, app.configDir)
-    if (resolvers.length > 0) {
-      const resolverMw = createResolverMiddleware(resolvers, process.cwd())
-      middleware.beforeModelCall = prepend(middleware.beforeModelCall, resolverMw)
-    }
-  }
+  // Pattern resolvers (e.g. @file, url:) — collected here, combined with skill resolver below
+  const patternResolvers = agent.context.resolvers?.length
+    ? await loadResolvers(agent.context.resolvers, app.configDir)
+    : []
 
   // Dynamic context discovery — picks up context files from directories referenced in messages
   if (agent.context.enabled) {
@@ -252,10 +248,13 @@ export async function bootstrap(
       estimatedTokens: skillTokens,
     })
 
-    // Skill pattern resolver — lazy-loads full skill on first /skill-name reference
-    const skillResolver = createSkillResolver(skillIndex)
-    const skillResolverMw = createResolverMiddleware([skillResolver], process.cwd())
-    middleware.beforeModelCall = prepend(middleware.beforeModelCall, skillResolverMw)
+    patternResolvers.push(createSkillResolver(skillIndex))
+  }
+
+  // Register all pattern resolvers (user-configured + skill) as a single middleware
+  if (patternResolvers.length > 0) {
+    const resolverMw = createResolverMiddleware(patternResolvers, process.cwd())
+    middleware.beforeModelCall = prepend(middleware.beforeModelCall, resolverMw)
   }
 
   // ── MCP clients ────────────────────────────────────────────────────

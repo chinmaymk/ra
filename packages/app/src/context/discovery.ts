@@ -15,6 +15,21 @@ export async function findGitRoot(cwd: string): Promise<string | null> {
   return result.stdout.toString().trim()
 }
 
+/** Walk from `start` up to `stop` (inclusive), returning each directory. */
+function walkUpTo(start: string, stop: string): string[] {
+  const normalizedStop = resolve(stop)
+  const dirs: string[] = []
+  let current = start
+  while (true) {
+    dirs.push(current)
+    if (resolve(current) === normalizedStop) break
+    const parent = resolve(current, '..')
+    if (parent === current) break // filesystem root
+    current = parent
+  }
+  return dirs
+}
+
 export async function discoverContextFiles(options: DiscoverOptions): Promise<ContextFile[]> {
   const { patterns } = options
   if (patterns.length === 0) return []
@@ -22,18 +37,7 @@ export async function discoverContextFiles(options: DiscoverOptions): Promise<Co
   const cwd = realpathSync(options.cwd)
   const root = (await findGitRoot(cwd)) ?? cwd
 
-  // Walk from cwd up to git root, collecting each directory
-  const dirs: string[] = []
-  let current = cwd
-  while (current !== root) {
-    dirs.push(current)
-    const parent = resolve(current, '..')
-    if (parent === current) break
-    current = parent
-  }
-  dirs.push(root)
-
-  return scanDirs(dirs, patterns, root)
+  return scanDirs(walkUpTo(cwd, root), patterns, root)
 }
 
 async function scanDirs(dirs: string[], patterns: string[], root: string, exclude?: Set<string>): Promise<ContextFile[]> {
@@ -58,27 +62,13 @@ async function scanDirs(dirs: string[], patterns: string[], root: string, exclud
 // ── Dynamic discovery middleware ─────────────────────────────────────
 
 /** Collect directories to scan for context files from a file path.
- *  When `walk` is true, walks from the file's directory up to `root`,
- *  returning every intermediate directory (excluding `root` itself,
- *  since root-level files are already discovered at startup).
- *  When `walk` is false, returns only the file's immediate directory. */
+ *  When `walk` is true, walks from the file's directory up to `root`.
+ *  When `walk` is false, returns only the file's immediate directory.
+ *  Deduplicates against `checked` set. */
 function collectDirs(filePath: string, root: string, walk: boolean, checked: Set<string>): string[] {
-  const dirs: string[] = []
   const start = dirname(filePath)
-  if (!walk) {
-    if (!checked.has(start)) { checked.add(start); dirs.push(start) }
-    return dirs
-  }
-  let current = start
-  const normalizedRoot = resolve(root)
-  while (true) {
-    if (!checked.has(current)) { checked.add(current); dirs.push(current) }
-    if (resolve(current) === normalizedRoot) break
-    const parent = resolve(current, '..')
-    if (parent === current) break // filesystem root
-    current = parent
-  }
-  return dirs
+  const candidates = walk ? walkUpTo(start, root) : [start]
+  return candidates.filter(d => { if (checked.has(d)) return false; checked.add(d); return true })
 }
 
 /** Extract absolute file paths from all messages (tool call arguments, tool results, and user text). */
