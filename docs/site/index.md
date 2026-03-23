@@ -1,10 +1,12 @@
 # ra
 
-ra is the predictable, observable agent harness — built to run autonomously. Nothing hidden behind abstractions you can't reach. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](/middleware/) let you intercept every step — model calls, tool execution, streaming, all of it.
+ra is the predictable, observable agent harness — built to run autonomously. Nothing hidden behind abstractions you can't reach. Every part of the loop is exposed via config and extensible with plain TypeScript. [Middleware hooks](/middleware/) intercept every step — model calls, tool execution, streaming. [Permissions](/permissions/) constrain what tools can do with regex allow/deny rules.
 
 It's designed for long-running, unattended operation. The loop runs until the task is done — no arbitrary iteration caps. [Adaptive thinking](/core/context-control) scales reasoning depth with the task. [Context compaction](/core/context-control) manages memory automatically, using a cache-aware truncation strategy that preserves prompt caches across turns. [Token budgets and duration limits](/core/agent-loop) set hard guardrails. When a provider returns a context-length error, ra learns the real window size and adjusts — no manual tuning needed.
 
 It comes with [built-in tools](/tools/) for filesystem, shell, network, and parallelization. Tool calls execute concurrently by default. The [Agent tool](/tools/#agent) spawns independent sub-agents for parallel workstreams. Connect to [MCP servers](/modes/mcp) for additional tools — or expose ra itself as an MCP server for Cursor, Claude Desktop, or anything that speaks the protocol.
+
+Because everything is plain files — skills are Markdown, middleware is TypeScript, config is YAML — the model itself can extend its own capabilities at runtime. It can write new [skills](/skills/), add [middleware](/middleware/), create scripts. You set the guardrails; it builds what it needs within them.
 
 Persistent [sessions](/core/sessions) via JSONL, scoped per-project. An FTS5 [memory](/tools/#memory) backed by SQLite. Automatic [context discovery](/core/context-control) loads your repo's conventions at startup. [Prompt caching](/providers/anthropic) keeps long sessions fast and cheap. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch providers with a flag.
 
@@ -44,6 +46,13 @@ agent:
   thinking: adaptive          # deep reasoning early, lighter as execution progresses
   parallelToolCalls: true     # concurrent tool execution (default)
   maxTokenBudget: 500_000     # hard token limit for autonomous runs
+
+  permissions:
+    rules:
+      - tool: Bash
+        command:
+          allow: ["^git ", "^bun "]
+          deny: ["--force", "--hard"]
 
   middleware:
     beforeModelCall:
@@ -89,24 +98,6 @@ cron:
 
 Runs every 30 minutes with its own session, logs, and traces.
 
-### You're building a feature
-
-```bash
-ra
-› /attach src/auth.ts
-› How should I add rate limiting to this endpoint?
-```
-
-Attach files, ask follow-ups, keep context. Resume the session tomorrow with `/resume`.
-
-### Your product needs AI
-
-```bash
-ra --http --http-port 3000
-```
-
-POST a message, get SSE chunks back. No framework — just `Bun.serve()` under the hood.
-
 ### Your editor needs a specialist
 
 ```bash
@@ -129,7 +120,7 @@ Now Cursor or Claude Desktop has a dedicated code reviewer that uses your projec
 | [Inspector](/modes/inspector) | Web dashboard for debugging sessions — traces, logs, token usage, TTFT |
 | [GitHub Actions](/modes/github-actions) | Run ra directly in CI/CD workflows with no install step |
 | [Built-in Tools](/tools/) | Filesystem, shell, network, scratchpad, parallel sub-agents |
-| [Skills](/skills/) | Reusable instruction bundles — install from npm, GitHub, or URLs |
+| [Skills](/skills/) | Reusable instruction bundles — install from npm, GitHub, or URLs. The model can write new ones at runtime |
 | [Middleware](/middleware/) | Hooks at every loop stage — intercept, modify, deny, or stop |
 | [Permissions](/permissions/) | Regex-based allow/deny rules per tool per field |
 | [Sessions](/core/sessions) | Persist conversations as JSONL, scoped per-project, resume from any interface |
