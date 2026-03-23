@@ -29,7 +29,8 @@ export function searchFilesTool(options?: GrepToolOptions): ITool {
       if (rootDir) assertWithinRoot(path, rootDir)
       const glob = new Bun.Glob(include ? `**/${include}` : '**/*')
       const results: string[] = []
-      for await (const rel of glob.scan({ cwd: path, onlyFiles: true })) {
+      for await (const rel of glob.scan({ cwd: path, onlyFiles: true, dot: false })) {
+        if (rel.startsWith('node_modules/') || rel.startsWith('.git/')) continue
         try {
           const content = await readFile(join(path, rel), 'utf-8')
           const lines = content.split('\n')

@@ -35,13 +35,13 @@ export function listDirectoryTool(options?: LSToolOptions): ITool {
     description:
       'List contents of a directory, one entry per line. ' +
       'Directories are suffixed with "/" (e.g. "src/"). ' +
-      'Set recursive=true to list nested contents up to a given depth (default 5).',
+      'Set recursive=true to list nested contents up to a given depth (default 3, max 5).',
     inputSchema: {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'Directory path to list' },
         recursive: { type: 'boolean', description: 'Recurse into subdirectories (default false)' },
-        depth: { type: 'number', description: 'Max recursion depth, 1-5 (default 3, only used when recursive=true)' },
+        depth: { type: 'number', description: 'Max recursion depth 1-5 (default 3, only used when recursive=true)' },
       },
       required: ['path'],
     },

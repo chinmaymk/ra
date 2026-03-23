@@ -51,6 +51,9 @@ Paths in `skillDirs`, `middleware`, and `systemPrompt` (when pointing to a file)
 Use `${}` syntax for configurable values:
 
 ```yaml
+agent:
+  provider: ${PROVIDER:-anthropic}
+  model: ${MODEL:-claude-sonnet-4-6}
 app:
   mcpServers:
     - name: github
@@ -59,10 +62,6 @@ app:
       args: ["-y", "@modelcontextprotocol/server-github"]
       env:
         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
-
-agent:
-  provider: ${PROVIDER:-anthropic}
-  model: ${MODEL:-claude-sonnet-4-6}
 ```
 
 `${VAR:-default}` uses the default when unset or empty. `${VAR}` errors if unset.
@@ -120,7 +119,7 @@ Create TypeScript files in `middleware/` and reference them in your config:
 // middleware/token-budget.ts
 export default async (ctx) => {
   const budget = parseInt(process.env.RA_TOKEN_BUDGET || '200000', 10)
-  const used = ctx.loop.usage.inputTokens + ctx.loop.usage.outputTokens
+  const used = (ctx.loop.usage.inputTokens + ctx.loop.usage.outputTokens)
 
   if (used > budget) {
     ctx.stop(`Token budget exceeded: ${used} / ${budget}`)
@@ -258,7 +257,7 @@ Review the provided code. For each issue found, output:
 ```ts
 export default async (ctx) => {
   const budget = parseInt(process.env.RA_TOKEN_BUDGET || '200000', 10)
-  const used = ctx.loop.usage.inputTokens + ctx.loop.usage.outputTokens
+  const used = (ctx.loop.usage.inputTokens + ctx.loop.usage.outputTokens)
   if (used > budget) ctx.stop(`Token budget exceeded: ${used} / ${budget}`)
 }
 ```
