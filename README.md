@@ -99,7 +99,7 @@ ra --show-context     # discovered context files
 
 ## Configuration
 
-Config lives in your repo. No hidden prompts. One engineer defines behavior — everyone else runs the same agent.
+Config lives in your repo. No hidden prompts, no default system prompt. One engineer defines behavior — everyone else runs the same agent.
 
 ```yaml
 # ra.config.yml
