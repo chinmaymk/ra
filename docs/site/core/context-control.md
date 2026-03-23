@@ -4,22 +4,36 @@ ra gives you full control over what the model sees and when. Built-in mechanisms
 
 ## Smart context compaction
 
-When conversations grow long, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then summarizes the middle with a cheap model. You keep the context that matters.
+When conversations grow long, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then drops the minimum messages from the **back** of the compactable zone needed to free space. This keeps `[pinned, ...early_compactable]` byte-identical to the cached prefix, so provider prompt caches (Anthropic, OpenAI, Google) get maximum reuse on the very next model call.
 
 ```yaml
 agent:
   compaction:
     enabled: true
-    threshold: 0.70              # trigger at 70% of context window
+    threshold: 0.90              # trigger at 90% of context window
+    strategy: truncate           # 'truncate' (default) or 'summarize'
+```
+
+Two strategies:
+
+- **`truncate`** (default) — Drops messages from the back of the compactable zone (the transition between old and recent context). Free, instant, and maximally cache-friendly: the message prefix `[system, first_user, early_turns...]` stays byte-identical across compactions, giving maximum prefix cache hits on all providers.
+- **`summarize`** — Calls a cheap model to summarize the entire compactable zone and injects the summary into the pinned user message. Costs an extra API call but preserves more context semantically.
+
+```yaml
+# opt into summarization if you prefer preserving context over cost
+agent:
+  compaction:
+    strategy: summarize
     model: claude-haiku-4-5-20251001  # cheap model for summarization
 ```
 
 Key properties:
 
+- **Cache-friendly** — Designed for provider prefix caching (Anthropic, OpenAI, Google). The truncate strategy keeps the message prefix as stable as possible across compactions — only the oldest messages change. The 0.90 threshold maximizes time between compactions.
 - **Token-aware** — Uses real token counts from the provider when available, falls back to estimation.
 - **Pinned zones** — System prompts and initial context never get compacted.
 - **Tool-call-aware** — Boundaries never split an assistant message from its tool results.
-- **Provider-portable** — Works the same across all providers. Default compaction models: Haiku for Anthropic, GPT-4o-mini for OpenAI, Gemini Flash for Google.
+- **Provider-portable** — Works the same across all providers.
 - **Dynamic context window learning** — For unknown models (custom fine-tunes, local models, new releases), ra learns the real context window from provider errors. The first time a model hits a context limit, ra parses the actual size from the error message and caches it — all future compaction thresholds use the correct value automatically.
 
 ### Context window resolution

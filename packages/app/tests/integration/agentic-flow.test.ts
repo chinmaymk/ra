@@ -300,7 +300,7 @@ export default async function(_ctx: unknown) {
     const configFile = join(tmpDir, 'ra-compact.config.json')
     writeFileSync(configFile, JSON.stringify({
       agent: {
-        compaction: { enabled: true, maxTokens: 1000, contextWindow: 5000 },
+        compaction: { enabled: true, strategy: 'summarize', maxTokens: 1000, contextWindow: 5000 },
         context: { enabled: false },
         skillDirs: [],
       },

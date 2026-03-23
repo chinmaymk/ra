@@ -71,7 +71,8 @@ export const defaultConfig: RaConfig = {
     },
     compaction: {
       enabled: true,
-      threshold: 0.70,
+      threshold: 0.90,
+      strategy: 'truncate',
     },
     memory: {
       enabled: false,

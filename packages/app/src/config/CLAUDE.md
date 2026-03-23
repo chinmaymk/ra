@@ -75,7 +75,7 @@ Everything a recipe defines: brain, tools, skills, permissions.
 | `agent.permissions` | `{}` | Tool permission rules |
 | `agent.middleware` | `{}` | Custom middleware hooks |
 | `agent.context` | `{ enabled: true, ... }` | Context file discovery |
-| `agent.compaction` | `{ enabled: true, threshold: 0.70 }` | Auto-summarize old messages |
+| `agent.compaction` | `{ enabled: true, threshold: 0.90, strategy: 'truncate' }` | Drop old messages when context is full |
 | `agent.memory` | `{ enabled: false, ... }` | SQLite-backed persistent memory |
 
 ## Provider Options

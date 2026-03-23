@@ -8,6 +8,13 @@ import { serializeContent } from '../providers/utils'
 /** Fraction of context window reserved for recent messages during compaction. */
 const RECENT_BUDGET_FRACTION = 0.20
 
+/**
+ * How far below the trigger threshold to target after truncation.
+ * E.g. threshold=0.90, headroom=0.15 → target=0.75 of context window.
+ * Gives room for several turns before the next compaction.
+ */
+const TRUNCATION_HEADROOM = 0.15
+
 export interface MessageZones {
   pinned: IMessage[]
   compactable: IMessage[]
@@ -89,13 +96,17 @@ function appendToMessage(msg: IMessage, text: string, extraParts: ContentPart[] 
   return { ...msg, content: [...base, { type: 'text' as const, text: `\n\n${text}` }, ...extraParts] }
 }
 
+export type CompactionStrategy = 'truncate' | 'summarize'
+
 export interface CompactionConfig {
   enabled: boolean
   threshold: number
+  /** 'truncate' drops old messages (free, cache-friendly). 'summarize' calls the model to summarize them. Default: 'truncate'. */
+  strategy?: CompactionStrategy
   maxTokens?: number
   contextWindow?: number
   model?: string
-  /** Custom prompt for summarization. Overrides the default summarization prompt. */
+  /** Custom prompt for summarization. Overrides the default summarization prompt. Only used with strategy: 'summarize'. */
   prompt?: string
   onCompact?: (info: { originalMessages: number; compactedMessages: number; estimatedTokens: number; threshold: number }) => void
 }
@@ -229,56 +240,87 @@ async function _runCompaction(
     return false
   }
 
-  ctx.logger.debug('compaction zones', { pinnedCount: pinned.length, compactableCount: compactable.length, recentCount: recent.length })
+  const strategy = config.strategy ?? 'truncate'
+  ctx.logger.debug('compaction zones', { pinnedCount: pinned.length, compactableCount: compactable.length, recentCount: recent.length, strategy })
 
-  const conversationText = compactable.map(m => {
-    const content = serializeContent(m.content)
-    const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
-    const toolId = m.toolCallId ? ` [tool result for: ${m.toolCallId}]` : ''
-    return `${m.role}${toolInfo}${toolId}: ${content}`
-  }).join('\n')
-
-  let summaryResponse
-  try {
-    const compactionModel = config.model || ctx.request.model
-    summaryResponse = await provider.chat({
-      model: compactionModel,
-      messages: [{ role: 'user', content: `${config.prompt || DEFAULT_SUMMARIZATION_PROMPT}\n\n<conversation>\n${conversationText}\n</conversation>` }],
-    })
-  } catch (err) {
-    ctx.logger.error('compaction summarization failed', { error: errorMessage(err) })
-    return false
-  }
-
-  const summaryContent = serializeContent(summaryResponse.message.content)
-  const summaryText = `[Context Summary]\n${summaryContent}`
-
-  // Merge summary into the last pinned user message, absorbing the first recent
-  // user message if it exists (to avoid an orphaned summary-only message).
   let recentStart = 0
-  const userIdx = pinned.findLastIndex(m => m.role === 'user')
-  if (userIdx >= 0) {
-    let extraText = summaryText
-    const nonTextParts: ContentPart[] = []
+  let middle: IMessage[] = []
 
-    if (recent.length > 0 && recent[0]?.role === 'user') {
-      const { content } = recent[0]
-      if (typeof content === 'string') {
-        extraText += `\n\n${content}`
-      } else {
-        for (const part of content) {
-          if (part.type === 'text') extraText += `\n\n${part.text}`
-          else nonTextParts.push(part)
-        }
-      }
-      recentStart = 1
+  if (strategy === 'summarize') {
+    const conversationText = compactable.map(m => {
+      const content = serializeContent(m.content)
+      const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
+      const toolId = m.toolCallId ? ` [tool result for: ${m.toolCallId}]` : ''
+      return `${m.role}${toolInfo}${toolId}: ${content}`
+    }).join('\n')
+
+    let summaryResponse
+    try {
+      const compactionModel = config.model || ctx.request.model
+      summaryResponse = await provider.chat({
+        model: compactionModel,
+        messages: [{ role: 'user', content: `${config.prompt || DEFAULT_SUMMARIZATION_PROMPT}\n\n<conversation>\n${conversationText}\n</conversation>` }],
+      })
+    } catch (err) {
+      ctx.logger.error('compaction summarization failed', { error: errorMessage(err) })
+      return false
     }
 
-    pinned[userIdx] = appendToMessage(pinned[userIdx] as IMessage, extraText, nonTextParts)
+    const summaryContent = serializeContent(summaryResponse.message.content)
+    const summaryText = `[Context Summary]\n${summaryContent}`
+
+    // Merge summary into the last pinned user message, absorbing the first recent
+    // user message if it exists (to avoid an orphaned summary-only message).
+    const userIdx = pinned.findLastIndex(m => m.role === 'user')
+    if (userIdx >= 0) {
+      let extraText = summaryText
+      const nonTextParts: ContentPart[] = []
+
+      if (recent.length > 0 && recent[0]?.role === 'user') {
+        const { content } = recent[0]
+        if (typeof content === 'string') {
+          extraText += `\n\n${content}`
+        } else {
+          for (const part of content) {
+            if (part.type === 'text') extraText += `\n\n${part.text}`
+            else nonTextParts.push(part)
+          }
+        }
+        recentStart = 1
+      }
+
+      pinned[userIdx] = appendToMessage(pinned[userIdx] as IMessage, extraText, nonTextParts)
+    }
+    // summarize replaces the entire compactable zone with the summary in pinned
+  } else {
+    // Truncate: drop from the back of the compactable zone to keep the message
+    // prefix byte-identical for provider prompt caches (Anthropic, OpenAI, Google).
+    const currentTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
+    const targetTokens = contextWindow !== undefined
+      ? Math.floor(contextWindow * Math.max(config.threshold - TRUNCATION_HEADROOM, 0.50))
+      : Math.floor(currentTokens * 0.75)
+
+    let keepEnd = compactable.length
+    let droppedTokens = 0
+    const neededDrop = currentTokens - targetTokens
+    while (keepEnd > 0 && droppedTokens < neededDrop) {
+      keepEnd--
+      droppedTokens += estimateTokens([compactable[keepEnd]!])
+    }
+    // Don't split tool call groups — keep trailing tool results with their assistant
+    while (keepEnd < compactable.length && compactable[keepEnd]?.role === 'tool') {
+      keepEnd++
+    }
+    // If nothing could be kept (e.g. single giant tool group), drop everything
+    if (keepEnd >= compactable.length) keepEnd = 0
+
+    middle = compactable.slice(0, keepEnd)
+    ctx.logger.debug('truncation drop', { kept: middle.length, dropped: compactable.length - keepEnd, droppedTokens, neededDrop })
   }
+
   const originalCount = messages.length
   ctx.request.messages.length = 0
-  ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
+  ctx.request.messages.push(...pinned, ...middle, ...recent.slice(recentStart))
   const estimatedTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
   const threshold = config.maxTokens ?? (contextWindow !== undefined ? Math.floor(contextWindow * config.threshold) : 0)
   ctx.logger.info('compaction complete', {
