@@ -31,35 +31,20 @@ describe('getContextWindowSize', () => {
     expect(getContextWindowSize('claude-sonnet-4-6', 50_000)).toBe(50_000)
   })
 
-  it('uses provider.contextWindow() when no user override', () => {
-    const provider = { contextWindow: () => 32_000 }
-    expect(getContextWindowSize('unknown-model', undefined, provider)).toBe(32_000)
-  })
-
-  it('user override takes priority over provider.contextWindow()', () => {
-    const provider = { contextWindow: () => 32_000 }
-    expect(getContextWindowSize('unknown-model', 64_000, provider)).toBe(64_000)
-  })
-
-  it('falls back to registry when provider.contextWindow() returns undefined', () => {
-    const provider = { contextWindow: () => undefined }
-    expect(getContextWindowSize('claude-sonnet-4-6', undefined, provider)).toBe(200_000)
-  })
-
-  it('falls back to registry when provider has no contextWindow method', () => {
-    const provider = {}
-    expect(getContextWindowSize('claude-sonnet-4-6', undefined, provider)).toBe(200_000)
-  })
-
   it('uses learned context window for unknown models', () => {
     setLearnedContextWindow('my-custom-model-v1', 32_000)
     expect(getContextWindowSize('my-custom-model-v1')).toBe(32_000)
   })
 
-  it('provider.contextWindow() takes priority over learned value', () => {
-    setLearnedContextWindow('my-custom-model-v2', 32_000)
-    const provider = { contextWindow: () => 64_000 }
-    expect(getContextWindowSize('my-custom-model-v2', undefined, provider)).toBe(64_000)
+  it('user override takes priority over learned value', () => {
+    setLearnedContextWindow('my-custom-model-v3', 32_000)
+    expect(getContextWindowSize('my-custom-model-v3', 64_000)).toBe(64_000)
+  })
+
+  it('learned value takes priority over registry for known model prefix', () => {
+    // If a model like claude-sonnet-custom has a different real window, learned wins
+    setLearnedContextWindow('claude-sonnet-custom', 100_000)
+    expect(getContextWindowSize('claude-sonnet-custom')).toBe(100_000)
   })
 
   it('empty model name returns default', () => {

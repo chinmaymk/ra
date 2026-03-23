@@ -78,37 +78,15 @@ function adjustToolCallBoundary(messages: IMessage[], boundary: number): number 
   return boundary
 }
 
-const CONTEXT_SUMMARY_MARKER = '[Context Summary]'
-
-/** Strip any prior [Context Summary] block from message content so summaries don't stack across compactions. */
-function stripExistingSummary(content: string): string {
-  const idx = content.indexOf(CONTEXT_SUMMARY_MARKER)
-  if (idx === -1) return content
-  // Remove from marker to end (summary is always appended at the end)
-  return content.slice(0, idx).trimEnd()
-}
-
-/** Append extra text (and optional non-text parts) to a message, preserving its content type.
- *  Replaces any existing [Context Summary] block to prevent stacking on resume. */
+/** Append extra text (and optional non-text parts) to a message, preserving its content type. */
 function appendToMessage(msg: IMessage, text: string, extraParts: ContentPart[] = []): IMessage {
   if (typeof msg.content === 'string' && extraParts.length === 0) {
-    const cleaned = stripExistingSummary(msg.content)
-    return { ...msg, content: `${cleaned}\n\n${text}` }
+    return { ...msg, content: `${msg.content}\n\n${text}` }
   }
   const base = typeof msg.content === 'string'
     ? [{ type: 'text' as const, text: msg.content }]
-    : [...msg.content]
-  // Remove any existing text part that contains the summary marker
-  const filtered = base.filter(p => !(p.type === 'text' && p.text.includes(CONTEXT_SUMMARY_MARKER)))
-  // Also strip trailing summary from the last text part (it may have been appended inline)
-  for (let i = filtered.length - 1; i >= 0; i--) {
-    const part = filtered[i]
-    if (part && part.type === 'text' && part.text.includes(CONTEXT_SUMMARY_MARKER)) {
-      filtered[i] = { type: 'text', text: stripExistingSummary(part.text) }
-      break
-    }
-  }
-  return { ...msg, content: [...filtered, { type: 'text' as const, text: `\n\n${text}` }, ...extraParts] }
+    : msg.content
+  return { ...msg, content: [...base, { type: 'text' as const, text: `\n\n${text}` }, ...extraParts] }
 }
 
 export interface CompactionConfig {
@@ -218,7 +196,7 @@ async function _runCompaction(
 
   if (!force) {
     const estimated = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
-    const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow, provider)
+    const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
     const triggerThreshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
     if (estimated <= triggerThreshold) {
       ctx.logger.debug('compaction not needed', { estimatedTokens: estimated, threshold: triggerThreshold })
@@ -229,7 +207,7 @@ async function _runCompaction(
 
   // Keep 20% of context window as recent messages when we know the window size,
   // otherwise use a conservative flat budget so we always compact aggressively.
-  const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow, provider)
+  const contextWindow = getContextWindowSize(ctx.request.model, config.contextWindow)
   const targetPostCompaction = Math.floor(contextWindow * RECENT_BUDGET_FRACTION)
   const { pinned, compactable, recent } = splitMessageZones(messages, targetPostCompaction)
 
@@ -288,8 +266,7 @@ async function _runCompaction(
   const originalCount = messages.length
   ctx.request.messages.length = 0
   ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
-  // Estimate tokens on the new (compacted) message list, not the stale pre-compaction count
-  const estimatedTokens = estimateTokens(ctx.request.messages)
+  const estimatedTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
   const threshold = config.maxTokens ?? Math.floor(contextWindow * config.threshold)
   ctx.logger.info('compaction complete', {
     originalMessages: originalCount,

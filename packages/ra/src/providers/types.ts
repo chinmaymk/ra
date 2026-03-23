@@ -80,8 +80,6 @@ export interface IProvider {
   name: string
   chat(request: ChatRequest): Promise<ChatResponse>
   stream(request: ChatRequest): AsyncIterable<StreamChunk>
-  /** Return the context window size (in tokens) for the given model, if known. */
-  contextWindow?(model: string): number | undefined
 }
 
 export type ProviderName = 'anthropic' | 'openai' | 'openai-completions' | 'google' | 'ollama' | 'bedrock' | 'azure'

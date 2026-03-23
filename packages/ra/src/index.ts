@@ -61,7 +61,7 @@ export { runMiddlewareChain, mergeMiddleware } from './agent/middleware'
 export { createCompactionMiddleware, forceCompact, isContextLengthError, parseContextWindowFromError, splitMessageZones, type CompactionConfig, type MessageZones } from './agent/context-compaction'
 export { withTimeout, TimeoutError } from './agent/timeout'
 export { estimateTokens } from './agent/token-estimator'
-export { getContextWindowSize, getDefaultCompactionModel, setLearnedContextWindow, type ContextWindowSource } from './agent/model-registry'
+export { getContextWindowSize, getDefaultCompactionModel, setLearnedContextWindow } from './agent/model-registry'
 
 // ── Observability ───────────────────────────────────────────────────
 export type { Logger, LogLevel, LogEntry } from './observability/logger'

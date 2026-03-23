@@ -10,7 +10,7 @@ Core agent loop and infrastructure.
 | `context-compaction.ts` | Summarizes old messages when context grows. Injected as `beforeModelCall` middleware |
 | `timeout.ts` | `withTimeout()` / `TimeoutError` |
 | `token-estimator.ts` | `estimateTokens()` — chars/4 heuristic |
-| `model-registry.ts` | `getContextWindowSize()` / `getDefaultCompactionModel()` |
+| `model-registry.ts` | `getContextWindowSize()` / `getDefaultCompactionModel()` / `setLearnedContextWindow()` |
 
 **Loop terminates when:** no tool calls, `maxIterations` reached, `maxTokenBudget` exceeded, `maxDuration` exceeded, `stop()` called, or `signal.aborted`.
 
@@ -20,4 +20,4 @@ Core agent loop and infrastructure.
 - `beforeModelCall` — can modify `ctx.request.messages` and `ctx.request.tools`
 - `beforeToolExecution` — can `deny(reason)` to block without stopping the loop
 
-**Compaction:** three zones (pinned, compactable, recent). Triggers at `threshold * contextWindow`. Won't split tool calls from results.
+**Compaction:** three zones (pinned, compactable, recent). Triggers at `threshold * contextWindow`. Won't split tool calls from results. Context window resolved as: config override → learned from errors → model registry → 200k fallback. On context length errors, `parseContextWindowFromError()` extracts the real limit and `setLearnedContextWindow()` caches it for future use.
