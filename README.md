@@ -23,7 +23,7 @@
 
 ---
 
-When an agent run fails, you want to know what it actually did. ra shows you.
+ra is a minimal agent runtime where the loop is explicit, every step is observable, and all behavior is controlled through config and middleware. It runs tasks end-to-end like other agents, but unlike them, you can see, constrain, and reproduce everything it does.
 
 ```bash
 ra "Fix the failing tests and open a PR"
@@ -35,8 +35,6 @@ iteration 2  Edit src/auth.ts · Bash bun test → passed
 iteration 3  Bash git commit + push
 ```
 
-Every iteration, every tool call, every decision — logged and inspectable. And you can hook into any step.
-
 ```bash
 ra --provider anthropic --model claude-sonnet-4-6 "Review this PR"
 ra --provider openai --model gpt-4.1 "Refactor auth to use JWT"
@@ -45,16 +43,9 @@ ra --interface cron   # scheduled agent jobs, unattended
 ra                    # interactive REPL
 ```
 
-## Why ra
-
-Agents fail in ways that are hard to debug — silent retries, unexpected tool calls, runaway loops. Most tools give you the output; you don't see the loop.
-
-ra makes the loop the thing. Every step is explicit. Every step has a hook.
-
-Not a framework. Not prompt chains. Just the loop, with control at every step.
+Hook into any step to inspect, modify, or stop what's happening:
 
 ```ts
-// block destructive commands before they run
 export default async (ctx) => {
   if (ctx.tool.name === 'Bash' && ctx.tool.input.includes('--force')) {
     ctx.stop("Blocked")
