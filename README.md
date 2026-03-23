@@ -19,7 +19,7 @@
   <a href="#middleware">Middleware</a> &middot;
   <a href="#mcp">MCP</a> &middot;
   <a href="#memory">Memory</a> &middot;
-  <a href="#context-discovery">Context Discovery</a> &middot;
+  <a href="#context-engineering">Context Engineering</a> &middot;
   <a href="#sessions">Sessions</a> &middot;
   <a href="#file-attachments">File Attachments</a> &middot;
   <a href="#observability">Observability</a> &middot;
@@ -258,9 +258,11 @@ agent:
 
 When enabled, `memory_save`, `memory_search`, and `memory_forget` tools are registered automatically.
 
-## [Context Discovery](https://chinmaymk.github.io/ra/core/context-control/)
+## [Context Engineering](https://chinmaymk.github.io/ra/core/context-control/)
 
-Ra discovers and loads project context at startup — `CLAUDE.md` files, `ra.config.yml`, and any files matching configured globs. The agent starts every session already knowing your repo's conventions, architecture, and rules.
+Ra gives you full control over what the model sees and when. Context isn't just "stuffed in" — it's discovered, resolved, compacted, and cached through a layered system you can inspect and override at every step.
+
+**Automatic discovery.** At startup, ra walks from the working directory up to the git root, loading `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.windsurfrules`, and any files matching your configured glob patterns. During the loop, it dynamically discovers context files near paths the model references — when the agent reads `src/auth/middleware.ts`, ra automatically loads `src/auth/CLAUDE.md` if it exists.
 
 ```yaml
 agent:
@@ -269,9 +271,16 @@ agent:
       - "CLAUDE.md"
       - "docs/architecture.md"
       - "src/**/*.prompt.md"
+    subdirectoryWalk: true     # discover context near referenced files (default)
 ```
 
-Context files support inline resolvers — `@src/auth.ts` inlines file contents and `url:https://example.com/api-docs` fetches and inlines URLs before the model sees the message.
+**Pattern resolvers.** Inline references in prompts and context files are resolved before the model sees the message. `@src/auth.ts` inlines file contents. `@src/**/*.ts` expands globs. `url:https://example.com/api-docs` fetches and inlines URLs. `/skill-name` lazy-loads a skill. All resolvers run in parallel with deduplication — reference the same file twice and it's only resolved once.
+
+**Context compaction.** When conversations grow toward the context window, ra splits messages into three zones — pinned (system + first user message), compactable (middle turns), and recent (last 20% by token count). The default strategy truncates from the back of the compactable zone, keeping the prefix byte-identical for prompt caching. A summarization fallback is available for cases where you need to preserve more semantic context. If the context window size isn't known (custom models, new providers), ra learns it from the first provider error and caches it for future runs.
+
+```bash
+ra --show-context   # see exactly what context files ra discovered and loaded
+```
 
 ## [Sessions](https://chinmaymk.github.io/ra/core/sessions/)
 
@@ -295,15 +304,33 @@ ra --file src/auth.ts --file src/routes.ts "Review these files"
 
 ## [Observability](https://chinmaymk.github.io/ra/observability/)
 
-Every model call, tool execution, and middleware hook emits structured events — token usage, latency, TTFT, cache hit rates, tool inputs/outputs. Stream to stdout, a file, or an external collector.
+Every model call, tool execution, and middleware decision emits structured events automatically. No instrumentation code required — ra logs and traces everything by default. Structured JSONL logs and OpenTelemetry-style trace spans are written per-session, ready to grep, stream to a collector, or inspect in the built-in dashboard.
+
+### [Inspector](https://chinmaymk.github.io/ra/modes/inspector/)
+
+`ra --inspector` launches a web dashboard that lets you replay and debug any session.
+
+<p align="center">
+  <img src="docs/inspector-overview.png" alt="ra inspector — session overview with per-iteration token breakdown" width="800">
+</p>
+
+The **Overview** tab gives you the full picture at a glance — total duration, iteration count, token breakdown (input, output, thinking, cache read, cache creation), cache hit percentage, tool call and error counts, loop status. A per-iteration bar chart shows exactly how tokens were spent across the run: where the model was thinking hardest, where cache hits kicked in, and where tool calls spiked.
+
+| Tab | What it shows |
+|-----|---------------|
+| **Overview** | Session stats, per-iteration token/tool breakdown chart, tool frequency table with call counts, errors, and timing |
+| **Timeline** | Chronological event stream — every model call (with token delta and cache %), every tool execution (with inputs/outputs), warnings and errors |
+| **Messages** | Full message history with collapsible thinking blocks — see exactly what the model saw and said at each turn |
+| **Logs** | Structured log entries with timestamp, level, message, and metadata — every subsystem logs here |
+| **Traces** | Hierarchical span tree — `agent.loop` → `agent.iteration` → `agent.model_call` / `agent.tool_execution` with duration and status |
+
+The inspector also shows resolved config (with API keys redacted), discovered context files, active middleware hooks, and persistent memories. Everything you need to answer "what did the agent do and why?"
 
 ```bash
-ra --inspector                                   # web dashboard with full traces
-ra --show-config                                 # inspect resolved config
-ra --show-context                                # print discovered context files
+ra --inspector                  # launch the dashboard
+ra --show-config                # print resolved config as JSON
+ra --show-context               # print discovered context files
 ```
-
-The [inspector](https://chinmaymk.github.io/ra/modes/inspector/) is a standalone web UI — overview dashboard, timeline of every model call and tool execution, full message history, structured logs, trace spans.
 
 ## Interfaces
 

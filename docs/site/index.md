@@ -2,15 +2,17 @@
 
 ra is the predictable, observable agent harness — built to run autonomously. Nothing hidden behind abstractions you can't reach. Every part of the loop is exposed via config and extensible with plain TypeScript. [Middleware hooks](/middleware/) intercept every step — model calls, tool execution, streaming. [Permissions](/permissions/) constrain what tools can do with regex allow/deny rules.
 
-It's designed for long-running, unattended operation. The loop runs until the task is done — no arbitrary iteration caps. [Adaptive thinking](/core/context-control) scales reasoning depth with the task. [Context compaction](/core/context-control) manages memory automatically, using a cache-aware truncation strategy that preserves prompt caches across turns. [Token budgets and duration limits](/core/agent-loop) set hard guardrails. When a provider returns a context-length error, ra learns the real window size and adjusts — no manual tuning needed.
+You get full control over [context engineering](/core/context-control). Automatic discovery walks your repo for `CLAUDE.md`, `AGENTS.md`, and configured patterns. Inline resolvers expand `@file` references and `url:` links before the model sees the prompt. Cache-aware [compaction](/core/context-control) manages long conversations — truncating from the back to keep prompt caches warm, or summarizing when you need semantic preservation. When a provider returns a context-length error, ra learns the real window size and adjusts.
+
+It's designed for long-running, unattended operation. The loop runs until the task is done — no arbitrary iteration caps. [Adaptive thinking](/core/context-control) scales reasoning depth with the task. [Token budgets and duration limits](/core/agent-loop) set hard guardrails.
 
 It comes with [built-in tools](/tools/) for filesystem, shell, network, and parallelization. Tool calls execute concurrently by default. The [Agent tool](/tools/#agent) spawns independent sub-agents for parallel workstreams. Connect to [MCP servers](/modes/mcp) for additional tools — or expose ra itself as an MCP server for Cursor, Claude Desktop, or anything that speaks the protocol.
 
 Because everything is plain files — skills are Markdown, middleware is TypeScript, config is YAML — the model itself can extend its own capabilities at runtime. It can write new [skills](/skills/), add [middleware](/middleware/), create scripts. You set the guardrails; it builds what it needs within them.
 
-Persistent [sessions](/core/sessions) via JSONL, scoped per-project. An FTS5 [memory](/tools/#memory) backed by SQLite. Automatic [context discovery](/core/context-control) loads your repo's conventions at startup. [Prompt caching](/providers/anthropic) keeps long sessions fast and cheap. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch providers with a flag.
+Every action is observable. Structured JSONL logs and trace spans are written per-session automatically. The built-in [inspector](/modes/inspector) gives you a full dashboard — per-iteration token breakdown, tool call frequency, cache hit rates, timeline of every model call and tool execution, the complete message history. When someone asks "what did the agent do?" — you can replay the entire run.
 
-It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), [MCP server](/modes/mcp), or on a [cron schedule](/modes/cron). Structured logs and traces per session, so you can replay exactly what an autonomous agent did at 3am. No runtime dependencies.
+It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), [MCP server](/modes/mcp), or on a [cron schedule](/modes/cron). Persistent [sessions](/core/sessions) via JSONL, scoped per-project. An FTS5 [memory](/tools/#memory) backed by SQLite. It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch providers with a flag. No runtime dependencies.
 
 All of this is [configurable](/configuration/) via a layered config system — env vars, config files (JSON, YAML, TOML), or CLI flags. Each layer overrides the last.
 
@@ -46,6 +48,11 @@ agent:
   thinking: adaptive          # deep reasoning early, lighter as execution progresses
   parallelToolCalls: true     # concurrent tool execution (default)
   maxTokenBudget: 500_000     # hard token limit for autonomous runs
+
+  context:
+    patterns:
+      - "CLAUDE.md"
+      - "docs/architecture.md"
 
   permissions:
     rules:
@@ -111,13 +118,14 @@ Now Cursor or Claude Desktop has a dedicated code reviewer that uses your projec
 | Feature | Description |
 |---------|-------------|
 | [The Agent Loop](/core/agent-loop) | Model → parallel tool execution → repeat, with adaptive thinking, token budgets, duration limits, and middleware hooks at every step |
-| [Context Control](/core/context-control) | Cache-aware compaction, dynamic context window learning, prompt caching, adaptive thinking, context discovery |
+| [Context Engineering](/core/context-control) | Automatic discovery, inline `@file` and `url:` resolvers, cache-aware compaction, dynamic context window learning |
+| [Observability](/observability/) | Structured JSONL logs, trace spans, per-iteration token breakdown, cache metrics — all automatic, no instrumentation needed |
+| [Inspector](/modes/inspector) | Web dashboard — session overview, iteration-by-iteration breakdown, timeline, messages, logs, traces |
 | [CLI](/modes/cli) | One-shot prompts, piping, chaining, scriptable |
 | [REPL](/modes/repl) | Interactive sessions with history, slash commands, file attachments |
 | [HTTP API](/modes/http) | Sync and streaming chat, session management |
 | [MCP](/modes/mcp) | Client (pull tools from MCP servers) and server (expose ra as a tool) |
 | [Cron](/modes/cron) | Scheduled autonomous jobs with cron expressions, per-job config overrides, isolated sessions |
-| [Inspector](/modes/inspector) | Web dashboard for debugging sessions — traces, logs, token usage, TTFT |
 | [GitHub Actions](/modes/github-actions) | Run ra directly in CI/CD workflows with no install step |
 | [Built-in Tools](/tools/) | Filesystem, shell, network, scratchpad, parallel sub-agents |
 | [Skills](/skills/) | Reusable instruction bundles — install from npm, GitHub, or URLs. The model can write new ones at runtime |
@@ -126,6 +134,5 @@ Now Cursor or Claude Desktop has a dedicated code reviewer that uses your projec
 | [Sessions](/core/sessions) | Persist conversations as JSONL, scoped per-project, resume from any interface |
 | [File Attachments](/core/file-attachments) | Images, PDFs, and text files — provider-aware format handling |
 | [Memory](/tools/#memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
-| [Observability](/observability/) | Structured JSONL logs, span-based traces, TTFT tracking, cache metrics |
 | [Configuration](/configuration/) | Layered: CLI > env > file, with env var interpolation and YAML/JSON/TOML support |
 | [Recipes](/recipes/) | Pre-built agent configurations — coding, code review, autonomous research, multi-agent orchestration |
