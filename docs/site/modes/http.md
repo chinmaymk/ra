@@ -48,11 +48,10 @@ The streaming endpoint returns Server-Sent Events (SSE):
 ```
 data: {"type":"text","delta":"Hello"}
 data: {"type":"text","delta":" there!"}
-data: {"type":"thinking","delta":"Let me consider..."}
 data: {"type":"tool_call_start","id":"tc_1","name":"Read"}
 data: {"type":"tool_call_delta","id":"tc_1","argsDelta":"{\"path\":\"src/index.ts\"}"}
 data: {"type":"tool_call_end","id":"tc_1"}
-data: {"type":"done","usage":{"inputTokens":150,"outputTokens":42}}
+data: {"type":"done","sessionId":"ses_abc123"}
 ```
 
 ## Synchronous response (`/chat/sync`)

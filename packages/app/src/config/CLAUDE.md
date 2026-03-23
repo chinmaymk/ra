@@ -62,9 +62,9 @@ Everything a recipe defines: brain, tools, skills, permissions.
 | `agent.model` | `'claude-sonnet-4-6'` | Model ID |
 | `agent.thinking` | — | Extended thinking: low, medium, high |
 | `agent.systemPrompt` | `'You are a helpful AI assistant.'` | System prompt |
-| `agent.maxIterations` | `50` | Loop iteration limit |
+| `agent.maxIterations` | `0` | Loop iteration limit (0 = unlimited) |
 | `agent.maxRetries` | `3` | Retry limit for model calls |
-| `agent.toolTimeout` | `30000` | Tool execution timeout (ms) |
+| `agent.toolTimeout` | `120000` | Tool execution timeout (ms) |
 | `agent.maxConcurrency` | `4` | Parallel subagent task limit |
 | `agent.parallelToolCalls` | `true` | Execute tool calls concurrently |
 | `agent.maxTokenBudget` | `0` | Max total tokens before stopping (0 = unlimited) |
@@ -75,7 +75,7 @@ Everything a recipe defines: brain, tools, skills, permissions.
 | `agent.permissions` | `{}` | Tool permission rules |
 | `agent.middleware` | `{}` | Custom middleware hooks |
 | `agent.context` | `{ enabled: true, ... }` | Context file discovery |
-| `agent.compaction` | `{ enabled: true, threshold: 0.80 }` | Auto-summarize old messages |
+| `agent.compaction` | `{ enabled: true, threshold: 0.70 }` | Auto-summarize old messages |
 | `agent.memory` | `{ enabled: false, ... }` | SQLite-backed persistent memory |
 
 ## Provider Options

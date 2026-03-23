@@ -41,7 +41,7 @@ Add or remove instructions based on what tools are available, how far into the c
 // middleware/conditional-instructions.ts
 export default async (ctx) => {
   const hasWriteTools = ctx.request.tools?.some(t => t.name === 'Write')
-  const isFirstCall = ctx.loop.iteration === 0
+  const isFirstCall = ctx.loop.iteration === 1
 
   const sections: string[] = []
 
@@ -126,7 +126,7 @@ export default async (ctx) => {
   if (!ctx.request.tools) return
 
   // Remove destructive tools in the first iteration (let the agent plan first)
-  if (ctx.loop.iteration === 0) {
+  if (ctx.loop.iteration === 1) {
     ctx.request.tools = ctx.request.tools.filter(
       t => !['DeleteFile', 'Bash'].includes(t.name)
     )

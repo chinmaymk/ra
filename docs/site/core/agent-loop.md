@@ -47,8 +47,8 @@ The loop tracks token usage per iteration, enforces `maxIterations`, and support
 
 ```yaml
 agent:
-  maxIterations: 50   # default — prevents runaway loops
-  toolTimeout: 30000  # per-tool timeout in ms
+  maxIterations: 200    # 0 = unlimited (default)
+  toolTimeout: 120000   # per-tool timeout in ms (default: 120000)
 ```
 
 ```ts

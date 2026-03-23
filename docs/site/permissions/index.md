@@ -6,7 +6,7 @@ By default, all tools are allowed (no rules configured). Add rules to restrict s
 
 ```yaml
 # ra.config.yml
-app:
+agent:
   permissions:
     rules:
       - tool: Bash
@@ -46,7 +46,7 @@ When a tool call is denied, the model receives an error result with a clear mess
 When `true`, disables all permission checks. All tools are allowed unconditionally. Use this to explicitly opt out of the permissions system.
 
 ```yaml
-app:
+agent:
   permissions:
     no_rules_rules: true
 ```
@@ -56,7 +56,7 @@ app:
 What happens when a tool has no matching rules. Default: `allow`.
 
 ```yaml
-app:
+agent:
   permissions:
     default_action: deny  # block tools with no rules
 ```
@@ -71,7 +71,7 @@ Array of rule objects. Each rule has:
 - Any other key — a field name from the tool's input schema, mapped to `{ allow?: string[], deny?: string[] }`
 
 ```yaml
-app:
+agent:
   permissions:
     rules:
       - tool: Bash
@@ -113,7 +113,7 @@ Each built-in tool has specific fields you can write rules against. These are th
 ### Allow only safe git commands
 
 ```yaml
-app:
+agent:
   permissions:
     rules:
       - tool: Bash
@@ -125,7 +125,7 @@ app:
 ### Restrict file operations to project directory
 
 ```yaml
-app:
+agent:
   permissions:
     rules:
       - tool: Write
@@ -144,7 +144,7 @@ app:
 ### Block secrets in file content
 
 ```yaml
-app:
+agent:
   permissions:
     rules:
       - tool: Write
@@ -158,7 +158,7 @@ app:
 ### Block network access to internal services
 
 ```yaml
-app:
+agent:
   permissions:
     rules:
       - tool: WebFetch
@@ -169,7 +169,7 @@ app:
 ### Lockdown mode — deny everything except reads
 
 ```yaml
-app:
+agent:
   permissions:
     default_action: deny
     rules:

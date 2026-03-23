@@ -45,9 +45,9 @@ agent:
   provider: ${PROVIDER:-anthropic}     # env override with default
   model: ${MODEL:-claude-sonnet-4-6}
   systemPrompt: You are a helpful coding assistant.
-  maxIterations: 50
+  maxIterations: 200
   thinking: adaptive
-  toolTimeout: 30000
+  toolTimeout: 120000
   parallelToolCalls: true       # run tool calls concurrently (default)
   maxTokenBudget: 0             # 0 = unlimited, or set e.g. 200000
   maxDuration: 0                # 0 = unlimited, or set e.g. 300000 (5 min)
@@ -57,7 +57,7 @@ agent:
 
   compaction:
     enabled: true
-    threshold: 0.8
+    threshold: 0.70
     model: claude-haiku-4-5-20251001
 
   context:
@@ -94,10 +94,10 @@ agent:
 | `agent.provider` | `--provider` | `anthropic` | LLM provider |
 | `agent.model` | `--model` | provider default | Model name |
 | `agent.systemPrompt` | `--system-prompt` | — | System prompt text |
-| `agent.maxIterations` | `--max-iterations` | `50` | Max agent loop iterations |
+| `agent.maxIterations` | `--max-iterations` | `0` | Max agent loop iterations (0 = unlimited) |
 | `agent.thinking` | `--thinking` | `off` | Thinking mode: `off`, `low`, `medium`, `high`, `adaptive` |
 | `agent.thinkingBudgetCap` | `--thinking-budget-cap` | — | Max thinking budget tokens (caps the level-based default) |
-| `agent.toolTimeout` | — | `30000` | Per-tool and middleware timeout (ms) |
+| `agent.toolTimeout` | — | `120000` | Per-tool and middleware timeout (ms) |
 | `agent.parallelToolCalls` | — | `true` | Execute tool calls in parallel when the model returns multiple |
 | `agent.maxTokenBudget` | `--max-token-budget` | `0` | Max total tokens (input + output) before the loop stops. 0 = unlimited |
 | `agent.maxDuration` | `--max-duration` | `0` | Max wall-clock duration (ms) before the loop stops. 0 = unlimited |
@@ -137,7 +137,7 @@ agent:
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
 | `agent.compaction.enabled` | — | `true` | Enable automatic context compaction |
-| `agent.compaction.threshold` | — | `0.8` | Trigger at this fraction of context window |
+| `agent.compaction.threshold` | — | `0.70` | Trigger at this fraction of context window |
 | `agent.compaction.model` | — | provider default | Model for summarization |
 
 ### Agent — Context
@@ -145,7 +145,7 @@ agent:
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
 | `agent.context.enabled` | — | `true` | Enable context file discovery |
-| `agent.context.patterns` | — | `[]` | Glob patterns for context files |
+| `agent.context.patterns` | — | `['CLAUDE.md', 'AGENTS.md', '.cursorrules', ...]` | Glob patterns for context files |
 | `agent.context.resolvers` | — | built-in | Pattern resolvers for `@file` and `url:` |
 
 ### Agent — Tools
@@ -310,7 +310,7 @@ To make any config field env-driven, use `${}` in your config file:
 agent:
   provider: ${PROVIDER:-anthropic}
   model: ${MODEL:-claude-sonnet-4-6}
-  maxIterations: ${MAX_ITERS:-50}     # coerced to number automatically
+  maxIterations: ${MAX_ITERS:-200}    # coerced to number automatically
 app:
   http:
     token: ${HTTP_TOKEN:-}

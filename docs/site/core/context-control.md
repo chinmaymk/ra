@@ -10,7 +10,7 @@ When conversations grow long, ra compacts automatically. It splits the history i
 agent:
   compaction:
     enabled: true
-    threshold: 0.8               # trigger at 80% of context window
+    threshold: 0.70              # trigger at 70% of context window
     model: claude-haiku-4-5-20251001  # cheap model for summarization
 ```
 
@@ -47,7 +47,7 @@ Enable extended thinking for models that support it. Five modes control how the 
 | `low` | Minimal reasoning budget |
 | `medium` | Moderate reasoning budget |
 | `high` | Maximum reasoning budget |
-| `adaptive` | `high` for the first 5 iterations, then `low` — balances deep initial reasoning with faster follow-up turns |
+| `adaptive` | `high` for the first 10 iterations, then `low` — balances deep initial reasoning with faster follow-up turns |
 
 ```bash
 ra --thinking high "Design a database schema for a social network"
@@ -71,7 +71,7 @@ Thinking output streams to the terminal in the REPL, so you can watch the model 
 
 ## Context discovery
 
-ra discovers and injects project context files into the conversation before your prompt. Configure which files to look for:
+ra discovers and injects project context files into the conversation before your prompt. By default, ra looks for common convention files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.windsurfrules`, `.github/copilot-instructions.md`). Configure which files to look for:
 
 ```yaml
 agent:
@@ -80,7 +80,7 @@ agent:
     patterns:
       - "CLAUDE.md"
       - "AGENTS.md"
-      - "CONVENTIONS.md"
+      - "CONVENTIONS.md"    # add your own patterns
 ```
 
 ra walks the directory tree upward to the git root, finds matching files, and injects them as system context. This is useful for project conventions, coding standards, or any persistent instructions.
