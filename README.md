@@ -23,16 +23,21 @@
 
 ---
 
-ra is a minimal agent runtime where the loop is explicit, every step is observable, and all behavior is controlled through config and middleware. It runs tasks end-to-end like other agents, but unlike them, you can see, constrain, and reproduce everything it does.
+Agents run loops you can't see.
+
+ra makes the loop explicit — and lets you control every step.
+
+It runs tasks end-to-end like other agents, but unlike them, you can see, constrain, and reproduce everything it does. Not a framework. Not prompt chains. Just the loop, with control around it.
 
 ```bash
 ra "Fix the failing tests and open a PR"
 ```
 
 ```
-iteration 1  Read src/auth.ts · Bash bun test → failed
-iteration 2  Edit src/auth.ts · Bash bun test → passed
-iteration 3  Bash git commit + push
+iteration 1  Read src/auth.ts · Bash bun test → 12 failures
+iteration 2  Edit src/auth.ts · Bash bun test → 3 failures
+iteration 3  Edit src/auth.ts · Bash bun test → passed
+iteration 4  Bash git commit + push
 ```
 
 ## Install
@@ -65,7 +70,7 @@ agent:
 
 ## Middleware
 
-TypeScript files that run at any hook in the loop. Full context at every step — read it, mutate it, stop it.
+Intercept any step in the loop. Full context at every step — read it, mutate it, stop it.
 
 ```ts
 // log every tool call with its duration
@@ -91,9 +96,9 @@ Hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelRespons
 
 ## Observability
 
-Every model call, tool execution, and middleware decision is logged automatically — no instrumentation required. Structured JSONL logs and trace spans written per-session, ready to grep or stream to a collector.
+Every model call, tool execution, and decision is logged automatically.
 
-`ra --inspector` opens a dashboard: iteration timeline, token breakdown, cache hit rate, full message history, trace spans.
+`ra --inspector` shows the full run: iterations, tokens, tools, traces, message history.
 
 ```bash
 ra --inspector        # web dashboard
@@ -103,7 +108,7 @@ ra --show-context     # discovered context files
 
 ## Configuration
 
-Config lives in your repo. Everyone runs the same agent. No hidden prompts.
+Config lives in your repo. No hidden prompts. One engineer defines behavior — everyone else runs the same agent.
 
 ```yaml
 # ra.config.yml
@@ -144,23 +149,19 @@ Complete agent configurations to fork and commit to your repo.
 ra --config recipes/coding-agent/ra.config.yaml "Fix the failing test"
 ```
 
-## Also includes
+## More
 
 [**Tools**](https://chinmaymk.github.io/ra/tools/) — filesystem, shell, web fetch, and a parallel sub-agent spawner. Each independently configurable or disabled.
 
 [**Skills**](https://chinmaymk.github.io/ra/skills/) — reusable instruction bundles (`code-review`, `architect`, `debugger`, and more). Install from GitHub or npm.
 
-[**MCP**](https://chinmaymk.github.io/ra/modes/mcp/) — run as an MCP server to expose skills as tools for Cursor, Claude Desktop, or other agents; connect to external MCP servers to pull in their tools.
+[**MCP**](https://chinmaymk.github.io/ra/modes/mcp/) — expose skills as tools for Cursor, Claude Desktop, or other agents; connect to external MCP servers.
 
 [**Memory**](https://chinmaymk.github.io/ra/tools/#memory) — SQLite-backed persistent memory with full-text search, scoped per project.
-
-[**Sessions**](https://chinmaymk.github.io/ra/core/sessions/) — conversations persist as JSONL; resume with `--resume`.
 
 [**Cron**](https://chinmaymk.github.io/ra/modes/cron/) — run agent jobs on a schedule, each with isolated logs and traces.
 
 [**GitHub Actions**](https://chinmaymk.github.io/ra/modes/github-actions/) — `uses: chinmaymk/ra@latest`, no install step.
-
-[**HTTP / REPL / MCP server**](https://chinmaymk.github.io/ra/modes/) — same agent, multiple entry points.
 
 Full reference in the [docs](https://chinmaymk.github.io/ra/).
 
