@@ -49,7 +49,10 @@ function currentPagePath(): string {
 function onChange() {
   const base = versionBase(currentVersion.value)
   const page = currentPagePath()
-  window.location.href = window.location.origin + base + page
+  const target = window.location.origin + base + page + window.location.hash
+  if (target !== window.location.href) {
+    window.location.href = target
+  }
 }
 
 // True when the user is on the root /ra/ build (not under /dev/ or /v/).
@@ -67,7 +70,7 @@ onMounted(async () => {
       // versioned URL so the picker stays in sync with the address bar.
       if (versions.value?.latest && isRootBuild()) {
         const page = currentPagePath()
-        const target = versionBase(versions.value.latest) + page
+        const target = versionBase(versions.value.latest) + page + window.location.hash
         window.location.replace(window.location.origin + target)
         return
       }
