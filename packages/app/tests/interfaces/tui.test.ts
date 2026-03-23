@@ -4,6 +4,7 @@ import {
   closeAssistantBox, printToolCall, printToolResult, printStatus,
   printCommandResponse, printError, collapseThinking, createStreamState,
   handleStreamChunk, clearPendingTools, StreamBuffer, RESPONSE_PREFIX,
+  visibleLength, terminalRows, renderMarkdown,
 } from '../../src/interfaces/tui'
 import { captureStdout } from '../fixtures'
 
@@ -193,6 +194,51 @@ describe('handleStreamChunk tool_call_start', () => {
   })
 })
 
+describe('visibleLength', () => {
+  it('returns length of plain text', () => {
+    expect(visibleLength('hello')).toBe(5)
+  })
+
+  it('strips ANSI escape codes', () => {
+    expect(visibleLength('\x1b[1mbold\x1b[0m')).toBe(4)
+    expect(visibleLength('\x1b[31m\x1b[4mred underline\x1b[0m')).toBe(13)
+  })
+
+  it('returns 0 for empty string', () => {
+    expect(visibleLength('')).toBe(0)
+  })
+})
+
+describe('terminalRows', () => {
+  it('counts single short line as 1 row', () => {
+    expect(terminalRows('hello', 80)).toBe(1)
+  })
+
+  it('counts wrapped lines', () => {
+    expect(terminalRows('a'.repeat(160), 80)).toBe(2)
+    expect(terminalRows('a'.repeat(240), 80)).toBe(3)
+  })
+
+  it('counts multiple lines with wrapping', () => {
+    const text = 'short\n' + 'a'.repeat(160)
+    expect(terminalRows(text, 80)).toBe(3) // 1 + 2
+  })
+
+  it('counts empty lines as 1 row', () => {
+    expect(terminalRows('a\n\nb', 80)).toBe(3)
+  })
+})
+
+describe('renderMarkdown', () => {
+  it('adds RESPONSE_PREFIX to each line', () => {
+    const out = renderMarkdown('hello')
+    const lines = out.split('\n')
+    for (const line of lines) {
+      expect(line.startsWith(RESPONSE_PREFIX)).toBe(true)
+    }
+  })
+})
+
 describe('StreamBuffer', () => {
   const P = RESPONSE_PREFIX
 
@@ -202,7 +248,7 @@ describe('StreamBuffer', () => {
     // end() clears raw output and returns markdown-rendered version
     const out = b.end()
     expect(out).toContain('hello world')
-    // Should start with ANSI cursor-clear sequence
+    // Should contain ANSI clear sequence
     expect(out).toContain('\x1b[K')
   })
 
@@ -230,6 +276,21 @@ describe('StreamBuffer', () => {
     const b = new StreamBuffer(40)
     const out = b.write('para one\n\npara two\n')
     expect(out).toBe('para one\n' + P + '\n' + P + 'para two\n' + P)
+  })
+
+  it('end() with multiline text uses cursor-up to clear', () => {
+    const b = new StreamBuffer(40)
+    b.write('line one\nline two')
+    const out = b.end()
+    // Should move cursor up to clear the raw output
+    expect(out).toContain('\x1b[')
+    expect(out).toContain('A') // cursor up
+    expect(out).toContain('\x1b[J') // clear below
+  })
+
+  it('end() returns empty for no accumulated text', () => {
+    const b = new StreamBuffer(40)
+    expect(b.end()).toBe('')
   })
 })
 

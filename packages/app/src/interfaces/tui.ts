@@ -100,6 +100,25 @@ export const RESPONSE_PREFIX = `  `
 /** Visible column width of RESPONSE_PREFIX. */
 export const RESPONSE_PREFIX_LEN = 2
 
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
+
+/** Strip ANSI escape codes to get the visible character length. */
+export function visibleLength(s: string): number {
+  return s.replace(ANSI_RE, '').length
+}
+
+/** Count the number of terminal rows a string occupies, accounting for wrapping. */
+export function terminalRows(text: string, cols: number): number {
+  const lines = text.split('\n')
+  let rows = 0
+  for (const line of lines) {
+    const len = visibleLength(line)
+    rows += len === 0 ? 1 : Math.ceil(len / cols)
+  }
+  return rows
+}
+
 /** Render a markdown string to ANSI-styled terminal output. */
 export function renderMarkdown(text: string): string {
   const rendered = marked.parse(text) as string
@@ -116,7 +135,8 @@ export function renderMarkdown(text: string): string {
  * text so `end()` can clear raw output and replace with styled markdown. */
 export class StreamBuffer {
   private accumulated = ''
-  private linesWritten = 0
+  /** Full raw output written to terminal (including RESPONSE_PREFIX on each line). */
+  private rawOutput = ''
 
   constructor(private readonly contentWidth: number) {}
 
@@ -124,16 +144,21 @@ export class StreamBuffer {
   write(text: string): string {
     this.accumulated += text
     const output = text.replaceAll('\n', '\n' + RESPONSE_PREFIX)
-    this.linesWritten += countNewlines(output)
+    this.rawOutput += output
     return output
   }
 
   /** Clear raw streamed output and replace with markdown-rendered version. */
   end(): string {
     if (!this.accumulated) return ''
-    // Move cursor up to the start of streamed text, clear below
-    const clearSequence = this.linesWritten > 0
-      ? `\r\x1b[${this.linesWritten}A\x1b[J`
+    const cols = process.stdout.columns || 80
+    // The first line also had RESPONSE_PREFIX written by stopSpinner() before us
+    const fullRaw = RESPONSE_PREFIX + this.rawOutput
+    const rows = terminalRows(fullRaw, cols)
+    // Cursor is on the last row — move up (rows-1) to reach the first row, then clear below
+    const up = rows - 1
+    const clearSequence = up > 0
+      ? `\r\x1b[${up}A\x1b[J`
       : '\r\x1b[K'
     return clearSequence + renderMarkdown(this.accumulated)
   }
