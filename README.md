@@ -35,26 +35,62 @@
 
 ---
 
-Ra is an agent loop you configure with a YAML file and run as a single binary. Give it a task and walk away — it manages its own context, adapts its reasoning depth, and runs until the job is done. Pipe it, chain it, cron it. Run it as a CLI, REPL, HTTP server, or MCP server. No runtime dependencies.
+Give ra a task, point it at an LLM, and let it work. It reads files, runs commands, calls APIs, and loops until the job is done. You stay in control through a simple config file that defines what the agent can and can't do.
 
 ```bash
 ra "Fix the failing tests and open a PR"
 ra --provider openai --model gpt-4.1 "Refactor auth to use JWT"
 cat server.log | ra "Find the root cause and patch it"
 ra --interface cron   # scheduled agent jobs, unattended
-ra   # interactive REPL
+ra                    # interactive REPL
 ```
 
-The config lives in your repo — skills, permissions, middleware — versioned and reviewable. When a new engineer clones the project, they get the same agent behavior everyone else has. When a cron job runs at 3am, it gets the same guardrails.
+## What can you do with ra?
+
+**Automate your dev workflow.** Point ra at your codebase and tell it to fix a bug, write tests, or refactor a module. It reads the code, makes changes, runs the tests, and iterates until they pass — all without you watching.
+
+```bash
+ra "Fix the failing tests and open a PR"
+```
+
+**Debug issues faster.** Pipe a log file or error trace into ra and get an explanation in seconds. Chain it with `--skill` to apply specialized analysis like code review or security auditing.
+
+```bash
+cat error.log | ra "Explain this error"
+ra --skill debugger --file crash.log "Find the root cause"
+```
+
+**Run agents on a schedule.** Set up cron jobs that monitor your APIs, check for stale dependencies, or generate daily reports — each run gets its own session and logs.
+
+```bash
+ra --interface cron
+```
+
+**Plug into your editor.** Run ra as an [MCP server](https://chinmaymk.github.io/ra/modes/mcp/) and connect it to Cursor, Claude Desktop, or any MCP-compatible tool. Your editor gets a specialist that knows your project's conventions.
+
+```bash
+ra --mcp-stdio
+```
+
+**Build custom agents.** A single config file turns ra into a purpose-built agent. Add [skills](https://chinmaymk.github.io/ra/skills/) (reusable instruction sets), [middleware](https://chinmaymk.github.io/ra/middleware/) (hooks that intercept every step), and [permissions](https://chinmaymk.github.io/ra/permissions/) (rules that constrain what tools can do). Everything is plain files — YAML config, Markdown skills, TypeScript middleware — so the agent itself can extend its own capabilities at runtime.
+
+**Orchestrate multiple agents.** Spawn persistent specialist agents as independent processes with resumable conversations. One agent coordinates, others execute.
+
+## Why ra?
+
+- **Predictable.** No magic. The agent loop is explicit: call the model, execute tools, repeat. Middleware hooks let you intercept, modify, or block any step.
+- **Observable.** Every run produces structured logs, trace spans, and token metrics automatically. The built-in [inspector](https://chinmaymk.github.io/ra/modes/inspector/) shows you exactly what the agent did.
+- **Runs anywhere.** CLI, REPL, HTTP server, MCP server, or cron job. Works with Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch providers with a flag.
+- **No limits on autonomy.** The loop runs until the task is done — no arbitrary iteration caps. Token budgets and duration limits set the guardrails you choose.
+- **Config as code.** The config lives in your repo — versioned and reviewable. When a new engineer clones the project, they get the same agent behavior everyone else has.
 
 ```yaml
 # ra.config.yml — checked into your repo, reviewed in PRs
 agent:
   provider: anthropic
   model: claude-sonnet-4-6
-  thinking: adaptive          # reasons deep early, gets faster as it goes
-  parallelToolCalls: true     # concurrent tool execution
-  maxTokenBudget: 500_000     # hard stop before burning your API budget
+  thinking: adaptive
+  maxTokenBudget: 500_000
   skillDirs:
     - ./skills
   permissions:
@@ -64,43 +100,6 @@ agent:
           allow: ["^git ", "^bun "]
           deny: ["--force", "--hard"]
 ```
-
-Every part of the loop is exposed via config and extensible with plain TypeScript. [Middleware hooks](https://chinmaymk.github.io/ra/middleware/) intercept every step — model calls, tool execution, streaming. [Permissions](https://chinmaymk.github.io/ra/permissions/) constrain what tools can do with regex allow/deny rules. When someone asks "what is our AI agent actually doing?" — here's the config, here's the middleware, here's the [audit log](https://chinmaymk.github.io/ra/observability/).
-
-Because everything is plain files — skills are Markdown, middleware is TypeScript, config is YAML — the model itself can extend its own capabilities at runtime. It can write new skills, add middleware, create scripts. You set the guardrails; it builds what it needs within them.
-
-Six [providers](https://chinmaymk.github.io/ra/providers/anthropic/) — Anthropic, OpenAI, Google, Ollama, Bedrock, Azure. Switch with a flag or lock it in config.
-
-```bash
-ra "Why is this test failing?" --file test-output.log    # coding agent
-ra --mcp-stdio                                            # MCP tool for Cursor
-ra --http --http-port 3000                               # streaming HTTP API
-ra --interface cron                                      # scheduled jobs
-```
-
-## Use Cases
-
-The same binary powers wildly different workflows — you just configure it differently.
-
-**Autonomous coding agent.** Point it at a repo with the right tools and permissions. It reads the codebase, edits files, runs tests, iterates until green, opens the PR. Runs to completion — no iteration caps, no human-in-the-loop required.
-
-```bash
-ra "Fix the failing tests and open a PR"
-```
-
-**CI/CD agent.** Run in GitHub Actions to review PRs, enforce style, triage failing tests, or generate changelogs on every push. One YAML step, no install.
-
-**Scheduled operations.** Health checks, daily reports, log triage — define jobs with cron expressions, each gets its own session and traces. Set it and forget it.
-
-```bash
-ra --interface cron
-```
-
-**Research agent.** Feed it docs, URLs, or a knowledge base. Pair with web fetch and memory to build an agent that investigates questions, synthesizes sources, and remembers what it learned across sessions.
-
-**MCP tool for your editor.** Run `ra --mcp-stdio` and Cursor or Claude Desktop gets a dedicated agent that uses your project's config, context files, and permissions.
-
-**Multi-agent orchestrator.** Spawn and manage persistent specialist agents as independent processes with resumable conversations. One agent coordinates, others execute.
 
 ## Install
 
