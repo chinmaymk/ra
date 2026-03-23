@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { getContextWindowSize, getDefaultCompactionModel } from '@chinmaymk/ra'
+import { getContextWindowSize, getDefaultCompactionModel, setLearnedContextWindow } from '@chinmaymk/ra'
 
 describe('getContextWindowSize', () => {
   it('resolves exact family prefix', () => {
@@ -49,6 +49,17 @@ describe('getContextWindowSize', () => {
   it('falls back to registry when provider has no contextWindow method', () => {
     const provider = {}
     expect(getContextWindowSize('claude-sonnet-4-6', undefined, provider)).toBe(200_000)
+  })
+
+  it('uses learned context window for unknown models', () => {
+    setLearnedContextWindow('my-custom-model-v1', 32_000)
+    expect(getContextWindowSize('my-custom-model-v1')).toBe(32_000)
+  })
+
+  it('provider.contextWindow() takes priority over learned value', () => {
+    setLearnedContextWindow('my-custom-model-v2', 32_000)
+    const provider = { contextWindow: () => 64_000 }
+    expect(getContextWindowSize('my-custom-model-v2', undefined, provider)).toBe(64_000)
   })
 
   it('empty model name returns default', () => {

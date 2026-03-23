@@ -171,6 +171,35 @@ export function isContextLengthError(err: unknown): boolean {
   return CONTEXT_LENGTH_PATTERNS.some(p => p.test(msg))
 }
 
+// Patterns to extract the actual context window limit from error messages.
+// Each pattern captures the maximum token count as a named group.
+//   Anthropic:  "prompt is too long: 208310 tokens > 200000 maximum"
+//   Anthropic:  "input length and max_tokens exceed context limit: 188240 + 21333 > 200000 ..."
+//   OpenAI:     "This model's maximum context length is 128000 tokens..."
+//   Ollama:     "Token sequence length exceeds limit (5000 > 4096)"
+const CONTEXT_LIMIT_EXTRACTORS = [
+  /maximum context length is (?<limit>\d+)/i,              // OpenAI: "maximum context length is 128000"
+  />\s*(?<limit>\d+)\s*maximum/,                           // Anthropic: "> 200000 maximum"
+  /context.limit:\s*[\d+\s+]*>\s*(?<limit>\d+)/,          // Anthropic: "context limit: 188240 + 21333 > 200000"
+  /exceeds?\s+limit\s*\(\d+\s*>\s*(?<limit>\d+)\)/i,      // Ollama: "exceeds limit (5000 > 4096)"
+]
+
+/**
+ * Attempt to extract the actual context window size from a provider error message.
+ * Returns undefined if the limit cannot be parsed.
+ */
+export function parseContextWindowFromError(err: unknown): number | undefined {
+  const msg = err instanceof Error ? err.message : String(err)
+  for (const pattern of CONTEXT_LIMIT_EXTRACTORS) {
+    const match = pattern.exec(msg)
+    if (match?.groups?.['limit']) {
+      const limit = parseInt(match.groups['limit'], 10)
+      if (limit > 0 && isFinite(limit)) return limit
+    }
+  }
+  return undefined
+}
+
 export async function forceCompact(
   provider: IProvider,
   config: CompactionConfig,

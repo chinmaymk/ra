@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact } from '@chinmaymk/ra'
+import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact, parseContextWindowFromError } from '@chinmaymk/ra'
 import type { IMessage, IProvider, ChatResponse } from '@chinmaymk/ra'
 import { makeModelCallCtx } from './test-utils'
 
@@ -764,5 +764,34 @@ describe('isContextLengthError', () => {
   it('handles non-Error values', () => {
     expect(isContextLengthError('context length exceeded')).toBe(true)
     expect(isContextLengthError('random error')).toBe(false)
+  })
+})
+
+describe('parseContextWindowFromError', () => {
+  it('extracts limit from Anthropic "prompt is too long" error', () => {
+    expect(parseContextWindowFromError(new Error('400 prompt is too long: 208310 tokens > 200000 maximum'))).toBe(200_000)
+  })
+
+  it('extracts limit from Anthropic "exceed context limit" error', () => {
+    expect(parseContextWindowFromError(new Error('400 input length and max_tokens exceed context limit: 188240 + 21333 > 200000'))).toBe(200_000)
+  })
+
+  it('extracts limit from OpenAI "maximum context length" error', () => {
+    expect(parseContextWindowFromError(new Error("400 This model's maximum context length is 128000 tokens. However, your messages resulted in 150000 tokens."))).toBe(128_000)
+  })
+
+  it('extracts limit from Ollama "sequence length exceeds limit" error', () => {
+    expect(parseContextWindowFromError(new Error('Token sequence length exceeds limit (5000 > 4096)'))).toBe(4_096)
+  })
+
+  it('returns undefined for errors without parseable limit', () => {
+    expect(parseContextWindowFromError(new Error('request too large'))).toBeUndefined()
+    expect(parseContextWindowFromError(new Error('too many tokens'))).toBeUndefined()
+    expect(parseContextWindowFromError(new Error('network timeout'))).toBeUndefined()
+  })
+
+  it('handles non-Error values', () => {
+    expect(parseContextWindowFromError('maximum context length is 32000 tokens')).toBe(32_000)
+    expect(parseContextWindowFromError('random string')).toBeUndefined()
   })
 })
