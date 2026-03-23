@@ -19,12 +19,30 @@ const SORTED_FAMILIES = MODEL_FAMILIES.sort((a, b) => b[0].length - a[0].length)
 
 const DEFAULT_CONTEXT_WINDOW = 200_000
 
-export function getContextWindowSize(model: string, userOverride?: number): number {
+/** Cache of context window sizes learned from provider errors at runtime. */
+const learnedContextWindows = new Map<string, number>()
+
+/**
+ * Record a context window size learned from a provider error.
+ * Future calls to getContextWindowSize will use this before the static registry.
+ */
+export function setLearnedContextWindow(model: string, size: number): void {
+  learnedContextWindows.set(model, size)
+}
+
+/**
+ * Resolve context window size.
+ * Priority: userOverride → learned from errors → model family registry.
+ * Returns undefined when the model is unrecognized and no override/learned value exists.
+ */
+export function getContextWindowSize(model: string, userOverride?: number): number | undefined {
   if (userOverride !== undefined) return userOverride
+  const learned = learnedContextWindows.get(model)
+  if (learned !== undefined) return learned
   for (const [prefix, size] of SORTED_FAMILIES) {
     if (model.startsWith(prefix)) return size
   }
-  return DEFAULT_CONTEXT_WINDOW
+  return undefined
 }
 
 const DEFAULT_COMPACTION_MODELS: Record<string, string> = {
