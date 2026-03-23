@@ -4,7 +4,7 @@ ra gives you full control over what the model sees and when. Built-in mechanisms
 
 ## Smart context compaction
 
-When conversations grow long, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then drops the middle. The pinned prefix stays byte-identical, so provider prompt caches (Anthropic, etc.) keep hitting.
+When conversations grow long, ra compacts automatically. It splits the history into three zones — pinned messages (system prompt, first user message), compactable middle, and recent turns — then incrementally drops the minimum oldest messages needed to free space. The pinned prefix and as many middle messages as possible stay byte-identical, so provider prompt caches (Anthropic, OpenAI, Google) keep hitting.
 
 ```yaml
 agent:
@@ -16,8 +16,8 @@ agent:
 
 Two strategies:
 
-- **`truncate`** (default) — Drops old messages from the compactable zone. Free, instant, and cache-friendly since pinned content is never mutated.
-- **`summarize`** — Calls a cheap model to summarize the compactable zone and injects the summary into the pinned user message. Costs an extra API call but preserves more context.
+- **`truncate`** (default) — Drops the minimum oldest messages from the compactable zone needed to reach the target (threshold minus headroom). Free, instant, and maximally cache-friendly: pinned content is never mutated, and as much of the message prefix as possible is preserved for provider prefix caching.
+- **`summarize`** — Calls a cheap model to summarize the entire compactable zone and injects the summary into the pinned user message. Costs an extra API call but preserves more context semantically.
 
 ```yaml
 # opt into summarization if you prefer preserving context over cost
@@ -29,7 +29,7 @@ agent:
 
 Key properties:
 
-- **Cache-friendly** — The 0.90 threshold and truncation default maximize prompt cache reuse. Pinned zones stay immutable with the truncate strategy.
+- **Cache-friendly** — Designed for provider prefix caching (Anthropic, OpenAI, Google). The truncate strategy keeps the message prefix as stable as possible across compactions — only the oldest messages change. The 0.90 threshold maximizes time between compactions.
 - **Token-aware** — Uses real token counts from the provider when available, falls back to estimation.
 - **Pinned zones** — System prompts and initial context never get compacted.
 - **Tool-call-aware** — Boundaries never split an assistant message from its tool results.

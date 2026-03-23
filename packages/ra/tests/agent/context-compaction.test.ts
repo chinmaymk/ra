@@ -660,6 +660,79 @@ describe('createCompactionMiddleware', () => {
     expect(compactInfo!.compactedMessages).toBeLessThan(6)
   })
 
+  it('truncate strategy drops only the minimum oldest messages needed', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    // Build a conversation with many turns, each ~50 tokens (10 words * 5 chars / 4)
+    const shortText = 'word '.repeat(10) // ~12-13 tokens each
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+    ]
+    // Add 20 turn pairs ≈ 500 tokens
+    for (let i = 0; i < 20; i++) {
+      messages.push({ role: 'assistant', content: `assistant turn ${i} ${shortText}` })
+      messages.push({ role: 'user', content: `user turn ${i} ${shortText}` })
+    }
+    const ctx = makeCtx(messages)
+    // contextWindow=1000, threshold=0.9 → triggers at 900.
+    // Actual tokens ~ 500, but set lastUsage to simulate being right at threshold
+    ctx.loop.lastUsage = { inputTokens: 950, outputTokens: 50 }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.9, contextWindow: 1000,
+    })
+    await mw(ctx)
+    // Should have dropped some messages but NOT all of them.
+    // target = 1000 * (0.9 - 0.15) = 750 → need to drop ~200 tokens worth
+    // With 42 original messages, incremental drop should keep most of them
+    expect(ctx.request.messages.length).toBeGreaterThan(4) // more than just pinned+recent
+    expect(ctx.request.messages.length).toBeLessThan(42) // some were dropped
+    // Pinned zone preserved exactly
+    expect(ctx.request.messages[0]).toEqual({ role: 'system', content: 'sys' })
+    expect(ctx.request.messages[1]).toEqual({ role: 'user', content: 'first' })
+  })
+
+  it('truncate strategy does not orphan tool results at drop boundary', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => { throw new Error('should not be called') },
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'first' },
+      // Tool call group that might get split
+      { role: 'assistant', content: 'calling tools', toolCalls: [{ id: 'tc1', name: 'read', arguments: '{}' }] },
+      { role: 'tool', content: 'file contents here '.repeat(50), toolCallId: 'tc1' },
+      { role: 'assistant', content: 'result' },
+      { role: 'user', content: 'thanks' },
+      { role: 'assistant', content: 'welcome' },
+    ]
+    const ctx = makeCtx(messages)
+    ctx.loop.lastUsage = { inputTokens: 900, outputTokens: 50 }
+    const mw = createCompactionMiddleware(provider, {
+      enabled: true, threshold: 0.9, contextWindow: 1000,
+    })
+    await mw(ctx)
+    // No orphaned tool results: every tool message must have its assistant before it
+    for (let i = 0; i < ctx.request.messages.length; i++) {
+      const m = ctx.request.messages[i]!
+      if (m.role === 'tool') {
+        // Find the assistant with matching toolCalls before this tool result
+        let found = false
+        for (let j = i - 1; j >= 0; j--) {
+          const prev = ctx.request.messages[j]!
+          if (prev.role === 'assistant' && prev.toolCalls) { found = true; break }
+          if (prev.role !== 'tool') break
+        }
+        expect(found).toBe(true)
+      }
+    }
+  })
+
   it('forceCompact with truncate strategy drops without API call', async () => {
     const provider: IProvider = {
       name: 'mock',

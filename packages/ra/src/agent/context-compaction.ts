@@ -8,6 +8,13 @@ import { serializeContent } from '../providers/utils'
 /** Fraction of context window reserved for recent messages during compaction. */
 const RECENT_BUDGET_FRACTION = 0.20
 
+/**
+ * How far below the trigger threshold to target after truncation.
+ * E.g. threshold=0.90, headroom=0.15 → target=0.75 of context window.
+ * Gives room for several turns before the next compaction.
+ */
+const TRUNCATION_HEADROOM = 0.15
+
 export interface MessageZones {
   pinned: IMessage[]
   compactable: IMessage[]
@@ -76,6 +83,18 @@ function adjustToolCallBoundary(messages: IMessage[], boundary: number): number 
   }
 
   return boundary
+}
+
+/**
+ * When dropping messages from the front of the compactable zone, ensure we don't
+ * leave orphaned tool results. If the drop boundary lands before tool results whose
+ * assistant is already dropped, advance to include them.
+ */
+function adjustDropEnd(messages: IMessage[], dropEnd: number): number {
+  while (dropEnd < messages.length && messages[dropEnd]?.role === 'tool') {
+    dropEnd++
+  }
+  return dropEnd
 }
 
 /** Append extra text (and optional non-text parts) to a message, preserving its content type. */
@@ -237,6 +256,7 @@ async function _runCompaction(
   ctx.logger.debug('compaction zones', { pinnedCount: pinned.length, compactableCount: compactable.length, recentCount: recent.length, strategy })
 
   let recentStart = 0
+  let middle: IMessage[] = []
 
   if (strategy === 'summarize') {
     const conversationText = compactable.map(m => {
@@ -283,12 +303,36 @@ async function _runCompaction(
 
       pinned[userIdx] = appendToMessage(pinned[userIdx] as IMessage, extraText, nonTextParts)
     }
+    // summarize replaces the entire compactable zone with the summary in pinned
+  } else {
+    // Truncate strategy: drop only the minimum oldest compactable messages needed
+    // to reach the target. Preserves as much of the message prefix as possible so
+    // that provider prompt caches (Anthropic, OpenAI, Google) keep hitting.
+    const currentTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
+    const targetTokens = contextWindow !== undefined
+      ? Math.floor(contextWindow * Math.max(config.threshold - TRUNCATION_HEADROOM, 0.50))
+      : Math.floor(currentTokens * 0.75)
+    const neededDrop = currentTokens - targetTokens
+
+    let dropEnd = 0
+    let droppedTokens = 0
+    while (dropEnd < compactable.length && droppedTokens < neededDrop) {
+      droppedTokens += estimateTokens([compactable[dropEnd]!])
+      dropEnd++
+    }
+    // Don't orphan tool results at the boundary
+    dropEnd = adjustDropEnd(compactable, dropEnd)
+
+    // If incremental drop freed nothing, drop the entire zone as fallback
+    if (dropEnd === 0) dropEnd = compactable.length
+
+    middle = compactable.slice(dropEnd)
+    ctx.logger.debug('truncation drop', { dropped: dropEnd, kept: middle.length, droppedTokens, neededDrop })
   }
-  // truncate strategy: just drop compactable messages, no API call needed
 
   const originalCount = messages.length
   ctx.request.messages.length = 0
-  ctx.request.messages.push(...pinned, ...recent.slice(recentStart))
+  ctx.request.messages.push(...pinned, ...middle, ...recent.slice(recentStart))
   const estimatedTokens = ctx.loop.lastUsage?.inputTokens ?? estimateTokens(messages)
   const threshold = config.maxTokens ?? (contextWindow !== undefined ? Math.floor(contextWindow * config.threshold) : 0)
   ctx.logger.info('compaction complete', {
