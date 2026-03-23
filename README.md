@@ -105,7 +105,6 @@ agent:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
-ra --help
 ```
 
 ## Quick Start

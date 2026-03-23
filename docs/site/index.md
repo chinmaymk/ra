@@ -6,7 +6,11 @@ ra is an open-source agent harness — give it a task, point it at an LLM, and l
 
 **Automate your dev workflow.** Point ra at your codebase and tell it to fix a bug, write tests, or refactor a module. It reads the code, makes changes, runs the tests, and iterates until they pass — all without you watching.
 
+**Research anything.** Give ra a question and let it work — it fetches web pages, reads documents, cross-references sources, and synthesizes findings. Use it to survey a technology landscape, compare API options, or compile competitive analysis.
+
 **Debug issues faster.** Pipe a log file or error trace into ra and get an explanation in seconds. Chain it with `--skill` to apply specialized analysis like code review or security auditing.
+
+**Analyze data and documents.** Attach a CSV, PDF, or log dump and ask questions. ra reads the content, runs shell commands to slice and transform it, and reports back with summaries, anomalies, or trends.
 
 **Run agents on a schedule.** Set up cron jobs that monitor your APIs, check for stale dependencies, or generate daily reports — each run gets its own session and logs.
 
@@ -91,6 +95,24 @@ ra "Fix the failing tests and open a PR"
 
 Reads the codebase, edits files, runs tests, iterates until green, opens the PR. Runs to completion — no iteration caps, no human-in-the-loop needed.
 
+### Deep research
+
+```bash
+ra "Compare the top 3 vector databases for a 10M-document RAG pipeline. \
+    Evaluate cost, latency, and managed hosting options. Write findings to report.md"
+```
+
+Fetches docs, reads pricing pages, cross-references benchmarks, and delivers a structured report — no copy-paste required.
+
+### Log and data analysis
+
+```bash
+cat access.log | ra "Find the top 10 IPs by request count, flag any \
+    with more than 1000 requests in the last hour, and check if they hit rate-limited endpoints"
+```
+
+Parses logs with shell tools, correlates patterns, and surfaces actionable insights.
+
 ### CI caught a flaky test
 
 ```bash
@@ -98,6 +120,15 @@ ra --skill debugger --file test-output.log "Why is this test failing?"
 ```
 
 Reads the logs, explains the root cause, and exits. Pipe the output to Slack or a PR comment.
+
+### Document summarization
+
+```bash
+ra --file quarterly-report.pdf "Extract the key financial metrics, \
+    list any risks mentioned, and summarize the outlook in 3 bullet points"
+```
+
+Reads the PDF, pulls out what matters, and gives you a concise brief you can forward directly.
 
 ### Scheduled health checks
 
@@ -109,6 +140,15 @@ cron:
 ```
 
 Runs every 30 minutes with its own session, logs, and traces.
+
+### Writing and content generation
+
+```bash
+ra "Draft a changelog entry for the v2.3 release based on commits since the v2.2 tag. \
+    Group by feature, fix, and breaking change. Use past tense."
+```
+
+Reads git history, categorizes commits, and produces a polished changelog — works for release notes, migration guides, or any structured writing grounded in your repo.
 
 ### Your editor needs a specialist
 
