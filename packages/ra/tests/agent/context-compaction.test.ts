@@ -615,6 +615,14 @@ describe('isContextLengthError', () => {
     expect(isContextLengthError(new Error('ValidationException: Input is too long for requested model.'))).toBe(true)
     // Ollama sequence length
     expect(isContextLengthError(new Error('Token sequence length exceeds limit (5000 > 4096)'))).toBe(true)
+    // Mistral
+    expect(isContextLengthError(new Error("The number of tokens in the prompt exceeds the model's maximum context length of 32768."))).toBe(true)
+    // Cohere
+    expect(isContextLengthError(new Error('Too many tokens: the total number of tokens in the prompt exceeds the limit of 4081 tokens.'))).toBe(true)
+    // DeepSeek (OpenAI-compatible)
+    expect(isContextLengthError(new Error("This model's maximum context length is 65536 tokens."))).toBe(true)
+    // Perplexity
+    expect(isContextLengthError(new Error('[400] Messages have 16865 tokens, which exceeds the max limit of 8192 tokens.'))).toBe(true)
     // Generic patterns
     expect(isContextLengthError(new Error('context length exceeded'))).toBe(true)
     expect(isContextLengthError(new Error('token limit exceeded'))).toBe(true)
@@ -651,6 +659,38 @@ describe('parseContextWindowFromError', () => {
 
   it('extracts limit from Ollama "sequence length exceeds limit" error', () => {
     expect(parseContextWindowFromError(new Error('Token sequence length exceeds limit (5000 > 4096)'))).toBe(4_096)
+  })
+
+  it('extracts limit from Gemini "maximum number of tokens allowed" error', () => {
+    expect(parseContextWindowFromError(new Error('The input token count (1236488) exceeds the maximum number of tokens allowed (1048576).'))).toBe(1_048_576)
+  })
+
+  it('extracts limit from Mistral "context length of" error', () => {
+    expect(parseContextWindowFromError(new Error('The number of tokens in the prompt exceeds the model\'s maximum context length of 32768. Please use a shorter prompt.'))).toBe(32_768)
+  })
+
+  it('extracts limit from Perplexity "max limit of" error', () => {
+    expect(parseContextWindowFromError(new Error('[400] Messages have 16865 tokens, which exceeds the max limit of 8192 tokens.'))).toBe(8_192)
+  })
+
+  it('extracts limit from Cohere "limit of N tokens" error', () => {
+    expect(parseContextWindowFromError(new Error('Too many tokens: the total number of tokens in the prompt exceeds the limit of 4081 tokens.'))).toBe(4_081)
+  })
+
+  it('extracts limit from Cohere "Max size" error', () => {
+    expect(parseContextWindowFromError(new Error('Request body too large for cohere-command-r model. Max size: 8000 tokens.'))).toBe(8_000)
+  })
+
+  it('extracts limit from Together AI "must not exceed" error', () => {
+    expect(parseContextWindowFromError(new Error("Input validation error: The sum of 'inputs' tokens and 'max_new_tokens' must not exceed 4097."))).toBe(4_097)
+  })
+
+  it('extracts limit from DeepSeek "maximum allowed length" error', () => {
+    expect(parseContextWindowFromError(new Error('Input length (160062 tokens) exceeds the maximum allowed length (59862 tokens).'))).toBe(59_862)
+  })
+
+  it('extracts limit from Azure OpenAI error (same as OpenAI)', () => {
+    expect(parseContextWindowFromError(new Error("This model's maximum context length is 4097 tokens. However, you requested 4927 tokens (3927 in the messages, 1000 in the completion)."))).toBe(4_097)
   })
 
   it('returns undefined for errors without parseable limit', () => {

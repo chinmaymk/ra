@@ -135,6 +135,7 @@ const CONTEXT_LENGTH_PATTERNS = [
   /prompt too long/i,               // Ollama: "prompt too long; exceeded max context length..."
   /too many tokens/i,               // generic / Bedrock
   /exceeds? the maximum/i,          // Google: "... exceeds the maximum number of tokens"
+  /exceeds?.{0,10}max.{0,3}limit/i, // Perplexity: "exceeds the max limit of 8192 tokens"
   /token.{0,3}limit/i,              // generic: "token limit exceeded", "token_limit_exceeded" (not "token rate limit")
   /input.{0,5}too long/i,           // Bedrock: "Input is too long for requested model" / generic
   /sequence.length.exceeds/i,       // Ollama: "Token sequence length exceeds limit (X > Y)"
@@ -151,15 +152,19 @@ export function isContextLengthError(err: unknown): boolean {
 
 // Patterns to extract the actual context window limit from error messages.
 // Each pattern captures the maximum token count as a named group.
-//   Anthropic:  "prompt is too long: 208310 tokens > 200000 maximum"
-//   Anthropic:  "input length and max_tokens exceed context limit: 188240 + 21333 > 200000 ..."
-//   OpenAI:     "This model's maximum context length is 128000 tokens..."
-//   Ollama:     "Token sequence length exceeds limit (5000 > 4096)"
+// Ordered from most specific to most general — first match wins.
 const CONTEXT_LIMIT_EXTRACTORS = [
-  /maximum context length is (?<limit>\d+)/i,              // OpenAI: "maximum context length is 128000"
+  /maximum context length is (?<limit>\d+)/i,              // OpenAI/Azure/DeepSeek: "maximum context length is 128000"
   />\s*(?<limit>\d+)\s*maximum/,                           // Anthropic: "> 200000 maximum"
   /context.limit:\s*[\d+\s+]*>\s*(?<limit>\d+)/,          // Anthropic: "context limit: 188240 + 21333 > 200000"
   /exceeds?\s+limit\s*\(\d+\s*>\s*(?<limit>\d+)\)/i,      // Ollama: "exceeds limit (5000 > 4096)"
+  /tokens\s*allowed\s*\(?(?<limit>\d+)\)?/i,                // Gemini: "exceeds the maximum number of tokens allowed (1048576)"
+  /context length of (?<limit>\d+)/i,                      // Mistral: "exceeds the model's maximum context length of 32768"
+  /max limit of (?<limit>\d+)/i,                           // Perplexity: "exceeds the max limit of 8192 tokens"
+  /limit of (?<limit>\d+)\s*tokens/i,                      // Cohere: "exceeds the limit of 4081 tokens"
+  /must not exceed (?<limit>\d+)/i,                        // Together: "must not exceed 4097"
+  /maximum allowed.*?(?<limit>\d+)\s*tokens/i,             // DeepSeek: "maximum allowed length (59862 tokens)"
+  /max.?size:\s*(?<limit>\d+)\s*tokens/i,                  // Cohere: "Max size: 8000 tokens"
 ]
 
 /**

@@ -20,4 +20,4 @@ Core agent loop and infrastructure.
 - `beforeModelCall` — can modify `ctx.request.messages` and `ctx.request.tools`
 - `beforeToolExecution` — can `deny(reason)` to block without stopping the loop
 
-**Compaction:** three zones (pinned, compactable, recent). Triggers at `threshold * contextWindow`. Won't split tool calls from results. Context window resolved as: config override → learned from errors → model registry → 200k fallback. On context length errors, `parseContextWindowFromError()` extracts the real limit and `setLearnedContextWindow()` caches it for future use.
+**Compaction:** three zones (pinned, compactable, recent). Triggers at `threshold * contextWindow`. Won't split tool calls from results. Context window resolved as: config override → learned from errors → model registry. Unknown models skip proactive compaction and rely on the error-driven path — `parseContextWindowFromError()` extracts the real limit and `setLearnedContextWindow()` caches it for future use.
