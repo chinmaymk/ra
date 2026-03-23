@@ -52,6 +52,8 @@
   .sidebar-actions button:hover { background: var(--bg3); color: var(--text); }
   .sidebar-actions .btn-clear-all { color: var(--red); border-color: var(--red); opacity: 0.7; }
   .sidebar-actions .btn-clear-all:hover { opacity: 1; background: rgba(248,81,73,0.1); }
+  .sidebar-actions .btn-auto-refresh { color: var(--text2); }
+  .sidebar-actions .btn-auto-refresh.active { color: var(--accent2); border-color: var(--accent2); }
 
   /* Messages */
   .message { margin-bottom: 16px; border-radius: var(--radius); padding: 16px 20px; max-width: 100%; }
@@ -235,6 +237,7 @@
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header"><span>Sessions</span><select id="handle-select"><option value="">Loading…</option></select></div>
     <div class="sidebar-actions">
+      <button class="btn-auto-refresh" id="btn-auto-refresh">Auto-refresh</button>
       <button class="btn-clear-all" id="btn-clear-all">Clear all</button>
     </div>
     <div id="session-list"><div class="loading">Loading…</div></div>
@@ -785,6 +788,32 @@
   }
 
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // ── Auto-refresh ──
+  let autoRefreshInterval = null;
+  const AUTO_REFRESH_MS = 3000;
+  const autoRefreshBtn = document.getElementById('btn-auto-refresh');
+
+  function autoRefreshTick() {
+    loadSessions();
+    if (currentSession && !isGlobal(currentView)) {
+      loadSessionView(currentSession, currentView);
+    }
+  }
+
+  autoRefreshBtn.addEventListener('click', function() {
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval = null;
+      this.classList.remove('active');
+      this.textContent = 'Auto-refresh';
+    } else {
+      autoRefreshInterval = setInterval(autoRefreshTick, AUTO_REFRESH_MS);
+      this.classList.add('active');
+      this.textContent = 'Auto-refresh (on)';
+      autoRefreshTick();
+    }
+  });
 
   loadHandles();
   loadSessions();

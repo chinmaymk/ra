@@ -40,21 +40,19 @@ function buildStats(traces: TraceSpan[], messages: Array<{ role?: string; toolCa
   const modelCalls = traces.filter(s => s.name === 'agent.model_call')
   const toolExecs = traces.filter(s => s.name === 'agent.tool_execution')
 
-  // Token totals from loop span or sum from model calls
-  const la = loopSpan?.attributes || {}
-  let inputTokens = numAttr(la, 'inputTokens')
-  let outputTokens = numAttr(la, 'outputTokens')
+  // Token totals — always sum from model calls for accuracy
+  let inputTokens = 0
+  let outputTokens = 0
   let thinkingTokens = 0
-  let cacheReadTokens = numAttr(la, 'cacheReadTokens')
-  let cacheCreationTokens = numAttr(la, 'cacheCreationTokens')
+  let cacheReadTokens = 0
+  let cacheCreationTokens = 0
   for (const mc of modelCalls) {
     const a = mc.attributes || {}
+    inputTokens += numAttr(a, 'inputTokens')
+    outputTokens += numAttr(a, 'outputTokens')
     thinkingTokens += numAttr(a, 'thinkingTokens')
-    // Fall back to summing if loop span didn't have totals
-    if (!inputTokens) inputTokens += numAttr(a, 'inputTokens')
-    if (!outputTokens) outputTokens += numAttr(a, 'outputTokens')
-    if (!cacheReadTokens) cacheReadTokens += numAttr(a, 'cacheReadTokens')
-    if (!cacheCreationTokens) cacheCreationTokens += numAttr(a, 'cacheCreationTokens')
+    cacheReadTokens += numAttr(a, 'cacheReadTokens')
+    cacheCreationTokens += numAttr(a, 'cacheCreationTokens')
   }
 
   // Tool frequency map
