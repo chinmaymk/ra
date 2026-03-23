@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="#use-cases">Use Cases</a> &middot;
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#the-agent-loop">The Agent Loop</a> &middot;
@@ -76,6 +77,30 @@ ra --mcp-stdio                                            # MCP tool for Cursor
 ra --http --http-port 3000                               # streaming HTTP API
 ra --interface cron                                      # scheduled jobs
 ```
+
+## Use Cases
+
+The same binary powers wildly different workflows — you just configure it differently.
+
+**Autonomous coding agent.** Point it at a repo with the right tools and permissions. It reads the codebase, edits files, runs tests, iterates until green, opens the PR. Runs to completion — no iteration caps, no human-in-the-loop required.
+
+```bash
+ra "Fix the failing tests and open a PR"
+```
+
+**CI/CD agent.** Run in GitHub Actions to review PRs, enforce style, triage failing tests, or generate changelogs on every push. One YAML step, no install.
+
+**Scheduled operations.** Health checks, daily reports, log triage — define jobs with cron expressions, each gets its own session and traces. Set it and forget it.
+
+```bash
+ra --interface cron
+```
+
+**Research agent.** Feed it docs, URLs, or a knowledge base. Pair with web fetch and memory to build an agent that investigates questions, synthesizes sources, and remembers what it learned across sessions.
+
+**MCP tool for your editor.** Run `ra --mcp-stdio` and Cursor or Claude Desktop gets a dedicated agent that uses your project's config, context files, and permissions.
+
+**Multi-agent orchestrator.** Spawn and manage persistent specialist agents as independent processes with resumable conversations. One agent coordinates, others execute.
 
 ## Install
 
