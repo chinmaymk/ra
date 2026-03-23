@@ -59,7 +59,8 @@ export async function loadSkill(index: SkillIndex): Promise<Skill> {
 
 export function buildAvailableSkillsXml(skills: Map<string, SkillIndex>, exclude?: Set<string>): string {
   const entries: string[] = []
-  for (const [name, skill] of skills) {
+  for (const name of [...skills.keys()].sort()) {
+    const skill = skills.get(name)!
     if (exclude?.has(name)) continue
     if (skill.metadata.disableModelInvocation) continue
     entries.push(
