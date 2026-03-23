@@ -75,7 +75,12 @@
   .message .tool-calls { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
   .tool-call { background: var(--bg); border-radius: 8px; padding: 10px 14px; margin-top: 8px; font-size: 12px; }
   .tool-call .name { color: var(--orange); font-weight: 600; }
-  .tool-call .args { color: var(--text2); margin-top: 6px; max-height: 200px; overflow-y: auto; line-height: 1.5; }
+  .tool-call .args { color: var(--text2); margin-top: 6px; max-height: 200px; overflow-y: auto; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .json-key { color: var(--accent); }
+  .json-str { color: var(--accent2); }
+  .json-num { color: var(--orange); }
+  .json-bool { color: var(--purple); }
+  .json-null { color: var(--red); opacity: 0.7; }
 
   /* Logs */
   .log-entry { display: grid; grid-template-columns: 180px 50px 1fr; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 12px; align-items: start; }
@@ -585,7 +590,7 @@
             return '<span class="thinking-toggle" onclick="this.classList.toggle(\'open\')">[thinking] ' + esc((block.thinking || '').slice(0, 80)) + (block.thinking && block.thinking.length > 80 ? '…' : '') + '</span>' +
               '<div class="thinking-content">' + esc(block.thinking || '') + '</div>';
           }
-          if (block.type === 'tool_use') return '<span style="color:var(--orange)">[tool_use: ' + esc(block.name || '') + ']</span>\n' + esc(JSON.stringify(block.input, null, 2));
+          if (block.type === 'tool_use') return '<span style="color:var(--orange)">[tool_use: ' + esc(block.name || '') + ']</span>\n' + highlightJson(block.input);
           if (block.type === 'tool_result') return '<span style="color:var(--accent2)">[tool_result]</span>\n' + esc(typeof block.content === 'string' ? block.content : JSON.stringify(block.content, null, 2));
           return esc(JSON.stringify(block, null, 2));
         }).join('\n');
@@ -597,7 +602,7 @@
       if (m.toolCalls && m.toolCalls.length) {
         toolCallsHtml = '<div class="tool-calls">' + m.toolCalls.map(tc =>
           '<div class="tool-call"><span class="name">' + esc(tc.name || tc.function?.name || 'tool') + '</span>' +
-          '<div class="args">' + esc(JSON.stringify(tc.input || tc.arguments || tc.function?.arguments, null, 2)) + '</div></div>'
+          '<div class="args">' + highlightJson(tc.input || tc.arguments || tc.function?.arguments) + '</div></div>'
         ).join('') + '</div>';
       }
 
@@ -811,6 +816,18 @@
   }
 
   function esc(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function highlightJson(obj) {
+    const raw = JSON.stringify(obj, null, 2);
+    if (raw == null) return '';
+    const escaped = esc(raw);
+    return escaped
+      .replace(/(&quot;(?:\\.|[^&]|&amp;)*?&quot;)\s*:/g, '<span class="json-key">$1</span>:')
+      .replace(/:\s*(&quot;(?:\\.|[^&]|&amp;)*?&quot;)/g, ': <span class="json-str">$1</span>')
+      .replace(/:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g, ': <span class="json-num">$1</span>')
+      .replace(/:\s*(true|false)\b/g, ': <span class="json-bool">$1</span>')
+      .replace(/:\s*(null)\b/g, ': <span class="json-null">$1</span>');
+  }
 
   // ── Auto-refresh ──
   let autoRefreshInterval = null;
