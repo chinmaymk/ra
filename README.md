@@ -9,24 +9,12 @@
 </p>
 
 <p align="center">
-  <a href="#use-cases">Use Cases</a> &middot;
   <a href="#install">Install</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
-  <a href="#the-agent-loop">The Agent Loop</a> &middot;
-  <a href="#autonomous-operation">Autonomous Operation</a> &middot;
   <a href="#providers">Providers</a> &middot;
   <a href="#tools">Tools</a> &middot;
-  <a href="#skills">Skills</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
-  <a href="#mcp">MCP</a> &middot;
-  <a href="#memory">Memory</a> &middot;
-  <a href="#context-engineering">Context Engineering</a> &middot;
-  <a href="#sessions">Sessions</a> &middot;
-  <a href="#file-attachments">File Attachments</a> &middot;
-  <a href="#observability">Observability</a> &middot;
-  <a href="#interfaces">Interfaces</a> &middot;
-  <a href="#recipes">Recipes</a> &middot;
-  <a href="#configuration">Configuration</a>
+  <a href="#recipes">Recipes</a>
 </p>
 
 <p align="center">
