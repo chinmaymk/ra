@@ -47,20 +47,35 @@ ra                    # interactive REPL
 
 ## What can you do with ra?
 
-ra loops over an LLM with tools until the job is done. That loop works for anything the model can reason about — not just code.
+**Automate your dev workflow.** Fix bugs, write tests, refactor — ra reads the code, makes changes, runs the tests, and iterates until they pass.
 
 ```bash
-ra "Fix the failing tests and open a PR"                              # code
-ra "Compare the top 3 vector databases for our RAG pipeline. \
-    Write findings to report.md"                                      # research
-cat access.log | ra "Find the top 10 IPs and flag anomalies"          # analysis
-ra --file quarterly-report.pdf "Summarize the key metrics"            # documents
-ra "Write a changelog for v3.0 from commits since the v2.9 tag"      # writing
-ra --interface cron                                                   # scheduled jobs
-ra --mcp-stdio                                                       # editor integration
+ra "Fix the failing tests and open a PR"
 ```
 
-A single [config file](https://chinmaymk.github.io/ra/configuration/) turns ra into a purpose-built agent — add [skills](https://chinmaymk.github.io/ra/skills/), [middleware](https://chinmaymk.github.io/ra/middleware/), and [permissions](https://chinmaymk.github.io/ra/permissions/) to shape what it can do. Spawn [multiple agents](https://chinmaymk.github.io/ra/recipes/) as independent processes when one isn't enough.
+**Research and analyze.** Survey a technology landscape, compare options, or pipe in logs and documents for analysis. ra fetches pages, reads files, cross-references sources, and writes up findings.
+
+```bash
+ra "Compare the top 3 vector databases for a 10M-document RAG pipeline. \
+    Write findings to report.md"
+ra --file quarterly-report.pdf "Extract key metrics and summarize the outlook"
+cat access.log | ra "Find the top 10 IPs by request count and flag anomalies"
+```
+
+**Generate content from your repo.** Changelogs, release notes, migration guides — anything grounded in your actual code and git history.
+
+```bash
+ra "Write a changelog for v3.0 based on commits since the v2.9 tag"
+```
+
+**Run unattended.** Cron jobs for monitoring, reports, or triage — each run gets its own session and logs. Or plug ra into your editor as an [MCP server](https://chinmaymk.github.io/ra/modes/mcp/).
+
+```bash
+ra --interface cron
+ra --mcp-stdio
+```
+
+**Build custom agents.** A single [config file](https://chinmaymk.github.io/ra/configuration/) with [skills](https://chinmaymk.github.io/ra/skills/), [middleware](https://chinmaymk.github.io/ra/middleware/), and [permissions](https://chinmaymk.github.io/ra/permissions/) turns ra into a purpose-built agent. Spawn [multiple agents](https://chinmaymk.github.io/ra/recipes/) as independent processes when one isn't enough.
 
 ## Why ra?
 
