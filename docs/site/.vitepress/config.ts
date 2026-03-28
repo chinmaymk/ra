@@ -139,6 +139,12 @@ export default defineConfig({
           { text: 'Dynamic Prompts', link: '/recipes/dynamic-prompts' },
         ],
       },
+      {
+        text: 'Blog',
+        items: [
+          { text: 'Reproducing Karpathy\'s Autoresearch', link: '/blog/autoresearch' },
+        ],
+      },
     ],
     socialLinks: [
       { icon: 'github', link: 'https://github.com/chinmaymk/ra' },
