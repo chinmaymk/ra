@@ -16,21 +16,38 @@ Autoresearch is deliberately minimal. Three files, one rule:
 | `prepare.py` | Data loading, BPE tokenizer, `evaluate_bpb` | No |
 | `program.md` | Instructions for the agent | — |
 
-The model is a small transformer (~5.5M params, 8 layers, 768-dim) trained on [climbmix-400b](https://huggingface.co/datasets/HuggingFaceFW/climbmix-400b-shuffle), a 400B-token text dataset. The tokenizer uses a vocabulary of 8,192 BPE tokens. Each training run gets exactly 5 minutes of wall-clock time on a single GPU — no more, no less. The metric is `val_bpb` (validation bits per byte): lower is better, vocabulary-size-independent, so the agent can try radically different architectures and every result stays directly comparable.
+The default model is a small transformer (8 layers, 512-dim, 4 heads) trained on [climbmix-400b](https://huggingface.co/datasets/HuggingFaceFW/climbmix-400b-shuffle), a 400B-token text dataset. The tokenizer uses a vocabulary of 8,192 BPE tokens with a 2,048-token context length. Each training run gets exactly 300 seconds of wall-clock time on a single GPU — no more, no less. The metric is `val_bpb` (validation bits per byte): lower is better, vocabulary-size-independent, so the agent can try radically different architectures and every result stays directly comparable.
 
 The agent runs an infinite loop: hypothesize, modify `train.py`, commit, train, evaluate, keep or discard. At ~12 experiments per hour, an overnight run yields roughly 100 experiments.
 
 ## Prerequisites
 
+You need three things: ra, the autoresearch repo, and a GPU.
+
+**Install ra:**
+
 ```bash
-# Clone autoresearch and prepare data
+curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
+```
+
+**Set up your LLM provider:**
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+**Clone autoresearch and prepare data:**
+
+```bash
 git clone https://github.com/karpathy/autoresearch
 cd autoresearch
 uv sync
 uv run prepare.py
 ```
 
-This downloads training shards and trains the BPE tokenizer. You need an NVIDIA GPU — the experiment was designed for H100 but works on other cards. Verify with a manual baseline run:
+This downloads training shards from HuggingFace and trains the BPE tokenizer. You need an NVIDIA GPU — the experiment was designed for H100 but works on other cards.
+
+Verify with a manual baseline run:
 
 ```bash
 uv run train.py
@@ -88,41 +105,65 @@ a training script, run experiments, evaluate results, and decide whether
 to keep or discard changes — all without human intervention.
 ```
 
-**Setup phase** — Propose a run tag (e.g. `mar28`), create branch `autoresearch/mar28`, read the codebase, verify data exists, initialize `results.tsv`.
+**Setup phase** — Propose a run tag (e.g. `mar28`), create branch `autoresearch/mar28`, read `README.md`, `prepare.py` (read-only), and `train.py` (the file to modify), verify data exists in `~/.cache/autoresearch/`, initialize `results.tsv` with header row, and confirm before starting.
 
-**The experiment loop:**
+**Experimentation rules:**
+- **CAN** modify `train.py` — everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size
+- **CANNOT** modify `prepare.py`, install new packages, or alter the evaluation harness
+
+**Results logging** — every experiment is recorded in `results.tsv` (tab-separated, never committed to git):
+
+```
+commit	val_bpb	memory_gb	status	description
+a1b2c3d	0.997900	44.0	keep	baseline
+b2c3d4e	0.993200	44.2	keep	increase LR to 0.04
+c3d4e5f	1.005000	44.0	discard	switch to GeLU activation
+d4e5f6g	0.000000	0.0	crash	double model width (OOM)
+```
+
+**The experiment loop** — copied verbatim from the skill:
 
 ```
 LOOP FOREVER:
-1. Review git state and past results in results.tsv
+1. Review current git state and past results in results.tsv
 2. Formulate a hypothesis and modify train.py
 3. git commit the change
-4. Run: uv run train.py > run.log 2>&1
+4. Run the experiment: uv run train.py > run.log 2>&1
 5. Read results: grep "^val_bpb:\|^peak_vram_mb:" run.log
-6. If crashed → diagnose, attempt fix or move on
-7. Record in results.tsv
-8. If val_bpb improved → keep the commit
-9. If val_bpb equal or worse → git reset --hard HEAD~1
+6. If grep output is empty, the run crashed. Run tail -n 50 run.log
+   to diagnose. Attempt a fix if trivial; otherwise give up on this idea.
+7. Record results in results.tsv (do NOT commit this file)
+8. If val_bpb improved (lower): keep the commit, advance the branch
+9. If val_bpb is equal or worse: git reset --hard HEAD~1 to revert
 ```
 
 **The autonomy directive:**
 
-> Once the loop begins, do NOT pause to ask the human if you should continue. The human may be away. You are autonomous. If you run out of ideas, think harder.
+> Once the loop begins, do NOT pause to ask the human if you should continue. The human may be away. You are autonomous. If you run out of ideas, think harder — re-read the code, try combining previous near-misses, try more radical changes. The loop runs until manually interrupted.
 
 **The simplicity criterion:**
 
-> All else being equal, simpler is better. A small improvement that adds ugly complexity is not worth it. Removing something for equal or better results is a win.
+> All else being equal, simpler is better. A small improvement that adds ugly complexity is not worth it. Removing something for equal or better results is a win. Weigh complexity cost against improvement magnitude.
 
 This is a direct translation of Karpathy's `program.md` into a ra skill. No Python orchestration, no state machines, no custom tool implementations. The skill is a markdown document that tells the model what to do, and ra handles the execution loop, tool dispatch, context management, and crash recovery.
 
 ## Running it
 
+From the autoresearch repo, point ra at the recipe config:
+
 ```bash
 cd /path/to/autoresearch
+ra --config /path/to/ra/recipes/karpathy-autoresearch/ra.config.yaml
+```
+
+Or install the recipe first and reference it by name:
+
+```bash
+ra recipe install chinmaymk/ra
 ra --recipe karpathy-autoresearch
 ```
 
-The agent proposes a tag, sets up the branch, reads the codebase, and kicks off. Then walk away. Check back in the morning.
+The agent proposes a run tag, creates a branch, reads `train.py` and `prepare.py`, verifies the data exists, initializes `results.tsv`, runs the unmodified baseline, and enters the autonomous loop. Walk away. Check back in the morning.
 
 ## Results
 
@@ -196,10 +237,14 @@ Weight decay on value embeddings alone was worth ~0.0016. Combined with embeddin
 
 ### Final result
 
+The last entry in `results.tsv`:
+
 ```
-commit    val_bpb     memory_gb  status  description
+commit	val_bpb	memory_gb	status	description
 ...
-f8a2e1c   0.969686    44.1       keep    warmdown 0.7 → 0.75
+f8a2e1c	0.969686	44.1	keep	warmdown 0.7 → 0.75
+a2c4f9b	0.970244	44.1	discard	warmdown 0.75 → 0.8
+b3d5e1a	0.969714	44.1	discard	FINAL_LR_FRAC 0.05 → 0.03
 ```
 
 **0.9979 → 0.9697** in 126 experiments. 23 improvements found, 102 ideas rejected, 1 crash recovered from.
@@ -288,11 +333,11 @@ Karpathy's autoresearch uses `program.md` — a markdown file that acts as instr
 |-------------------|---------------|
 | `program.md` | `skills/autoresearch/SKILL.md` |
 | Agent-specific config (model, API key) | `ra.config.yaml` |
-| Manual agent setup | `ra --recipe karpathy-autoresearch` |
+| Manual agent setup | `ra --config recipes/karpathy-autoresearch/ra.config.yaml` |
 | Context management | `compaction.enabled: true` |
 | Tool access control | `permissions.no_rules_rules: true` |
 
-The key difference is that Karpathy's `program.md` is agent-agnostic — you can use it with Claude Code, Cursor, or any coding agent. The ra recipe bundles the instructions with the infrastructure config (timeouts, compaction, tool restrictions) into a single portable unit. Anyone with ra and a GPU can run `ra --recipe karpathy-autoresearch` and get the exact same setup.
+The key difference is that Karpathy's `program.md` is agent-agnostic — you can use it with Claude Code, Cursor, or any coding agent. The ra recipe bundles the instructions with the infrastructure config (timeouts, compaction, tool restrictions) into a single portable unit. Anyone with ra and a GPU can point `--config` at the recipe and get the exact same setup.
 
 ## Adapting it
 
@@ -326,17 +371,56 @@ agent:
 
 ## Try it yourself
 
-```bash
-# Install ra
-bun install -g ra-app
+### 1. Install ra
 
-# Clone autoresearch and prepare data
+```bash
+curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
+```
+
+Or [build from source](/getting-started/install) if you prefer.
+
+### 2. Set up your provider
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+The recipe uses `claude-sonnet-4-6` by default. You can swap providers by editing the config — see [Adapting it](#adapting-it) above.
+
+### 3. Clone autoresearch and prepare data
+
+```bash
 git clone https://github.com/karpathy/autoresearch
 cd autoresearch
-uv sync && uv run prepare.py
+uv sync
+uv run prepare.py
+```
 
-# Run the agent overnight
+This downloads ~5GB of training data and trains the BPE tokenizer. Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
+
+### 4. Run the baseline manually (optional)
+
+```bash
+uv run train.py
+```
+
+Takes 5 minutes. Confirms your GPU works and gives you the baseline `val_bpb` to compare against.
+
+### 5. Start the agent
+
+```bash
+ra --config /path/to/ra/recipes/karpathy-autoresearch/ra.config.yaml
+```
+
+Or install the recipe and run by name:
+
+```bash
+ra recipe install chinmaymk/ra
 ra --recipe karpathy-autoresearch
 ```
+
+The agent will set up a branch, run the baseline, and begin autonomous experimentation. Each experiment takes ~5 minutes. Expect ~12 experiments per hour, ~100 overnight.
+
+Check progress anytime by reading `results.tsv` in the autoresearch directory.
 
 The full recipe source is at [`recipes/karpathy-autoresearch`](https://github.com/chinmaymk/ra/tree/main/recipes/karpathy-autoresearch).
