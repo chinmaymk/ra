@@ -62,84 +62,97 @@ export default defineConfig({
   },
   themeConfig: {
     logo: '/logo.svg',
-    nav: [],
-    sidebar: [
-      {
-        text: 'Getting Started',
-        items: [
-          { text: 'Install', link: '/getting-started/install' },
-          { text: 'Quick Start', link: '/getting-started/quick-start' },
-        ],
-      },
-      {
-        text: 'Concepts',
-        items: [
-          { text: 'What is ra?', link: '/concepts/' },
-          { text: 'The Agent Loop', link: '/concepts/agent-loop' },
-          { text: 'Providers', link: '/concepts/providers' },
-          { text: 'Tools', link: '/concepts/tools' },
-          { text: 'Middleware', link: '/concepts/middleware' },
-          { text: 'Skills', link: '/concepts/skills' },
-          { text: 'Recipes', link: '/concepts/recipes' },
-          { text: 'Configuration', link: '/concepts/configuration' },
-          { text: 'Sessions & Memory', link: '/concepts/sessions' },
-        ],
-      },
-      {
-        text: 'Core',
-        items: [
-          { text: 'The Agent Loop', link: '/core/agent-loop' },
-          { text: 'Context Control', link: '/core/context-control' },
-          { text: 'Sessions', link: '/core/sessions' },
-          { text: 'File Attachments', link: '/core/file-attachments' },
-        ],
-      },
-      {
-        text: 'Interfaces',
-        items: [
-          { text: 'CLI (One-Shot)', link: '/modes/cli' },
-          { text: 'REPL', link: '/modes/repl' },
-          { text: 'HTTP Server', link: '/modes/http' },
-          { text: 'MCP', link: '/modes/mcp' },
-          { text: 'Cron', link: '/modes/cron' },
-          { text: 'Inspector', link: '/modes/inspector' },
-          { text: 'GitHub Actions', link: '/modes/github-actions' },
-        ],
-      },
-      {
-        text: 'Features',
-        items: [
-          { text: 'Built-in Tools', link: '/tools/' },
-          { text: 'Skills', link: '/skills/' },
-          { text: 'Middleware', link: '/middleware/' },
-          { text: 'Permissions', link: '/permissions/' },
-          { text: 'Memory', link: '/tools/#memory' },
-          { text: 'Observability', link: '/observability/' },
-        ],
-      },
-      {
-        text: 'Providers',
-        items: [
-          { text: 'Anthropic', link: '/providers/anthropic' },
-          { text: 'OpenAI', link: '/providers/openai' },
-          { text: 'OpenAI Completions', link: '/providers/openai-completions' },
-          { text: 'Azure OpenAI', link: '/providers/azure' },
-          { text: 'Google Gemini', link: '/providers/google' },
-          { text: 'AWS Bedrock', link: '/providers/bedrock' },
-          { text: 'Ollama', link: '/providers/ollama' },
-        ],
-      },
-      {
-        text: 'Reference',
-        items: [
-          { text: 'Configuration', link: '/configuration/' },
-          { text: 'HTTP API', link: '/api/' },
-          { text: 'Recipes', link: '/recipes/' },
-          { text: 'Creating Recipes', link: '/recipes/creating-recipes' },
-          { text: 'Dynamic Prompts', link: '/recipes/dynamic-prompts' },
-        ],
-      },
+    nav: [
+      { text: 'Blog', link: '/blog/' },
     ],
+    sidebar: {
+      '/blog/': [
+        {
+          text: 'Blog',
+          items: [
+            { text: 'All Posts', link: '/blog/' },
+            { text: 'Introducing the ra blog', link: '/blog/introducing-the-blog' },
+          ],
+        },
+      ],
+      '/': [
+        {
+          text: 'Getting Started',
+          items: [
+            { text: 'Install', link: '/getting-started/install' },
+            { text: 'Quick Start', link: '/getting-started/quick-start' },
+          ],
+        },
+        {
+          text: 'Concepts',
+          items: [
+            { text: 'What is ra?', link: '/concepts/' },
+            { text: 'The Agent Loop', link: '/concepts/agent-loop' },
+            { text: 'Providers', link: '/concepts/providers' },
+            { text: 'Tools', link: '/concepts/tools' },
+            { text: 'Middleware', link: '/concepts/middleware' },
+            { text: 'Skills', link: '/concepts/skills' },
+            { text: 'Recipes', link: '/concepts/recipes' },
+            { text: 'Configuration', link: '/concepts/configuration' },
+            { text: 'Sessions & Memory', link: '/concepts/sessions' },
+          ],
+        },
+        {
+          text: 'Core',
+          items: [
+            { text: 'The Agent Loop', link: '/core/agent-loop' },
+            { text: 'Context Control', link: '/core/context-control' },
+            { text: 'Sessions', link: '/core/sessions' },
+            { text: 'File Attachments', link: '/core/file-attachments' },
+          ],
+        },
+        {
+          text: 'Interfaces',
+          items: [
+            { text: 'CLI (One-Shot)', link: '/modes/cli' },
+            { text: 'REPL', link: '/modes/repl' },
+            { text: 'HTTP Server', link: '/modes/http' },
+            { text: 'MCP', link: '/modes/mcp' },
+            { text: 'Cron', link: '/modes/cron' },
+            { text: 'Inspector', link: '/modes/inspector' },
+            { text: 'GitHub Actions', link: '/modes/github-actions' },
+          ],
+        },
+        {
+          text: 'Features',
+          items: [
+            { text: 'Built-in Tools', link: '/tools/' },
+            { text: 'Skills', link: '/skills/' },
+            { text: 'Middleware', link: '/middleware/' },
+            { text: 'Permissions', link: '/permissions/' },
+            { text: 'Memory', link: '/tools/#memory' },
+            { text: 'Observability', link: '/observability/' },
+          ],
+        },
+        {
+          text: 'Providers',
+          items: [
+            { text: 'Anthropic', link: '/providers/anthropic' },
+            { text: 'OpenAI', link: '/providers/openai' },
+            { text: 'OpenAI Completions', link: '/providers/openai-completions' },
+            { text: 'Azure OpenAI', link: '/providers/azure' },
+            { text: 'Google Gemini', link: '/providers/google' },
+            { text: 'AWS Bedrock', link: '/providers/bedrock' },
+            { text: 'Ollama', link: '/providers/ollama' },
+          ],
+        },
+        {
+          text: 'Reference',
+          items: [
+            { text: 'Configuration', link: '/configuration/' },
+            { text: 'HTTP API', link: '/api/' },
+            { text: 'Recipes', link: '/recipes/' },
+            { text: 'Creating Recipes', link: '/recipes/creating-recipes' },
+            { text: 'Dynamic Prompts', link: '/recipes/dynamic-prompts' },
+          ],
+        },
+      ],
+    },
     socialLinks: [
       { icon: 'github', link: 'https://github.com/chinmaymk/ra' },
     ],
