@@ -71,6 +71,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All Posts', link: '/blog/' },
+            { text: 'Introducing ra', link: '/blog/introducing-ra' },
             { text: 'Introducing the ra blog', link: '/blog/introducing-the-blog' },
           ],
         },

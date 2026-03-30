@@ -4,6 +4,13 @@ News, releases, and updates from the ra project.
 
 <div class="blog-list">
 
+### [Introducing ra](/blog/introducing-ra)
+<span class="blog-date">March 30, 2026</span>
+
+A walkthrough of the ideas behind ra and the features that make it useful — the agent loop, context engineering, observability, skills, recipes, and more.
+
+---
+
 ### [Introducing the ra blog](/blog/introducing-the-blog)
 <span class="blog-date">March 30, 2026</span>
 
