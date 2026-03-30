@@ -51,6 +51,7 @@ The default `openai` provider uses the newer [Responses API](https://platform.op
 |----------|----------|
 | OpenAI directly | `openai` |
 | Together AI, Groq, Fireworks | `openai-completions` |
+| [OpenRouter](/providers/openrouter), [LiteLLM](/providers/litellm) | `openai-completions` |
 | vLLM, llama.cpp, Ollama-compatible | `openai-completions` |
 | OpenAI proxy/gateway (Responses API) | `openai` |
 

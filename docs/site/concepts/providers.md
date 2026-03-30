@@ -12,6 +12,8 @@ ra ships with providers for:
 | [AWS Bedrock](/providers/bedrock) | Claude via AWS | `bedrock` |
 | [Azure OpenAI](/providers/azure) | GPT-4.1 via Azure | `azure` |
 | [Ollama](/providers/ollama) | Llama, Mistral, local models | `ollama` |
+| [OpenRouter](/providers/openrouter) | 100+ models via unified API | `openai-completions` |
+| [LiteLLM](/providers/litellm) | 100+ providers via proxy | `openai-completions` |
 
 ## Switching providers
 
