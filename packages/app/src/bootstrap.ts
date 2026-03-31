@@ -201,6 +201,10 @@ export async function bootstrap(
     const customToolSpan = tracer.startSpan('custom_tools.load', { fileCount: agent.tools.custom.length, files: agent.tools.custom })
     const customTools = await loadCustomTools(agent.tools.custom, app.configDir, logger)
     for (const tool of customTools) {
+      const existing = tools.get(tool.name)
+      if (existing) {
+        logger.warn('custom tool overrides existing tool', { tool: tool.name })
+      }
       tools.register(tool)
     }
     tracer.endSpan(customToolSpan, 'ok', { toolCount: customTools.length, tools: customTools.map(t => t.name) })

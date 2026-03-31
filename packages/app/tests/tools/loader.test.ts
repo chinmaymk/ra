@@ -80,6 +80,21 @@ test('loads tool with absolute path', async () => {
   expect(tools[0]!.name).toBe('ObjectTool')
 })
 
+test('loads tool from async factory function', async () => {
+  const tools = await loadCustomTools(['./async-factory-tool.ts'], cwd)
+  expect(tools).toHaveLength(1)
+  expect(tools[0]!.name).toBe('AsyncFactoryTool')
+  const result = await tools[0]!.execute({ value: 'test' })
+  expect(result).toBe('async: test')
+})
+
+test('parameters shorthand is removed from tool object after conversion', async () => {
+  const tools = await loadCustomTools(['./params-shorthand.ts'], cwd)
+  const tool = tools[0]! as unknown as Record<string, unknown>
+  expect(tool.inputSchema).toBeDefined()
+  expect(tool.parameters).toBeUndefined()
+})
+
 // ── Parameters shorthand ──────────────────────────────────────────
 
 test('parameters shorthand builds inputSchema automatically', async () => {
@@ -99,20 +114,31 @@ test('parameters shorthand builds inputSchema automatically', async () => {
   expect(result).toBe('reading: /tmp/test')
 })
 
-// ── Error cases ───────────────────────────────────────────────────
+// ── Error cases (logged, not thrown — partial loading via allSettled) ─
 
-test('throws on missing default export', async () => {
-  await expect(loadCustomTools(['./no-default.ts'], cwd)).rejects.toThrow('default export')
+test('returns empty array on missing default export', async () => {
+  const tools = await loadCustomTools(['./no-default.ts'], cwd)
+  expect(tools).toHaveLength(0)
 })
 
-test('throws on missing execute', async () => {
-  await expect(loadCustomTools(['./missing-execute.ts'], cwd)).rejects.toThrow('missing an "execute"')
+test('returns empty array on missing execute', async () => {
+  const tools = await loadCustomTools(['./missing-execute.ts'], cwd)
+  expect(tools).toHaveLength(0)
 })
 
-test('throws on nonexistent file', async () => {
-  await expect(loadCustomTools(['./nonexistent.ts'], cwd)).rejects.toThrow('Failed to import')
+test('returns empty array on nonexistent file', async () => {
+  const tools = await loadCustomTools(['./nonexistent.ts'], cwd)
+  expect(tools).toHaveLength(0)
 })
 
-test('throws on non-path entry', async () => {
-  await expect(loadCustomTools(['some random string'], cwd)).rejects.toThrow('must be a file path')
+test('returns empty array on non-path entry', async () => {
+  const tools = await loadCustomTools(['some random string'], cwd)
+  expect(tools).toHaveLength(0)
+})
+
+test('loads valid tools even when some entries fail', async () => {
+  const tools = await loadCustomTools(['./object-tool.ts', './nonexistent.ts', './factory-tool.ts'], cwd)
+  expect(tools).toHaveLength(2)
+  const names = tools.map(t => t.name).sort()
+  expect(names).toEqual(['FactoryTool', 'ObjectTool'])
 })

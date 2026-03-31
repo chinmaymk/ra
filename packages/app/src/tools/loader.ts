@@ -70,8 +70,8 @@ async function loadOne(entry: string, cwd: string): Promise<ITool> {
     throw new Error(`Tool file "${resolved}" must have a default export`)
   }
 
-  // Factory function: call it to get the tool object
-  const raw = typeof exported === 'function' ? exported() : exported
+  // Factory function: call it to get the tool object (supports async factories)
+  const raw = typeof exported === 'function' ? await exported() : exported
 
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error(`Tool from "${resolved}" must export an object with { name, description, execute }`)
@@ -82,6 +82,7 @@ async function loadOne(entry: string, cwd: string): Promise<ITool> {
   // Convert parameters shorthand → inputSchema
   if (obj.parameters && !obj.inputSchema) {
     obj.inputSchema = buildInputSchema(obj.parameters as Record<string, ParameterDef>)
+    delete obj.parameters
   }
 
   return validateTool(obj, resolved)
@@ -96,7 +97,18 @@ export async function loadCustomTools(
   const log = logger ?? new NoopLogger()
   if (entries.length === 0) return []
 
-  const tools = await Promise.all(entries.map(e => loadOne(e, cwd)))
-  log.info('custom tools loaded', { count: tools.length, tools: tools.map(t => t.name) })
+  const results = await Promise.allSettled(entries.map(e => loadOne(e, cwd)))
+  const tools: ITool[] = []
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]!
+    if (result.status === 'fulfilled') {
+      tools.push(result.value)
+    } else {
+      log.error('failed to load custom tool', { file: entries[i], error: errorMessage(result.reason) })
+    }
+  }
+  if (tools.length > 0) {
+    log.info('custom tools loaded', { count: tools.length, tools: tools.map(t => t.name) })
+  }
   return tools
 }
