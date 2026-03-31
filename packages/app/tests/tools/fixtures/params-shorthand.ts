@@ -1,4 +1,5 @@
 export default {
+  name: 'ParamsShorthand',
   description: 'A tool using parameters shorthand',
   parameters: {
     path: { type: 'string' as const, description: 'File path' },

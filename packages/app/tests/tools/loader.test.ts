@@ -27,9 +27,7 @@ test('buildInputSchema omits required when all params are optional', () => {
   })
   expect(schema).toEqual({
     type: 'object',
-    properties: {
-      verbose: { type: 'boolean' },
-    },
+    properties: { verbose: { type: 'boolean' } },
   })
 })
 
@@ -38,7 +36,7 @@ test('buildInputSchema handles empty parameters', () => {
   expect(schema).toEqual({ type: 'object', properties: {} })
 })
 
-// ── Full ITool object export (existing) ────────────────────────────
+// ── Object export ─────────────────────────────────────────────────
 
 test('loads tool exported as plain object', async () => {
   const tools = await loadCustomTools(['./object-tool.ts'], cwd)
@@ -84,7 +82,7 @@ test('loads tool with absolute path', async () => {
 
 // ── Parameters shorthand ──────────────────────────────────────────
 
-test('object export with parameters shorthand builds inputSchema and infers name', async () => {
+test('parameters shorthand builds inputSchema automatically', async () => {
   const tools = await loadCustomTools(['./params-shorthand.ts'], cwd)
   expect(tools).toHaveLength(1)
   const tool = tools[0]!
@@ -101,47 +99,10 @@ test('object export with parameters shorthand builds inputSchema and infers name
   expect(result).toBe('reading: /tmp/test')
 })
 
-// ── Name inference ────────────────────────────────────────────────
+// ── Error cases ───────────────────────────────────────────────────
 
-test('infers name from filename when not specified', async () => {
-  const tools = await loadCustomTools(['./infer-from-filename.ts'], cwd)
-  expect(tools[0]!.name).toBe('InferFromFilename')
-})
-
-test('infers name from execute function name', async () => {
-  const tools = await loadCustomTools(['./named-execute.ts'], cwd)
-  expect(tools[0]!.name).toBe('FetchUrl')
-})
-
-// ── Named exports pattern ────────────────────────────────────────
-
-test('loads tool from named exports (description + parameters + default function)', async () => {
-  const tools = await loadCustomTools(['./named-exports.ts'], cwd)
-  expect(tools).toHaveLength(1)
-  const tool = tools[0]!
-  expect(tool.name).toBe('Search')
-  expect(tool.description).toContain('named exports')
-  expect(tool.inputSchema).toEqual({
-    type: 'object',
-    properties: {
-      query: { type: 'string', description: 'Search query' },
-      limit: { type: 'number', description: 'Max results' },
-    },
-    required: ['query'],
-  })
-  const result = await tool.execute({ query: 'test', limit: 5 })
-  expect(result).toBe('query=test, limit=5')
-})
-
-// ── Error cases ──────────────────────────────────────────────────
-
-test('throws on missing default export and no named execute', async () => {
+test('throws on missing default export', async () => {
   await expect(loadCustomTools(['./no-default.ts'], cwd)).rejects.toThrow('default export')
-})
-
-test('infers name from filename when name field is missing', async () => {
-  const tools = await loadCustomTools(['./missing-name.ts'], cwd)
-  expect(tools[0]!.name).toBe('MissingName')
 })
 
 test('throws on missing execute', async () => {
