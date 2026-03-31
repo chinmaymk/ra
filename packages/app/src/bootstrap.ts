@@ -198,10 +198,12 @@ export async function bootstrap(
 
   // Custom tools from file paths
   if (agent.tools.custom?.length) {
+    const customToolSpan = tracer.startSpan('custom_tools.load', { fileCount: agent.tools.custom.length, files: agent.tools.custom })
     const customTools = await loadCustomTools(agent.tools.custom, app.configDir, logger)
     for (const tool of customTools) {
       tools.register(tool)
     }
+    tracer.endSpan(customToolSpan, 'ok', { toolCount: customTools.length, tools: customTools.map(t => t.name) })
   }
 
   const allTools = tools.all()

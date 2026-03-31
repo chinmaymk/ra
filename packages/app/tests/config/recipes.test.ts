@@ -94,4 +94,82 @@ describe('recipe validation', () => {
     const config = await loadConfig({ recipeName: dir, cwd: dir, env: {} })
     expect(config.agent.provider).toBe('anthropic')
   })
+
+  it('preserves recipe custom tools through merge', async () => {
+    const recipeDir = mkdtempSync(join(tmpdir(), 'ra-recipe-custom-tools-'))
+    writeFileSync(join(recipeDir, 'my-tool.ts'), `
+export default {
+  name: 'RecipeTool',
+  description: 'A tool from the recipe',
+  inputSchema: { type: 'object', properties: {} },
+  async execute() { return 'ok' },
+}
+`)
+    writeFileSync(join(recipeDir, 'ra.config.yaml'), [
+      'agent:',
+      '  provider: anthropic',
+      '  model: claude-sonnet-4-6',
+      '  tools:',
+      '    custom:',
+      '      - ./my-tool.ts',
+    ].join('\n'))
+
+    // User config in a separate dir that also defines tools
+    const userDir = mkdtempSync(join(tmpdir(), 'ra-user-custom-tools-'))
+    writeFileSync(join(userDir, 'ra.config.yaml'), [
+      'agent:',
+      '  tools:',
+      '    builtin: true',
+    ].join('\n'))
+
+    const config = await loadConfig({ cwd: userDir, recipeName: recipeDir, env: {} })
+    expect(config.agent.tools.custom).toBeDefined()
+    expect(config.agent.tools.custom!.length).toBe(1)
+    // Path should be pre-resolved to absolute
+    expect(config.agent.tools.custom![0]).toContain('my-tool.ts')
+    expect(config.agent.tools.custom![0]).not.toBe('./my-tool.ts')
+  })
+
+  it('combines recipe and user custom tools', async () => {
+    const recipeDir = mkdtempSync(join(tmpdir(), 'ra-recipe-tools-merge-'))
+    writeFileSync(join(recipeDir, 'recipe-tool.ts'), `
+export default {
+  name: 'RecipeTool',
+  description: 'From recipe',
+  inputSchema: { type: 'object', properties: {} },
+  async execute() { return 'ok' },
+}
+`)
+    writeFileSync(join(recipeDir, 'ra.config.yaml'), [
+      'agent:',
+      '  provider: anthropic',
+      '  model: claude-sonnet-4-6',
+      '  tools:',
+      '    custom:',
+      '      - ./recipe-tool.ts',
+    ].join('\n'))
+
+    const userDir = mkdtempSync(join(tmpdir(), 'ra-user-tools-merge-'))
+    writeFileSync(join(userDir, 'user-tool.ts'), `
+export default {
+  name: 'UserTool',
+  description: 'From user',
+  inputSchema: { type: 'object', properties: {} },
+  async execute() { return 'ok' },
+}
+`)
+    writeFileSync(join(userDir, 'ra.config.yaml'), [
+      'agent:',
+      '  tools:',
+      '    custom:',
+      '      - ./user-tool.ts',
+    ].join('\n'))
+
+    const config = await loadConfig({ cwd: userDir, recipeName: recipeDir, env: {} })
+    expect(config.agent.tools.custom).toBeDefined()
+    expect(config.agent.tools.custom!.length).toBe(2)
+    // Recipe tools come first
+    expect(config.agent.tools.custom![0]).toContain('recipe-tool.ts')
+    expect(config.agent.tools.custom![1]).toContain('user-tool.ts')
+  })
 })

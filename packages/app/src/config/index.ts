@@ -257,17 +257,22 @@ function preResolveRecipePaths(agent: Record<string, unknown>, recipeDir: string
 interface RecipeArrays {
   skillDirs: string[]
   middleware: Record<string, string[]>
+  customTools: string[]
 }
 
 /** Extract array fields from a recipe config (they'd be lost by deepMerge). */
 function extractRecipeArrays(config: Record<string, unknown>): RecipeArrays {
-  const result: RecipeArrays = { skillDirs: [], middleware: {} }
+  const result: RecipeArrays = { skillDirs: [], middleware: {}, customTools: [] }
   const agent = (config.agent ?? config) as Record<string, unknown>
   if (Array.isArray(agent.skillDirs)) result.skillDirs = agent.skillDirs as string[]
   if (isPlainObject(agent.middleware)) {
     for (const [hook, entries] of Object.entries(agent.middleware as Record<string, unknown>)) {
       if (Array.isArray(entries)) result.middleware[hook] = entries as string[]
     }
+  }
+  if (isPlainObject(agent.tools)) {
+    const tools = agent.tools as Record<string, unknown>
+    if (Array.isArray(tools.custom)) result.customTools = tools.custom as string[]
   }
   return result
 }
@@ -280,6 +285,10 @@ function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
   for (const [hook, entries] of Object.entries(arrays.middleware)) {
     const existing = config.agent.middleware[hook] ?? []
     config.agent.middleware[hook] = [...entries, ...existing]
+  }
+  if (arrays.customTools.length > 0) {
+    const existing = config.agent.tools.custom ?? []
+    config.agent.tools.custom = [...arrays.customTools, ...existing]
   }
 }
 

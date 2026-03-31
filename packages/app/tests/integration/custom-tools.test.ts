@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test'
-import { writeFileSync, mkdirSync, readFileSync } from 'fs'
+import { writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { createTestEnv, type TestEnv } from './helpers/setup'
@@ -289,6 +289,147 @@ export default {
     expect(toolNames).toContain('ToolB')
     // Builtin tools should NOT be present (builtin: false)
     expect(toolNames).not.toContain('Read')
+  })
+
+  it('custom tool execution is logged and traced', async () => {
+    const toolFile = join(tmpDir, 'tools', 'traced.ts')
+    writeFileSync(toolFile, `
+export default {
+  name: 'Traced',
+  description: 'A tool we want to see in logs and traces',
+  inputSchema: { type: 'object', properties: { x: { type: 'string' } }, required: ['x'] },
+  async execute(input: unknown) {
+    const { x } = input as { x: string }
+    return 'traced-result-' + x
+  },
+}
+`)
+
+    const configFile = join(tmpDir, 'ra-traced.config.json')
+    writeFileSync(configFile, JSON.stringify({
+      agent: {
+        tools: { custom: [toolFile] },
+        context: { enabled: false },
+        skillDirs: [],
+      },
+    }))
+
+    // Snapshot session dirs before the run
+    const sessionsDir = join(env.storageDir, 'sessions')
+    const beforeDirs = new Set(existsSync(sessionsDir) ? readdirSync(sessionsDir) : [])
+
+    env.mock.enqueue([{ type: 'tool_call', name: 'Traced', args: { x: 'hello' } }])
+    env.mock.enqueue([{ type: 'text', content: 'Done tracing.' }])
+
+    const { exitCode } = await runBinary(
+      ['--cli', '--config', configFile, '--max-iterations', '5', 'test tracing'],
+      env.binaryEnv,
+    )
+
+    expect(exitCode).toBe(0)
+
+    // Find the new session directory created by this run
+    const afterDirs = readdirSync(sessionsDir)
+    const newDirs = afterDirs.filter(d => !beforeDirs.has(d) && existsSync(join(sessionsDir, d, 'logs.jsonl')))
+    expect(newDirs.length).toBe(1)
+    const sessionDir = join(sessionsDir, newDirs[0]!)
+
+    // Verify logs contain custom tool execution entries
+    const logsContent = readFileSync(join(sessionDir, 'logs.jsonl'), 'utf8')
+    const logLines = logsContent.trim().split('\n').map(l => JSON.parse(l))
+
+    const customToolsLoaded = logLines.find((l: { message?: string }) => l.message === 'custom tools loaded')
+    expect(customToolsLoaded).toBeDefined()
+    expect(customToolsLoaded.tools).toContain('Traced')
+
+    const executingTool = logLines.find((l: { message?: string; tool?: string }) =>
+      l.message === 'executing tool' && l.tool === 'Traced'
+    )
+    expect(executingTool).toBeDefined()
+
+    const toolComplete = logLines.find((l: { message?: string; tool?: string }) =>
+      l.message === 'tool execution complete' && l.tool === 'Traced'
+    )
+    expect(toolComplete).toBeDefined()
+
+    // Verify traces contain custom tool span
+    const tracesPath = join(sessionDir, 'traces.jsonl')
+    const tracesContent = readFileSync(tracesPath, 'utf8')
+    const traceLines = tracesContent.trim().split('\n').map(l => JSON.parse(l))
+
+    const toolSpan = traceLines.find((t: { name?: string; attributes?: { tool?: string } }) =>
+      t.name === 'agent.tool_execution' && t.attributes?.tool === 'Traced'
+    )
+    expect(toolSpan).toBeDefined()
+    expect(toolSpan.status).toBe('ok')
+
+    // Verify the custom_tools.load span exists
+    const loadSpan = traceLines.find((t: { name?: string }) => t.name === 'custom_tools.load')
+    expect(loadSpan).toBeDefined()
+    expect(loadSpan.status).toBe('ok')
+    expect(loadSpan.attributes.tools).toContain('Traced')
+  })
+
+  it('custom tool error is logged with error level', async () => {
+    const toolFile = join(tmpDir, 'tools', 'traced-fail.ts')
+    writeFileSync(toolFile, `
+export default {
+  name: 'TracedFail',
+  description: 'Fails and should be logged as error',
+  inputSchema: { type: 'object', properties: {} },
+  async execute() { throw new Error('traced-failure-reason') },
+}
+`)
+
+    const configFile = join(tmpDir, 'ra-traced-fail.config.json')
+    writeFileSync(configFile, JSON.stringify({
+      agent: {
+        tools: { custom: [toolFile] },
+        context: { enabled: false },
+        skillDirs: [],
+      },
+    }))
+
+    // Snapshot session dirs before the run
+    const sessionsDir = join(env.storageDir, 'sessions')
+    const beforeDirs = new Set(readdirSync(sessionsDir))
+
+    env.mock.enqueue([{ type: 'tool_call', name: 'TracedFail', args: {} }])
+    env.mock.enqueue([{ type: 'text', content: 'Failed as expected.' }])
+
+    const { exitCode } = await runBinary(
+      ['--cli', '--config', configFile, '--max-iterations', '5', 'test error tracing'],
+      env.binaryEnv,
+    )
+
+    expect(exitCode).toBe(0)
+
+    // Find the new session directory
+    const afterDirs = readdirSync(sessionsDir)
+    const newDirs = afterDirs.filter(d => !beforeDirs.has(d) && existsSync(join(sessionsDir, d, 'logs.jsonl')))
+    expect(newDirs.length).toBe(1)
+    const sessionDir = join(sessionsDir, newDirs[0]!)
+
+    const logsContent = readFileSync(join(sessionDir, 'logs.jsonl'), 'utf8')
+    const logLines = logsContent.trim().split('\n').map(l => JSON.parse(l))
+
+    const errorLog = logLines.find((l: { message?: string; level?: string; tool?: string }) =>
+      l.message === 'tool execution failed' && l.level === 'error' && l.tool === 'TracedFail'
+    )
+    expect(errorLog).toBeDefined()
+    expect(errorLog.error).toContain('traced-failure-reason')
+
+    // Verify trace span has error status
+    const tracesPath = join(sessionDir, 'traces.jsonl')
+    const tracesContent = readFileSync(tracesPath, 'utf8')
+    const traceLines = tracesContent.trim().split('\n').map(l => JSON.parse(l))
+
+    const errorSpan = traceLines.find((t: { name?: string; attributes?: { tool?: string } }) =>
+      t.name === 'agent.tool_execution' && t.attributes?.tool === 'TracedFail'
+    )
+    expect(errorSpan).toBeDefined()
+    expect(errorSpan.status).toBe('error')
+    expect(errorSpan.attributes.error).toContain('traced-failure-reason')
   })
 
   it('tool that throws returns error result to the model', async () => {
