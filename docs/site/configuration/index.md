@@ -157,6 +157,9 @@ The `agent.tools` section controls which built-in tools are registered and their
 agent:
   tools:
     builtin: true            # master switch (default: true)
+    custom:                   # load tools from files
+      - "./tools/deploy.ts"
+      - "./tools/db-query.ts"
     Read:
       rootDir: "./src"        # constrain reads to this directory
     Write:
@@ -170,6 +173,7 @@ agent:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `agent.tools.builtin` | boolean | `true` | Master switch: register all built-in tools unless individually disabled |
+| `agent.tools.custom` | string[] | `[]` | File paths to [custom tool](/tools/custom) files (JS/TS) |
 | `agent.tools.<ToolName>.enabled` | boolean | `true` | Enable or disable a specific tool |
 | `agent.tools.<ToolName>.rootDir` | string | — | Restrict filesystem tools to this directory |
 | `agent.tools.<ToolName>.maxConcurrency` | number | `4` | Max parallel tasks (Agent tool) |

@@ -362,6 +362,7 @@ The old `builtinTools: true/false` flag still works and is automatically convert
 
 ## See also
 
+- [Custom Tools](/tools/custom) — define your own tools as TypeScript files
 - [The Agent Loop](/core/agent-loop) — how tools are executed within the loop
 - [Middleware](/middleware/) — `beforeToolExecution` and `afterToolExecution` hooks
 - [MCP](/modes/mcp) — connecting external MCP tools

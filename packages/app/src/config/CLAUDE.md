@@ -70,6 +70,7 @@ Everything a recipe defines: brain, tools, skills, permissions.
 | `agent.maxTokenBudget` | `0` | Max total tokens before stopping (0 = unlimited) |
 | `agent.maxDuration` | `0` | Max wall-clock ms before stopping (0 = unlimited) |
 | `agent.tools.builtin` | `true` | Register built-in tools (master switch) |
+| `agent.tools.custom` | `[]` | File paths to custom tool files (JS/TS) |
 | `agent.tools.overrides` | `{}` | Per-tool settings |
 | `agent.skillDirs` | `['.claude/skills', ...]` | Directories to scan for skills |
 | `agent.permissions` | `{}` | Tool permission rules |
