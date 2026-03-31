@@ -106,7 +106,7 @@ export default function createCounter() {
 }
 ```
 
-The factory is called once at load time. The returned object must have the same shape as a direct export.
+The factory is called once at load time. The returned object must have the same shape as a direct export. Async factories (`async function`) are also supported.
 
 ## Combining with built-in tools
 
@@ -133,7 +133,9 @@ agent:
 
 ## Error handling
 
-Thrown errors are caught and sent back to the model as error results (`isError: true`). The model sees the error message and can adjust its approach — no special handling needed in your code.
+**At load time**, if a tool file fails to import or validate, it is logged as an error and skipped — other valid tools still load normally.
+
+**At runtime**, thrown errors are caught and sent back to the model as error results (`isError: true`). The model sees the error message and can adjust its approach — no special handling needed in your code.
 
 ```ts
 async execute(input: unknown) {
