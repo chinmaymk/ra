@@ -39,7 +39,7 @@ ra "Fix the failing tests and open a PR"
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
 ```
 
-Works with Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure — switch with `--provider`.
+Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, [OpenRouter](https://chinmaymk.github.io/ra/providers/openrouter), and [LiteLLM](https://chinmaymk.github.io/ra/providers/litellm) — switch with `--provider`.
 
 ## The Loop
 
