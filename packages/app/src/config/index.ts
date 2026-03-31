@@ -196,13 +196,14 @@ function normalizeToolsSection(obj: Record<string, unknown>): void {
   // Flat form: extract builtin, treat other keys as per-tool overrides
   const builtin = t.builtin !== undefined ? !!t.builtin : true
   const maxResponseSize = typeof t.maxResponseSize === 'number' ? t.maxResponseSize : undefined
+  const custom = Array.isArray(t.custom) ? t.custom as string[] : []
   const overrides: Record<string, ToolSettings> = {}
   for (const [key, val] of Object.entries(t)) {
-    if (key === 'builtin' || key === 'overrides' || key === 'maxResponseSize') continue
+    if (key === 'builtin' || key === 'overrides' || key === 'maxResponseSize' || key === 'custom') continue
     if (val === false) overrides[key] = { enabled: false }
     else if (isPlainObject(val)) overrides[key] = val as ToolSettings
   }
-  obj.tools = { builtin, overrides, ...(maxResponseSize !== undefined && { maxResponseSize }) }
+  obj.tools = { builtin, overrides, custom, ...(maxResponseSize !== undefined && { maxResponseSize }) }
 }
 
 // ── Recipe resolution helpers ───────────────────────────────────────
@@ -241,6 +242,13 @@ function preResolveRecipePaths(agent: Record<string, unknown>, recipeDir: string
       if (Array.isArray(entries)) {
         mw[hook] = (entries as string[]).map(e => looksLikePath(e) ? resolvePath(e, recipeDir) : e)
       }
+    }
+  }
+  // Pre-resolve custom tool file paths
+  if (isPlainObject(agent.tools)) {
+    const tools = agent.tools as Record<string, unknown>
+    if (Array.isArray(tools.custom)) {
+      tools.custom = (tools.custom as string[]).map(e => looksLikePath(e) ? resolvePath(e, recipeDir) : e)
     }
   }
 }

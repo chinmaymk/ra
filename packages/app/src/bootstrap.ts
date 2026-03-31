@@ -29,6 +29,7 @@ import { loadSkillIndex, buildAvailableSkillsXml } from './skills/loader'
 import type { SkillIndex } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
+import { loadCustomTools } from './tools/loader'
 import { resolvePath, configHandle } from './utils/paths'
 import type { Tracer } from './observability/tracer'
 import type { Middleware } from '@chinmaymk/ra'
@@ -193,6 +194,14 @@ export async function bootstrap(
   const tools = new ToolRegistry()
   if (agent.tools.builtin || Object.keys(agent.tools.overrides).length > 0) {
     registerBuiltinTools(tools, agent.tools)
+  }
+
+  // Custom tools from file paths
+  if (agent.tools.custom?.length) {
+    const customTools = await loadCustomTools(agent.tools.custom, app.configDir, logger)
+    for (const tool of customTools) {
+      tools.register(tool)
+    }
   }
 
   const allTools = tools.all()
