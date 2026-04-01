@@ -29,6 +29,7 @@ import { loadSkillIndex, buildAvailableSkillsXml } from './skills/loader'
 import type { SkillIndex } from './skills/types'
 import { SessionStorage } from './storage/sessions'
 import { registerBuiltinTools, subagentTool } from './tools'
+import { loadCustomTools } from './tools/loader'
 import { resolvePath, configHandle } from './utils/paths'
 import type { Tracer } from './observability/tracer'
 import type { Middleware } from '@chinmaymk/ra'
@@ -193,6 +194,20 @@ export async function bootstrap(
   const tools = new ToolRegistry()
   if (agent.tools.builtin || Object.keys(agent.tools.overrides).length > 0) {
     registerBuiltinTools(tools, agent.tools)
+  }
+
+  // Custom tools from file paths
+  if (agent.tools.custom?.length) {
+    const customToolSpan = tracer.startSpan('custom_tools.load', { fileCount: agent.tools.custom.length, files: agent.tools.custom })
+    const customTools = await loadCustomTools(agent.tools.custom, app.configDir, logger)
+    for (const tool of customTools) {
+      const existing = tools.get(tool.name)
+      if (existing) {
+        logger.warn('custom tool overrides existing tool', { tool: tool.name })
+      }
+      tools.register(tool)
+    }
+    tracer.endSpan(customToolSpan, 'ok', { toolCount: customTools.length, tools: customTools.map(t => t.name) })
   }
 
   const allTools = tools.all()

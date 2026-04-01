@@ -2,6 +2,8 @@
 
 Built-in tools, each in its own file. `index.ts` registers them all.
 
+`loader.ts` handles file-based custom tools (`agent.tools.custom` in config). Supports `parameters` shorthand (auto-converted to JSON Schema) and factory functions.
+
 ## Files
 
 | File | Tool Name | Category |

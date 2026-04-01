@@ -48,6 +48,8 @@ export interface ToolsConfig {
   builtin: boolean
   /** Per-tool overrides keyed by tool name (e.g. Read, Write, Bash, Agent). */
   overrides: Record<string, ToolSettings>
+  /** File paths to custom tool files (JS/TS). Each file must default-export an ITool object or a factory function returning one. */
+  custom?: string[]
   /** Max characters for a single tool response. Responses exceeding this are truncated with a notice. Default 25000. */
   maxResponseSize?: number
 }

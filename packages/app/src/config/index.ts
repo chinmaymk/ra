@@ -196,13 +196,14 @@ function normalizeToolsSection(obj: Record<string, unknown>): void {
   // Flat form: extract builtin, treat other keys as per-tool overrides
   const builtin = t.builtin !== undefined ? !!t.builtin : true
   const maxResponseSize = typeof t.maxResponseSize === 'number' ? t.maxResponseSize : undefined
+  const custom = Array.isArray(t.custom) ? t.custom as string[] : []
   const overrides: Record<string, ToolSettings> = {}
   for (const [key, val] of Object.entries(t)) {
-    if (key === 'builtin' || key === 'overrides' || key === 'maxResponseSize') continue
+    if (key === 'builtin' || key === 'overrides' || key === 'maxResponseSize' || key === 'custom') continue
     if (val === false) overrides[key] = { enabled: false }
     else if (isPlainObject(val)) overrides[key] = val as ToolSettings
   }
-  obj.tools = { builtin, overrides, ...(maxResponseSize !== undefined && { maxResponseSize }) }
+  obj.tools = { builtin, overrides, custom, ...(maxResponseSize !== undefined && { maxResponseSize }) }
 }
 
 // ── Recipe resolution helpers ───────────────────────────────────────
@@ -243,23 +244,35 @@ function preResolveRecipePaths(agent: Record<string, unknown>, recipeDir: string
       }
     }
   }
+  // Pre-resolve custom tool file paths
+  if (isPlainObject(agent.tools)) {
+    const tools = agent.tools as Record<string, unknown>
+    if (Array.isArray(tools.custom)) {
+      tools.custom = (tools.custom as string[]).map(e => looksLikePath(e) ? resolvePath(e, recipeDir) : e)
+    }
+  }
 }
 
 /** Saved recipe arrays to prepend after all merges complete. */
 interface RecipeArrays {
   skillDirs: string[]
   middleware: Record<string, string[]>
+  customTools: string[]
 }
 
 /** Extract array fields from a recipe config (they'd be lost by deepMerge). */
 function extractRecipeArrays(config: Record<string, unknown>): RecipeArrays {
-  const result: RecipeArrays = { skillDirs: [], middleware: {} }
+  const result: RecipeArrays = { skillDirs: [], middleware: {}, customTools: [] }
   const agent = (config.agent ?? config) as Record<string, unknown>
   if (Array.isArray(agent.skillDirs)) result.skillDirs = agent.skillDirs as string[]
   if (isPlainObject(agent.middleware)) {
     for (const [hook, entries] of Object.entries(agent.middleware as Record<string, unknown>)) {
       if (Array.isArray(entries)) result.middleware[hook] = entries as string[]
     }
+  }
+  if (isPlainObject(agent.tools)) {
+    const tools = agent.tools as Record<string, unknown>
+    if (Array.isArray(tools.custom)) result.customTools = tools.custom as string[]
   }
   return result
 }
@@ -272,6 +285,10 @@ function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
   for (const [hook, entries] of Object.entries(arrays.middleware)) {
     const existing = config.agent.middleware[hook] ?? []
     config.agent.middleware[hook] = [...entries, ...existing]
+  }
+  if (arrays.customTools.length > 0) {
+    const existing = config.agent.tools.custom ?? []
+    config.agent.tools.custom = [...arrays.customTools, ...existing]
   }
 }
 

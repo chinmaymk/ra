@@ -17,9 +17,22 @@ ra ships with tools for the most common agent tasks:
 
 These cover file manipulation, code search, shell commands, and HTTP requests — enough for most coding and automation tasks.
 
+## Custom tools
+
+You can define your own tools as plain TypeScript files and register them via config. Custom tools go through the same execution pipeline as built-in tools — with full logging, tracing, permissions, and middleware support.
+
+```yaml
+agent:
+  tools:
+    custom:
+      - "./tools/deploy.ts"
+```
+
+See [Custom Tools](/tools/custom) for the full guide.
+
 ## MCP tools
 
-Beyond built-in tools, ra can connect to external [MCP servers](/modes/mcp) to pull in additional tools. This means you can give your agent access to databases, APIs, Slack, GitHub, or anything else that exposes an MCP interface.
+Beyond built-in and custom tools, ra can connect to external [MCP servers](/modes/mcp) to pull in additional tools. This means you can give your agent access to databases, APIs, Slack, GitHub, or anything else that exposes an MCP interface.
 
 ```yaml
 app:

@@ -49,6 +49,7 @@ export const defaultConfig: RaConfig = {
     tools: {
       builtin: true,
       overrides: {},
+      custom: [],
       maxResponseSize: 25000,
     },
     skillDirs: ['.claude/skills', '.agents/skills', '.opencode/skills'],
