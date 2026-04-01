@@ -7,6 +7,8 @@ import { buildContextMessages } from './inject'
 export interface DiscoverOptions {
   cwd: string
   patterns: string[]
+  maxFileChars?: number
+  maxTotalChars?: number
 }
 
 export async function findGitRoot(cwd: string): Promise<string | null> {
@@ -37,11 +39,22 @@ export async function discoverContextFiles(options: DiscoverOptions): Promise<Co
   const cwd = realpathSync(options.cwd)
   const root = (await findGitRoot(cwd)) ?? cwd
 
-  return scanDirs(walkUpTo(cwd, root), patterns, root)
+  return scanDirs(walkUpTo(cwd, root), patterns, root, undefined, { maxFileChars: options.maxFileChars, maxTotalChars: options.maxTotalChars })
 }
 
-async function scanDirs(dirs: string[], patterns: string[], root: string, exclude?: Set<string>): Promise<ContextFile[]> {
+const DEFAULT_MAX_FILE_CHARS = 10_000
+const DEFAULT_MAX_TOTAL_CHARS = 30_000
+
+interface ScanOptions {
+  maxFileChars?: number
+  maxTotalChars?: number
+}
+
+async function scanDirs(dirs: string[], patterns: string[], root: string, exclude?: Set<string>, opts?: ScanOptions): Promise<ContextFile[]> {
+  const maxFileChars = opts?.maxFileChars ?? DEFAULT_MAX_FILE_CHARS
+  const maxTotalChars = opts?.maxTotalChars ?? DEFAULT_MAX_TOTAL_CHARS
   const files: ContextFile[] = []
+  let totalChars = 0
   for (const dir of dirs) {
     for (const pattern of patterns) {
       try {
@@ -49,8 +62,22 @@ async function scanDirs(dirs: string[], patterns: string[], root: string, exclud
         for await (const match of glob.scan({ cwd: dir, absolute: false, onlyFiles: true, dot: true })) {
           const absPath = resolve(dir, match)
           if (exclude?.has(absPath) || files.some(f => f.path === absPath)) continue
+          if (totalChars >= maxTotalChars) break
           try {
-            files.push({ path: absPath, relativePath: relative(root, absPath), content: await Bun.file(absPath).text() })
+            let content = await Bun.file(absPath).text()
+            if (content.length > maxFileChars) {
+              content = content.slice(0, maxFileChars) + `\n\n[Truncated: file exceeded ${maxFileChars} character limit]`
+            }
+            if (totalChars + content.length > maxTotalChars) {
+              const remaining = maxTotalChars - totalChars
+              if (remaining > 200) {
+                content = content.slice(0, remaining) + `\n\n[Truncated: total context file budget (${maxTotalChars} chars) reached]`
+              } else {
+                break
+              }
+            }
+            totalChars += content.length
+            files.push({ path: absPath, relativePath: relative(root, absPath), content })
           } catch { /* skip unreadable */ }
         }
       } catch { /* skip unscannable dir */ }
@@ -98,11 +125,12 @@ function extractFilePathsFromMessages(messages: readonly { role: string; content
 /** beforeModelCall middleware — discovers context files from directories referenced in conversation. */
 export function createDiscoveryMiddleware(
   patterns: string[], root: string, initialPaths: Set<string>,
-  options?: { subdirectoryWalk?: boolean },
+  options?: { subdirectoryWalk?: boolean; maxFileChars?: number; maxTotalChars?: number },
 ): Middleware<ModelCallContext> {
   const seen = new Set(initialPaths)
   const checked = new Set<string>()
   const walk = options?.subdirectoryWalk ?? true
+  const scanOpts: ScanOptions = { maxFileChars: options?.maxFileChars, maxTotalChars: options?.maxTotalChars }
 
   return async (ctx: ModelCallContext) => {
     try {
@@ -113,7 +141,7 @@ export function createDiscoveryMiddleware(
       }
       if (dirs.length === 0) return
 
-      const files = await scanDirs(dirs, patterns, root, seen)
+      const files = await scanDirs(dirs, patterns, root, seen, scanOpts)
       if (files.length === 0) return
       for (const f of files) seen.add(f.path)
       ctx.logger.info('dynamic context files discovered', { fileCount: files.length, files: files.map(f => f.relativePath), dirsScanned: dirs.length })

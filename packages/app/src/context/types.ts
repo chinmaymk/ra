@@ -16,6 +16,10 @@ export interface ContextConfig {
    *  directory to the project root, injecting any context files found along
    *  the way (not just in the immediate directory). Default: true. */
   subdirectoryWalk: boolean
+  /** Max characters per context file. Files exceeding this are truncated with a notice. Default: 10000. */
+  maxFileChars?: number
+  /** Max total characters across all context files. Once exceeded, remaining files are skipped. Default: 30000. */
+  maxTotalChars?: number
 }
 
 export interface ContextFile {
