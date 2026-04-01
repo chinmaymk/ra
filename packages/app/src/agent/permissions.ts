@@ -31,25 +31,44 @@ export function createPermissionsMiddleware(config: PermissionsConfig): Middlewa
 
   const defaultAction = config.default_action ?? 'allow'
 
-  // Index rules by tool name and pre-compile field regexes
-  const rulesByTool = new Map<string, Array<{ tool: string; fields: Map<string, CompiledFieldRule> }>>()
+  // Index rules: exact tool names go into a Map for O(1) lookup,
+  // glob/regex patterns go into a separate list for linear matching.
+  const exactRules = new Map<string, Array<{ tool: string; fields: Map<string, CompiledFieldRule> }>>()
+  const patternRules: Array<{ re: RegExp; tool: string; fields: Map<string, CompiledFieldRule> }>[] = []
   for (const rule of config.rules) {
     const fields = new Map<string, CompiledFieldRule>()
     for (const [key, fieldRule] of Object.entries(rule)) {
       if (key === 'tool' || !fieldRule || typeof fieldRule !== 'object' || Array.isArray(fieldRule)) continue
       fields.set(key, compileFieldRule(fieldRule as PermissionFieldRule))
     }
-    const entry = { tool: rule.tool, fields }
-    const list = rulesByTool.get(rule.tool)
-    if (list) list.push(entry)
-    else rulesByTool.set(rule.tool, [entry])
+    // If the tool name contains regex metacharacters, treat it as a pattern
+    if (/[.*+?^${}()|[\]\\]/.test(rule.tool)) {
+      patternRules.push([{ re: new RegExp(`^${rule.tool}$`), tool: rule.tool, fields }])
+    } else {
+      const entry = { tool: rule.tool, fields }
+      const list = exactRules.get(rule.tool)
+      if (list) list.push(entry)
+      else exactRules.set(rule.tool, [entry])
+    }
+  }
+
+  /** Find all matching rules for a tool name — exact match first, then pattern match. */
+  function findRules(name: string): Array<{ tool: string; fields: Map<string, CompiledFieldRule> }> {
+    const exact = exactRules.get(name)
+    const matched = exact ? [...exact] : []
+    for (const group of patternRules) {
+      for (const rule of group) {
+        if (rule.re.test(name)) matched.push(rule)
+      }
+    }
+    return matched
   }
 
   return async (ctx) => {
     const { name, arguments: args } = ctx.toolCall
-    const toolRules = rulesByTool.get(name)
+    const toolRules = findRules(name)
 
-    if (!toolRules) {
+    if (toolRules.length === 0) {
       if (defaultAction === 'deny') {
         ctx.logger.info('tool denied by default action', { tool: name })
         ctx.deny(`Permission denied: no rules configured for tool '${name}' and default_action is 'deny'`)

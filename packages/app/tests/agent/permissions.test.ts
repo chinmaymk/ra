@@ -156,6 +156,52 @@ describe('permissions middleware', () => {
     expect(ctx.denied).toContain('Permission denied')
   })
 
+  it('matches tool names by pattern (glob-style)', async () => {
+    const mw = createPermissionsMiddleware({
+      default_action: 'deny',
+      rules: [{ tool: 'mcp__github__.*', }],
+    })
+    // Tools matching the pattern should be allowed (rule exists, no field denials)
+    const ctx1 = makeCtx('mcp__github__get_me', {})
+    await mw(ctx1)
+    expect(ctx1.denied).toBeUndefined()
+
+    const ctx2 = makeCtx('mcp__github__create_pull_request', {})
+    await mw(ctx2)
+    expect(ctx2.denied).toBeUndefined()
+
+    // Non-matching tool should be denied by default_action
+    const ctx3 = makeCtx('execute_bash', { command: 'echo hi' })
+    await mw(ctx3)
+    expect(ctx3.denied).toContain("no rules configured for tool 'execute_bash'")
+  })
+
+  it('applies field rules through pattern-matched tool names', async () => {
+    const mw = createPermissionsMiddleware({
+      rules: [{ tool: 'mcp__.*', body: { deny: ['password', 'secret'] } }],
+    })
+    const ctx1 = makeCtx('mcp__slack__post_message', { body: 'the password is 123' })
+    await mw(ctx1)
+    expect(ctx1.denied).toContain('password')
+
+    const ctx2 = makeCtx('mcp__slack__post_message', { body: 'hello world' })
+    await mw(ctx2)
+    expect(ctx2.denied).toBeUndefined()
+  })
+
+  it('exact tool rules and pattern rules both apply', async () => {
+    const mw = createPermissionsMiddleware({
+      rules: [
+        { tool: 'execute_bash', command: { allow: ['^git '] } },
+        { tool: 'execute_.*', command: { deny: ['--force'] } },
+      ],
+    })
+    // Both rules match — allow requires ^git, deny blocks --force
+    const ctx = makeCtx('execute_bash', { command: 'git push --force' })
+    await mw(ctx)
+    expect(ctx.denied).toContain('--force')
+  })
+
   it('checks both source and destination fields for move_file', async () => {
     const mw = createPermissionsMiddleware({ rules: [{ tool: 'move_file', source: { deny: ['node_modules/'] }, destination: { allow: ['^src/'] } }] })
 
