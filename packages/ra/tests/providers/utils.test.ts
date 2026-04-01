@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, cacheHitPercent, extractTextContent, serializeContent, parseToolArguments, resolveThinkingBudget, THINKING_BUDGETS, pricingForModel, estimateUsageCost, formatUsd } from '@chinmaymk/ra'
-import type { TokenUsage, ContentPart, ModelPricing, UsageCostEstimate } from '@chinmaymk/ra'
+import { extractSystemMessages, mergeConsecutiveRoles, accumulateUsage, cacheHitPercent, extractTextContent, serializeContent, parseToolArguments, resolveThinkingBudget, THINKING_BUDGETS } from '@chinmaymk/ra'
+import type { TokenUsage, ContentPart } from '@chinmaymk/ra'
 
 describe('mergeConsecutiveRoles', () => {
   it('returns empty array for empty input', () => {
@@ -266,87 +266,3 @@ describe('resolveThinkingBudget', () => {
   })
 })
 
-describe('pricingForModel', () => {
-  it('returns pricing for Anthropic models', () => {
-    const opus = pricingForModel('claude-opus-4-6')
-    expect(opus).toBeDefined()
-    expect(opus!.inputCostPerMillion).toBe(15)
-    expect(opus!.outputCostPerMillion).toBe(75)
-
-    const sonnet = pricingForModel('claude-sonnet-4-6')
-    expect(sonnet).toBeDefined()
-    expect(sonnet!.inputCostPerMillion).toBe(3)
-
-    const haiku = pricingForModel('claude-haiku-4-5-20251001')
-    expect(haiku).toBeDefined()
-    expect(haiku!.inputCostPerMillion).toBe(0.8)
-  })
-
-  it('returns pricing for OpenAI models', () => {
-    const gpt4o = pricingForModel('gpt-4o-2024-08-06')
-    expect(gpt4o).toBeDefined()
-    expect(gpt4o!.inputCostPerMillion).toBe(2.5)
-  })
-
-  it('returns pricing for Google models', () => {
-    const gemini = pricingForModel('gemini-2.5-pro-latest')
-    expect(gemini).toBeDefined()
-    expect(gemini!.inputCostPerMillion).toBe(1.25)
-  })
-
-  it('returns undefined for unknown models', () => {
-    expect(pricingForModel('custom-llama-7b')).toBeUndefined()
-  })
-})
-
-describe('estimateUsageCost', () => {
-  it('estimates cost for known model', () => {
-    const usage: TokenUsage = { inputTokens: 1_000_000, outputTokens: 500_000 }
-    const cost = estimateUsageCost(usage, 'claude-opus-4-6')
-    expect(cost.inputCostUsd).toBe(15)
-    expect(cost.outputCostUsd).toBe(37.5)
-    expect(cost.totalCostUsd).toBe(52.5)
-  })
-
-  it('includes cache costs when present', () => {
-    const usage: TokenUsage = {
-      inputTokens: 100_000,
-      outputTokens: 50_000,
-      cacheCreationTokens: 10_000,
-      cacheReadTokens: 20_000,
-    }
-    const cost = estimateUsageCost(usage, 'claude-sonnet-4-6')
-    expect(cost.cacheCreationCostUsd).toBeGreaterThan(0)
-    expect(cost.cacheReadCostUsd).toBeGreaterThan(0)
-    expect(cost.totalCostUsd).toBe(
-      cost.inputCostUsd + cost.outputCostUsd + cost.cacheCreationCostUsd + cost.cacheReadCostUsd
-    )
-  })
-
-  it('uses default pricing for unknown models', () => {
-    const usage: TokenUsage = { inputTokens: 1_000_000, outputTokens: 1_000_000 }
-    const cost = estimateUsageCost(usage, 'unknown-model')
-    // Default falls back to sonnet-tier pricing
-    expect(cost.inputCostUsd).toBe(3)
-    expect(cost.outputCostUsd).toBe(15)
-  })
-
-  it('works without model parameter', () => {
-    const usage: TokenUsage = { inputTokens: 1_000_000, outputTokens: 1_000_000 }
-    const cost = estimateUsageCost(usage)
-    expect(cost.totalCostUsd).toBeGreaterThan(0)
-  })
-
-  it('returns zero costs for zero usage', () => {
-    const cost = estimateUsageCost({ inputTokens: 0, outputTokens: 0 })
-    expect(cost.totalCostUsd).toBe(0)
-  })
-})
-
-describe('formatUsd', () => {
-  it('formats to 4 decimal places', () => {
-    expect(formatUsd(15)).toBe('$15.0000')
-    expect(formatUsd(0.001)).toBe('$0.0010')
-    expect(formatUsd(0)).toBe('$0.0000')
-  })
-})

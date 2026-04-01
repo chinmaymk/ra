@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { ToolRegistry } from '@chinmaymk/ra'
+import { ToolRegistry, normalizeToolName } from '@chinmaymk/ra'
 
 describe('ToolRegistry', () => {
   it('registers and retrieves tools', () => {
@@ -70,5 +70,94 @@ describe('ToolRegistry', () => {
     const complexInput = { nested: { arr: [1, 2], obj: { key: 'val' } }, flag: true }
     await reg.execute('capture', complexInput)
     expect(received).toEqual(complexInput)
+  })
+})
+
+describe('normalizeToolName', () => {
+  it('lowercases tool names', () => {
+    expect(normalizeToolName('ReadFile')).toBe('readfile')
+    expect(normalizeToolName('BASH')).toBe('bash')
+  })
+
+  it('replaces hyphens with underscores', () => {
+    expect(normalizeToolName('read-file')).toBe('read_file')
+    expect(normalizeToolName('web-fetch-url')).toBe('web_fetch_url')
+  })
+
+  it('handles combined normalization', () => {
+    expect(normalizeToolName('Read-File')).toBe('read_file')
+    expect(normalizeToolName('Web-Fetch')).toBe('web_fetch')
+  })
+})
+
+describe('ToolRegistry name normalization', () => {
+  it('finds tools case-insensitively', () => {
+    const reg = new ToolRegistry()
+    reg.register({ name: 'ReadFile', description: '', inputSchema: {}, execute: async () => 'ok' })
+    expect(reg.get('readfile')).toBeDefined()
+    expect(reg.get('READFILE')).toBeDefined()
+    expect(reg.get('ReadFile')).toBeDefined()
+  })
+
+  it('finds tools with hyphen/underscore normalization', () => {
+    const reg = new ToolRegistry()
+    reg.register({ name: 'read_file', description: '', inputSchema: {}, execute: async () => 'ok' })
+    expect(reg.get('read-file')).toBeDefined()
+    expect(reg.get('Read-File')).toBeDefined()
+    expect(reg.get('READ_FILE')).toBeDefined()
+  })
+
+  it('prefers exact match over normalized match', () => {
+    const reg = new ToolRegistry()
+    reg.register({ name: 'read_file', description: 'underscore', inputSchema: {}, execute: async () => 'ok' })
+    const tool = reg.get('read_file')
+    expect(tool).toBeDefined()
+    expect(tool!.description).toBe('underscore')
+  })
+
+  it('executes through normalized name', async () => {
+    const reg = new ToolRegistry()
+    reg.register({ name: 'read_file', description: '', inputSchema: {}, execute: async () => 'found it' })
+    const result = await reg.execute('Read-File', {})
+    expect(result).toBe('found it')
+  })
+
+  it('still throws for truly unknown tools', async () => {
+    const reg = new ToolRegistry()
+    reg.register({ name: 'bash', description: '', inputSchema: {}, execute: async () => 'ok' })
+    expect(reg.get('totally_unknown')).toBeUndefined()
+    await expect(reg.execute('totally_unknown', {})).rejects.toThrow('Tool not found')
+  })
+})
+
+describe('ToolRegistry aliases', () => {
+  it('resolves aliases to canonical tools', () => {
+    const reg = new ToolRegistry()
+    reg.register({ name: 'read_file', description: '', inputSchema: {}, execute: async () => 'ok' })
+    reg.alias('read', 'read_file')
+    expect(reg.get('read')).toBeDefined()
+    expect(reg.get('read')!.name).toBe('read_file')
+  })
+
+  it('alias lookup is case-insensitive', () => {
+    const reg = new ToolRegistry()
+    reg.register({ name: 'bash', description: '', inputSchema: {}, execute: async () => 'ok' })
+    reg.alias('shell', 'bash')
+    expect(reg.get('Shell')).toBeDefined()
+    expect(reg.get('SHELL')).toBeDefined()
+  })
+
+  it('executes through alias', async () => {
+    const reg = new ToolRegistry()
+    reg.register({ name: 'write_file', description: '', inputSchema: {}, execute: async () => 'written' })
+    reg.alias('write', 'write_file')
+    const result = await reg.execute('write', {})
+    expect(result).toBe('written')
+  })
+
+  it('alias to nonexistent tool returns undefined', () => {
+    const reg = new ToolRegistry()
+    reg.alias('ghost', 'nonexistent_tool')
+    expect(reg.get('ghost')).toBeUndefined()
   })
 })
