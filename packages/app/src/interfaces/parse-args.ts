@@ -180,6 +180,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (val !== undefined) applyRule(r, rule, val as string | boolean)
   }
 
+  // --openai-base-url applies to both openai and openai-completions providers
+  if (values['openai-base-url']) {
+    setPath(r, ['app', 'providers', 'openai-completions', 'baseURL'], values['openai-base-url'] as string)
+  }
+
   // Memory — --memories, --list-memories, and --forget imply --memory
   if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) setPath(r, ['agent', 'memory', 'enabled'], true)
 
