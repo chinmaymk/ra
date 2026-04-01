@@ -36,6 +36,8 @@ export interface ITool {
   execute(input: unknown): Promise<unknown>
   /** Per-tool timeout in ms. Overrides the global toolTimeout when set. */
   timeout?: number
+  /** Minimum permission tier required to execute this tool. Used by PermissionPolicy when present. */
+  permissionTier?: 'read_only' | 'workspace_write' | 'full_access'
 }
 
 export interface TokenUsage {

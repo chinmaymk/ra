@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { PermissionPolicy, createPermissionPolicyMiddleware } from '@chinmaymk/ra'
+import { PermissionPolicy, createPermissionPolicyMiddleware, ToolRegistry } from '@chinmaymk/ra'
 import type { PermissionTier, ToolExecutionContext } from '@chinmaymk/ra'
 import { NoopLogger } from '@chinmaymk/ra'
 
@@ -119,6 +119,64 @@ describe('PermissionPolicy', () => {
     expect(policy.requiredTierFor('bash')).toBe('full_access')
     expect(policy.requiredTierFor('read_file')).toBe('read_only')
     expect(policy.requiredTierFor('unknown')).toBe('workspace_write')
+  })
+
+  it('reads permissionTier from tool definitions when registry provided', () => {
+    const tools = new ToolRegistry()
+    tools.register({ name: 'read_file', description: '', inputSchema: {}, execute: async () => 'ok', permissionTier: 'read_only' })
+    tools.register({ name: 'bash', description: '', inputSchema: {}, execute: async () => 'ok', permissionTier: 'full_access' })
+    tools.register({ name: 'write_file', description: '', inputSchema: {}, execute: async () => 'ok', permissionTier: 'workspace_write' })
+
+    const policy = new PermissionPolicy({
+      activeTier: 'workspace_write',
+      tools,
+    })
+    expect(policy.requiredTierFor('read_file')).toBe('read_only')
+    expect(policy.requiredTierFor('bash')).toBe('full_access')
+    expect(policy.requiredTierFor('write_file')).toBe('workspace_write')
+  })
+
+  it('explicit toolRequirements override tool-declared permissionTier', () => {
+    const tools = new ToolRegistry()
+    tools.register({ name: 'bash', description: '', inputSchema: {}, execute: async () => 'ok', permissionTier: 'full_access' })
+
+    const policy = new PermissionPolicy({
+      activeTier: 'workspace_write',
+      toolRequirements: { bash: 'workspace_write' }, // override: allow bash at workspace_write
+      tools,
+    })
+    expect(policy.requiredTierFor('bash')).toBe('workspace_write')
+  })
+
+  it('falls back to defaultToolTier when tool has no permissionTier', () => {
+    const tools = new ToolRegistry()
+    tools.register({ name: 'custom_tool', description: '', inputSchema: {}, execute: async () => 'ok' }) // no permissionTier
+
+    const policy = new PermissionPolicy({
+      activeTier: 'read_only',
+      defaultToolTier: 'workspace_write',
+      tools,
+    })
+    expect(policy.requiredTierFor('custom_tool')).toBe('workspace_write')
+  })
+
+  it('auto-denies tools whose declared tier exceeds active tier', async () => {
+    const tools = new ToolRegistry()
+    tools.register({ name: 'bash', description: '', inputSchema: {}, execute: async () => 'ok', permissionTier: 'full_access' })
+
+    const policy = new PermissionPolicy({ activeTier: 'read_only', tools })
+    const decision = await policy.authorize('bash', '{}')
+    expect(decision.allowed).toBe(false)
+    expect(decision.reason).toContain('full_access')
+  })
+
+  it('auto-allows tools whose declared tier is within active tier', async () => {
+    const tools = new ToolRegistry()
+    tools.register({ name: 'read_file', description: '', inputSchema: {}, execute: async () => 'ok', permissionTier: 'read_only' })
+
+    const policy = new PermissionPolicy({ activeTier: 'workspace_write', tools })
+    const decision = await policy.authorize('read_file', '{}')
+    expect(decision.allowed).toBe(true)
   })
 })
 

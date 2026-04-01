@@ -1,6 +1,6 @@
 # src/config/
 
-Layered configuration system: CLI flags > config file > defaults.
+Layered configuration system: CLI flags > project config > user settings > defaults.
 
 ## Files
 
@@ -12,10 +12,16 @@ Layered configuration system: CLI flags > config file > defaults.
 
 ## Config Hierarchy
 
-Each layer overrides the previous:
+Each layer overrides the previous (later wins):
 ```
---cli-flags > ra.config.{yml,json,toml} > defaults
+defaults < ~/.ra/settings.{json,yaml} < recipe < ra.config.{yml,json,toml} < --cli-flags
 ```
+
+### User-Global Settings
+
+`~/.ra/settings.{json,yaml,yml}` provides defaults that apply across all projects.
+Good for: preferred provider, model, API keys, default permissions.
+Project config always overrides user settings.
 
 ## Environment Variable Interpolation
 

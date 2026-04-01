@@ -1,4 +1,6 @@
+import type { ITool } from '../providers/types'
 import type { Middleware, ToolExecutionContext } from './types'
+import type { ToolRegistry } from './tool-registry'
 
 /**
  * Permission tiers, ordered from least to most permissive.
@@ -43,6 +45,8 @@ export interface PermissionPolicyConfig {
   defaultToolTier?: PermissionTier
   /** Optional callback for interactive escalation. Without it, escalation is denied. */
   prompter?: PermissionPrompter
+  /** Optional tool registry. When provided, tool-declared `permissionTier` values are used as fallback before `defaultToolTier`. */
+  tools?: ToolRegistry
 }
 
 export class PermissionPolicy {
@@ -50,17 +54,27 @@ export class PermissionPolicy {
   private toolRequirements: Map<string, PermissionTier>
   private defaultToolTier: PermissionTier
   private prompter?: PermissionPrompter
+  private tools?: ToolRegistry
 
   constructor(config: PermissionPolicyConfig) {
     this.activeTier = config.activeTier
     this.toolRequirements = new Map(Object.entries(config.toolRequirements ?? {}))
     this.defaultToolTier = config.defaultToolTier ?? 'full_access'
     this.prompter = config.prompter
+    this.tools = config.tools
   }
 
-  /** Get the minimum permission tier required for a tool. */
+  /** Get the minimum permission tier required for a tool.
+   *  Priority: explicit toolRequirements > tool.permissionTier > defaultToolTier */
   requiredTierFor(toolName: string): PermissionTier {
-    return this.toolRequirements.get(toolName) ?? this.defaultToolTier
+    const explicit = this.toolRequirements.get(toolName)
+    if (explicit) return explicit
+
+    // Check the tool's own declared tier
+    const tool = this.tools?.get(toolName)
+    if (tool?.permissionTier) return tool.permissionTier
+
+    return this.defaultToolTier
   }
 
   /** Check if the active tier meets or exceeds the required tier. */
