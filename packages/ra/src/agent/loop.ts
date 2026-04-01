@@ -300,6 +300,11 @@ export class AgentLoop {
         if (!toolCalls.length) break
       }
 
+      // Set stopReason when loop exits due to max iterations
+      if (!stopReason && !signal.aborted && this.maxIterations > 0 && iterations >= this.maxIterations) {
+        stopReason = 'max_iterations'
+      }
+
       if (!signal.aborted) {
         await runMiddlewareChain(loopCtx(), this.middleware.afterLoopComplete, this.toolTimeout)
       }
