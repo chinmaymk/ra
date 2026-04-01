@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact, parseContextWindowFromError } from '@chinmaymk/ra'
-import type { IMessage, IProvider, ChatResponse } from '@chinmaymk/ra'
+import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact, parseContextWindowFromError, extractCompactionMetadata, formatCompactionSummary } from '@chinmaymk/ra'
+import type { IMessage, IProvider, ChatResponse, CompactionMetadata } from '@chinmaymk/ra'
 import { makeModelCallCtx } from './test-utils'
 
 describe('splitMessageZones', () => {
@@ -875,5 +875,126 @@ describe('parseContextWindowFromError', () => {
   it('handles non-Error values', () => {
     expect(parseContextWindowFromError('maximum context length is 32000 tokens')).toBe(32_000)
     expect(parseContextWindowFromError('random string')).toBeUndefined()
+  })
+})
+
+describe('extractCompactionMetadata', () => {
+  it('extracts tool names from tool calls', () => {
+    const messages: IMessage[] = [
+      { role: 'assistant', content: 'Let me read that file', toolCalls: [{ id: 'tc1', name: 'read_file', arguments: '{"path":"src/index.ts"}' }] },
+      { role: 'tool', content: 'file contents', toolCallId: 'tc1' },
+      { role: 'assistant', content: 'Now let me edit', toolCalls: [{ id: 'tc2', name: 'edit_file', arguments: '{"path":"src/utils.ts"}' }] },
+      { role: 'tool', content: 'done', toolCallId: 'tc2' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.toolNames).toContain('read_file')
+    expect(meta.toolNames).toContain('edit_file')
+    expect(meta.toolNames).toHaveLength(2)
+  })
+
+  it('extracts file paths from message content', () => {
+    const messages: IMessage[] = [
+      { role: 'user', content: 'Please update packages/ra/src/agent/loop.ts' },
+      { role: 'assistant', content: 'I see the file at packages/ra/src/providers/types.ts' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.filePaths).toContain('packages/ra/src/agent/loop.ts')
+    expect(meta.filePaths).toContain('packages/ra/src/providers/types.ts')
+  })
+
+  it('extracts file paths from ContentPart[] content', () => {
+    const messages: IMessage[] = [
+      { role: 'assistant', content: [{ type: 'text', text: 'Reading src/config/defaults.ts' }] },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.filePaths).toContain('src/config/defaults.ts')
+  })
+
+  it('detects pending work hints', () => {
+    const messages: IMessage[] = [
+      { role: 'assistant', content: 'TODO: need to add tests for the new feature' },
+      { role: 'assistant', content: 'Next step: run the linter' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.pendingWorkHints).toHaveLength(2)
+    expect(meta.pendingWorkHints[0]).toContain('TODO')
+  })
+
+  it('returns empty arrays for messages without metadata', () => {
+    const messages: IMessage[] = [
+      { role: 'user', content: 'Hello' },
+      { role: 'assistant', content: 'Hi there' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.toolNames).toEqual([])
+    expect(meta.filePaths).toEqual([])
+    expect(meta.pendingWorkHints).toEqual([])
+  })
+
+  it('limits file paths to 15 entries', () => {
+    const paths = Array.from({ length: 20 }, (_, i) => `src/file${i}.ts`)
+    const messages: IMessage[] = [
+      { role: 'assistant', content: paths.join(' ') },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.filePaths.length).toBeLessThanOrEqual(15)
+  })
+
+  it('limits pending work hints to 5 entries', () => {
+    const messages: IMessage[] = Array.from({ length: 10 }, (_, i) => ({
+      role: 'assistant' as const,
+      content: `TODO item ${i}: implement feature ${i}`,
+    }))
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.pendingWorkHints.length).toBeLessThanOrEqual(5)
+  })
+})
+
+describe('formatCompactionSummary', () => {
+  it('includes tool names in summary', () => {
+    const metadata: CompactionMetadata = {
+      toolNames: ['read_file', 'bash'],
+      filePaths: [],
+      pendingWorkHints: [],
+    }
+    const result = formatCompactionSummary('The user asked to read a file.', metadata)
+    expect(result).toContain('Tools used: read_file, bash')
+  })
+
+  it('includes file paths in summary', () => {
+    const metadata: CompactionMetadata = {
+      toolNames: [],
+      filePaths: ['src/index.ts', 'src/loop.ts'],
+      pendingWorkHints: [],
+    }
+    const result = formatCompactionSummary('Worked on the agent loop.', metadata)
+    expect(result).toContain('Key files: src/index.ts, src/loop.ts')
+  })
+
+  it('includes pending work in summary', () => {
+    const metadata: CompactionMetadata = {
+      toolNames: [],
+      filePaths: [],
+      pendingWorkHints: ['Need to add tests'],
+    }
+    const result = formatCompactionSummary('Made some changes.', metadata)
+    expect(result).toContain('Pending work:')
+    expect(result).toContain('Need to add tests')
+  })
+
+  it('includes previous summary when provided', () => {
+    const metadata: CompactionMetadata = { toolNames: [], filePaths: [], pendingWorkHints: [] }
+    const result = formatCompactionSummary('New work.', metadata, 'Previous context about the project.')
+    expect(result).toContain('Previously compacted context:')
+    expect(result).toContain('Previous context about the project.')
+  })
+
+  it('parses XML tags from LLM response', () => {
+    const llmResponse = '<summary>User worked on loop.ts</summary>\n<pending_work>- Add tests</pending_work>\n<key_files>- src/loop.ts</key_files>'
+    const metadata: CompactionMetadata = { toolNames: ['bash'], filePaths: [], pendingWorkHints: [] }
+    const result = formatCompactionSummary(llmResponse, metadata)
+    expect(result).toContain('User worked on loop.ts')
+    expect(result).toContain('Tools used: bash')
+    expect(result).toContain('src/loop.ts')
   })
 })

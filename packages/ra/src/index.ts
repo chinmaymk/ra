@@ -29,7 +29,11 @@ export {
   withDoneGuard,
   THINKING_BUDGETS,
   resolveThinkingBudget,
+  pricingForModel,
+  estimateUsageCost,
+  formatUsd,
 } from './providers/utils'
+export type { ModelPricing, UsageCostEstimate } from './providers/utils'
 
 // ── Provider implementations ────────────────────────────────────────
 export { AnthropicProvider, type AnthropicProviderOptions } from './providers/anthropic'
@@ -59,7 +63,8 @@ export type {
 export { AgentLoop, truncateToolOutput, resolveThinking, type AgentLoopOptions, type LoopResult } from './agent/loop'
 export { ToolRegistry } from './agent/tool-registry'
 export { runMiddlewareChain, mergeMiddleware } from './agent/middleware'
-export { createCompactionMiddleware, forceCompact, isContextLengthError, parseContextWindowFromError, splitMessageZones, type CompactionConfig, type CompactionStrategy, type MessageZones } from './agent/context-compaction'
+export { createCompactionMiddleware, forceCompact, isContextLengthError, parseContextWindowFromError, splitMessageZones, extractCompactionMetadata, formatCompactionSummary, type CompactionConfig, type CompactionStrategy, type CompactionMetadata, type MessageZones } from './agent/context-compaction'
+export { createPreToolHookMiddleware, createPostToolHookMiddleware, createShellHooksMiddleware, type ShellHooksConfig, type HookRunResult } from './agent/shell-hooks'
 export { withTimeout, TimeoutError } from './agent/timeout'
 export { estimateTokens } from './agent/token-estimator'
 export { getContextWindowSize, getDefaultCompactionModel, setLearnedContextWindow } from './agent/model-registry'

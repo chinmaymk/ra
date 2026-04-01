@@ -63,6 +63,72 @@ export function serializeContent(content: string | ContentPart[]): string {
   return typeof content === 'string' ? content : JSON.stringify(content)
 }
 
+// ── Cost estimation ────────────────────────────────────────────────
+
+export interface ModelPricing {
+  inputCostPerMillion: number
+  outputCostPerMillion: number
+  cacheCreationCostPerMillion?: number
+  cacheReadCostPerMillion?: number
+}
+
+export interface UsageCostEstimate {
+  inputCostUsd: number
+  outputCostUsd: number
+  cacheCreationCostUsd: number
+  cacheReadCostUsd: number
+  totalCostUsd: number
+}
+
+const MODEL_PRICING: [string, ModelPricing][] = [
+  ['claude-opus', { inputCostPerMillion: 15, outputCostPerMillion: 75, cacheCreationCostPerMillion: 18.75, cacheReadCostPerMillion: 1.5 }],
+  ['claude-sonnet', { inputCostPerMillion: 3, outputCostPerMillion: 15, cacheCreationCostPerMillion: 3.75, cacheReadCostPerMillion: 0.3 }],
+  ['claude-haiku', { inputCostPerMillion: 0.8, outputCostPerMillion: 4, cacheCreationCostPerMillion: 1, cacheReadCostPerMillion: 0.08 }],
+  ['gpt-4.1', { inputCostPerMillion: 2, outputCostPerMillion: 8 }],
+  ['gpt-4o', { inputCostPerMillion: 2.5, outputCostPerMillion: 10 }],
+  ['gpt-4o-mini', { inputCostPerMillion: 0.15, outputCostPerMillion: 0.6 }],
+  ['o3', { inputCostPerMillion: 2, outputCostPerMillion: 8 }],
+  ['o4-mini', { inputCostPerMillion: 1.1, outputCostPerMillion: 4.4 }],
+  ['gemini-2.5-pro', { inputCostPerMillion: 1.25, outputCostPerMillion: 10 }],
+  ['gemini-2.5-flash', { inputCostPerMillion: 0.15, outputCostPerMillion: 0.6 }],
+]
+
+/** Look up pricing for a model by prefix match. Returns undefined for unknown models. */
+export function pricingForModel(model: string): ModelPricing | undefined {
+  const normalized = model.toLowerCase()
+  for (const [prefix, pricing] of MODEL_PRICING) {
+    if (normalized.includes(prefix)) return pricing
+  }
+  return undefined
+}
+
+function costForTokens(tokens: number, usdPerMillion: number): number {
+  return (tokens / 1_000_000) * usdPerMillion
+}
+
+/** Estimate the USD cost for a given token usage, using model-specific or default pricing. */
+export function estimateUsageCost(usage: TokenUsage, model?: string): UsageCostEstimate {
+  const pricing = model ? pricingForModel(model) : undefined
+  const p = pricing ?? { inputCostPerMillion: 3, outputCostPerMillion: 15, cacheCreationCostPerMillion: 3.75, cacheReadCostPerMillion: 0.3 }
+  const inputCostUsd = costForTokens(usage.inputTokens, p.inputCostPerMillion)
+  const outputCostUsd = costForTokens(usage.outputTokens, p.outputCostPerMillion)
+  const cacheCreationCostUsd = usage.cacheCreationTokens && p.cacheCreationCostPerMillion
+    ? costForTokens(usage.cacheCreationTokens, p.cacheCreationCostPerMillion)
+    : 0
+  const cacheReadCostUsd = usage.cacheReadTokens && p.cacheReadCostPerMillion
+    ? costForTokens(usage.cacheReadTokens, p.cacheReadCostPerMillion)
+    : 0
+  const totalCostUsd = inputCostUsd + outputCostUsd + cacheCreationCostUsd + cacheReadCostUsd
+  return { inputCostUsd, outputCostUsd, cacheCreationCostUsd, cacheReadCostUsd, totalCostUsd }
+}
+
+/** Format a USD amount to 4 decimal places. */
+export function formatUsd(amount: number): string {
+  return `$${amount.toFixed(4)}`
+}
+
+// ── Thinking budgets ───────────────────────────────────────────────
+
 /** Minimum thinking budget per Anthropic API. */
 const MIN_THINKING_BUDGET = 1024
 

@@ -119,7 +119,161 @@ const DEFAULT_SUMMARIZATION_PROMPT = `Summarize the conversation in <conversatio
 <rule>Preserve current state of the task being worked on</rule>
 <rule>Preserve relevant tool results and their outcomes</rule>
 <rule>Be concise but complete</rule>
-</instructions>`
+<rule>List any pending work, next steps, or TODOs mentioned</rule>
+<rule>List key file paths referenced in tool calls or results</rule>
+<rule>List tools that were used and their outcomes</rule>
+</instructions>
+
+Format your response as:
+<summary>
+[Concise narrative summary of the conversation]
+</summary>
+
+<pending_work>
+[Bullet list of any pending tasks, TODOs, or next steps. Write "none" if there are none.]
+</pending_work>
+
+<key_files>
+[Bullet list of important file paths referenced. Write "none" if there are none.]
+</key_files>`
+
+/** Continuation preamble prepended to compacted summaries when resuming. */
+const COMPACT_CONTINUATION_PREAMBLE = 'This is a summary of the conversation so far, replacing older messages that were compacted to save context space.\n\n'
+const COMPACT_RESUME_INSTRUCTION = '\n\nContinue the conversation from where it left off. Do not acknowledge or recap this summary.'
+
+/**
+ * Extract structured metadata from compactable messages for richer compaction summaries.
+ * Returns tool names used, file paths referenced, and any pending work indicators.
+ */
+export function extractCompactionMetadata(messages: IMessage[]): CompactionMetadata {
+  const toolNames = new Set<string>()
+  const filePaths = new Set<string>()
+  const pendingWorkHints: string[] = []
+
+  for (const msg of messages) {
+    // Collect tool names from tool calls
+    if (msg.toolCalls) {
+      for (const tc of msg.toolCalls) toolNames.add(tc.name)
+    }
+    // Collect tool names from tool results
+    if (msg.role === 'tool' && msg.toolCallId) {
+      // Tool result — tool name is in the preceding assistant message's toolCalls
+      // We still get it from toolCalls above; just note it's a tool message
+    }
+
+    const text = typeof msg.content === 'string'
+      ? msg.content
+      : msg.content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join(' ')
+
+    // Extract file paths (tokens containing / with code-like extensions)
+    for (const token of text.split(/[\s"'`(),;[\]{}]+/)) {
+      const cleaned = token.replace(/^[,.:;)]+|[,.:;(]+$/g, '')
+      if (cleaned.includes('/') && FILE_EXTENSION_RE.test(cleaned)) {
+        filePaths.add(cleaned)
+      }
+    }
+
+    // Detect pending work hints
+    const lower = text.toLowerCase()
+    if (lower.includes('todo') || lower.includes('next step') || lower.includes('remaining') || lower.includes('follow up') || lower.includes('pending')) {
+      const snippet = text.length > 160 ? text.slice(0, 157) + '...' : text
+      pendingWorkHints.push(snippet)
+    }
+  }
+
+  return {
+    toolNames: [...toolNames].sort(),
+    filePaths: [...filePaths].sort().slice(0, 15),
+    pendingWorkHints: pendingWorkHints.slice(0, 5),
+  }
+}
+
+export interface CompactionMetadata {
+  toolNames: string[]
+  filePaths: string[]
+  pendingWorkHints: string[]
+}
+
+const FILE_EXTENSION_RE = /\.(ts|tsx|js|jsx|json|md|rs|py|go|java|rb|css|html|yml|yaml|toml|sh|sql)$/i
+
+/**
+ * Format a structured compaction summary that preserves rich context.
+ * Merges the LLM summary with extracted metadata for maximum information density.
+ */
+export function formatCompactionSummary(llmSummary: string, metadata: CompactionMetadata, previousSummary?: string): string {
+  const sections: string[] = []
+
+  if (previousSummary) {
+    sections.push('Previously compacted context:\n' + previousSummary)
+    sections.push('')
+  }
+
+  // Parse LLM structured output if it used our XML tags, otherwise use raw
+  const summaryBody = extractTagContent(llmSummary, 'summary') ?? llmSummary
+  sections.push(summaryBody.trim())
+
+  // Merge LLM-extracted and programmatically-extracted metadata
+  const llmPending = extractTagContent(llmSummary, 'pending_work')
+  const llmFiles = extractTagContent(llmSummary, 'key_files')
+
+  const allFiles = new Set(metadata.filePaths)
+  if (llmFiles && llmFiles.trim() !== 'none') {
+    for (const line of llmFiles.split('\n')) {
+      const match = line.match(/[-*]\s*(.+)/)
+      if (match?.[1]) {
+        const path = match[1].trim().replace(/`/g, '')
+        if (path.includes('/')) allFiles.add(path)
+      }
+    }
+  }
+
+  if (metadata.toolNames.length > 0) {
+    sections.push(`\nTools used: ${metadata.toolNames.join(', ')}`)
+  }
+
+  const fileList = [...allFiles].slice(0, 15)
+  if (fileList.length > 0) {
+    sections.push(`Key files: ${fileList.join(', ')}`)
+  }
+
+  const pendingItems: string[] = []
+  if (llmPending && llmPending.trim() !== 'none') {
+    pendingItems.push(llmPending.trim())
+  }
+  if (metadata.pendingWorkHints.length > 0) {
+    for (const hint of metadata.pendingWorkHints) {
+      if (!pendingItems.some(p => p.includes(hint.slice(0, 40)))) {
+        pendingItems.push(hint)
+      }
+    }
+  }
+  if (pendingItems.length > 0) {
+    sections.push(`\nPending work:\n${pendingItems.map(p => `- ${p}`).join('\n')}`)
+  }
+
+  return sections.join('\n')
+}
+
+function extractTagContent(text: string, tag: string): string | undefined {
+  const start = `<${tag}>`
+  const end = `</${tag}>`
+  const startIdx = text.indexOf(start)
+  const endIdx = text.indexOf(end)
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return undefined
+  return text.slice(startIdx + start.length, endIdx)
+}
+
+/** Check if an existing compacted summary exists in pinned system messages. */
+function extractExistingSummary(messages: IMessage[]): string | undefined {
+  for (const msg of messages) {
+    if (msg.role !== 'system') continue
+    const text = typeof msg.content === 'string' ? msg.content : ''
+    if (text.startsWith(COMPACT_CONTINUATION_PREAMBLE)) {
+      return text.slice(COMPACT_CONTINUATION_PREAMBLE.length).replace(COMPACT_RESUME_INSTRUCTION, '').trim()
+    }
+  }
+  return undefined
+}
 
 // Patterns matched against err.message from each provider's SDK.
 // Both Anthropic and OpenAI SDKs prefix messages with the HTTP status:
@@ -247,6 +401,10 @@ async function _runCompaction(
   let middle: IMessage[] = []
 
   if (strategy === 'summarize') {
+    // Extract structured metadata from compactable messages before summarizing
+    const metadata = extractCompactionMetadata(compactable)
+    const previousSummary = extractExistingSummary(pinned)
+
     const conversationText = compactable.map(m => {
       const content = serializeContent(m.content)
       const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
@@ -266,14 +424,15 @@ async function _runCompaction(
       return false
     }
 
-    const summaryContent = serializeContent(summaryResponse.message.content)
-    const summaryText = `[Context Summary]\n${summaryContent}`
+    const llmSummary = serializeContent(summaryResponse.message.content)
+    const formattedSummary = formatCompactionSummary(llmSummary, metadata, previousSummary)
+    const summaryText = COMPACT_CONTINUATION_PREAMBLE + formattedSummary + COMPACT_RESUME_INSTRUCTION
 
     // Merge summary into the last pinned user message, absorbing the first recent
     // user message if it exists (to avoid an orphaned summary-only message).
     const userIdx = pinned.findLastIndex(m => m.role === 'user')
     if (userIdx >= 0) {
-      let extraText = summaryText
+      let extraText = `[Context Summary]\n${formattedSummary}`
       const nonTextParts: ContentPart[] = []
 
       if (recent.length > 0 && recent[0]?.role === 'user') {
@@ -291,6 +450,7 @@ async function _runCompaction(
 
       pinned[userIdx] = appendToMessage(pinned[userIdx] as IMessage, extraText, nonTextParts)
     }
+    ctx.logger.debug('compaction metadata', { toolNames: metadata.toolNames, fileCount: metadata.filePaths.length, pendingWork: metadata.pendingWorkHints.length })
     // summarize replaces the entire compactable zone with the summary in pinned
   } else {
     // Truncate: drop from the back of the compactable zone to keep the message
