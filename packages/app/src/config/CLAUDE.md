@@ -17,11 +17,11 @@ Each layer overrides the previous (later wins):
 defaults < ~/.ra/settings.{json,yaml} < recipe < ra.config.{yml,json,toml} < --cli-flags
 ```
 
-### User-Global Settings
+### User-Global Config
 
-`~/.ra/settings.{json,yaml,yml}` provides defaults that apply across all projects.
+`~/.ra/ra.config.{yaml,yml,json,toml}` — same filename as project config, lives in `~/.ra/`.
 Good for: preferred provider, model, API keys, default permissions.
-Project config always overrides user settings.
+Project config always overrides user-global config.
 
 ## Environment Variable Interpolation
 

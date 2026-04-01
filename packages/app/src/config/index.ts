@@ -292,19 +292,16 @@ function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
   }
 }
 
-// ── User-global settings ────────────────────────────────────────────
-
-/** Well-known paths for user-global settings, checked in order. */
-const USER_SETTINGS_FILES = ['settings.json', 'settings.yaml', 'settings.yml']
+// ── User-global config ──────────────────────────────────────────────
 
 /**
- * Load user-global settings from `~/.ra/settings.{json,yaml,yml}`.
- * These provide defaults that apply across all projects (e.g. preferred provider, model, API keys).
- * Inspired by claw-code's three-layer config precedence (user > project > local).
+ * Load user-global config from `~/.ra/ra.config.{yaml,yml,json,toml}`.
+ * Same filename convention as project config — just lives in ~/.ra/.
+ * Provides defaults across all projects (e.g. preferred provider, model, API keys).
  */
-async function loadUserSettings(): Promise<Partial<RaConfig>> {
+async function loadUserConfig(): Promise<Partial<RaConfig>> {
   const raHome = join(homeDir(), '.ra')
-  for (const name of USER_SETTINGS_FILES) {
+  for (const name of CONFIG_FILES) {
     const full = join(raHome, name)
     if (await Bun.file(full).exists()) return parseFile(full)
   }
@@ -327,11 +324,11 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
     log.debug('no config file found', { cwd, searchedFiles: CONFIG_FILES })
   }
 
-  // Load user-global settings from ~/.ra/settings.{json,yaml,yml}
-  const rawUserSettings = await loadUserSettings()
-  const userSettings = interpolateEnvVars(rawUserSettings, env) as Record<string, unknown>
-  if (Object.keys(rawUserSettings).length > 0) {
-    log.info('user settings loaded', { path: join(homeDir(), '.ra') })
+  // Load user-global config from ~/.ra/ra.config.{yaml,yml,json,toml}
+  const rawUserConfig = await loadUserConfig()
+  const userConfig = interpolateEnvVars(rawUserConfig, env) as Record<string, unknown>
+  if (Object.keys(rawUserConfig).length > 0) {
+    log.info('user config loaded', { dir: join(homeDir(), '.ra') })
   }
 
   const rawDefaults = JSON.parse(JSON.stringify(defaultConfig))
@@ -344,10 +341,10 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
     normalizeAppToAgentKeys(layer)
     normalizeToolsConfig(layer)
   }
-  for (const layer of [userSettings, fileConfig, cliArgs]) normalizeLayer(layer)
+  for (const layer of [userConfig, fileConfig, cliArgs]) normalizeLayer(layer)
 
   // Coerce after normalization so schema paths match (e.g. "50" → 50)
-  const coercedUserSettings = coerceTypes(userSettings, rawDefaults) as Record<string, unknown>
+  const coercedUserConfig = coerceTypes(userConfig, rawDefaults) as Record<string, unknown>
   const coercedFileConfig = coerceTypes(fileConfig, rawDefaults) as Record<string, unknown>
 
   // ── Recipe resolution ────────────────────────────────────────────
@@ -399,8 +396,8 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   // defaults < user settings < recipe < project file < CLI
   const defaults = interpolateEnvVars(rawDefaults, env) as Record<string, unknown>
   const layers = recipeLayer
-    ? [coercedUserSettings, recipeLayer, coercedFileConfig, cliArgs]
-    : [coercedUserSettings, coercedFileConfig, cliArgs]
+    ? [coercedUserConfig, recipeLayer, coercedFileConfig, cliArgs]
+    : [coercedUserConfig, coercedFileConfig, cliArgs]
   const merged = layers.reduce((acc, layer) => deepMerge(acc, layer), defaults)
 
   const config = merged as unknown as RaConfig
