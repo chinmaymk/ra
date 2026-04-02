@@ -178,6 +178,9 @@ export async function loginCodexPkce(): Promise<StoredTokens> {
     code_challenge: challenge,
     code_challenge_method: 'S256',
     state,
+    // Matches official Codex CLI authorize params
+    id_token_add_organizations: 'true',
+    codex_cli_simplified_flow: 'true',
   })
   const authorizeUrl = `${AUTHORIZE_URL}?${params}`
 
