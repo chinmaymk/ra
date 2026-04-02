@@ -14,6 +14,21 @@ This isn't a takedown. claw-code is an impressive reverse-engineering effort and
 
 The structural difference is telling. ra was designed from scratch as a composable framework. claw-code was reverse-engineered from a specific product, and its architecture reflects that origin — it faithfully reconstructs subsystems (hooks, plugins, skills, commands) rather than questioning whether those abstractions are the right ones.
 
+### Quick comparison
+
+| Dimension | ra | claw-code |
+|---|---|---|
+| **Language** | TypeScript (runtime-agnostic) | Rust + Python |
+| **Providers** | 7 (Anthropic, OpenAI, Google, Ollama, Bedrock, Azure) | 3 (Anthropic, OpenAI-compat, xAI) |
+| **Middleware hooks** | 9, in-process, typed contexts | Config-parsed, not yet executed at runtime |
+| **Context compaction** | 3-zone, cache-aware, with summarization | Turn-count truncation, token-estimate compaction |
+| **Sandboxing** | Permission middleware (application layer) | Linux namespace isolation (OS layer) |
+| **Interfaces** | CLI, REPL, HTTP, MCP server, cron, inspector | REPL, prompt mode, HTTP/SSE server |
+| **Skills** | Progressive disclosure, recipes, runtime creation | Local SKILL.md loading |
+| **Autonomous controls** | Token budget, duration, adaptive thinking | max_iterations, usage tracking |
+| **Built-in tools** | 13 | 20 |
+| **Slash commands** | Interface-specific | 28 (including /ultraplan, /commit, /pr) |
+
 ## Where ra is stronger
 
 ### 1. The middleware system is a genuine extension point
@@ -104,15 +119,29 @@ claw-code's Rust CLI supports REPL and prompt modes. It doesn't have HTTP, MCP s
 
 claw-code's Rust implementation brings genuine advantages for certain deployment scenarios. Native binaries start faster, use less memory, and don't carry a runtime. For edge deployments or resource-constrained environments, this matters. ra's TypeScript core is lightweight but still requires a JavaScript runtime.
 
+### Sandbox isolation
+
+This is arguably claw-code's most impressive subsystem. The Rust runtime uses Linux `unshare` to create isolated namespaces — user, mount, IPC, PID, UTS, and optionally network — before executing tools. Three filesystem modes (off, workspace-only, allow-list) let you control exactly what the agent can touch. It detects container environments (Docker, Kubernetes, Podman) and adjusts accordingly.
+
+For autonomous agents executing arbitrary shell commands, process-level sandboxing isn't a nice-to-have — it's a safety boundary. ra relies on permission middleware to deny dangerous operations, which works but operates at a higher level of abstraction. A misbehaving tool that bypasses the middleware layer has no further guardrail. claw-code's approach isolates at the OS level, which is fundamentally harder to escape.
+
+### A serious Rust runtime
+
+The Rust port deserves more credit than "it's a reverse-engineering project." The `ConversationRuntime<C, T>` is generic over API client and tool executor traits — clean, testable, and provider-swappable. There are 20 built-in tools, 28 slash commands (including `/ultraplan` for multi-step execution plans, `/commit`, `/pr`, and `/teleport` for ripgrep-powered code navigation), sub-agent types (Explore, Plan, Verification) with isolated tool sets, and per-model cost tracking with cache-aware pricing. This is a functional coding agent, not a prototype.
+
 ### Exhaustive surface mapping
 
-The Python codebase is a remarkably thorough catalog of what an agent CLI needs. The `reference_data/` directory contains JSON snapshots of 28+ subsystems, every tool, every command. If you're building an agent harness and wondering "what tools do I need?", claw-code's inventory is genuinely useful as a reference — it's one of the most complete public maps of an agent CLI's surface area.
+The Python codebase is a remarkably thorough catalog of what an agent CLI needs. The `reference_data/` directory contains JSON snapshots of 28+ subsystems, 150+ commands, and 100+ tools. If you're building an agent harness and wondering "what tools do I need?", claw-code's inventory is genuinely useful as a reference — it's one of the most complete public maps of an agent CLI's surface area.
 
 ### Permission model baked into the runtime
 
-claw-code's Rust runtime has permissions integrated directly into the conversation loop, with tool-level deny logic that runs during execution. ra handles permissions through middleware (which is more flexible) but claw-code's approach of making permissions a first-class runtime concept rather than an optional middleware is a defensible design choice for security-critical deployments.
+claw-code's Rust runtime has permissions integrated directly into the conversation loop — three hierarchical modes (ReadOnly, WorkspaceWrite, DangerFullAccess) with interactive escalation prompts when a tool needs more access than the current mode allows. ra handles permissions through middleware (which is more flexible) but claw-code's approach of making permissions a first-class runtime concept with explicit escalation is a defensible design choice for security-critical deployments.
 
 ## Opportunities for ra to improve
+
+### Process-level sandboxing
+
+This is the biggest gap. ra's permission middleware can deny tool calls based on regex patterns, but it operates at the application layer. If an agent runs `bash -c "curl ... | sh"` and the permission rules don't catch the pattern, there's no fallback. claw-code's namespace isolation provides defense in depth — even if a tool call slips through policy, the process can't reach the network or filesystem outside the sandbox. Adding opt-in sandboxing (Linux namespaces, macOS sandbox-exec, or container-based isolation) would make ra's autonomous story significantly more credible for production deployments.
 
 ### Rust/native compilation option
 
@@ -128,7 +157,7 @@ claw-code's plugin architecture (even if not yet functional in Rust) points to a
 
 ### LSP integration
 
-claw-code maps an `LSPTool` in its tool surface, pointing to a real opportunity. Language Server Protocol integration would give agents access to type information, go-to-definition, find-references, and diagnostics — significantly improving code understanding without burning tokens on grep-based exploration.
+claw-code has a full LSP client crate (`rust/crates/lsp/`) with diagnostics, symbol navigation, and context enrichment. This points to a real opportunity. Language Server Protocol integration would give agents access to type information, go-to-definition, find-references, and compiler diagnostics — significantly improving code understanding without burning tokens on grep-based exploration.
 
 ## The deeper difference
 
@@ -138,7 +167,7 @@ claw-code is reconstructing a known system. Its quality metric is parity — how
 
 ra starts from a different question: *what does an agent harness need to be if it's going to run autonomously?* The answer is: explicit control at every step (middleware), predictable resource consumption (budgets, timeouts, adaptive thinking), composable behavior (skills, recipes), and operational visibility (structured logging, inspector, traces). These aren't features bolted on after the fact — they're the load-bearing walls.
 
-Both projects prove that the agent harness is becoming a well-understood piece of infrastructure. The interesting question isn't which one is "better" — it's what each one reveals about the design space. claw-code maps the surface area comprehensively. ra explores how deep the control surface needs to go.
+Both projects prove that the agent harness is becoming a well-understood piece of infrastructure. The interesting question isn't which one is "better" — it's what each one reveals about the design space. claw-code maps the surface area comprehensively and gets sandboxing right. ra explores how deep the control surface needs to go and gets the autonomous loop right. The ideal agent harness probably looks like ra's middleware and compaction with claw-code's isolation model.
 
 If you're building agents that need to run unattended, ship to production, and stay within guardrails, [take ra for a spin](https://github.com/chinmaymk/ra).
 
