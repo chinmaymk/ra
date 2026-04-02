@@ -190,12 +190,13 @@ export async function bootstrap(
 
   // ── Codex token resolution ─────────────────────────────────────────
   if (agent.provider === 'codex' && !app.providers.codex.accessToken) {
-    const { getCodexAccessToken } = await import('./auth/codex')
+    const { getCodexAccessToken, getCodexDeviceId } = await import('./auth/codex')
     const token = await getCodexAccessToken()
     if (!token) {
       throw new Error('No Codex access token found. Run `ra login codex` to authenticate with your ChatGPT subscription.')
     }
     app.providers.codex.accessToken = token
+    app.providers.codex.deviceId = app.providers.codex.deviceId || await getCodexDeviceId()
   }
 
   // ── Provider ───────────────────────────────────────────────────────

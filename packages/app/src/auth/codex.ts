@@ -5,14 +5,14 @@
  *   1. PKCE (primary) — opens browser, local callback server on :1455
  *   2. Device Code (headless fallback) — user enters code on another device
  *
- * Tokens are persisted to ~/.ra/codex-tokens.json.
+ * Tokens persisted to ~/.ra/codex-tokens.json.
  *
  * References:
  *   - https://github.com/anomalyco/opencode/issues/3281
  *   - https://github.com/tumf/opencode-openai-device-auth
  */
-import { createHash, randomBytes } from 'node:crypto'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createServer } from 'node:http'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
@@ -54,17 +54,19 @@ interface DeviceCodeResponse {
 interface StoredTokens {
   accessToken: string
   refreshToken?: string
+  deviceId: string
   expiresAt: number // unix ms
 }
 
-// ── PKCE helpers ────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────
 
-function generateVerifier(): string {
-  return randomBytes(32).toString('base64url')
-}
-
-function generateChallenge(verifier: string): string {
-  return createHash('sha256').update(verifier).digest('base64url')
+function toStoredTokens(data: TokenResponse, prev?: StoredTokens): StoredTokens {
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token ?? prev?.refreshToken,
+    deviceId: prev?.deviceId ?? randomUUID(),
+    expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+  }
 }
 
 // ── Token persistence ───────────────────────────────────────────────
@@ -85,63 +87,51 @@ async function saveTokens(tokens: StoredTokens): Promise<void> {
 
 // ── Token refresh ───────────────────────────────────────────────────
 
-async function refreshAccessToken(refreshToken: string): Promise<StoredTokens | null> {
+async function refreshAccessToken(stored: StoredTokens): Promise<StoredTokens | null> {
+  if (!stored.refreshToken) return null
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       grant_type: 'refresh_token',
       client_id: CLIENT_ID,
-      refresh_token: refreshToken,
+      refresh_token: stored.refreshToken,
     }),
   })
   if (!res.ok) return null
 
   const data = (await res.json()) as TokenResponse
   if (!data.access_token) return null
-  const tokens: StoredTokens = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token ?? refreshToken,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  }
+  const tokens = toStoredTokens(data, stored)
   await saveTokens(tokens)
   return tokens
 }
 
 // ── Public API ──────────────────────────────────────────────────────
 
-/**
- * Get a valid access token, refreshing if needed.
- * Returns null if no stored tokens or refresh fails.
- */
+/** Get a valid access token, refreshing if needed. */
 export async function getCodexAccessToken(): Promise<string | null> {
   const stored = await loadStoredTokens()
   if (!stored) return null
 
-  // Still valid (with 60s buffer)
-  if (stored.expiresAt > Date.now() + 60_000) {
-    return stored.accessToken
-  }
+  if (stored.expiresAt > Date.now() + 60_000) return stored.accessToken
 
-  // Try refresh
-  if (stored.refreshToken) {
-    const refreshed = await refreshAccessToken(stored.refreshToken)
-    if (refreshed) return refreshed.accessToken
-  }
-
-  return null
+  const refreshed = await refreshAccessToken(stored)
+  return refreshed?.accessToken ?? null
 }
 
-/**
- * Login via PKCE flow — opens browser, spins up local callback server.
- * Primary flow for environments with a browser.
- */
+/** Get the persisted device ID (for the provider's oai-device-id header). */
+export async function getCodexDeviceId(): Promise<string | undefined> {
+  const stored = await loadStoredTokens()
+  return stored?.deviceId
+}
+
+/** Login via PKCE flow — opens browser, local callback server on :1455. */
 export async function loginCodexPkce(): Promise<StoredTokens> {
-  const verifier = generateVerifier()
-  const challenge = generateChallenge(verifier)
+  const verifier = randomBytes(32).toString('base64url')
+  const challenge = createHash('sha256').update(verifier).digest('base64url')
   const state = randomBytes(16).toString('hex')
 
-  // Build authorization URL
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
@@ -153,10 +143,8 @@ export async function loginCodexPkce(): Promise<StoredTokens> {
   })
   const authorizeUrl = `${AUTHORIZE_URL}?${params}`
 
-  // Wait for the OAuth callback with the authorization code
   const code = await waitForCallback(state, authorizeUrl)
 
-  // Exchange code for tokens
   const tokenRes = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -177,11 +165,7 @@ export async function loginCodexPkce(): Promise<StoredTokens> {
   const data = (await tokenRes.json()) as TokenResponse
   if (data.error) throw new Error(`OAuth error: ${data.error} — ${data.error_description ?? ''}`)
 
-  const tokens: StoredTokens = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  }
+  const tokens = toStoredTokens(data)
   await saveTokens(tokens)
   console.log('  Login successful! Token saved to', TOKENS_PATH)
   return tokens
@@ -190,37 +174,40 @@ export async function loginCodexPkce(): Promise<StoredTokens> {
 /** Spin up a local HTTP server on :1455 and wait for the OAuth redirect. */
 function waitForCallback(expectedState: string, authorizeUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      const url = new URL(req.url ?? '/', `http://localhost:${REDIRECT_PORT}`)
+    let settled = false
+    const settle = (fn: typeof resolve | typeof reject, value: string | Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      server.close()
+      ;(fn as (v: string | Error) => void)(value)
+    }
 
+    const server = createServer((req, res) => {
+      const url = new URL(req.url ?? '/', `http://localhost:${REDIRECT_PORT}`)
       if (!url.pathname.startsWith('/auth/callback')) {
-        res.writeHead(404)
-        res.end('Not found')
+        res.writeHead(404).end('Not found')
+        return
+      }
+
+      const error = url.searchParams.get('error')
+      if (error) {
+        res.writeHead(200, { 'Content-Type': 'text/html' })
+        res.end('<h2>Login failed</h2><p>You can close this window.</p>')
+        settle(reject, new Error(`OAuth callback error: ${error}`))
         return
       }
 
       const code = url.searchParams.get('code')
       const state = url.searchParams.get('state')
-      const error = url.searchParams.get('error')
-
-      if (error) {
-        res.writeHead(200, { 'Content-Type': 'text/html' })
-        res.end('<html><body><h2>Login failed</h2><p>You can close this window.</p></body></html>')
-        server.close()
-        reject(new Error(`OAuth callback error: ${error}`))
-        return
-      }
-
       if (!code || state !== expectedState) {
-        res.writeHead(400, { 'Content-Type': 'text/html' })
-        res.end('<html><body><h2>Invalid callback</h2></body></html>')
+        res.writeHead(400, { 'Content-Type': 'text/html' }).end('<h2>Invalid callback</h2>')
         return
       }
 
       res.writeHead(200, { 'Content-Type': 'text/html' })
-      res.end('<html><body><h2>Login successful!</h2><p>You can close this window and return to the terminal.</p></body></html>')
-      server.close()
-      resolve(code)
+      res.end('<h2>Login successful!</h2><p>You can close this window.</p>')
+      settle(resolve, code)
     })
 
     server.listen(REDIRECT_PORT, () => {
@@ -234,26 +221,18 @@ function waitForCallback(expectedState: string, authorizeUrl: string): Promise<s
 
     server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
-        reject(new Error(`Port ${REDIRECT_PORT} is in use. Close the process using it and try again, or use --device-code.`))
+        settle(reject, new Error(`Port ${REDIRECT_PORT} is in use. Close the process using it, or use --device-code.`))
       } else {
-        reject(err)
+        settle(reject, err as Error)
       }
     })
 
-    // Timeout after 5 minutes
-    setTimeout(() => {
-      server.close()
-      reject(new Error('Login timed out after 5 minutes.'))
-    }, 5 * 60 * 1000)
+    const timer = setTimeout(() => settle(reject, new Error('Login timed out after 5 minutes.')), 5 * 60 * 1000)
   })
 }
 
-/**
- * Login via device code flow — for headless/SSH environments.
- * Displays a code for the user to enter on another device.
- */
+/** Login via device code flow — for headless/SSH environments. */
 export async function loginCodexDeviceCode(): Promise<StoredTokens> {
-  // Step 1: Request device code
   const codeRes = await fetch(DEVICE_CODE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -266,7 +245,6 @@ export async function loginCodexDeviceCode(): Promise<StoredTokens> {
 
   const deviceCode = (await codeRes.json()) as DeviceCodeResponse
 
-  // Step 2: Show user the verification URL
   console.log()
   console.log('  Open this URL in your browser:')
   console.log()
@@ -276,7 +254,6 @@ export async function loginCodexDeviceCode(): Promise<StoredTokens> {
   console.log()
   console.log('  Waiting for authorization...')
 
-  // Step 3: Poll for token
   const interval = Math.max(deviceCode.interval, 5) * 1000
   const deadline = Date.now() + deviceCode.expires_in * 1000
 
@@ -293,11 +270,9 @@ export async function loginCodexDeviceCode(): Promise<StoredTokens> {
       }),
     })
 
-    // 428/400 = authorization pending
     if (tokenRes.status === 428 || tokenRes.status === 400) continue
 
     const body = (await tokenRes.json()) as TokenResponse
-
     if (body.error === 'authorization_pending') continue
     if (body.error === 'slow_down') {
       await new Promise(resolve => setTimeout(resolve, 5000))
@@ -306,11 +281,7 @@ export async function loginCodexDeviceCode(): Promise<StoredTokens> {
     if (body.error) throw new Error(`OAuth error: ${body.error}`)
     if (!body.access_token) continue
 
-    const tokens: StoredTokens = {
-      accessToken: body.access_token,
-      refreshToken: body.refresh_token,
-      expiresAt: Date.now() + (body.expires_in || 3600) * 1000,
-    }
+    const tokens = toStoredTokens(body)
     await saveTokens(tokens)
     console.log('  Login successful! Token saved to', TOKENS_PATH)
     return tokens
@@ -319,10 +290,7 @@ export async function loginCodexDeviceCode(): Promise<StoredTokens> {
   throw new Error('Device code expired. Please try again.')
 }
 
-/**
- * Login entry point — tries PKCE first, falls back to device code.
- * Use `--device-code` flag to skip PKCE.
- */
+/** Login entry point. Use `--device-code` flag for headless environments. */
 export async function loginCodex(opts?: { deviceCode?: boolean }): Promise<StoredTokens> {
   if (opts?.deviceCode) return loginCodexDeviceCode()
   return loginCodexPkce()

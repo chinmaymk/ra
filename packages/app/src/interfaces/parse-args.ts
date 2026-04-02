@@ -2,11 +2,9 @@ import { parseArgs as utilParseArgs } from 'util'
 import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
-export interface SubCommand {
-  kind: 'skill' | 'recipe' | 'login'
-  action: 'install' | 'remove' | 'list' | 'codex'
-  args: string[]
-}
+export type SubCommand =
+  | { kind: 'skill' | 'recipe'; action: 'install' | 'remove' | 'list'; args: string[] }
+  | { kind: 'login'; action: string; args: string[] }
 
 export interface ParsedArgsMeta {
   help: boolean
