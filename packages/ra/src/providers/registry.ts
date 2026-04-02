@@ -5,6 +5,7 @@ import { GoogleProvider, type GoogleProviderOptions } from './google'
 import { OllamaProvider, type OllamaProviderOptions } from './ollama'
 import { BedrockProvider, type BedrockProviderOptions } from './bedrock'
 import { AzureProvider, type AzureProviderOptions } from './azure'
+import { CodexProvider, type CodexProviderOptions } from './openai-codex'
 
 type ProviderOptionsMap = {
   anthropic: AnthropicProviderOptions
@@ -14,6 +15,7 @@ type ProviderOptionsMap = {
   ollama: OllamaProviderOptions
   bedrock: BedrockProviderOptions
   azure: AzureProviderOptions
+  codex: CodexProviderOptions
 }
 
 export type ProviderConfig = {
@@ -35,6 +37,7 @@ const constructors = {
   ollama: OllamaProvider,
   bedrock: BedrockProvider,
   azure: AzureProvider,
+  codex: CodexProvider,
 } as const
 
 export function createProvider(config: ProviderConfig): IProvider {

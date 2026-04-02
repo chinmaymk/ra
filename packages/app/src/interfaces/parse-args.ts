@@ -3,8 +3,8 @@ import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
 export interface SubCommand {
-  kind: 'skill' | 'recipe'
-  action: 'install' | 'remove' | 'list'
+  kind: 'skill' | 'recipe' | 'login'
+  action: 'install' | 'remove' | 'list' | 'codex'
   args: string[]
 }
 
@@ -84,6 +84,24 @@ export function parseArgs(argv: string[]): ParsedArgs {
         listMemories: false,
         files: [],
         subCommand: { kind, action: userArgs[1] as 'install' | 'remove' | 'list', args: userArgs.slice(2) },
+      },
+    }
+  }
+
+  // Check for login subcommand: ra login codex
+  if (userArgs[0] === 'login') {
+    const provider = userArgs[1] ?? 'codex'
+    return {
+      config: {},
+      meta: {
+        help: false,
+        version: false,
+        showContext: false,
+        showConfig: false,
+        runImmediately: false,
+        listMemories: false,
+        files: [],
+        subCommand: { kind: 'login', action: provider as 'codex', args: userArgs.slice(2) },
       },
     }
   }

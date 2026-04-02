@@ -39,8 +39,10 @@ function sanitizeConfigSnapshot(config: RaConfig): unknown {
   const copy = JSON.parse(JSON.stringify(config))
   if (copy.app?.providers) {
     for (const p of Object.values(copy.app.providers)) {
-      if (p && typeof p === 'object' && 'apiKey' in (p as Record<string, unknown>)) {
-        (p as Record<string, unknown>).apiKey = '***'
+      if (p && typeof p === 'object') {
+        const obj = p as Record<string, unknown>
+        if ('apiKey' in obj) obj.apiKey = '***'
+        if ('accessToken' in obj) obj.accessToken = '***'
       }
     }
   }
@@ -184,6 +186,16 @@ export async function bootstrap(
     const root = (await findGitRoot(process.cwd())) ?? process.cwd()
     const discoveryMw = createDiscoveryMiddleware(agent.context.patterns, root, new Set(contextFiles.map(f => f.path)), { subdirectoryWalk: agent.context.subdirectoryWalk })
     middleware.beforeModelCall = append(middleware.beforeModelCall, discoveryMw)
+  }
+
+  // ── Codex token resolution ─────────────────────────────────────────
+  if (agent.provider === 'codex' && !app.providers.codex.accessToken) {
+    const { getCodexAccessToken } = await import('./auth/codex')
+    const token = await getCodexAccessToken()
+    if (!token) {
+      throw new Error('No Codex access token found. Run `ra login codex` to authenticate with your ChatGPT subscription.')
+    }
+    app.providers.codex.accessToken = token
   }
 
   // ── Provider ───────────────────────────────────────────────────────

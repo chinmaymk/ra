@@ -40,6 +40,7 @@ export { GoogleProvider, type GoogleProviderOptions } from './providers/google'
 export { OllamaProvider, type OllamaProviderOptions } from './providers/ollama'
 export { BedrockProvider, type BedrockProviderOptions } from './providers/bedrock'
 export { AzureProvider, type AzureProviderOptions } from './providers/azure'
+export { CodexProvider, type CodexProviderOptions } from './providers/openai-codex'
 export { createProvider, buildProviderConfig, type ProviderConfig } from './providers/registry'
 
 // ── Agent / middleware types ────────────────────────────────────────
