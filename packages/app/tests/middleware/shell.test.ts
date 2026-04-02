@@ -53,7 +53,7 @@ test('parseShellEntry handles quoted args', () => {
 })
 
 test('parseShellEntry throws on empty entry', () => {
-  expect(() => parseShellEntry('shell:   ')).toThrow(/Empty shell middleware/)
+  expect(() => parseShellEntry('shell:   ')).toThrow(/Empty shell entry/)
 })
 
 // --- isShellEntry / hasShellPrefix / isShellPath ---
