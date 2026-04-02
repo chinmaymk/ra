@@ -1,6 +1,6 @@
 # Custom Tools
 
-Define your own tools as plain TypeScript or JavaScript files. Custom tools work exactly like built-in tools — the model sees them in its tool list, can call them, and receives results through the same execution pipeline with full logging and tracing.
+Define your own tools as TypeScript files, JavaScript files, or shell scripts. Custom tools work exactly like built-in tools — the model sees them in its tool list, can call them, and receives results through the same execution pipeline with full logging and tracing.
 
 ```yaml
 # ra.config.yml
@@ -9,6 +9,7 @@ agent:
     custom:
       - "./tools/deploy.ts"
       - "./tools/db-query.ts"
+      - "./tools/health-check.sh"
 ```
 
 ## Writing a tool
@@ -107,6 +108,107 @@ export default function createCounter() {
 ```
 
 The factory is called once at load time. The returned object must have the same shape as a direct export. Async factories (`async function`) are also supported.
+
+## Shell script tools
+
+Any shell script or executable can be a custom tool. Scripts with known extensions (`.sh`, `.bash`, `.zsh`, `.py`, `.rb`, `.pl`, `.php`, `.lua`, `.r`) are **auto-detected** — no prefix needed:
+
+```yaml
+agent:
+  tools:
+    custom:
+      - "./tools/health-check.sh"       # auto-detected by .sh extension
+      - "./tools/lint.py"               # auto-detected by .py extension
+```
+
+Use the `shell:` prefix for commands with arguments or binaries without a recognized extension:
+
+```yaml
+agent:
+  tools:
+    custom:
+      - "shell: python3 ./tools/analyze.py --strict"
+      - "shell: /usr/local/bin/my-tool"
+```
+
+### Self-describing protocol
+
+Shell tools self-describe by outputting JSON when called with `--describe`. During execution, they receive tool input as JSON on **stdin** and write the result to **stdout**.
+
+```bash
+#!/bin/bash
+# tools/health-check.sh
+
+if [ "$1" = "--describe" ]; then
+  cat << 'EOF'
+{
+  "name": "HealthCheck",
+  "description": "Check health of a service endpoint",
+  "parameters": {
+    "url": { "type": "string", "description": "URL to check" },
+    "timeout": { "type": "number", "description": "Timeout in seconds", "optional": true }
+  }
+}
+EOF
+  exit 0
+fi
+
+# Read tool input from stdin
+read -r input
+url=$(echo "$input" | jq -r '.url')
+timeout=$(echo "$input" | jq -r '.timeout // 5')
+
+status=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$timeout" "$url")
+echo "HTTP $status for $url"
+```
+
+The `--describe` output supports the same fields as TypeScript tools:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Tool name the model calls |
+| `description` | Yes | When and how to use this tool |
+| `parameters` | No* | Parameters shorthand (same format as TS tools) |
+| `inputSchema` | No* | Raw JSON Schema (use one or the other) |
+| `timeout` | No | Per-tool timeout override (ms) |
+
+\* If neither `parameters` nor `inputSchema` is provided, the tool accepts no arguments.
+
+### Execution protocol
+
+| Channel | Direction | Purpose |
+|---------|-----------|---------|
+| **stdin** | ra → script | JSON object with tool input arguments |
+| **stdout** | script → ra | Tool result (returned as-is to the model) |
+| **stderr** | script → ra | Logged at debug level |
+| **exit code** | script → ra | Non-zero throws an error (sent to model as error result) |
+
+### Python example
+
+```python
+#!/usr/bin/env python3
+# tools/lint.py
+import sys, json
+
+if '--describe' in sys.argv:
+    json.dump({
+        'name': 'Lint',
+        'description': 'Run linter on a file and return findings',
+        'parameters': {
+            'path': {'type': 'string', 'description': 'File path to lint'},
+        },
+    }, sys.stdout)
+    sys.exit(0)
+
+data = json.load(sys.stdin)
+path = data['path']
+# ... run linter ...
+print(f'No issues found in {path}')
+```
+
+### Shared infrastructure with middleware
+
+Shell tools use the same underlying detection and execution engine as [shell middleware](/middleware/#shell-middleware). The same extensions are auto-detected, the same process management applies (SIGTERM → SIGKILL after 3s on timeout), and the same path resolution rules work (relative to project root, `~/` for home, absolute paths).
 
 ## Combining with built-in tools
 

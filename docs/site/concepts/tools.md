@@ -19,14 +19,17 @@ These cover file manipulation, code search, shell commands, and HTTP requests �
 
 ## Custom tools
 
-You can define your own tools as plain TypeScript files and register them via config. Custom tools go through the same execution pipeline as built-in tools — with full logging, tracing, permissions, and middleware support.
+You can define your own tools as TypeScript files or shell scripts and register them via config. Custom tools go through the same execution pipeline as built-in tools — with full logging, tracing, permissions, and middleware support.
 
 ```yaml
 agent:
   tools:
     custom:
-      - "./tools/deploy.ts"
+      - "./tools/deploy.ts"          # TypeScript
+      - "./tools/health-check.sh"    # Shell script (auto-detected)
 ```
+
+Shell scripts self-describe via a `--describe` flag and receive input as JSON on stdin — the same execution engine used by [shell middleware](/middleware/#shell-middleware).
 
 See [Custom Tools](/tools/custom) for the full guide.
 
