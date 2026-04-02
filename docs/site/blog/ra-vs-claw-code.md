@@ -26,6 +26,10 @@ The structural difference is telling. ra was designed from scratch as a composab
 | **Interfaces** | CLI, REPL, HTTP, MCP server, cron, inspector | REPL, prompt mode, HTTP/SSE server |
 | **Skills** | Progressive disclosure, recipes, runtime creation | Local SKILL.md loading |
 | **Autonomous controls** | Token budget, duration, adaptive thinking | max_iterations, usage tracking |
+| **Observability** | Inspector web UI, hierarchical traces, cache hit % | Usage tracking, cost calculation |
+| **Cross-session memory** | SQLite + FTS5, auto-injected | None (sessions are isolated) |
+| **MCP** | Bidirectional (client + server), lazy schemas | Client only, 5 transport types |
+| **Subagent token rollup** | Yes (budget-aware) | Sub-agent types, no rollup |
 | **Built-in tools** | 13 | 20 |
 | **Slash commands** | Interface-specific | 28 (including /ultraplan, /commit, /pr) |
 
@@ -114,6 +118,85 @@ ra runs as:
 - **Inspector** — web dashboard showing every model call, tool execution, and token spend
 
 claw-code's Rust CLI supports REPL and prompt modes. It doesn't have HTTP, MCP server, or cron interfaces. For teams that want to embed an agent into existing workflows (CI/CD, internal tools, editor integrations), the interface breadth matters.
+
+### 7. Operational visibility you can actually use
+
+ra's built-in **Inspector** is a web dashboard (default port 3002) that renders the full trace hierarchy of every session: `agent.loop` → `agent.iteration` → `agent.model_call` + parallel `agent.tool_execution` spans. Each iteration shows token breakdown (input, output, thinking, cache read, cache creation), cache hit percentage, tool call names, error rates, and wall-clock duration. It's not just a log viewer — it computes per-iteration cache efficiency so you can see exactly when compaction fired and whether it preserved cache hits.
+
+```yaml
+app:
+  inspector:
+    port: 3002
+  tracesEnabled: true
+```
+
+Traces are OpenTelemetry-style spans stored as JSONL alongside the session they belong to. The Inspector can browse sessions across all project namespaces without initializing each one — useful when you're running multiple autonomous agents against different repos.
+
+claw-code has usage tracking and cost calculation (per-model pricing with cache-aware math), which is solid. But there's no trace hierarchy, no per-iteration breakdown, no web UI, and no way to visually debug why a 200-iteration autonomous run went sideways at iteration 147.
+
+### 8. Persistent memory that outlives sessions
+
+ra has a memory system backed by SQLite with FTS5 full-text search. Memories are stored separately from session history — they persist across sessions, get auto-pruned by TTL, and are injected at the start of each new conversation via middleware.
+
+```yaml
+agent:
+  memory:
+    enabled: true
+    maxMemories: 1000
+    ttlDays: 90
+    injectLimit: 5
+```
+
+The agent gets three tools: `memory_save`, `memory_search`, and `memory_forget`. When a session starts, the five most recent memories are injected as a `<recalled-memories>` message. The FTS5 index uses BM25 ranking for search, auto-syncs via SQLite triggers, and runs in WAL mode for concurrent access. Memories can be tagged (`preference`, `project`, `convention`, `team`, `tooling`) and browsed through the Inspector.
+
+This matters for autonomous agents that run repeatedly against the same codebase. Without persistent memory, every run starts from zero — the agent rediscovers project conventions, past decisions, and user preferences through expensive context exploration. With memory, it remembers.
+
+claw-code has session persistence and compaction, but no cross-session memory. Each run is isolated.
+
+### 9. Subagents with resource tracking
+
+ra's `Agent` tool forks parallel child agents that inherit tools, model, and system prompt but start with fresh conversations. Tasks run concurrently via `Promise.all`, and token usage from all children rolls up to the parent for accurate budget tracking.
+
+```typescript
+// The model can spawn up to maxConcurrency parallel tasks
+{
+  name: 'Agent',
+  inputSchema: {
+    properties: {
+      tasks: { type: 'array', items: { task: { type: 'string' } }, maxItems: 4 }
+    }
+  }
+}
+```
+
+Two design details make this more than a simple fork. First, the child tool registry is built lazily at execution time — so MCP tools registered after initialization are picked up by subagents without restart. Second, recursion is depth-limited (default 2 levels), preventing runaway nesting while still allowing an orchestrator agent to spawn workers that themselves spawn specialists.
+
+claw-code also has sub-agent types (Explore, Plan, Verification) with restricted tool sets — a good pattern. But without token rollup to the parent, autonomous budget enforcement breaks down: a parent agent can't know how much its children spent, so `maxTokenBudget` becomes meaningless once subagents enter the picture. ra tracks this end-to-end.
+
+### 10. Bidirectional MCP
+
+ra is both an MCP client (connecting to external tool servers) and an MCP server (exposing itself as a tool to other systems). This bidirectional capability is configured, not coded:
+
+```yaml
+app:
+  # Client: connect to external MCP servers
+  mcpServers:
+    - name: github
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github"]
+
+  # Server: expose ra as an MCP tool
+  raMcpServer:
+    enabled: true
+    port: 3001
+```
+
+When connecting to external servers, ra uses **lazy schema loading** by default: MCP tools are registered with minimal schemas, and the full parameter schema is only revealed on first call (returned as an error the model retries with correct params). This saves tokens on the initial model call — significant when you have dozens of MCP tools registered.
+
+Tool names are server-prefixed (`github__issues_list`) to prevent collisions. When ra runs as an MCP server, it exposes both the agent itself (as a single callable tool) and all built-in tools individually — so a parent system like Cursor or Claude Desktop can either delegate to ra as a whole or call specific tools directly.
+
+claw-code has MCP support with five transport types (stdio, SSE, HTTP, WebSocket, SDK), which is broader transport coverage. But it operates only as a client — it can connect to MCP servers but can't expose itself as one. For workflows where ra sits in the middle of a tool chain (editor → ra → external servers), bidirectional MCP is essential.
 
 ## Where claw-code is interesting
 
