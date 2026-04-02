@@ -36,7 +36,7 @@ ra gives us every building block:
 | Periodic trigger | [Cron jobs](/modes/cron) |
 | Background sub-agent | Cron creates isolated sessions |
 | Memory read/write | [Memory tools](/tools/#memory) (`memory_save`, `memory_search`, `memory_forget`) |
-| Session transcript access | [Sessions](/core/sessions) stored as JSONL — readable with `Read` and `Grep` tools |
+| Session transcript access | [Sessions](/core/sessions) stored as directories with JSONL message logs — readable with `Read` and `Grep` tools |
 | Sandboxed execution | [Permissions](/permissions/) — restrict to memory files only |
 | Concurrency protection | Lock file via [middleware](/middleware/) |
 
@@ -179,6 +179,13 @@ agent:
         command:
           deny: [".*"]  # no shell access during dreams
 
+  middleware:
+    beforeLoopBegin:
+      - "./middleware/dream-threshold.ts"
+      - "./middleware/dream-lock.ts"
+    afterLoopComplete:
+      - "./middleware/dream-unlock.ts"
+
 cron:
   - name: dream
     schedule: "0 3 * * *"  # 3 AM daily
@@ -187,27 +194,22 @@ cron:
       model: claude-sonnet-4-6
       thinking: medium
       maxIterations: 30
-      middleware:
-        beforeLoopBegin:
-          - "./middleware/dream-lock.ts"
-        afterLoopComplete:
-          - "./middleware/dream-unlock.ts"
 ```
 
 Key decisions:
 
 - **Schedule**: `0 3 * * *` runs at 3 AM daily. Adjust to match your idle hours.
 - **Sandboxing**: Shell access is denied. File writes are restricted to `.ra/`. The dream agent can only touch memory files and session data.
-- **Lock middleware**: `beforeLoopBegin` acquires the lock; `afterLoopComplete` releases it. If another instance holds the lock, the agent stops immediately.
+- **Middleware at app level**: Cron jobs inherit the top-level agent middleware. The `beforeLoopBegin` chain runs the threshold check first, then acquires the lock. `afterLoopComplete` releases it.
 - **Thinking**: `medium` gives the agent enough reasoning depth to resolve contradictions without burning excessive tokens.
 
 ## Step 4: Smarter triggers with middleware
 
-Claude Code's AutoDream doesn't just run on a fixed schedule — it triggers after enough sessions have accumulated. We can replicate this with a middleware that checks session count before proceeding.
+The config above already includes the threshold middleware in `beforeLoopBegin`. Claude Code's AutoDream doesn't just run on a fixed schedule — it triggers after enough sessions have accumulated. The `dream-threshold.ts` middleware checks for this before the lock is acquired.
 
 ```typescript
 // middleware/dream-threshold.ts
-import { readdirSync, statSync } from 'node:fs'
+import { readdirSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const SESSIONS_DIR = join(process.cwd(), '.ra', 'sessions')
@@ -216,10 +218,13 @@ const MIN_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 export default async (ctx: { stop: () => void }) => {
   try {
-    const files = readdirSync(SESSIONS_DIR).filter(f => f.endsWith('.jsonl'))
+    // Sessions are directories, each containing meta.json + messages.jsonl
+    const dirs = readdirSync(SESSIONS_DIR).filter(d =>
+      existsSync(join(SESSIONS_DIR, d, 'meta.json'))
+    )
     const now = Date.now()
-    const recentSessions = files.filter(f => {
-      const stat = statSync(join(SESSIONS_DIR, f))
+    const recentSessions = dirs.filter(d => {
+      const stat = statSync(join(SESSIONS_DIR, d, 'meta.json'))
       return now - stat.mtimeMs < MIN_AGE_MS
     })
 
@@ -232,16 +237,7 @@ export default async (ctx: { stop: () => void }) => {
 }
 ```
 
-Add it to the `beforeLoopBegin` chain, before the lock:
-
-```yaml
-middleware:
-  beforeLoopBegin:
-    - "./middleware/dream-threshold.ts"
-    - "./middleware/dream-lock.ts"
-```
-
-Now the dream agent only runs when there's enough new material to consolidate.
+It's already wired into the `beforeLoopBegin` chain in the config above, ordered before the lock. When the cron job fires, the threshold check runs first — if fewer than 5 sessions exist within the last 24 hours, the agent stops before acquiring the lock or making any LLM calls.
 
 ## Step 5: Manual override
 
