@@ -3,6 +3,7 @@ import { errorMessage, NoopLogger } from '@chinmaymk/ra'
 import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '@chinmaymk/ra'
+import { wrapShellMiddleware } from './shell'
 
 const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
   'beforeLoopBegin', 'beforeModelCall', 'onStreamChunk',
@@ -10,7 +11,21 @@ const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
   'afterLoopIteration', 'afterLoopComplete', 'onError',
 ])
 
-async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
+const SHELL_EXTENSIONS = new Set(['.sh', '.bash', '.zsh'])
+
+function isShellEntry(entry: string): boolean {
+  if (!looksLikePath(entry)) return false
+  const ext = entry.slice(entry.lastIndexOf('.'))
+  return SHELL_EXTENSIONS.has(ext)
+}
+
+async function loadOne<T>(entry: string, cwd: string, hook: string): Promise<Middleware<T>> {
+  // Shell scripts → wrap in a middleware that executes the script
+  if (isShellEntry(entry)) {
+    const resolved = resolvePath(entry, cwd)
+    return wrapShellMiddleware(resolved, hook) as Middleware<T>
+  }
+  // TS/JS files → import default export
   if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)
     const mod = await import(resolved)
@@ -19,6 +34,7 @@ async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
     }
     return mod.default as Middleware<T>
   }
+  // Inline expression → eval
   let fn: unknown
   try {
     const transpiler = new Bun.Transpiler({ loader: 'ts', deadCodeElimination: false })
@@ -46,7 +62,7 @@ export async function loadMiddleware(
       log.warn('unknown middleware hook, skipping', { hook })
       continue
     }
-    const fns = await Promise.all(entries.map(e => loadOne(e, cwd)))
+    const fns = await Promise.all(entries.map(e => loadOne(e, cwd, hook)))
     ;(result as Record<string, unknown[]>)[hook] = fns
     log.debug('middleware hook loaded', { hook, count: fns.length })
   }

@@ -177,3 +177,35 @@ test('throws with descriptive message on eval non-function', async () => {
   })
   await expect(loadMiddleware(config, cwd)).rejects.toThrow(/function/)
 })
+
+test('loads shell script as middleware', async () => {
+  const config = withMiddleware({
+    beforeLoopBegin: ['./echo-hook.sh'],
+  })
+  const mw = await loadMiddleware(config, cwd)
+  expect(mw.beforeLoopBegin).toHaveLength(1)
+  expect(typeof mw.beforeLoopBegin![0]).toBe('function')
+})
+
+test('shell script middleware is callable and receives env vars', async () => {
+  const config = withMiddleware({
+    beforeLoopBegin: ['./echo-hook.sh'],
+  })
+  const mw = await loadMiddleware(config, cwd)
+  const { NoopLogger } = await import('@chinmaymk/ra')
+  const ctx: any = {
+    messages: [], iteration: 3, maxIterations: 10, sessionId: 'test-shell',
+    usage: { inputTokens: 0, outputTokens: 0 }, lastUsage: undefined, resumed: false,
+    stop: () => {}, signal: new AbortController().signal, logger: new NoopLogger(),
+  }
+  // Should not throw
+  await mw.beforeLoopBegin![0]!(ctx)
+})
+
+test('mixes shell and ts middleware in same hook', async () => {
+  const config = withMiddleware({
+    beforeLoopBegin: ['./echo-hook.sh', './sample-middleware.js'],
+  })
+  const mw = await loadMiddleware(config, cwd)
+  expect(mw.beforeLoopBegin).toHaveLength(2)
+})
