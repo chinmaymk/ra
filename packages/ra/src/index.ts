@@ -60,7 +60,7 @@ export { AgentLoop, truncateToolOutput, resolveThinking, type AgentLoopOptions, 
 export { ToolRegistry, normalizeToolName } from './agent/tool-registry'
 export { runMiddlewareChain, mergeMiddleware } from './agent/middleware'
 export { createCompactionMiddleware, forceCompact, isContextLengthError, parseContextWindowFromError, splitMessageZones, extractCompactionMetadata, formatCompactionSummary, type CompactionConfig, type CompactionStrategy, type CompactionMetadata, type MessageZones } from './agent/context-compaction'
-export { createPreToolHookMiddleware, createPostToolHookMiddleware, createShellHooksMiddleware, type ShellHooksConfig, type HookRunResult } from './agent/shell-hooks'
+export { createShellHooksMiddleware, type ShellHooksConfig, type ShellHookEntry, type HookRunResult } from './agent/shell-hooks'
 export { PermissionPolicy, createPermissionPolicyMiddleware, type PermissionTier, type PermissionPolicyConfig } from './agent/permission-policy'
 export { withTimeout, TimeoutError } from './agent/timeout'
 export { estimateTokens } from './agent/token-estimator'

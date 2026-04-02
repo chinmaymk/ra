@@ -110,6 +110,9 @@ export interface AgentConfig {
   maxTokenBudget: number
   /** Max wall-clock duration in milliseconds before the loop stops. 0 = unlimited. */
   maxDuration: number
+  /** Session-wide permission tier. Acts as a coarse pre-filter before field-level permission rules.
+   *  'read_only' = read/search only, 'workspace_write' = read + write files, 'full_access' = anything. */
+  permissionTier?: 'read_only' | 'workspace_write' | 'full_access'
   tools: ToolsConfig
   skillDirs: string[]
   permissions: PermissionsConfig

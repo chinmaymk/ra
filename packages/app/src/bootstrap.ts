@@ -295,6 +295,13 @@ export async function bootstrap(
   }
 
   // ── Permissions middleware ─────────────────────────────────────────
+  // Tier runs first (coarse session-wide gate), then field-level rules (fine-grained)
+  if (agent.permissionTier) {
+    const { PermissionPolicy, createPermissionPolicyMiddleware } = await import('@chinmaymk/ra')
+    const tierMw = createPermissionPolicyMiddleware(new PermissionPolicy({ activeTier: agent.permissionTier, tools }))
+    middleware.beforeToolExecution = prepend(middleware.beforeToolExecution, tierMw)
+    logger.info('permission tier loaded', { tier: agent.permissionTier })
+  }
   if (agent.permissions.rules?.length && !agent.permissions.no_rules_rules) {
     const permMw = createPermissionsMiddleware(agent.permissions)
     middleware.beforeToolExecution = prepend(middleware.beforeToolExecution, permMw)

@@ -1,38 +1,50 @@
 import { execFile } from 'node:child_process'
 import { platform } from 'node:os'
-import type { Middleware, ToolExecutionContext, ToolResultContext } from './types'
+import type { Middleware, MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext } from './types'
+import { serializeContent } from '../providers/utils'
 
 /**
- * Shell-based pre/post tool execution hooks.
+ * Generic shell hook system for any middleware event.
  *
- * Inspired by claw-code's hook runner pattern. Hooks are shell commands that run
- * before and/or after tool execution with well-defined exit code semantics:
+ * Runs external shell commands at any point in the agent loop lifecycle.
+ * Commands receive context via environment variables and control flow
+ * via exit codes:
  *
- *   Exit 0 — allow (stdout is appended as feedback)
- *   Exit 2 — deny the tool call (stdout becomes the denial reason)
- *   Other  — warn (logged but execution continues)
+ *   Exit 0 — success (stdout is logged as feedback)
+ *   Exit 2 — deny/stop (for beforeToolExecution: denies the tool call;
+ *            for other hooks: stops the loop)
+ *   Other  — warn (logged, execution continues)
  *
- * Hook commands receive context via environment variables:
- *   HOOK_EVENT        — 'pre_tool_use' or 'post_tool_use'
- *   HOOK_TOOL_NAME    — name of the tool being executed
- *   HOOK_TOOL_INPUT   — JSON string of tool input
- *   HOOK_TOOL_OUTPUT  — tool output (post hooks only)
- *   HOOK_TOOL_IS_ERROR — 'true' or 'false' (post hooks only)
+ * Environment variables set for all hooks:
+ *   HOOK_EVENT     — the hook name (e.g. 'beforeToolExecution')
+ *   HOOK_SESSION   — session ID
+ *   HOOK_ITERATION — current loop iteration
+ *
+ * Additional variables per hook type:
+ *   beforeToolExecution / afterToolExecution:
+ *     HOOK_TOOL_NAME, HOOK_TOOL_INPUT, HOOK_TOOL_OUTPUT, HOOK_TOOL_IS_ERROR
+ *   onError:
+ *     HOOK_ERROR, HOOK_ERROR_PHASE
  */
 
-export interface ShellHooksConfig {
-  /** Shell commands to run before tool execution. */
-  preToolUse?: string[]
-  /** Shell commands to run after tool execution. */
-  postToolUse?: string[]
-  /** Timeout in ms for each hook command. Default: 10000. */
+type HookName = keyof MiddlewareConfig
+
+export interface ShellHookEntry {
+  /** Shell command to execute. */
+  command: string
+  /** Timeout in ms. Default: 10000. */
   timeout?: number
 }
+
+/** Map of hook event names to shell commands. */
+export type ShellHooksConfig = Partial<Record<HookName, (string | ShellHookEntry)[]>>
 
 export interface HookRunResult {
   denied: boolean
   messages: string[]
 }
+
+const DEFAULT_TIMEOUT = 10_000
 
 function runShellCommand(command: string, env: Record<string, string>, timeoutMs: number): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   return new Promise(resolve => {
@@ -41,7 +53,6 @@ function runShellCommand(command: string, env: Record<string, string>, timeoutMs
     const shellArgs = isWindows ? ['/C', command] : ['-c', command]
 
     const child = execFile(shell, shellArgs, {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       env: { ...(globalThis as { process?: { env?: Record<string, string> } }).process?.env, ...env },
       timeout: timeoutMs,
       maxBuffer: 1024 * 1024,
@@ -54,21 +65,22 @@ function runShellCommand(command: string, env: Record<string, string>, timeoutMs
   })
 }
 
-async function runHooks(commands: string[], env: Record<string, string>, timeoutMs: number): Promise<HookRunResult> {
+async function runHooks(entries: (string | ShellHookEntry)[], env: Record<string, string>): Promise<HookRunResult> {
   const messages: string[] = []
   let denied = false
 
-  for (const command of commands) {
-    const { exitCode, stdout, stderr } = await runShellCommand(command, env, timeoutMs)
+  for (const entry of entries) {
+    const command = typeof entry === 'string' ? entry : entry.command
+    const timeout = (typeof entry === 'object' ? entry.timeout : undefined) ?? DEFAULT_TIMEOUT
+    const { exitCode, stdout, stderr } = await runShellCommand(command, env, timeout)
 
     if (exitCode === 0) {
       if (stdout) messages.push(stdout)
     } else if (exitCode === 2) {
       denied = true
-      messages.push(stdout || `Hook denied tool execution`)
-      break // Stop running further hooks once denied
+      messages.push(stdout || 'Hook denied execution')
+      break
     } else {
-      // Non-zero, non-deny: warn
       const warning = stderr || stdout || `Hook exited with code ${exitCode}`
       messages.push(`[hook warning] ${warning}`)
     }
@@ -77,94 +89,125 @@ async function runHooks(commands: string[], env: Record<string, string>, timeout
   return { denied, messages }
 }
 
-/** Merge hook feedback messages into tool output. */
-function mergeHookFeedback(hookMessages: string[], output: string, denied: boolean): string {
-  if (hookMessages.length === 0) return output
-  const sections: string[] = []
-  if (output.trim()) sections.push(output)
-  const label = denied ? 'Hook feedback (denied)' : 'Hook feedback'
-  sections.push(`${label}:\n${hookMessages.join('\n')}`)
-  return sections.join('\n\n')
-}
-
-/**
- * Create beforeToolExecution middleware that runs pre-tool-use shell hooks.
- * If any hook exits with code 2, the tool call is denied.
- */
-export function createPreToolHookMiddleware(config: ShellHooksConfig): Middleware<ToolExecutionContext> {
-  const commands = config.preToolUse ?? []
-  const timeout = config.timeout ?? 10_000
-
-  return async (ctx: ToolExecutionContext) => {
-    if (commands.length === 0) return
-
-    const env: Record<string, string> = {
-      HOOK_EVENT: 'pre_tool_use',
-      HOOK_TOOL_NAME: ctx.toolCall.name,
-      HOOK_TOOL_INPUT: ctx.toolCall.arguments,
-    }
-
-    const result = await runHooks(commands, env, timeout)
-
-    if (result.denied) {
-      const reason = result.messages.join('\n') || `Pre-tool hook denied tool '${ctx.toolCall.name}'`
-      ctx.deny(reason)
-      ctx.logger.info('pre-tool hook denied', { tool: ctx.toolCall.name, reason })
-    } else if (result.messages.length > 0) {
-      ctx.logger.debug('pre-tool hook feedback', { tool: ctx.toolCall.name, messages: result.messages })
-    }
+/** Build base env vars common to all hooks. */
+function baseEnv(hookName: string, loop: LoopContext): Record<string, string> {
+  return {
+    HOOK_EVENT: hookName,
+    HOOK_SESSION: loop.sessionId,
+    HOOK_ITERATION: String(loop.iteration),
   }
 }
 
 /**
- * Create afterToolExecution middleware that runs post-tool-use shell hooks.
- * Post hooks can append feedback to the tool result. If a hook exits with code 2,
- * the tool result is marked as an error.
+ * Build a complete MiddlewareConfig from a shell hooks config.
+ * Each hook event maps to shell commands that run at that lifecycle point.
+ *
+ * Example config:
+ * ```
+ * {
+ *   beforeToolExecution: ['./hooks/check-tool.sh'],
+ *   afterLoopComplete: ['./hooks/notify.sh'],
+ *   onError: [{ command: './hooks/alert.sh', timeout: 5000 }],
+ * }
+ * ```
  */
-export function createPostToolHookMiddleware(config: ShellHooksConfig): Middleware<ToolResultContext> {
-  const commands = config.postToolUse ?? []
-  const timeout = config.timeout ?? 10_000
+export function createShellHooksMiddleware(config: ShellHooksConfig): Partial<MiddlewareConfig> {
+  const result: Partial<MiddlewareConfig> = {}
 
-  return async (ctx: ToolResultContext) => {
-    if (commands.length === 0) return
+  if (config.beforeLoopBegin?.length) {
+    result.beforeLoopBegin = [createLoopHook('beforeLoopBegin', config.beforeLoopBegin)]
+  }
+  if (config.beforeModelCall?.length) {
+    result.beforeModelCall = [createModelCallHook('beforeModelCall', config.beforeModelCall)]
+  }
+  if (config.onStreamChunk?.length) {
+    result.onStreamChunk = [createStreamChunkHook(config.onStreamChunk)]
+  }
+  if (config.beforeToolExecution?.length) {
+    result.beforeToolExecution = [createToolExecHook(config.beforeToolExecution)]
+  }
+  if (config.afterToolExecution?.length) {
+    result.afterToolExecution = [createToolResultHook(config.afterToolExecution)]
+  }
+  if (config.afterModelResponse?.length) {
+    result.afterModelResponse = [createModelCallHook('afterModelResponse', config.afterModelResponse)]
+  }
+  if (config.afterLoopIteration?.length) {
+    result.afterLoopIteration = [createLoopHook('afterLoopIteration', config.afterLoopIteration)]
+  }
+  if (config.afterLoopComplete?.length) {
+    result.afterLoopComplete = [createLoopHook('afterLoopComplete', config.afterLoopComplete)]
+  }
+  if (config.onError?.length) {
+    result.onError = [createErrorHook(config.onError)]
+  }
 
-    const output = typeof ctx.result.content === 'string'
-      ? ctx.result.content
-      : JSON.stringify(ctx.result.content)
+  return result
+}
 
-    const env: Record<string, string> = {
-      HOOK_EVENT: 'post_tool_use',
+function createLoopHook(name: string, entries: (string | ShellHookEntry)[]): Middleware<LoopContext> {
+  return async (ctx) => {
+    const { denied, messages } = await runHooks(entries, baseEnv(name, ctx))
+    if (messages.length) ctx.logger.debug('shell hook feedback', { hook: name, messages })
+    if (denied) { ctx.stop(messages.join('\n') || `Shell hook stopped loop at ${name}`); ctx.logger.info('shell hook stopped loop', { hook: name }) }
+  }
+}
+
+function createModelCallHook(name: string, entries: (string | ShellHookEntry)[]): Middleware<ModelCallContext> {
+  return async (ctx) => {
+    const env = { ...baseEnv(name, ctx.loop), HOOK_MODEL: ctx.request.model, HOOK_MESSAGE_COUNT: String(ctx.request.messages.length) }
+    const { denied, messages } = await runHooks(entries, env)
+    if (messages.length) ctx.logger.debug('shell hook feedback', { hook: name, messages })
+    if (denied) { ctx.stop(messages.join('\n') || `Shell hook stopped loop at ${name}`); ctx.logger.info('shell hook stopped loop', { hook: name }) }
+  }
+}
+
+function createStreamChunkHook(entries: (string | ShellHookEntry)[]): Middleware<StreamChunkContext> {
+  return async (ctx) => {
+    const env = { ...baseEnv('onStreamChunk', ctx.loop), HOOK_CHUNK_TYPE: ctx.chunk.type }
+    const { messages } = await runHooks(entries, env)
+    if (messages.length) ctx.logger.debug('shell hook feedback', { hook: 'onStreamChunk', messages })
+  }
+}
+
+function createToolExecHook(entries: (string | ShellHookEntry)[]): Middleware<ToolExecutionContext> {
+  return async (ctx) => {
+    const env = { ...baseEnv('beforeToolExecution', ctx.loop), HOOK_TOOL_NAME: ctx.toolCall.name, HOOK_TOOL_INPUT: ctx.toolCall.arguments }
+    const { denied, messages } = await runHooks(entries, env)
+    if (messages.length) ctx.logger.debug('shell hook feedback', { hook: 'beforeToolExecution', messages })
+    if (denied) {
+      ctx.deny(messages.join('\n') || `Shell hook denied tool '${ctx.toolCall.name}'`)
+      ctx.logger.info('shell hook denied tool', { tool: ctx.toolCall.name })
+    }
+  }
+}
+
+function createToolResultHook(entries: (string | ShellHookEntry)[]): Middleware<ToolResultContext> {
+  return async (ctx) => {
+    const output = typeof ctx.result.content === 'string' ? ctx.result.content : serializeContent(ctx.result.content)
+    const env = {
+      ...baseEnv('afterToolExecution', ctx.loop),
       HOOK_TOOL_NAME: ctx.toolCall.name,
       HOOK_TOOL_INPUT: ctx.toolCall.arguments,
       HOOK_TOOL_OUTPUT: output,
       HOOK_TOOL_IS_ERROR: String(ctx.result.isError ?? false),
     }
-
-    const result = await runHooks(commands, env, timeout)
-
-    if (result.messages.length > 0) {
-      const currentContent = typeof ctx.result.content === 'string'
-        ? ctx.result.content : JSON.stringify(ctx.result.content)
-      ctx.result.content = mergeHookFeedback(result.messages, currentContent, result.denied)
+    const { denied, messages } = await runHooks(entries, env)
+    if (messages.length) {
+      const current = typeof ctx.result.content === 'string' ? ctx.result.content : serializeContent(ctx.result.content)
+      const sections: string[] = []
+      if (current.trim()) sections.push(current)
+      sections.push(`${denied ? 'Hook feedback (denied)' : 'Hook feedback'}:\n${messages.join('\n')}`)
+      ctx.result.content = sections.join('\n\n')
     }
-    if (result.denied) {
-      ctx.result.isError = true
-      ctx.logger.info('post-tool hook denied', { tool: ctx.toolCall.name })
-    }
+    if (denied) { ctx.result.isError = true; ctx.logger.info('shell hook denied tool result', { tool: ctx.toolCall.name }) }
   }
 }
 
-/**
- * Create both pre and post tool hook middleware from a single config.
- * Returns an object with `beforeToolExecution` and `afterToolExecution` arrays
- * ready to spread into a MiddlewareConfig.
- */
-export function createShellHooksMiddleware(config: ShellHooksConfig): {
-  beforeToolExecution: Middleware<ToolExecutionContext>[]
-  afterToolExecution: Middleware<ToolResultContext>[]
-} {
-  return {
-    beforeToolExecution: config.preToolUse?.length ? [createPreToolHookMiddleware(config)] : [],
-    afterToolExecution: config.postToolUse?.length ? [createPostToolHookMiddleware(config)] : [],
+function createErrorHook(entries: (string | ShellHookEntry)[]): Middleware<ErrorContext> {
+  return async (ctx) => {
+    const env = { ...baseEnv('onError', ctx.loop), HOOK_ERROR: ctx.error.message, HOOK_ERROR_PHASE: ctx.phase }
+    const { messages } = await runHooks(entries, env)
+    if (messages.length) ctx.logger.debug('shell hook feedback', { hook: 'onError', messages })
   }
 }
