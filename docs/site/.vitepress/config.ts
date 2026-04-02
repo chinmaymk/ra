@@ -142,6 +142,7 @@ export default defineConfig({
             { text: 'Google Gemini', link: '/providers/google' },
             { text: 'AWS Bedrock', link: '/providers/bedrock' },
             { text: 'Ollama', link: '/providers/ollama' },
+            { text: 'Codex (ChatGPT)', link: '/providers/codex' },
             { text: 'OpenRouter', link: '/providers/openrouter' },
             { text: 'LiteLLM', link: '/providers/litellm' },
           ],
