@@ -23,8 +23,7 @@
  * **execute exit code**: non-zero becomes an error result
  */
 import { execFile } from 'node:child_process'
-import { parseShellEntry, resolveCommand, runShellProcess } from '../shell'
-import { resolvePath } from '../utils/paths'
+import { resolveShellEntry, runShellProcess } from '../shell'
 import { buildInputSchema, type ParameterDef } from './loader'
 import type { ITool, Logger } from '@chinmaymk/ra'
 
@@ -96,20 +95,7 @@ export async function createShellTool(
   cwd: string,
   logger: Logger,
 ): Promise<ITool> {
-  let command: string
-  let args: string[]
-
-  if (entry.startsWith('shell:')) {
-    const parsed = parseShellEntry(entry)
-    command = parsed.command
-    args = parsed.args
-  } else {
-    // Direct path — resolve it
-    command = resolvePath(entry, cwd)
-    args = []
-  }
-
-  const resolvedCommand = resolveCommand(command, cwd)
+  const { command: resolvedCommand, args } = resolveShellEntry(entry, cwd)
   const describeOutput = await describeScript(resolvedCommand, args, cwd)
   const descriptor = parseDescriptor(describeOutput, entry)
 

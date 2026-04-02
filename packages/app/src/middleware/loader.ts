@@ -3,10 +3,8 @@ import { errorMessage, NoopLogger } from '@chinmaymk/ra'
 import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '@chinmaymk/ra'
-import { hasShellPrefix, isShellPath, isShellEntry } from '../shell'
+import { isShellEntry } from '../shell'
 import { createShellMiddleware } from './shell'
-
-export { hasShellPrefix, isShellPath, isShellEntry }
 
 const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
   'beforeLoopBegin', 'beforeModelCall', 'onStreamChunk',
@@ -15,12 +13,8 @@ const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
 ])
 
 async function loadOne<T>(entry: string, hook: string, cwd: string, logger: Logger, timeoutMs: number): Promise<Middleware<T>> {
-  if (hasShellPrefix(entry)) {
+  if (isShellEntry(entry)) {
     return createShellMiddleware<T & import('@chinmaymk/ra').StoppableContext>(entry, hook, cwd, logger, timeoutMs) as Middleware<T>
-  }
-  if (isShellPath(entry)) {
-    // Auto-detected script file — wrap as "shell: <path>" for the shell executor
-    return createShellMiddleware<T & import('@chinmaymk/ra').StoppableContext>(`shell: ${entry}`, hook, cwd, logger, timeoutMs) as Middleware<T>
   }
   if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)

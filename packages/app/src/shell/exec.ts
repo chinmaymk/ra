@@ -23,6 +23,19 @@ export function resolveCommand(command: string, cwd: string): string {
     : command
 }
 
+/**
+ * Resolve a shell entry (either `shell: <cmd> [args...]` or a direct script path)
+ * into a resolved command and args ready for execution.
+ */
+export function resolveShellEntry(entry: string, cwd: string): { command: string; args: string[] } {
+  if (entry.startsWith('shell:')) {
+    const { command, args } = parseShellEntry(entry)
+    return { command: resolveCommand(command, cwd), args }
+  }
+  // Direct path — resolve against cwd, no args
+  return { command: resolvePath(entry, cwd), args: [] }
+}
+
 /** Grace period (ms) between SIGTERM and SIGKILL when aborting a shell process. */
 const SIGKILL_GRACE_MS = 3_000
 

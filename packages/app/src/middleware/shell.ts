@@ -1,9 +1,6 @@
-import { parseShellEntry, resolveCommand, runShellProcess } from '../shell'
+import { resolveShellEntry, runShellProcess } from '../shell'
 import type { Logger } from '@chinmaymk/ra'
 import type { Middleware, StoppableContext, LoopContext, ModelCallContext, ToolExecutionContext } from '@chinmaymk/ra'
-
-// Re-export for backwards compatibility (tests and other consumers import from here)
-export { parseShellEntry }
 
 /** Serialize the context into a JSON-safe payload for stdin. */
 function serializeContext(hook: string, ctx: StoppableContext): Record<string, unknown> {
@@ -102,8 +99,7 @@ export function createShellMiddleware<T extends StoppableContext>(
   logger: Logger,
   timeoutMs: number = 0,
 ): Middleware<T> {
-  const { command, args } = parseShellEntry(entry)
-  const resolvedCommand = resolveCommand(command, cwd)
+  const { command: resolvedCommand, args } = resolveShellEntry(entry, cwd)
 
   return async (ctx: T) => {
     // Combine the loop's abort signal with a per-execution timeout signal so the
