@@ -2,7 +2,7 @@
 
 <span class="blog-date">April 2, 2026</span>
 
-When Anthropic's Claude Code source was leaked on March 31, 2026, it didn't take long for the reverse-engineering projects to appear. [claw-code](https://github.com/instructkr/claw-code) is the most ambitious of them — a cleanroom rewrite by Sigrid Jin that reconstructs Claude Code's architecture from scratch, with a Python workspace cataloging the full tool and command surface, and a Rust port implementing the actual runtime. The project hit 50K GitHub stars in two hours.
+When Anthropic's Claude Code source was leaked on March 31, 2026, it didn't take long for the reverse-engineering projects to appear. [claw-code](https://github.com/instructkr/claw-code) is the most ambitious of them — a cleanroom rewrite that reconstructs Claude Code's architecture from scratch, with a Python workspace cataloging the full tool and command surface, and a Rust port implementing the actual runtime.
 
 The leak made Claude Code's internals public knowledge. That means we can now have an honest, specific comparison between its architecture and ra's — not in the abstract, but subsystem by subsystem. This isn't a takedown. claw-code is serious systems work and the Rust runtime is genuinely well-built. But the two projects start from fundamentally different places, and those starting points lead to very different architectures. Understanding where each one excels reveals something useful about what makes an agent harness work well — especially for autonomous operation.
 
