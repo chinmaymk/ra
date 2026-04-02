@@ -3,13 +3,15 @@
  *
  * Two flows:
  *   1. PKCE (primary) — opens browser, local callback server on :1455
- *   2. Device Code (headless fallback) — user enters code on another device
+ *   2. Device Code (headless fallback) — two-phase: poll for auth code,
+ *      then exchange at /oauth/token
  *
  * Tokens persisted to ~/.ra/codex-tokens.json.
  *
  * References:
  *   - https://github.com/anomalyco/opencode/issues/3281
  *   - https://github.com/tumf/opencode-openai-device-auth
+ *   - https://github.com/EvanZhouDev/openai-oauth
  */
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
@@ -25,10 +27,11 @@ const AUTHORIZE_URL = `${AUTH_BASE}/oauth/authorize`
 const TOKEN_URL = `${AUTH_BASE}/oauth/token`
 const DEVICE_CODE_URL = `${AUTH_BASE}/api/accounts/deviceauth/usercode`
 const DEVICE_TOKEN_URL = `${AUTH_BASE}/api/accounts/deviceauth/token`
+const DEVICE_REDIRECT_URI = `${AUTH_BASE}/deviceauth/callback`
 const VERIFICATION_URL = `${AUTH_BASE}/codex/device`
 const REDIRECT_PORT = 1455
 const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/auth/callback`
-const SCOPES = 'openid profile email offline_access model.request api.model.read'
+const SCOPES = 'openid profile email offline_access'
 
 const TOKENS_DIR = join(homedir(), '.ra')
 const TOKENS_PATH = join(TOKENS_DIR, 'codex-tokens.json')
@@ -44,11 +47,19 @@ interface TokenResponse {
   error_description?: string
 }
 
-interface DeviceCodeResponse {
+/** Response from POST /api/accounts/deviceauth/usercode */
+interface DeviceUserCodeResponse {
+  device_auth_id: string
   user_code: string
-  device_code: string
   expires_in: number
   interval: number
+}
+
+/** Response from POST /api/accounts/deviceauth/token (phase 1 poll) */
+interface DeviceAuthCodeResponse {
+  authorization_code: string
+  code_verifier: string
+  code_challenge: string
 }
 
 interface StoredTokens {
@@ -107,6 +118,33 @@ async function refreshAccessToken(stored: StoredTokens): Promise<StoredTokens | 
   return tokens
 }
 
+/** Exchange an authorization code for tokens at /oauth/token. */
+async function exchangeCode(code: string, codeVerifier: string, redirectUri: string): Promise<StoredTokens> {
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      client_id: CLIENT_ID,
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: codeVerifier,
+    }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Token exchange failed: ${res.status} ${text}`)
+  }
+
+  const data = (await res.json()) as TokenResponse
+  if (data.error) throw new Error(`OAuth error: ${data.error} — ${data.error_description ?? ''}`)
+
+  const tokens = toStoredTokens(data)
+  await saveTokens(tokens)
+  return tokens
+}
+
 // ── Public API ──────────────────────────────────────────────────────
 
 /** Get a valid access token, refreshing if needed. */
@@ -144,29 +182,7 @@ export async function loginCodexPkce(): Promise<StoredTokens> {
   const authorizeUrl = `${AUTHORIZE_URL}?${params}`
 
   const code = await waitForCallback(state, authorizeUrl)
-
-  const tokenRes = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      grant_type: 'authorization_code',
-      client_id: CLIENT_ID,
-      code,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: verifier,
-    }),
-  })
-
-  if (!tokenRes.ok) {
-    const text = await tokenRes.text()
-    throw new Error(`Token exchange failed: ${tokenRes.status} ${text}`)
-  }
-
-  const data = (await tokenRes.json()) as TokenResponse
-  if (data.error) throw new Error(`OAuth error: ${data.error} — ${data.error_description ?? ''}`)
-
-  const tokens = toStoredTokens(data)
-  await saveTokens(tokens)
+  const tokens = await exchangeCode(code, verifier, REDIRECT_URI)
   console.log('  Login successful! Token saved to', TOKENS_PATH)
   return tokens
 }
@@ -231,8 +247,16 @@ function waitForCallback(expectedState: string, authorizeUrl: string): Promise<s
   })
 }
 
-/** Login via device code flow — for headless/SSH environments. */
+/**
+ * Login via device code flow — for headless/SSH environments.
+ *
+ * Two-phase flow:
+ *   Phase 1: Poll /deviceauth/token with device_auth_id until user authorizes.
+ *            Returns an authorization_code + code_verifier.
+ *   Phase 2: Exchange the code at /oauth/token (same as PKCE exchange).
+ */
 export async function loginCodexDeviceCode(): Promise<StoredTokens> {
+  // Phase 1a: Request device auth ID and user code
   const codeRes = await fetch(DEVICE_CODE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -243,46 +267,46 @@ export async function loginCodexDeviceCode(): Promise<StoredTokens> {
     throw new Error(`Failed to request device code: ${codeRes.status} ${text}`)
   }
 
-  const deviceCode = (await codeRes.json()) as DeviceCodeResponse
+  const device = (await codeRes.json()) as DeviceUserCodeResponse
 
   console.log()
   console.log('  Open this URL in your browser:')
   console.log()
   console.log(`    ${VERIFICATION_URL}`)
   console.log()
-  console.log(`  Enter code: ${deviceCode.user_code}`)
+  console.log(`  Enter code: ${device.user_code}`)
   console.log()
   console.log('  Waiting for authorization...')
 
-  const interval = Math.max(deviceCode.interval, 5) * 1000
-  const deadline = Date.now() + deviceCode.expires_in * 1000
+  // Phase 1b: Poll for authorization code
+  const interval = Math.max(device.interval, 5) * 1000
+  const deadline = Date.now() + device.expires_in * 1000
 
   while (Date.now() < deadline) {
     await new Promise(resolve => setTimeout(resolve, interval))
 
-    const tokenRes = await fetch(DEVICE_TOKEN_URL, {
+    const pollRes = await fetch(DEVICE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: CLIENT_ID,
-        device_code: deviceCode.device_code,
-        grant_type: 'authorization_code',
+        device_auth_id: device.device_auth_id,
+        user_code: device.user_code,
       }),
     })
 
-    if (tokenRes.status === 428 || tokenRes.status === 400) continue
+    // 403/404 = authorization pending (user hasn't entered code yet)
+    if (pollRes.status === 403 || pollRes.status === 404) continue
 
-    const body = (await tokenRes.json()) as TokenResponse
-    if (body.error === 'authorization_pending') continue
-    if (body.error === 'slow_down') {
-      await new Promise(resolve => setTimeout(resolve, 5000))
-      continue
+    if (!pollRes.ok) {
+      const text = await pollRes.text()
+      throw new Error(`Device auth poll failed: ${pollRes.status} ${text}`)
     }
-    if (body.error) throw new Error(`OAuth error: ${body.error}`)
-    if (!body.access_token) continue
 
-    const tokens = toStoredTokens(body)
-    await saveTokens(tokens)
+    const authCode = (await pollRes.json()) as DeviceAuthCodeResponse
+    if (!authCode.authorization_code) continue
+
+    // Phase 2: Exchange authorization code for tokens
+    const tokens = await exchangeCode(authCode.authorization_code, authCode.code_verifier, DEVICE_REDIRECT_URI)
     console.log('  Login successful! Token saved to', TOKENS_PATH)
     return tokens
   }
