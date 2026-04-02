@@ -1,6 +1,6 @@
 # ra
 
-The predictable, observable agent harness.
+Your agent, your rules.
 
 ## Quick Reference
 
