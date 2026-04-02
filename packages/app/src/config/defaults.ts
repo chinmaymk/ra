@@ -13,7 +13,7 @@ export const defaultConfig: RaConfig = {
       ttlDays: 30,
     },
     providers: {
-      anthropic: { apiKey: '${ANTHROPIC_API_KEY:-}' },
+      anthropic: { apiKey: '${ANTHROPIC_API_KEY:-}', authToken: '${ANTHROPIC_AUTH_TOKEN:-}' },
       openai: { apiKey: '${OPENAI_API_KEY:-}' },
       'openai-completions': { apiKey: '${OPENAI_API_KEY:-}' },
       google: { apiKey: '${GOOGLE_API_KEY:-}' },

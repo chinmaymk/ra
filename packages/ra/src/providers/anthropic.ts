@@ -12,7 +12,9 @@ type RawAnthropicUsage = {
 }
 
 export interface AnthropicProviderOptions {
-  apiKey: string
+  apiKey?: string
+  /** OAuth/Bearer token for subscription-based access (Claude Pro/Max/Team). Alternative to apiKey. */
+  authToken?: string
   baseURL?: string
 }
 
@@ -21,7 +23,11 @@ export class AnthropicProvider implements IProvider {
   private client: Anthropic
 
   constructor(options: AnthropicProviderOptions) {
-    this.client = new Anthropic({ apiKey: options.apiKey, baseURL: options.baseURL })
+    this.client = new Anthropic({
+      ...(options.apiKey && { apiKey: options.apiKey }),
+      ...(options.authToken && { authToken: options.authToken }),
+      ...(options.baseURL && { baseURL: options.baseURL }),
+    })
   }
 
   buildParams(request: ChatRequest) {

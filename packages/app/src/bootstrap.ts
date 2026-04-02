@@ -39,8 +39,10 @@ function sanitizeConfigSnapshot(config: RaConfig): unknown {
   const copy = JSON.parse(JSON.stringify(config))
   if (copy.app?.providers) {
     for (const p of Object.values(copy.app.providers)) {
-      if (p && typeof p === 'object' && 'apiKey' in (p as Record<string, unknown>)) {
-        (p as Record<string, unknown>).apiKey = '***'
+      if (p && typeof p === 'object') {
+        const rec = p as Record<string, unknown>
+        if ('apiKey' in rec) rec.apiKey = '***'
+        if ('authToken' in rec) rec.authToken = '***'
       }
     }
   }
