@@ -1,8 +1,10 @@
 /**
  * Codex OAuth — device-code flow for ChatGPT subscription access.
  *
- * Authenticates via OpenAI's OAuth endpoints and persists tokens
+ * Authenticates via OpenAI's auth endpoints and persists tokens
  * to ~/.ra/codex-tokens.json for reuse across sessions.
+ *
+ * Flow reference: https://github.com/tumf/opencode-openai-device-auth
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -10,12 +12,12 @@ import { homedir } from 'node:os'
 
 // ── OAuth constants ─────────────────────────────────────────────────
 
-const AUTH0_CLIENT_ID = 'DRivsnm2Mu42T3KOpqdtwB3NYviHYzwD'
-const AUTH0_DOMAIN = 'https://auth0.openai.com'
-const DEVICE_CODE_URL = `${AUTH0_DOMAIN}/oauth/device/code`
-const TOKEN_URL = `${AUTH0_DOMAIN}/oauth/token`
-const AUDIENCE = 'https://api.openai.com/v1'
-const SCOPE = 'openid profile email offline_access'
+const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
+const AUTH_BASE = 'https://auth.openai.com'
+const DEVICE_CODE_URL = `${AUTH_BASE}/api/accounts/deviceauth/usercode`
+const DEVICE_TOKEN_URL = `${AUTH_BASE}/api/accounts/deviceauth/token`
+const REFRESH_TOKEN_URL = `${AUTH_BASE}/oauth/token`
+const VERIFICATION_URL = `${AUTH_BASE}/codex/device`
 
 const TOKENS_DIR = join(homedir(), '.ra')
 const TOKENS_PATH = join(TOKENS_DIR, 'codex-tokens.json')
@@ -23,10 +25,8 @@ const TOKENS_PATH = join(TOKENS_DIR, 'codex-tokens.json')
 // ── Types ───────────────────────────────────────────────────────────
 
 interface DeviceCodeResponse {
-  device_code: string
   user_code: string
-  verification_uri: string
-  verification_uri_complete: string
+  device_code: string
   expires_in: number
   interval: number
 }
@@ -35,7 +35,6 @@ interface TokenResponse {
   access_token: string
   refresh_token?: string
   id_token?: string
-  token_type: string
   expires_in: number
 }
 
@@ -64,12 +63,12 @@ async function saveTokens(tokens: StoredTokens): Promise<void> {
 // ── Token refresh ───────────────────────────────────────────────────
 
 async function refreshAccessToken(refreshToken: string): Promise<StoredTokens | null> {
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetch(REFRESH_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       grant_type: 'refresh_token',
-      client_id: AUTH0_CLIENT_ID,
+      client_id: CLIENT_ID,
       refresh_token: refreshToken,
     }),
   })
@@ -118,11 +117,7 @@ export async function loginCodex(): Promise<StoredTokens> {
   const codeRes = await fetch(DEVICE_CODE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: AUTH0_CLIENT_ID,
-      audience: AUDIENCE,
-      scope: SCOPE,
-    }),
+    body: JSON.stringify({ client_id: CLIENT_ID }),
   })
   if (!codeRes.ok) {
     const text = await codeRes.text()
@@ -135,9 +130,9 @@ export async function loginCodex(): Promise<StoredTokens> {
   console.log()
   console.log('  Open this URL in your browser:')
   console.log()
-  console.log(`    ${deviceCode.verification_uri_complete}`)
+  console.log(`    ${VERIFICATION_URL}`)
   console.log()
-  console.log(`  Or go to ${deviceCode.verification_uri} and enter code: ${deviceCode.user_code}`)
+  console.log(`  Enter code: ${deviceCode.user_code}`)
   console.log()
   console.log('  Waiting for authorization...')
 
@@ -148,32 +143,40 @@ export async function loginCodex(): Promise<StoredTokens> {
   while (Date.now() < deadline) {
     await new Promise(resolve => setTimeout(resolve, interval))
 
-    const tokenRes = await fetch(TOKEN_URL, {
+    const tokenRes = await fetch(DEVICE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-        client_id: AUTH0_CLIENT_ID,
+        client_id: CLIENT_ID,
         device_code: deviceCode.device_code,
+        grant_type: 'authorization_code',
       }),
     })
 
+    if (tokenRes.status === 428 || tokenRes.status === 400) {
+      // Authorization pending — user hasn't completed login yet
+      continue
+    }
+
     const body = (await tokenRes.json()) as TokenResponse & { error?: string }
 
-    if (body.error === 'authorization_pending') continue
-    if (body.error === 'slow_down') {
-      await new Promise(resolve => setTimeout(resolve, 5000))
+    if (body.error === 'authorization_pending' || body.error === 'slow_down') {
+      if (body.error === 'slow_down') {
+        await new Promise(resolve => setTimeout(resolve, 5000))
+      }
       continue
     }
     if (body.error) {
       throw new Error(`OAuth error: ${body.error}`)
     }
 
+    if (!body.access_token) continue
+
     // Success
     const tokens: StoredTokens = {
       accessToken: body.access_token,
       refreshToken: body.refresh_token,
-      expiresAt: Date.now() + body.expires_in * 1000,
+      expiresAt: Date.now() + (body.expires_in || 3600) * 1000,
     }
     await saveTokens(tokens)
     console.log('  Login successful! Token saved to', TOKENS_PATH)
