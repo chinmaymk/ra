@@ -76,6 +76,12 @@ test('isShellPath detects script file extensions', () => {
   expect(isShellPath('./script.bash')).toBe(true)
 })
 
+test('isShellPath detects Windows script extensions', () => {
+  expect(isShellPath('./hook.bat')).toBe(true)
+  expect(isShellPath('./hook.cmd')).toBe(true)
+  expect(isShellPath('./hook.ps1')).toBe(true)
+})
+
 test('isShellPath returns false for JS/TS and inline expressions', () => {
   expect(isShellPath('./middleware.ts')).toBe(false)
   expect(isShellPath('./middleware.js')).toBe(false)
@@ -128,6 +134,14 @@ test('shell middleware throws on non-zero exit', async () => {
   )
   const ctx = fakeLoopCtx()
   await expect(mw(ctx)).rejects.toThrow(/exited with code 1/)
+})
+
+test('shell middleware includes stderr in error on non-zero exit', async () => {
+  const mw = createShellMiddleware<LoopContext>(
+    'shell: ./bad-exit-stderr.sh', 'beforeLoopBegin', fixturesDir, logger,
+  )
+  const ctx = fakeLoopCtx()
+  await expect(mw(ctx)).rejects.toThrow(/something went wrong in the script/)
 })
 
 test('shell middleware throws on invalid JSON stdout', async () => {

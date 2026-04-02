@@ -12,7 +12,12 @@ const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
 ])
 
 /** File extensions treated as shell/script middleware (auto-detected, no prefix needed). */
-const SHELL_EXTENSIONS = ['.sh', '.bash', '.zsh', '.py', '.rb', '.pl', '.php', '.lua', '.r', '.R']
+const SHELL_EXTENSIONS = [
+  '.sh', '.bash', '.zsh',           // Unix shells
+  '.py', '.rb', '.pl', '.php',      // Scripting languages
+  '.lua', '.r', '.R',               // Other languages
+  '.bat', '.cmd', '.ps1',           // Windows
+]
 
 /** Returns true if the entry uses the explicit `shell:` prefix. */
 export function hasShellPrefix(entry: string): boolean {

@@ -100,6 +100,9 @@ function applyMutations(ctx: StoppableContext, output: Record<string, unknown>):
   }
 }
 
+/** Grace period (ms) between SIGTERM and SIGKILL when aborting a shell process. */
+const SIGKILL_GRACE_MS = 3_000
+
 /**
  * Run a shell command as middleware. The command receives the serialized
  * context on stdin as JSON and may write a JSON response to stdout.
@@ -112,17 +115,22 @@ function runShellProcess(
   command: string,
   args: string[],
   input: string,
+  cwd: string,
   signal: AbortSignal,
   logger: Logger,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    const proc = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd })
 
     const stdoutChunks: Buffer[] = []
     const stderrChunks: Buffer[] = []
+    let killTimer: ReturnType<typeof setTimeout> | undefined
 
     const onAbort = () => {
       proc.kill('SIGTERM')
+      killTimer = setTimeout(() => {
+        if (!proc.killed) proc.kill('SIGKILL')
+      }, SIGKILL_GRACE_MS)
     }
     signal.addEventListener('abort', onAbort, { once: true })
 
@@ -131,11 +139,13 @@ function runShellProcess(
 
     proc.on('error', (err) => {
       signal.removeEventListener('abort', onAbort)
+      if (killTimer) clearTimeout(killTimer)
       reject(new Error(`Shell middleware failed to spawn "${command}": ${err.message}`))
     })
 
     proc.on('close', (code) => {
       signal.removeEventListener('abort', onAbort)
+      if (killTimer) clearTimeout(killTimer)
       const stdout = Buffer.concat(stdoutChunks).toString('utf-8')
       const stderr = Buffer.concat(stderrChunks).toString('utf-8')
       if (stderr) logger.debug('shell middleware stderr', { command, stderr: stderr.trim() })
@@ -163,10 +173,11 @@ export function createShellMiddleware<T extends StoppableContext>(
 
   return async (ctx: T) => {
     const payload = JSON.stringify(serializeContext(hook, ctx))
-    const { stdout, exitCode } = await runShellProcess(resolvedCommand, args, payload, ctx.signal, ctx.logger ?? logger)
+    const { stdout, stderr, exitCode } = await runShellProcess(resolvedCommand, args, payload, cwd, ctx.signal, ctx.logger ?? logger)
 
     if (exitCode !== 0) {
-      throw new Error(`Shell middleware "${entry}" exited with code ${exitCode}`)
+      const detail = stderr.trim() ? `\n  stderr: ${stderr.trim().slice(0, 500)}` : ''
+      throw new Error(`Shell middleware "${entry}" exited with code ${exitCode}${detail}`)
     }
 
     const trimmed = stdout.trim()
