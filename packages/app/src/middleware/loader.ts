@@ -3,6 +3,7 @@ import { errorMessage, NoopLogger } from '@chinmaymk/ra'
 import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig } from '../config/types'
 import type { MiddlewareConfig, Middleware } from '@chinmaymk/ra'
+import { createShellMiddleware } from './shell'
 
 const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
   'beforeLoopBegin', 'beforeModelCall', 'onStreamChunk',
@@ -10,7 +11,32 @@ const VALID_HOOKS = new Set<keyof MiddlewareConfig>([
   'afterLoopIteration', 'afterLoopComplete', 'onError',
 ])
 
-async function loadOne<T>(entry: string, cwd: string): Promise<Middleware<T>> {
+/** File extensions treated as shell/script middleware (auto-detected, no prefix needed). */
+const SHELL_EXTENSIONS = ['.sh', '.bash', '.zsh', '.py', '.rb', '.pl', '.php', '.lua', '.r', '.R']
+
+/** Returns true if the entry uses the explicit `shell:` prefix. */
+export function hasShellPrefix(entry: string): boolean {
+  return entry.startsWith('shell:')
+}
+
+/** Returns true if the entry is a file path with a known script extension. */
+export function isShellPath(entry: string): boolean {
+  return looksLikePath(entry, SHELL_EXTENSIONS) && SHELL_EXTENSIONS.some(ext => entry.endsWith(ext))
+}
+
+/** Returns true if the entry should be handled as shell middleware (prefix or script extension). */
+export function isShellEntry(entry: string): boolean {
+  return hasShellPrefix(entry) || isShellPath(entry)
+}
+
+async function loadOne<T>(entry: string, hook: string, cwd: string, logger: Logger): Promise<Middleware<T>> {
+  if (hasShellPrefix(entry)) {
+    return createShellMiddleware<T & import('@chinmaymk/ra').StoppableContext>(entry, hook, cwd, logger) as Middleware<T>
+  }
+  if (isShellPath(entry)) {
+    // Auto-detected script file — wrap as "shell: <path>" for the shell executor
+    return createShellMiddleware<T & import('@chinmaymk/ra').StoppableContext>(`shell: ${entry}`, hook, cwd, logger) as Middleware<T>
+  }
   if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)
     const mod = await import(resolved)
@@ -46,7 +72,7 @@ export async function loadMiddleware(
       log.warn('unknown middleware hook, skipping', { hook })
       continue
     }
-    const fns = await Promise.all(entries.map(e => loadOne(e, cwd)))
+    const fns = await Promise.all(entries.map(e => loadOne(e, hook, cwd, log)))
     ;(result as Record<string, unknown[]>)[hook] = fns
     log.debug('middleware hook loaded', { hook, count: fns.length })
   }
