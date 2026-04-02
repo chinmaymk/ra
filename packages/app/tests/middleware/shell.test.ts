@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test'
-import { parseShellEntry, createShellMiddleware } from '../../src/middleware/shell'
-import { isShellEntry, hasShellPrefix, isShellPath } from '../../src/middleware/loader'
+import { createShellMiddleware } from '../../src/middleware/shell'
 import { loadMiddleware } from '../../src/middleware/loader'
+import { parseShellEntry, isShellEntry, hasShellPrefix, isShellPath } from '../../src/shell'
 import { defaultConfig } from '../../src/config/defaults'
 import type { RaConfig } from '../../src/config/types'
 import type { LoopContext, ToolExecutionContext } from '@chinmaymk/ra'
@@ -53,7 +53,7 @@ test('parseShellEntry handles quoted args', () => {
 })
 
 test('parseShellEntry throws on empty entry', () => {
-  expect(() => parseShellEntry('shell:   ')).toThrow(/Empty shell middleware/)
+  expect(() => parseShellEntry('shell:   ')).toThrow(/Empty shell entry/)
 })
 
 // --- isShellEntry / hasShellPrefix / isShellPath ---

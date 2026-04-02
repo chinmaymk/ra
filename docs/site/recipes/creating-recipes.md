@@ -12,6 +12,9 @@ my-recipe/
       SKILL.md            # Skill prompt with YAML frontmatter
       references/         # Optional: files the model can consult
       scripts/            # Optional: scripts the model can run
+  tools/                  # Optional: custom tools (TS/JS/shell)
+    deploy.ts
+    health-check.sh
   middleware/             # Optional: middleware hooks
     token-budget.ts
   README.md               # Optional: usage instructions
@@ -44,7 +47,7 @@ agent:
     threshold: 0.8
 ```
 
-Paths in `skillDirs`, `middleware`, and `systemPrompt` (when pointing to a file) are resolved relative to the recipe directory, not the working directory. This means recipes are portable.
+Paths in `skillDirs`, `tools.custom`, `middleware`, and `systemPrompt` (when pointing to a file) are resolved relative to the recipe directory, not the working directory. This means recipes are portable.
 
 ### Environment variable interpolation
 
@@ -110,6 +113,28 @@ skills/debugger/
   scripts/
     collect-logs.sh       # Gather diagnostic info
 ```
+
+## Adding custom tools
+
+Add tool files to a `tools/` directory and reference them in your config. Both TypeScript and shell scripts are supported:
+
+```
+my-recipe/
+  ra.config.yaml
+  tools/
+    deploy.ts
+    health-check.sh
+```
+
+```yaml
+agent:
+  tools:
+    custom:
+      - ./tools/deploy.ts
+      - ./tools/health-check.sh
+```
+
+Shell script tools self-describe via `--describe` and receive input on stdin. See [Custom Tools](/tools/custom#shell-script-tools) for the full protocol.
 
 ## Adding middleware
 

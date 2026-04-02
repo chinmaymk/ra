@@ -1,6 +1,8 @@
 import { looksLikePath, resolvePath } from '../utils/paths'
 import { errorMessage, NoopLogger } from '@chinmaymk/ra'
 import type { Logger, ITool } from '@chinmaymk/ra'
+import { hasShellPrefix, isShellPath } from '../shell'
+import { createShellTool } from './shell-tool'
 
 /** Simplified parameter definition — avoids raw JSON Schema boilerplate. */
 export interface ParameterDef {
@@ -52,8 +54,13 @@ function validateTool(tool: Record<string, unknown>, source: string): ITool {
   return tool as unknown as ITool
 }
 
-/** Load a single tool from a file path. Default export must be an ITool object or a factory returning one. Supports `parameters` shorthand in place of `inputSchema`. */
-async function loadOne(entry: string, cwd: string): Promise<ITool> {
+/** Load a single tool from a file path or shell entry. */
+async function loadOne(entry: string, cwd: string, logger: Logger): Promise<ITool> {
+  // Shell script tools: shell: prefix or auto-detected script extension
+  if (hasShellPrefix(entry) || isShellPath(entry)) {
+    return createShellTool(entry, cwd, logger)
+  }
+
   if (!looksLikePath(entry)) {
     throw new Error(`Tool entry must be a file path (got: "${entry}")`)
   }
@@ -97,7 +104,7 @@ export async function loadCustomTools(
   const log = logger ?? new NoopLogger()
   if (entries.length === 0) return []
 
-  const results = await Promise.allSettled(entries.map(e => loadOne(e, cwd)))
+  const results = await Promise.allSettled(entries.map(e => loadOne(e, cwd, log)))
   const tools: ITool[] = []
   for (let i = 0; i < results.length; i++) {
     const result = results[i]!

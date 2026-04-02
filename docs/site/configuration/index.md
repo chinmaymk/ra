@@ -160,6 +160,7 @@ agent:
     custom:                   # load tools from files
       - "./tools/deploy.ts"
       - "./tools/db-query.ts"
+      - "./tools/health-check.sh"  # shell scripts auto-detected
     Read:
       rootDir: "./src"        # constrain reads to this directory
     Write:
@@ -173,7 +174,7 @@ agent:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `agent.tools.builtin` | boolean | `true` | Master switch: register all built-in tools unless individually disabled |
-| `agent.tools.custom` | string[] | `[]` | File paths to [custom tool](/tools/custom) files (JS/TS) |
+| `agent.tools.custom` | string[] | `[]` | File paths to [custom tool](/tools/custom) files (JS/TS/shell scripts) |
 | `agent.tools.<ToolName>.enabled` | boolean | `true` | Enable or disable a specific tool |
 | `agent.tools.<ToolName>.rootDir` | string | — | Restrict filesystem tools to this directory |
 | `agent.tools.<ToolName>.maxConcurrency` | number | `4` | Max parallel tasks (Agent tool) |
