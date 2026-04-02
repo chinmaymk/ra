@@ -2,17 +2,17 @@
 
 <span class="blog-date">April 2, 2026</span>
 
-[claw-code](https://github.com/instructkr/claw-code) recently appeared on GitHub — a cleanroom reverse-engineering effort that attempts to reconstruct the architecture of a well-known commercial agent CLI. It has a Python implementation for modeling the tool and command surfaces, plus an active Rust port for the actual runtime. The project has gotten attention (50K stars in two hours, if the README is to be believed), so it's worth examining how its design choices compare to ra's.
+When Anthropic's Claude Code source was leaked on March 31, 2026, it didn't take long for the reverse-engineering projects to appear. [claw-code](https://github.com/instructkr/claw-code) is the most ambitious of them — a cleanroom rewrite by Sigrid Jin that reconstructs Claude Code's architecture from scratch, with a Python workspace cataloging the full tool and command surface, and a Rust port implementing the actual runtime. The project hit 50K GitHub stars in two hours.
 
-This isn't a takedown. claw-code is an impressive reverse-engineering effort and the Rust runtime is a serious piece of systems work. But the two projects have fundamentally different goals, and those goals lead to very different architectures. Understanding where each one excels reveals something useful about what makes an agent harness work well in practice — especially for autonomous operation.
+The leak made Claude Code's internals public knowledge. That means we can now have an honest, specific comparison between its architecture and ra's — not in the abstract, but subsystem by subsystem. This isn't a takedown. claw-code is serious systems work and the Rust runtime is genuinely well-built. But the two projects start from fundamentally different places, and those starting points lead to very different architectures. Understanding where each one excels reveals something useful about what makes an agent harness work well — especially for autonomous operation.
 
 ## Architecture at a glance
 
 **ra** is a TypeScript library + CLI. The core library (`@chinmaymk/ra`) is runtime-agnostic — it runs on Node.js, Bun, or Deno. The CLI layer consumes the library and adds interfaces (REPL, HTTP, MCP server, cron). The agent loop is ~250 lines of explicit, hookable code.
 
-**claw-code** is a dual-language project. The Python codebase (`src/`) catalogs and mirrors the tool and command surfaces of its target — it's essentially a porting workspace with reference snapshots, backlog tracking, and execution stubs. The Rust codebase (`rust/crates/`) is the real runtime: an API client, conversation loop, CLI, plugin infrastructure, MCP support, and built-in tools.
+**claw-code** is a dual-language project that mirrors Claude Code's architecture. The Python codebase (`src/`) catalogs the original's full surface — 150+ commands, 100+ tools, 28 subsystems — with reference snapshots and execution stubs. The Rust codebase (`rust/crates/`) is the real runtime: an API client, conversation loop, CLI, plugin infrastructure, MCP support, and built-in tools.
 
-The structural difference is telling. ra was designed from scratch as a composable framework. claw-code was reverse-engineered from a specific product, and its architecture reflects that origin — it faithfully reconstructs subsystems (hooks, plugins, skills, commands) rather than questioning whether those abstractions are the right ones.
+The structural difference is telling. ra was designed from scratch as a composable framework. claw-code reconstructs Claude Code's specific subsystems (hooks, plugins, skills, commands) faithfully rather than questioning whether those abstractions are the right ones. Its quality metric is parity with the original; ra's quality metric is how well the agent runs unattended.
 
 ### Quick comparison
 
@@ -52,7 +52,9 @@ export default async function (ctx) {
 }
 ```
 
-claw-code parses hook configuration from config files, but the Rust runtime doesn't actually execute hooks at runtime. The `PARITY.md` document is explicit: hooks are "config-only; runtime behavior missing." There's no `PreToolUse`/`PostToolUse` mutation, deny, or rewrite pipeline. This means you can't programmatically control what the agent does mid-loop — a critical gap for autonomous operation where guardrails aren't optional.
+Claude Code has `PreToolUse`/`PostToolUse` hooks that can mutate, deny, or rewrite tool calls. claw-code parses this hook configuration from config files, but the Rust runtime doesn't actually execute them. The `PARITY.md` document is explicit: hooks are "config-only; runtime behavior missing." This means you can't programmatically control what the agent does mid-loop — a critical gap for autonomous operation where guardrails aren't optional.
+
+ra's middleware, by contrast, is the load-bearing structure. It's not a feature bolted onto the loop — the loop *is* the middleware chain.
 
 ### 2. Provider-agnostic from the ground up
 
@@ -64,7 +66,7 @@ agent:
   model: gemini-2.5-pro
 ```
 
-claw-code's Rust runtime has a core Anthropic API client and an OpenAI-compatible provider layer. But the architecture is built around one vendor's message format and streaming protocol. Adding a truly different provider (say, Bedrock with its Converse API) would require significant plumbing changes. ra's message normalization layer handles this by design.
+This is where claw-code inherits Claude Code's biggest architectural constraint. Claude Code was built for one provider — Anthropic. claw-code adds OpenAI-compatible and xAI layers, but the message format, streaming protocol, and tool calling conventions are still shaped around Anthropic's API. Adding a truly different provider (say, Bedrock with its Converse API) would require significant plumbing changes. ra's message normalization layer handles this by design.
 
 ### 3. Context compaction that respects prompt caching
 
@@ -163,11 +165,11 @@ claw-code has a full LSP client crate (`rust/crates/lsp/`) with diagnostics, sym
 
 The fundamental divergence isn't about features or language choices. It's about design philosophy.
 
-claw-code is reconstructing a known system. Its quality metric is parity — how closely does it match the original? This produces a faithful reproduction but inherits the original's architectural decisions, including ones that may not be optimal.
+The Claude Code leak gave the community a detailed look at how Anthropic builds agent infrastructure. claw-code faithfully reconstructs that architecture — and in doing so, inherits both its strengths (sandboxing, comprehensive tooling, battle-tested patterns) and its constraints (single-provider assumptions, hooks that exist in config but not in runtime, no compositional skill system).
 
 ra starts from a different question: *what does an agent harness need to be if it's going to run autonomously?* The answer is: explicit control at every step (middleware), predictable resource consumption (budgets, timeouts, adaptive thinking), composable behavior (skills, recipes), and operational visibility (structured logging, inspector, traces). These aren't features bolted on after the fact — they're the load-bearing walls.
 
-Both projects prove that the agent harness is becoming a well-understood piece of infrastructure. The interesting question isn't which one is "better" — it's what each one reveals about the design space. claw-code maps the surface area comprehensively and gets sandboxing right. ra explores how deep the control surface needs to go and gets the autonomous loop right. The ideal agent harness probably looks like ra's middleware and compaction with claw-code's isolation model.
+The Claude Code source being public is actually good for the ecosystem. It validates patterns that independent frameworks like ra arrived at independently (the stream-collect-execute loop, context compaction, skill-based instruction injection) and exposes gaps that everyone should learn from (process-level sandboxing, LSP integration). Both projects prove that the agent harness is becoming well-understood infrastructure. claw-code maps Claude Code's surface comprehensively and gets sandboxing right. ra explores how deep the control surface needs to go and gets the autonomous loop right. The ideal agent harness probably looks like ra's middleware and compaction with claw-code's isolation model.
 
 If you're building agents that need to run unattended, ship to production, and stay within guardrails, [take ra for a spin](https://github.com/chinmaymk/ra).
 
