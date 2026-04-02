@@ -3,7 +3,7 @@
  * memory, MCP, observability) from a resolved config.  Returns a single
  * `AppContext` that the interface layer can consume.
  */
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import {
   ToolRegistry,
   getDefaultCompactionModel,
@@ -57,6 +57,39 @@ function prepend<T>(arr: Middleware<T>[] | undefined, mw: Middleware<T>): Middle
 /** Append a middleware to a hook array (creates the array if needed). */
 function append<T>(arr: Middleware<T>[] | undefined, mw: Middleware<T>): Middleware<T>[] {
   return [...(arr ?? []), mw]
+}
+
+/**
+ * Resolve a Claude OAuth token for subscription-based access.
+ * Checks (in order): file descriptor, known file paths, env var.
+ */
+async function resolveClaudeOAuthToken(): Promise<string | undefined> {
+  // 1. Try reading from file descriptor (how Claude Code passes tokens to subprocesses)
+  const fdStr = process.env.CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR
+  if (fdStr) {
+    try {
+      const { readFileSync } = await import('node:fs')
+      const token = readFileSync(parseInt(fdStr, 10), 'utf-8').trim()
+      if (token) return token
+    } catch { /* FD not inherited or already consumed */ }
+  }
+
+  // 2. Try known file paths where Claude Code stores OAuth tokens
+  const { homedir } = await import('node:os')
+  const { join } = await import('path')
+  const home = homedir()
+  const candidates = [
+    join(home, '.claude', 'remote', '.oauth_token'),
+    join(home, '.claude', '.oauth_token'),
+  ]
+  for (const path of candidates) {
+    try {
+      const token = (await readFile(path, 'utf-8')).trim()
+      if (token) return token
+    } catch { /* file not found */ }
+  }
+
+  return undefined
 }
 
 export interface AppContext {
@@ -189,7 +222,18 @@ export async function bootstrap(
   }
 
   // ── Provider ───────────────────────────────────────────────────────
-  const provider = createProvider(buildProviderConfig(agent.provider, app.providers[agent.provider]))
+  const providerOpts = app.providers[agent.provider]
+  if (agent.provider === 'anthropic') {
+    const opts = providerOpts as { apiKey?: string; authToken?: string }
+    if (!opts.apiKey && !opts.authToken) {
+      const token = await resolveClaudeOAuthToken()
+      if (token) {
+        opts.authToken = token
+        logger.info('using Claude subscription auth (OAuth token)')
+      }
+    }
+  }
+  const provider = createProvider(buildProviderConfig(agent.provider, providerOpts))
   logger.info('provider initialized', { provider: agent.provider, model: agent.model })
 
   // ── Tools ──────────────────────────────────────────────────────────
