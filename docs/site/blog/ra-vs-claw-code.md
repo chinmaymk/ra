@@ -10,7 +10,7 @@ The leak made Claude Code's internals public knowledge. That means we can now ha
 
 **ra** is a TypeScript library + CLI. The core library (`@chinmaymk/ra`) is runtime-agnostic — it runs on Node.js, Bun, or Deno. The CLI layer consumes the library and adds interfaces (REPL, HTTP, MCP server, cron). The agent loop is ~250 lines of explicit, hookable code.
 
-**claw-code** is a dual-language project that mirrors Claude Code's architecture. The Python codebase (`src/`) catalogs the original's full surface — 500+ commands, 230+ tools, 28 subsystems — with reference snapshots and execution stubs. The Rust codebase (`rust/crates/`) is the real runtime: an API client, conversation loop, CLI, plugin infrastructure, MCP support, and built-in tools.
+**claw-code** is a dual-language project that mirrors Claude Code's architecture. The Python codebase (`src/`) catalogs the original's full surface — hundreds of commands, 200+ tools, 29 subsystems — with reference snapshots and execution stubs. The Rust codebase (`rust/crates/`) is the real runtime: an API client, conversation loop, CLI, plugin infrastructure, MCP support, and built-in tools.
 
 The structural difference is telling. ra was designed from scratch as a composable framework. claw-code reconstructs Claude Code's specific subsystems (hooks, plugins, skills, commands) faithfully rather than questioning whether those abstractions are the right ones. Its quality metric is parity with the original; ra's quality metric is how well the agent runs unattended.
 
@@ -216,11 +216,11 @@ The Rust port deserves more credit than "it's a reverse-engineering project." Th
 
 ### Exhaustive surface mapping
 
-The Python codebase is a remarkably thorough catalog of what an agent CLI needs. The `reference_data/` directory contains JSON snapshots of 28 subsystems, 500+ commands, and 230+ tools. If you're building an agent harness and wondering "what tools do I need?", claw-code's inventory is genuinely useful as a reference — it's one of the most complete public maps of an agent CLI's surface area.
+The Python codebase is a remarkably thorough catalog of what an agent CLI needs. The `reference_data/` directory contains JSON snapshots of 29 subsystems, hundreds of commands, and 200+ tools. If you're building an agent harness and wondering "what tools do I need?", claw-code's inventory is genuinely useful as a reference — it's one of the most complete public maps of an agent CLI's surface area.
 
 ### Permission model baked into the runtime
 
-claw-code's Rust runtime has permissions integrated directly into the conversation loop — three hierarchical modes (ReadOnly, WorkspaceWrite, DangerFullAccess) with interactive escalation prompts when a tool needs more access than the current mode allows. ra handles permissions through middleware (which is more flexible) but claw-code's approach of making permissions a first-class runtime concept with explicit escalation is a defensible design choice for security-critical deployments.
+claw-code's Rust runtime has permissions integrated directly into the conversation loop — five modes including ReadOnly, WorkspaceWrite, and DangerFullAccess, with interactive escalation prompts when a tool needs more access than the current mode allows. ra handles permissions through middleware (which is more flexible) but claw-code's approach of making permissions a first-class runtime concept with explicit escalation is a defensible design choice for security-critical deployments.
 
 ## Opportunities for ra to improve
 
