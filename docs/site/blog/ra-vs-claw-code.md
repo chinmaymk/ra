@@ -10,7 +10,7 @@ The leak made Claude Code's internals public knowledge. That means we can now ha
 
 **ra** is a TypeScript library + CLI. The core library (`@chinmaymk/ra`) is runtime-agnostic — it runs on Node.js, Bun, or Deno. The CLI layer consumes the library and adds interfaces (REPL, HTTP, MCP server, cron). The agent loop is ~250 lines of explicit, hookable code.
 
-**claw-code** is a dual-language project that mirrors Claude Code's architecture. The Python codebase (`src/`) catalogs the original's full surface — 150+ commands, 100+ tools, 28 subsystems — with reference snapshots and execution stubs. The Rust codebase (`rust/crates/`) is the real runtime: an API client, conversation loop, CLI, plugin infrastructure, MCP support, and built-in tools.
+**claw-code** is a dual-language project that mirrors Claude Code's architecture. The Python codebase (`src/`) catalogs the original's full surface — 500+ commands, 230+ tools, 28 subsystems — with reference snapshots and execution stubs. The Rust codebase (`rust/crates/`) is the real runtime: an API client, conversation loop, CLI, plugin infrastructure, MCP support, and built-in tools.
 
 The structural difference is telling. ra was designed from scratch as a composable framework. claw-code reconstructs Claude Code's specific subsystems (hooks, plugins, skills, commands) faithfully rather than questioning whether those abstractions are the right ones. Its quality metric is parity with the original; ra's quality metric is how well the agent runs unattended.
 
@@ -28,9 +28,9 @@ The structural difference is telling. ra was designed from scratch as a composab
 | **Autonomous controls** | Token budget, duration, adaptive thinking | max_iterations, usage tracking |
 | **Observability** | Inspector web UI, hierarchical traces, cache hit % | Usage tracking, cost calculation |
 | **Cross-session memory** | SQLite + FTS5, auto-injected | None (sessions are isolated) |
-| **MCP** | Bidirectional (client + server), lazy schemas | Client only, 5 transport types |
+| **MCP** | Bidirectional (client + server), lazy schemas | Client only, 6 transport types |
 | **Subagent token rollup** | Yes (budget-aware) | Sub-agent types, no rollup |
-| **Built-in tools** | 13 | 20 |
+| **Built-in tools** | 13 | 19 |
 | **Slash commands** | Interface-specific | 28 (including /ultraplan, /commit, /pr) |
 
 ## Where ra is stronger
@@ -48,7 +48,7 @@ beforeLoopBegin → beforeModelCall → onStreamChunk → afterModelResponse
 Each hook receives a typed context object. `beforeModelCall` lets you mutate the messages and tools before they hit the provider. `beforeToolExecution` can deny a tool call without stopping the loop. Middleware is just TypeScript — no registration API, no plugin manifest:
 
 ```typescript
-// Stop the agent if it's burned too many tokens
+// afterLoopIteration — stop the agent if it's burned too many tokens
 export default async function (ctx) {
   if (ctx.usage.inputTokens + ctx.usage.outputTokens > 500_000) {
     ctx.stop('Token budget exceeded')
@@ -117,7 +117,7 @@ ra runs as:
 - **Cron** — scheduled autonomous jobs
 - **Inspector** — web dashboard showing every model call, tool execution, and token spend
 
-claw-code's Rust CLI supports REPL and prompt modes. It doesn't have HTTP, MCP server, or cron interfaces. For teams that want to embed an agent into existing workflows (CI/CD, internal tools, editor integrations), the interface breadth matters.
+claw-code's Rust CLI supports REPL and prompt modes, plus an Axum-based HTTP/SSE server for session management. But it doesn't have an MCP server or cron interface. For teams that want to embed an agent into existing workflows — exposing it as an MCP tool to editors, running scheduled autonomous jobs, or inspecting past sessions through a web UI — ra's interface breadth matters.
 
 ### 7. Operational visibility you can actually use
 
@@ -196,7 +196,7 @@ When connecting to external servers, ra uses **lazy schema loading** by default:
 
 Tool names are server-prefixed (`github__issues_list`) to prevent collisions. When ra runs as an MCP server, it exposes both the agent itself (as a single callable tool) and all built-in tools individually — so a parent system like Cursor or Claude Desktop can either delegate to ra as a whole or call specific tools directly.
 
-claw-code has MCP support with five transport types (stdio, SSE, HTTP, WebSocket, SDK), which is broader transport coverage. But it operates only as a client — it can connect to MCP servers but can't expose itself as one. For workflows where ra sits in the middle of a tool chain (editor → ra → external servers), bidirectional MCP is essential.
+claw-code has MCP support with six transport types (stdio, SSE, HTTP, WebSocket, SDK, ManagedProxy), which is broader transport coverage. But it operates only as a client — it can connect to MCP servers but can't expose itself as one. For workflows where ra sits in the middle of a tool chain (editor → ra → external servers), bidirectional MCP is essential.
 
 ## Where claw-code is interesting
 
@@ -212,11 +212,11 @@ For autonomous agents executing arbitrary shell commands, process-level sandboxi
 
 ### A serious Rust runtime
 
-The Rust port deserves more credit than "it's a reverse-engineering project." The `ConversationRuntime<C, T>` is generic over API client and tool executor traits — clean, testable, and provider-swappable. There are 20 built-in tools, 28 slash commands (including `/ultraplan` for multi-step execution plans, `/commit`, `/pr`, and `/teleport` for ripgrep-powered code navigation), sub-agent types (Explore, Plan, Verification) with isolated tool sets, and per-model cost tracking with cache-aware pricing. This is a functional coding agent, not a prototype.
+The Rust port deserves more credit than "it's a reverse-engineering project." The `ConversationRuntime<C, T>` is generic over API client and tool executor traits — clean, testable, and provider-swappable. There are 19 built-in tools, 28 slash commands (including `/ultraplan` for multi-step execution plans, `/commit`, `/pr`, and `/teleport` for ripgrep-powered code navigation), sub-agent types (Explore, Plan, Verification) with isolated tool sets, and per-model cost tracking with cache-aware pricing. This is a functional coding agent, not a prototype.
 
 ### Exhaustive surface mapping
 
-The Python codebase is a remarkably thorough catalog of what an agent CLI needs. The `reference_data/` directory contains JSON snapshots of 28+ subsystems, 150+ commands, and 100+ tools. If you're building an agent harness and wondering "what tools do I need?", claw-code's inventory is genuinely useful as a reference — it's one of the most complete public maps of an agent CLI's surface area.
+The Python codebase is a remarkably thorough catalog of what an agent CLI needs. The `reference_data/` directory contains JSON snapshots of 28 subsystems, 500+ commands, and 230+ tools. If you're building an agent harness and wondering "what tools do I need?", claw-code's inventory is genuinely useful as a reference — it's one of the most complete public maps of an agent CLI's surface area.
 
 ### Permission model baked into the runtime
 
