@@ -161,6 +161,53 @@ describe('Glob', () => {
     const none = await tool.execute({ path: TMP, pattern: '**/*.xyz' }) as string
     expect(none).toContain('No files found')
   })
+
+  it('sorts results by modification time (most recent first)', async () => {
+    // Touch app.ts to make it newer
+    writeFileSync(join(TMP, 'src', 'app.ts'), 'function hello() {\n  return "world"\n}')
+    const tool = globFilesTool()
+    const result = await tool.execute({ path: TMP, pattern: '**/*.ts' }) as string
+    const lines = result.split('\n')
+    // app.ts was just written so it should appear before util.ts and deep.ts
+    const appIdx = lines.findIndex(l => l.includes('app.ts'))
+    const utilIdx = lines.findIndex(l => l.includes('util.ts'))
+    expect(appIdx).toBeLessThan(utilIdx)
+  })
+})
+
+describe('Bash exit code semantics', () => {
+  it('adds note for grep exit code 1 (no matches)', async () => {
+    const tool = executeBashTool()
+    const result = await tool.execute({ command: 'grep nonexistent_xyzzy /dev/null', timeout: 5000 }) as string
+    expect(result).toContain('<exit_code>1</exit_code>')
+    expect(result).toContain('<exit_code_note>')
+    expect(result).toContain('No matches found')
+  })
+
+  it('no note for exit code 0', async () => {
+    const tool = executeBashTool()
+    const result = await tool.execute({ command: 'echo hello', timeout: 5000 }) as string
+    expect(result).toContain('<exit_code>0</exit_code>')
+    expect(result).not.toContain('<exit_code_note>')
+  })
+
+  it('adds note for diff exit code 1 (files differ)', async () => {
+    const a = join(TMP, 'diff-a.txt')
+    const b = join(TMP, 'diff-b.txt')
+    writeFileSync(a, 'aaa')
+    writeFileSync(b, 'bbb')
+    const tool = executeBashTool()
+    const result = await tool.execute({ command: `diff ${a} ${b}`, timeout: 5000 }) as string
+    expect(result).toContain('<exit_code>1</exit_code>')
+    expect(result).toContain('Files differ')
+  })
+
+  it('no note for unknown commands with non-zero exit', async () => {
+    const tool = executeBashTool()
+    const result = await tool.execute({ command: 'false', timeout: 5000 }) as string
+    expect(result).toContain('<exit_code>1</exit_code>')
+    expect(result).not.toContain('<exit_code_note>')
+  })
 })
 
 describe('MoveFile', () => {
