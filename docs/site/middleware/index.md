@@ -1,6 +1,6 @@
 # Middleware
 
-Lifecycle hooks that let you intercept and modify every step of the [agent loop](/core/agent-loop). Define them inline in config or as TypeScript files.
+Lifecycle hooks that let you intercept and modify every step of the [agent loop](/core/agent-loop). Define them inline in config, as TypeScript files, or as shell scripts / arbitrary binaries.
 
 ```yaml
 # ra.config.yml
@@ -10,6 +10,9 @@ agent:
       - "(ctx) => { console.log('Calling model...'); }"
     afterToolExecution:
       - "./middleware/log-tools.ts"
+    beforeToolExecution:
+      - "./middleware/policy-check.sh"
+      - "shell: python3 ./middleware/guardrail.py --strict"
 ```
 
 Each middleware is an `async (ctx) => void` function. Every context object has `stop()` and `signal`:
@@ -166,6 +169,114 @@ agent:
       - "(ctx) => { console.error(`[${ctx.phase}]`, ctx.error.message); }"
 ```
 
+## Shell middleware
+
+Run any shell script or binary as middleware. ra pipes the context as JSON to **stdin** and reads an optional JSON response from **stdout**. **stderr** is logged at debug level.
+
+Scripts with known extensions (`.sh`, `.bash`, `.zsh`, `.py`, `.rb`, `.pl`, `.php`, `.lua`, `.r`) are **auto-detected** — no prefix needed:
+
+```yaml
+agent:
+  middleware:
+    beforeToolExecution:
+      - "./middleware/policy-check.sh"       # auto-detected by .sh extension
+      - "./middleware/guardrail.py"           # auto-detected by .py extension
+```
+
+Use the `shell:` prefix when you need to pass a command with arguments, or run a binary without a recognized extension:
+
+```yaml
+agent:
+  middleware:
+    beforeToolExecution:
+      - "shell: python3 ./middleware/guardrail.py --strict"
+      - "shell: /usr/local/bin/my-checker"
+```
+
+### Protocol
+
+**Input (stdin)** — JSON object:
+
+```json
+{
+  "hook": "beforeToolExecution",
+  "loop": {
+    "iteration": 0,
+    "maxIterations": 10,
+    "sessionId": "abc-123",
+    "usage": { "inputTokens": 1200, "outputTokens": 300 },
+    "resumed": false,
+    "messages": [...]
+  },
+  "toolCall": {
+    "id": "tc_1",
+    "name": "Bash",
+    "arguments": "{\"command\":\"rm -rf /\"}"
+  }
+}
+```
+
+The exact fields depend on which hook the middleware is registered for. For example, `beforeModelCall` includes `request` (with `model`, `messages`, `tools`), while `afterToolExecution` includes both `toolCall` and `result`.
+
+**Output (stdout)** — optional JSON object with mutations to apply:
+
+```json
+{
+  "stop": true,
+  "deny": "blocked by policy",
+  "context": {
+    "messages": [...]
+  }
+}
+```
+
+| Field | Type | Effect |
+|-------|------|--------|
+| `stop` | `true` or `string` | Calls `ctx.stop()` to halt the loop. String value is the reason. |
+| `deny` | `string` | Calls `ctx.deny(reason)` — only valid in `beforeToolExecution`. |
+| `context.messages` | `IMessage[]` | Replaces messages (for `beforeLoopBegin` hooks). |
+| `context.request.messages` | `IMessage[]` | Replaces request messages (for `beforeModelCall` hooks). |
+| `context.request.tools` | `ITool[]` | Replaces request tools (for `beforeModelCall` hooks). |
+
+If stdout is empty or the script produces no output, no mutations are applied.
+
+**Exit code** — a non-zero exit code throws an error and halts the middleware chain.
+
+### Examples
+
+**Shell — block dangerous commands:**
+
+```bash
+#!/bin/sh
+# middleware/policy-check.sh
+input=$(cat)
+args=$(echo "$input" | jq -r '.toolCall.arguments // ""')
+if echo "$args" | grep -q 'rm -rf'; then
+  echo '{"deny": "rm -rf is not allowed"}'
+else
+  echo '{}'
+fi
+```
+
+**Python — token budget enforcer:**
+
+```python
+#!/usr/bin/env python3
+# middleware/token-budget.py
+import json, sys
+
+ctx = json.load(sys.stdin)
+usage = ctx.get("loop", {}).get("usage", {})
+total = usage.get("inputTokens", 0) + usage.get("outputTokens", 0)
+
+if total > 100_000:
+    json.dump({"stop": "token budget exceeded"}, sys.stdout)
+```
+
+### Path resolution
+
+The command after `shell:` follows the same path resolution as file middleware — relative paths resolve against the project root, `~/` expands to home directory, and absolute paths are used as-is. The first token is the command; remaining tokens are arguments. Quoted strings (single or double) are treated as a single argument.
+
 ## Stopping the loop
 
 Any middleware can call `ctx.stop()` to halt the agent loop early:
@@ -182,6 +293,8 @@ export default async (ctx) => {
 ## Timeout
 
 All hooks support a configurable timeout via `toolTimeout` (default: 2 minutes). If a middleware function exceeds the timeout, the loop continues without waiting.
+
+For shell middleware, the timeout is enforced by killing the child process (SIGTERM, then SIGKILL after a 3-second grace period). The entire process tree is killed, so child processes spawned by the script are also cleaned up.
 
 ## See also
 
