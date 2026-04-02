@@ -34,13 +34,13 @@ export function isShellEntry(entry: string): boolean {
   return hasShellPrefix(entry) || isShellPath(entry)
 }
 
-async function loadOne<T>(entry: string, hook: string, cwd: string, logger: Logger): Promise<Middleware<T>> {
+async function loadOne<T>(entry: string, hook: string, cwd: string, logger: Logger, timeoutMs: number): Promise<Middleware<T>> {
   if (hasShellPrefix(entry)) {
-    return createShellMiddleware<T & import('@chinmaymk/ra').StoppableContext>(entry, hook, cwd, logger) as Middleware<T>
+    return createShellMiddleware<T & import('@chinmaymk/ra').StoppableContext>(entry, hook, cwd, logger, timeoutMs) as Middleware<T>
   }
   if (isShellPath(entry)) {
     // Auto-detected script file — wrap as "shell: <path>" for the shell executor
-    return createShellMiddleware<T & import('@chinmaymk/ra').StoppableContext>(`shell: ${entry}`, hook, cwd, logger) as Middleware<T>
+    return createShellMiddleware<T & import('@chinmaymk/ra').StoppableContext>(`shell: ${entry}`, hook, cwd, logger, timeoutMs) as Middleware<T>
   }
   if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)
@@ -77,7 +77,8 @@ export async function loadMiddleware(
       log.warn('unknown middleware hook, skipping', { hook })
       continue
     }
-    const fns = await Promise.all(entries.map(e => loadOne(e, hook, cwd, log)))
+    const timeoutMs = config.agent.toolTimeout ?? 0
+    const fns = await Promise.all(entries.map(e => loadOne(e, hook, cwd, log, timeoutMs)))
     ;(result as Record<string, unknown[]>)[hook] = fns
     log.debug('middleware hook loaded', { hook, count: fns.length })
   }

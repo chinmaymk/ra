@@ -111,6 +111,16 @@ const SIGKILL_GRACE_MS = 3_000
  * **stderr**: logged at debug level.
  * **exit code**: non-zero throws an error.
  */
+/** Send a signal to the entire process group (negative PID), falling back to the process itself. */
+function killProcessGroup(proc: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
+  try {
+    if (proc.pid) process.kill(-proc.pid, signal)
+  } catch {
+    // Fallback: kill just the process (e.g. if process group doesn't exist)
+    try { proc.kill(signal) } catch { /* already dead */ }
+  }
+}
+
 function runShellProcess(
   command: string,
   args: string[],
@@ -120,31 +130,38 @@ function runShellProcess(
   logger: Logger,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd })
+    // detached: true creates a new process group so we can kill the entire tree
+    const proc = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd, detached: true })
 
     const stdoutChunks: Buffer[] = []
     const stderrChunks: Buffer[] = []
     let killTimer: ReturnType<typeof setTimeout> | undefined
 
-    const onAbort = () => {
-      proc.kill('SIGTERM')
+    const killTree = () => {
+      killProcessGroup(proc, 'SIGTERM')
       killTimer = setTimeout(() => {
-        if (!proc.killed) proc.kill('SIGKILL')
+        killProcessGroup(proc, 'SIGKILL')
       }, SIGKILL_GRACE_MS)
     }
-    signal.addEventListener('abort', onAbort, { once: true })
+
+    // If signal is already aborted (e.g. timeout fired before spawn), kill immediately
+    if (signal.aborted) {
+      killTree()
+    } else {
+      signal.addEventListener('abort', killTree, { once: true })
+    }
 
     proc.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk))
     proc.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk))
 
     proc.on('error', (err) => {
-      signal.removeEventListener('abort', onAbort)
+      signal.removeEventListener('abort', killTree)
       if (killTimer) clearTimeout(killTimer)
       reject(new Error(`Shell middleware failed to spawn "${command}": ${err.message}`))
     })
 
     proc.on('close', (code) => {
-      signal.removeEventListener('abort', onAbort)
+      signal.removeEventListener('abort', killTree)
       if (killTimer) clearTimeout(killTimer)
       const stdout = Buffer.concat(stdoutChunks).toString('utf-8')
       const stderr = Buffer.concat(stderrChunks).toString('utf-8')
@@ -157,12 +174,19 @@ function runShellProcess(
   })
 }
 
-/** Create a middleware function from a shell: entry. */
+/**
+ * Create a middleware function from a shell: entry.
+ *
+ * `timeoutMs` is enforced directly by killing the child process. This ensures
+ * the process is actually terminated when the middleware chain's `withTimeout`
+ * wrapper fires, rather than leaving an orphaned process.
+ */
 export function createShellMiddleware<T extends StoppableContext>(
   entry: string,
   hook: string,
   cwd: string,
   logger: Logger,
+  timeoutMs: number = 0,
 ): Middleware<T> {
   const { command, args } = parseShellEntry(entry)
 
@@ -172,24 +196,41 @@ export function createShellMiddleware<T extends StoppableContext>(
     : command
 
   return async (ctx: T) => {
-    const payload = JSON.stringify(serializeContext(hook, ctx))
-    const { stdout, stderr, exitCode } = await runShellProcess(resolvedCommand, args, payload, cwd, ctx.signal, ctx.logger ?? logger)
+    // Combine the loop's abort signal with a per-execution timeout signal so the
+    // child process is always killed — whether the loop stops or the timeout fires.
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+    const ac = new AbortController()
 
-    if (exitCode !== 0) {
-      const detail = stderr.trim() ? `\n  stderr: ${stderr.trim().slice(0, 500)}` : ''
-      throw new Error(`Shell middleware "${entry}" exited with code ${exitCode}${detail}`)
+    const onParentAbort = () => ac.abort()
+    ctx.signal.addEventListener('abort', onParentAbort, { once: true })
+
+    if (timeoutMs > 0) {
+      timeoutTimer = setTimeout(() => ac.abort(), timeoutMs)
     }
 
-    const trimmed = stdout.trim()
-    if (!trimmed) return
-
-    let output: Record<string, unknown>
     try {
-      output = JSON.parse(trimmed) as Record<string, unknown>
-    } catch {
-      throw new Error(`Shell middleware "${entry}" produced invalid JSON on stdout: ${trimmed.slice(0, 200)}`)
-    }
+      const payload = JSON.stringify(serializeContext(hook, ctx))
+      const { stdout, stderr, exitCode } = await runShellProcess(resolvedCommand, args, payload, cwd, ac.signal, ctx.logger ?? logger)
 
-    applyMutations(ctx, output)
+      if (exitCode !== 0) {
+        const detail = stderr.trim() ? `\n  stderr: ${stderr.trim().slice(0, 500)}` : ''
+        throw new Error(`Shell middleware "${entry}" exited with code ${exitCode}${detail}`)
+      }
+
+      const trimmed = stdout.trim()
+      if (!trimmed) return
+
+      let output: Record<string, unknown>
+      try {
+        output = JSON.parse(trimmed) as Record<string, unknown>
+      } catch {
+        throw new Error(`Shell middleware "${entry}" produced invalid JSON on stdout: ${trimmed.slice(0, 200)}`)
+      }
+
+      applyMutations(ctx, output)
+    } finally {
+      ctx.signal.removeEventListener('abort', onParentAbort)
+      if (timeoutTimer) clearTimeout(timeoutTimer)
+    }
   }
 }

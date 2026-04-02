@@ -294,6 +294,8 @@ export default async (ctx) => {
 
 All hooks support a configurable timeout via `toolTimeout` (default: 2 minutes). If a middleware function exceeds the timeout, the loop continues without waiting.
 
+For shell middleware, the timeout is enforced by killing the child process (SIGTERM, then SIGKILL after a 3-second grace period). The entire process tree is killed, so child processes spawned by the script are also cleaned up.
+
 ## See also
 
 - [The Agent Loop](/core/agent-loop) — understand the loop lifecycle

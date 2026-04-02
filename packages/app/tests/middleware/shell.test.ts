@@ -225,6 +225,33 @@ test('loadMiddleware auto-detects .sh files without shell: prefix', async () => 
   expect(ctx.messages).toHaveLength(1)
 })
 
+test('shell middleware kills process on timeout', async () => {
+  const mw = createShellMiddleware<LoopContext>(
+    'shell: ./slow-script.sh', 'beforeLoopBegin', fixturesDir, logger, 200, // 200ms timeout
+  )
+  const ctx = fakeLoopCtx()
+  const start = Date.now()
+  // The process sleeps for 60s, but we timeout after 200ms and kill it.
+  // On SIGTERM the process exits non-zero, so we expect an error.
+  await expect(mw(ctx)).rejects.toThrow(/exited with code/)
+  const elapsed = Date.now() - start
+  expect(elapsed).toBeLessThan(5_000) // Should be ~200ms, definitely not 60s
+}, 10_000)
+
+test('shell middleware kills process when loop signal aborts', async () => {
+  const mw = createShellMiddleware<LoopContext>(
+    'shell: ./slow-script.sh', 'beforeLoopBegin', fixturesDir, logger,
+  )
+  const ac = new AbortController()
+  const ctx = fakeLoopCtx({ stop: () => ac.abort(), signal: ac.signal })
+  // Abort after 100ms
+  setTimeout(() => ac.abort(), 100)
+  const start = Date.now()
+  await expect(mw(ctx)).rejects.toThrow(/exited with code/)
+  const elapsed = Date.now() - start
+  expect(elapsed).toBeLessThan(5_000)
+}, 10_000)
+
 test('loadMiddleware auto-detects .py files without shell: prefix', async () => {
   // Write a temporary python script
   const { writeFileSync, rmSync } = await import('fs')
