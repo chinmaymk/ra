@@ -1,0 +1,33 @@
+{
+  "name": "@chinmaymk/ra-workflow",
+  "version": "0.0.1",
+  "description": "Multi-agent workflow orchestration for ra.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chinmaymk/ra.git",
+    "directory": "packages/workflow"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node --format esm && bun tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@chinmaymk/ra": "workspace:*"
+  }
+}

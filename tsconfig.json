@@ -25,7 +25,9 @@
     "baseUrl": ".",
     "paths": {
       "@chinmaymk/ra": ["./packages/ra/src/index.ts"],
-      "@chinmaymk/ra/*": ["./packages/ra/src/*"]
+      "@chinmaymk/ra/*": ["./packages/ra/src/*"],
+      "@chinmaymk/ra-workflow": ["./packages/workflow/src/index.ts"],
+      "@chinmaymk/ra-workflow/*": ["./packages/workflow/src/*"]
     }
   },
   "exclude": [

@@ -3,8 +3,8 @@ import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
 export interface SubCommand {
-  kind: 'skill' | 'recipe'
-  action: 'install' | 'remove' | 'list'
+  kind: 'skill' | 'recipe' | 'workflow'
+  action: 'install' | 'remove' | 'list' | 'run'
   args: string[]
 }
 
@@ -70,9 +70,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const userArgs = argv.slice(isScriptPath ? 2 : 1)
 
   // Check for subcommands: ra skill|recipe install|remove|list [args...]
-  const SUB_KINDS = ['skill', 'recipe'] as const
+  // or: ra workflow run [args...]
+  const SUB_KINDS = ['skill', 'recipe', 'workflow'] as const
   const kind = userArgs[0] as typeof SUB_KINDS[number]
-  if (SUB_KINDS.includes(kind) && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
+  const SUB_ACTIONS = ['install', 'remove', 'list', 'run'] as const
+  if (SUB_KINDS.includes(kind) && userArgs[1] && (SUB_ACTIONS as readonly string[]).includes(userArgs[1])) {
     return {
       config: {},
       meta: {
@@ -83,7 +85,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         runImmediately: false,
         listMemories: false,
         files: [],
-        subCommand: { kind, action: userArgs[1] as 'install' | 'remove' | 'list', args: userArgs.slice(2) },
+        subCommand: { kind, action: userArgs[1] as SubCommand['action'], args: userArgs.slice(2) },
       },
     }
   }

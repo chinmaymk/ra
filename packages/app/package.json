@@ -13,6 +13,7 @@
     "@azure/identity": "^4.13.0",
     "@azure/openai": "^2.0.0",
     "@chinmaymk/ra": "workspace:*",
+    "@chinmaymk/ra-workflow": "workspace:*",
     "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "cron-parser": "^5.5.0",

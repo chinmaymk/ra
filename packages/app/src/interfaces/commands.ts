@@ -39,10 +39,22 @@ async function loadRegistryOps(kind: 'skill' | 'recipe'): Promise<RegistryOps> {
   return { install: installRecipe, remove: removeRecipe, list: listInstalledRecipes, defaultDir: defaultRecipeInstallDir }
 }
 
-/** Handle `ra skill|recipe install|remove|list` subcommands. Exits the process. */
+/** Handle `ra skill|recipe install|remove|list` and `ra workflow run` subcommands. Exits the process. */
 export async function runSubCommand(cmd: SubCommand): Promise<void> {
   const { kind, action, args } = cmd
-  const ops = await loadRegistryOps(kind)
+
+  if (kind === 'workflow') {
+    if (action !== 'run' || args.length < 1) {
+      console.error('Usage: ra workflow run <path> [prompt]')
+      process.exit(1)
+    }
+    const { runWorkflowCommand } = await import('./workflow')
+    const [workflowPath, ...promptParts] = args
+    await runWorkflowCommand(workflowPath!, promptParts.join(' '))
+    process.exit(0)
+  }
+
+  const ops = await loadRegistryOps(kind as 'skill' | 'recipe')
 
   switch (action) {
     case 'install': {

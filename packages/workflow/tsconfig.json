@@ -4,8 +4,6 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleDetection": "force",
-    "jsx": "react-jsx",
-    "allowJs": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -21,9 +19,7 @@
     "baseUrl": ".",
     "paths": {
       "@chinmaymk/ra": ["../ra/src/index.ts"],
-      "@chinmaymk/ra/*": ["../ra/src/*"],
-      "@chinmaymk/ra-workflow": ["../workflow/src/index.ts"],
-      "@chinmaymk/ra-workflow/*": ["../workflow/src/*"]
+      "@chinmaymk/ra/*": ["../ra/src/*"]
     }
   },
   "include": ["src", "tests"],

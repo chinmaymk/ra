@@ -19,6 +19,7 @@
         "@azure/identity": "^4.13.0",
         "@azure/openai": "^2.0.0",
         "@chinmaymk/ra": "workspace:*",
+        "@chinmaymk/ra-workflow": "workspace:*",
         "@google/generative-ai": "^0.24.1",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "cron-parser": "^5.5.0",
@@ -31,7 +32,7 @@
     },
     "packages/ra": {
       "name": "@chinmaymk/ra",
-      "version": "0.0.5",
+      "version": "0.0.6",
       "devDependencies": {
         "@anthropic-ai/sdk": "^0.78.0",
         "@aws-sdk/client-bedrock-runtime": "^3.1001.0",
@@ -40,6 +41,13 @@
         "@google/generative-ai": "^0.24.1",
         "ollama": "^0.6.3",
         "openai": "^6.25.0",
+      },
+    },
+    "packages/workflow": {
+      "name": "@chinmaymk/ra-workflow",
+      "version": "0.0.1",
+      "dependencies": {
+        "@chinmaymk/ra": "workspace:*",
       },
     },
   },
@@ -141,6 +149,8 @@
     "@babel/runtime": ["@babel/runtime@7.28.6", "", {}, "sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA=="],
 
     "@chinmaymk/ra": ["@chinmaymk/ra@workspace:packages/ra"],
+
+    "@chinmaymk/ra-workflow": ["@chinmaymk/ra-workflow@workspace:packages/workflow"],
 
     "@google/generative-ai": ["@google/generative-ai@0.24.1", "", {}, "sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q=="],
 
