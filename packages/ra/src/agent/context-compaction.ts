@@ -3,7 +3,7 @@ import type { IMessage, IProvider, ContentPart } from '../providers/types'
 import type { Middleware, ModelCallContext } from './types'
 import { estimateTokens } from './token-estimator'
 import { getContextWindowSize } from './model-registry'
-import { serializeContent } from '../providers/utils'
+import { serializeContent, extractTextContent } from '../providers/utils'
 
 /** Fraction of context window reserved for recent messages during compaction. */
 const RECENT_BUDGET_FRACTION = 0.20
@@ -96,6 +96,119 @@ function appendToMessage(msg: IMessage, text: string, extraParts: ContentPart[] 
   return { ...msg, content: [...base, { type: 'text' as const, text: `\n\n${text}` }, ...extraParts] }
 }
 
+// --- Metadata extraction and summary formatting ---
+
+/** File extensions to detect when scanning message content for referenced paths. */
+const FILE_EXTENSION_PATTERN = /(?:^|\s|['"`(,])([^\s'"`),]+\.(?:ts|tsx|js|jsx|py|rs|go|java|rb|c|cpp|h|hpp|cs|swift|kt|sh|bash|zsh|json|yaml|yml|toml|md|css|scss|html|sql|proto|graphql|gql|vue|svelte))(?:\s|['"`),:]|$)/g
+
+/** Keywords that hint at pending/unfinished work in a message. */
+const PENDING_WORK_KEYWORDS = /\b(todo|next\s+step|remaining|pending|fixme|hack|still\s+need|not\s+yet|needs?\s+to\s+be)\b/i
+
+/** Maximum number of tool names / file paths to track per compaction. */
+const MAX_METADATA_ITEMS = 50
+
+export interface CompactionMetadata {
+  toolNames: string[]
+  filePaths: string[]
+  hasPendingWork: boolean
+}
+
+/** Scan compactable messages and extract programmatic metadata. */
+export function extractCompactionMetadata(messages: IMessage[]): CompactionMetadata {
+  const toolNameSet = new Set<string>()
+  const filePathSet = new Set<string>()
+  let hasPendingWork = false
+
+  for (const msg of messages) {
+    // Collect tool names from toolCalls
+    if (msg.toolCalls) {
+      for (const tc of msg.toolCalls) {
+        if (toolNameSet.size < MAX_METADATA_ITEMS) toolNameSet.add(tc.name)
+      }
+    }
+
+    // Extract text content for file path and pending work scanning
+    const text = extractTextContent(msg.content)
+
+    // Detect pending work hints
+    if (!hasPendingWork && PENDING_WORK_KEYWORDS.test(text)) {
+      hasPendingWork = true
+    }
+
+    // Extract file paths
+    if (filePathSet.size < MAX_METADATA_ITEMS) {
+      FILE_EXTENSION_PATTERN.lastIndex = 0
+      let match: RegExpExecArray | null
+      while ((match = FILE_EXTENSION_PATTERN.exec(text)) !== null) {
+        if (filePathSet.size >= MAX_METADATA_ITEMS) break
+        filePathSet.add(match[1]!)
+      }
+    }
+  }
+
+  return {
+    toolNames: [...toolNameSet],
+    filePaths: [...filePathSet],
+    hasPendingWork,
+  }
+}
+
+/** Parse XML-tagged sections from the LLM summary response. */
+function parseXmlTag(text: string, tag: string): string | undefined {
+  const pattern = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i')
+  const match = pattern.exec(text)
+  return match?.[1]?.trim() || undefined
+}
+
+/** Merge LLM summary with programmatic metadata into a structured output. */
+export function formatCompactionSummary(
+  llmSummary: string,
+  metadata: CompactionMetadata,
+  previousSummary?: string,
+): string {
+  const sections: string[] = []
+
+  // Narrative summary — strip XML tags from the LLM output for the narrative
+  const summaryBody = parseXmlTag(llmSummary, 'summary') ?? llmSummary
+    .replace(/<\/?(?:summary|pending_work|key_files)>/gi, '')
+    .trim()
+  sections.push(summaryBody)
+
+  // Previously compacted context
+  if (previousSummary) {
+    sections.push(`Previously compacted context:\n${previousSummary}`)
+  }
+
+  // Tools used — merge LLM-listed tools with extracted tool names
+  const allTools = new Set(metadata.toolNames)
+  // No LLM tool parsing needed — metadata already captures all tool calls
+  if (allTools.size > 0) {
+    sections.push(`Tools used: ${[...allTools].join(', ')}`)
+  }
+
+  // Key files — merge LLM-listed files with extracted file paths
+  const allFiles = new Set(metadata.filePaths)
+  const llmFiles = parseXmlTag(llmSummary, 'key_files')
+  if (llmFiles) {
+    for (const line of llmFiles.split('\n')) {
+      const trimmed = line.replace(/^[-*•]\s*/, '').trim()
+      if (trimmed) allFiles.add(trimmed)
+    }
+  }
+  if (allFiles.size > 0) {
+    sections.push(`Key files: ${[...allFiles].join(', ')}`)
+  }
+
+  // Pending work
+  const llmPending = parseXmlTag(llmSummary, 'pending_work')
+  if (llmPending || metadata.hasPendingWork) {
+    const pendingText = llmPending ?? 'Pending work detected in conversation.'
+    sections.push(`Pending work: ${pendingText}`)
+  }
+
+  return sections.join('\n\n')
+}
+
 export type CompactionStrategy = 'truncate' | 'summarize'
 
 export interface CompactionConfig {
@@ -119,6 +232,9 @@ const DEFAULT_SUMMARIZATION_PROMPT = `Summarize the conversation in <conversatio
 <rule>Preserve current state of the task being worked on</rule>
 <rule>Preserve relevant tool results and their outcomes</rule>
 <rule>Be concise but complete</rule>
+<rule>Wrap your narrative summary in <summary> tags</rule>
+<rule>List any pending work or next steps in <pending_work> tags</rule>
+<rule>List key file paths referenced in <key_files> tags, one per line</rule>
 </instructions>`
 
 // Patterns matched against err.message from each provider's SDK.
@@ -247,6 +363,21 @@ async function _runCompaction(
   let middle: IMessage[] = []
 
   if (strategy === 'summarize') {
+    // Extract programmatic metadata before calling the LLM
+    const metadata = extractCompactionMetadata(compactable)
+
+    // Check for an existing compacted summary in pinned messages
+    let previousSummary: string | undefined
+    for (const msg of pinned) {
+      const text = extractTextContent(msg.content)
+      const marker = '[Context Summary]'
+      const idx = text.indexOf(marker)
+      if (idx >= 0) {
+        previousSummary = text.slice(idx + marker.length).trim()
+        break
+      }
+    }
+
     const conversationText = compactable.map(m => {
       const content = serializeContent(m.content)
       const toolInfo = m.toolCalls ? ` [tool calls: ${m.toolCalls.map(t => t.name).join(', ')}]` : ''
@@ -266,8 +397,11 @@ async function _runCompaction(
       return false
     }
 
-    const summaryContent = serializeContent(summaryResponse.message.content)
-    const summaryText = `[Context Summary]\n${summaryContent}`
+    const llmSummary = serializeContent(summaryResponse.message.content)
+    const formattedSummary = config.prompt
+      ? llmSummary  // Custom prompt: don't apply formatting, user controls output
+      : formatCompactionSummary(llmSummary, metadata, previousSummary)
+    const summaryText = `[Context Summary]\n${formattedSummary}`
 
     // Merge summary into the last pinned user message, absorbing the first recent
     // user message if it exists (to avoid an orphaned summary-only message).

@@ -17,7 +17,7 @@ agent:
 Two strategies:
 
 - **`truncate`** (default) — Drops messages from the back of the compactable zone (the transition between old and recent context). Free, instant, and maximally cache-friendly: the message prefix `[system, first_user, early_turns...]` stays byte-identical across compactions, giving maximum prefix cache hits on all providers.
-- **`summarize`** — Calls a cheap model to summarize the entire compactable zone and injects the summary into the pinned user message. Costs an extra API call but preserves more context semantically.
+- **`summarize`** — Calls a model to summarize the entire compactable zone, enriches the summary with programmatically extracted metadata (tools used, key files, pending work), and injects the result into the pinned user message. Costs an extra API call but preserves more context semantically.
 
 ```yaml
 # opt into summarization if you prefer preserving context over cost
@@ -25,6 +25,27 @@ agent:
   compaction:
     strategy: summarize
     model: claude-haiku-4-5-20251001  # cheap model for summarization
+```
+
+### Enriched summaries
+
+When using the `summarize` strategy, ra doesn't just forward the LLM's summary verbatim. Before calling the model, it scans the compactable messages and extracts:
+
+- **Tool names** — every tool called during the compacted portion
+- **File paths** — code file references detected in message content (`.ts`, `.py`, `.rs`, `.go`, etc.)
+- **Pending work hints** — messages containing keywords like "todo", "next step", "remaining", "pending"
+
+The LLM is prompted to return structured XML tags (`<summary>`, `<pending_work>`, `<key_files>`) alongside its narrative summary. ra then merges the LLM output with the programmatic metadata, deduplicates file paths, and produces a single enriched summary that includes tools used, key files, and pending work sections.
+
+When re-compacting an already-compacted session, the previous summary is preserved as a "Previously compacted context" section, so no context is silently lost across multiple compactions.
+
+To fully control the summarization output, set a custom `prompt` — this bypasses the metadata formatting and uses the LLM response as-is:
+
+```yaml
+agent:
+  compaction:
+    strategy: summarize
+    prompt: "Summarize this conversation in bullet points."
 ```
 
 Key properties:

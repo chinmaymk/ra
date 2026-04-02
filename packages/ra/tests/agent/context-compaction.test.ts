@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact, parseContextWindowFromError } from '@chinmaymk/ra'
-import type { IMessage, IProvider, ChatResponse } from '@chinmaymk/ra'
+import { splitMessageZones, createCompactionMiddleware, isContextLengthError, forceCompact, parseContextWindowFromError, extractCompactionMetadata, formatCompactionSummary } from '@chinmaymk/ra'
+import type { IMessage, IProvider, ChatResponse, CompactionMetadata } from '@chinmaymk/ra'
 import { makeModelCallCtx } from './test-utils'
 
 describe('splitMessageZones', () => {
@@ -875,5 +875,211 @@ describe('parseContextWindowFromError', () => {
   it('handles non-Error values', () => {
     expect(parseContextWindowFromError('maximum context length is 32000 tokens')).toBe(32_000)
     expect(parseContextWindowFromError('random string')).toBeUndefined()
+  })
+})
+
+describe('extractCompactionMetadata', () => {
+  it('extracts tool names from toolCalls', () => {
+    const messages: IMessage[] = [
+      { role: 'assistant', content: 'calling tools', toolCalls: [
+        { id: 'tc1', name: 'read_file', arguments: '{}' },
+        { id: 'tc2', name: 'write_file', arguments: '{}' },
+      ] },
+      { role: 'tool', content: 'result', toolCallId: 'tc1' },
+      { role: 'tool', content: 'result', toolCallId: 'tc2' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.toolNames).toContain('read_file')
+    expect(meta.toolNames).toContain('write_file')
+  })
+
+  it('deduplicates tool names', () => {
+    const messages: IMessage[] = [
+      { role: 'assistant', content: 'a', toolCalls: [{ id: 'tc1', name: 'read', arguments: '{}' }] },
+      { role: 'tool', content: 'r', toolCallId: 'tc1' },
+      { role: 'assistant', content: 'b', toolCalls: [{ id: 'tc2', name: 'read', arguments: '{}' }] },
+      { role: 'tool', content: 'r', toolCallId: 'tc2' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.toolNames).toEqual(['read'])
+  })
+
+  it('extracts file paths from string content', () => {
+    const messages: IMessage[] = [
+      { role: 'user', content: 'Please edit src/index.ts and lib/utils.py' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.filePaths).toContain('src/index.ts')
+    expect(meta.filePaths).toContain('lib/utils.py')
+  })
+
+  it('extracts file paths from ContentPart[] content', () => {
+    const messages: IMessage[] = [
+      { role: 'user', content: [
+        { type: 'text', text: 'I modified packages/core/main.rs today' },
+      ] },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.filePaths).toContain('packages/core/main.rs')
+  })
+
+  it('detects pending work keywords', () => {
+    const messages: IMessage[] = [
+      { role: 'assistant', content: 'I completed the first part. TODO: handle edge cases.' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.hasPendingWork).toBe(true)
+  })
+
+  it('detects "next step" as pending work', () => {
+    const messages: IMessage[] = [
+      { role: 'assistant', content: 'The next step is to add validation.' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.hasPendingWork).toBe(true)
+  })
+
+  it('detects "remaining" as pending work', () => {
+    const messages: IMessage[] = [
+      { role: 'user', content: 'There are remaining issues to fix.' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.hasPendingWork).toBe(true)
+  })
+
+  it('reports no pending work when none detected', () => {
+    const messages: IMessage[] = [
+      { role: 'assistant', content: 'Everything is done and working.' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.hasPendingWork).toBe(false)
+  })
+
+  it('limits tool names to MAX_METADATA_ITEMS', () => {
+    const toolCalls = Array.from({ length: 60 }, (_, i) => ({
+      id: `tc${i}`, name: `tool_${i}`, arguments: '{}',
+    }))
+    const messages: IMessage[] = [
+      { role: 'assistant', content: 'many tools', toolCalls },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.toolNames.length).toBeLessThanOrEqual(50)
+  })
+
+  it('limits file paths to MAX_METADATA_ITEMS', () => {
+    const paths = Array.from({ length: 60 }, (_, i) => `file${i}.ts`).join(' ')
+    const messages: IMessage[] = [
+      { role: 'user', content: paths },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.filePaths.length).toBeLessThanOrEqual(50)
+  })
+
+  it('returns empty arrays for messages with no tools or files', () => {
+    const messages: IMessage[] = [
+      { role: 'user', content: 'Hello, how are you?' },
+      { role: 'assistant', content: 'I am fine, thanks!' },
+    ]
+    const meta = extractCompactionMetadata(messages)
+    expect(meta.toolNames).toEqual([])
+    expect(meta.filePaths).toEqual([])
+    expect(meta.hasPendingWork).toBe(false)
+  })
+})
+
+describe('formatCompactionSummary', () => {
+  const baseMeta: CompactionMetadata = { toolNames: [], filePaths: [], hasPendingWork: false }
+
+  it('includes tool names in output', () => {
+    const meta: CompactionMetadata = { ...baseMeta, toolNames: ['read_file', 'write_file'] }
+    const result = formatCompactionSummary('The user edited files.', meta)
+    expect(result).toContain('Tools used: read_file, write_file')
+  })
+
+  it('includes file paths in output', () => {
+    const meta: CompactionMetadata = { ...baseMeta, filePaths: ['src/main.ts', 'lib/utils.py'] }
+    const result = formatCompactionSummary('Worked on two files.', meta)
+    expect(result).toContain('Key files: src/main.ts, lib/utils.py')
+  })
+
+  it('includes pending work from metadata', () => {
+    const meta: CompactionMetadata = { ...baseMeta, hasPendingWork: true }
+    const result = formatCompactionSummary('Started the refactor.', meta)
+    expect(result).toContain('Pending work:')
+  })
+
+  it('preserves previous summary as separate section', () => {
+    const result = formatCompactionSummary('New summary here.', baseMeta, 'Old summary from before.')
+    expect(result).toContain('Previously compacted context:')
+    expect(result).toContain('Old summary from before.')
+  })
+
+  it('parses <summary> XML tag from LLM response', () => {
+    const llm = '<summary>The user asked to fix a bug in the login flow.</summary>'
+    const result = formatCompactionSummary(llm, baseMeta)
+    expect(result).toContain('The user asked to fix a bug in the login flow.')
+    expect(result).not.toContain('<summary>')
+  })
+
+  it('parses <pending_work> XML tag from LLM response', () => {
+    const llm = '<summary>Fixed auth.</summary>\n<pending_work>Still need to add tests.</pending_work>'
+    const result = formatCompactionSummary(llm, baseMeta)
+    expect(result).toContain('Pending work: Still need to add tests.')
+  })
+
+  it('parses <key_files> XML tag and deduplicates with metadata', () => {
+    const llm = '<summary>Edited files.</summary>\n<key_files>\n- src/main.ts\n- src/other.ts\n</key_files>'
+    const meta: CompactionMetadata = { ...baseMeta, filePaths: ['src/main.ts', 'lib/new.rs'] }
+    const result = formatCompactionSummary(llm, meta)
+    expect(result).toContain('src/main.ts')
+    expect(result).toContain('src/other.ts')
+    expect(result).toContain('lib/new.rs')
+    // src/main.ts should appear only once
+    const keyFilesLine = result.split('\n').find(l => l.startsWith('Key files:'))!
+    const occurrences = keyFilesLine.split('src/main.ts').length - 1
+    expect(occurrences).toBe(1)
+  })
+
+  it('handles LLM response with no XML tags', () => {
+    const result = formatCompactionSummary('Just a plain summary.', baseMeta)
+    expect(result).toContain('Just a plain summary.')
+  })
+
+  it('omits sections when metadata is empty', () => {
+    const result = formatCompactionSummary('Simple summary.', baseMeta)
+    expect(result).not.toContain('Tools used:')
+    expect(result).not.toContain('Key files:')
+    expect(result).not.toContain('Pending work:')
+  })
+})
+
+describe('summarize strategy with metadata integration', () => {
+  it('includes metadata in compacted summary', async () => {
+    const provider: IProvider = {
+      name: 'mock',
+      chat: async () => ({
+        message: { role: 'assistant' as const, content: '<summary>User worked on auth module.</summary>\n<pending_work>Add error handling.</pending_work>' },
+      }),
+      async *stream() { yield { type: 'done' as const } },
+    }
+    const mw = createCompactionMiddleware(provider, { enabled: true, threshold: 0.8, strategy: 'summarize', maxTokens: 10, contextWindow: 100 })
+    const longText = 'word '.repeat(200)
+    const messages: IMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'fix src/auth.ts' },
+      { role: 'assistant', content: 'calling read', toolCalls: [{ id: 'tc1', name: 'read_file', arguments: '{}' }] },
+      { role: 'tool', content: longText, toolCallId: 'tc1' },
+      { role: 'assistant', content: longText },
+      { role: 'user', content: 'latest' },
+    ]
+    const ctx = makeCtx(messages)
+    await mw(ctx)
+    const summaryMsg = ctx.request.messages.find(
+      m => typeof m.content === 'string' && m.content.includes('[Context Summary]')
+    )
+    expect(summaryMsg).toBeDefined()
+    const content = summaryMsg!.content as string
+    expect(content).toContain('Tools used: read_file')
+    expect(content).toContain('Pending work: Add error handling.')
   })
 })

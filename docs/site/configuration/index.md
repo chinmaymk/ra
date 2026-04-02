@@ -138,8 +138,9 @@ agent:
 |-------|----------|---------|-------------|
 | `agent.compaction.enabled` | — | `true` | Enable automatic context compaction |
 | `agent.compaction.threshold` | — | `0.90` | Trigger at this fraction of context window |
-| `agent.compaction.strategy` | — | `'truncate'` | `'truncate'` drops old messages (free, cache-friendly); `'summarize'` calls a model |
+| `agent.compaction.strategy` | — | `'truncate'` | `'truncate'` drops old messages (free, cache-friendly); `'summarize'` calls a model with metadata enrichment |
 | `agent.compaction.model` | — | provider default | Model for summarization (only used with `strategy: 'summarize'`) |
+| `agent.compaction.prompt` | — | built-in | Custom summarization prompt. When set, bypasses metadata enrichment and uses the LLM response as-is |
 
 ### Agent — Context
 
