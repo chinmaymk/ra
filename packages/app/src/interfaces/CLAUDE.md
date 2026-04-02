@@ -12,9 +12,15 @@ loadConfig() → createProvider() → ToolRegistry + MCP tools → loadSkills() 
 
 | File | Purpose |
 |------|---------|
+| `launchers.ts` | Interface launcher functions + signal helpers (called from `index.ts`) |
 | `cli.ts` | One-shot mode: takes a prompt, runs the loop once, exits |
 | `repl.ts` | Interactive mode: readline loop, session persistence, `/slash` commands |
 | `http.ts` | HTTP server: `POST /chat` (SSE streaming) and `POST /chat/sync` (JSON) |
+| `inspector.ts` | Inspector web UI server (session viewer, config, memory CRUD) |
+| `inspector-stats.ts` | Pure functions: stats aggregation + timeline building for inspector |
+| `cron.ts` | Cron scheduler: runs agent jobs on cron expressions |
+| `messages.ts` | Shared message threading: `buildThreadMessages`, `createSessionLoop` |
+| `commands.ts` | Standalone CLI commands (`--exec`, `--show-context`, subcommands) |
 | `parse-args.ts` | CLI argument parser shared across interfaces |
 | `tui.ts` | Terminal UI utilities (spinners, thinking boxes, tool timing) |
 
