@@ -12,6 +12,7 @@
   <a href="#install">Install</a> &middot;
   <a href="#the-loop">The Loop</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
+  <a href="#custom-tools">Custom Tools</a> &middot;
   <a href="#observability">Observability</a> &middot;
   <a href="#configuration">Configuration</a> &middot;
   <a href="#recipes">Recipes</a>
@@ -23,9 +24,11 @@
 
 ---
 
-Build your agent with ra.
+**Build your agent with ra.**
 
-Most agents are closed boxes — you can use them, but you can't change how they think, what they're allowed to do, or how they run. ra gives you the same power with full control. Every part of it — the model, the tools, the permissions, the guardrails, the system prompt, the middleware — is yours to configure, extend, or replace. And every run comes with full observability built in.
+Most agents work great — until you need to change something. Swap the model, add a guardrail, write a custom tool, enforce a policy. That's where closed boxes break down.
+
+ra is the infinitely customizable alternative. The model, the tools, the permissions, the guardrails, the system prompt, the middleware — every part is yours to configure, extend, or replace. Write custom tools in TypeScript or any scripting language. Intercept every step with middleware. And get full observability on every run — no extra setup.
 
 A coding agent, a code reviewer, a research agent, a multi-agent orchestrator — these aren't separate codebases. They're different configs:
 
@@ -36,7 +39,7 @@ ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache co
 ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
 
-One tool, any agent. Swap the model, add a guardrail, wire in custom middleware — it's all just config.
+One tool, any agent.
 
 ## Install
 
@@ -98,6 +101,52 @@ agent:
 ```
 
 Available hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelResponse`, `beforeToolExecution`, `afterToolExecution`, `afterLoopIteration`, `afterLoopComplete`, `onError`.
+
+## Custom Tools
+
+Need your agent to deploy, run a health check, or query an internal API? Write a tool in TypeScript:
+
+```ts
+// tools/deploy.ts
+export default {
+  name: 'Deploy',
+  description: 'Deploy a branch to staging',
+  parameters: {
+    branch: { type: 'string', description: 'Git branch to deploy' },
+    dryRun: { type: 'boolean', description: 'Preview only', optional: true },
+  },
+  async execute(input) {
+    const { branch, dryRun } = input as { branch: string; dryRun?: boolean }
+    // your logic here
+    return `Deployed ${branch} to staging`
+  },
+}
+```
+
+Or a shell script — any language works:
+
+```bash
+#!/bin/bash
+# tools/health-check.sh
+if [ "$1" = "--describe" ]; then
+  echo '{ "name": "HealthCheck", "description": "Check service health", "parameters": { "url": { "type": "string" } } }'
+  exit 0
+fi
+read -r input
+curl -sf "$(echo "$input" | jq -r '.url')" && echo "healthy" || echo "down"
+```
+
+Register them in config:
+
+```yaml
+agent:
+  tools:
+    custom:
+      - ./tools/deploy.ts
+      - ./tools/health-check.sh
+```
+
+The model discovers them automatically. Your tools get the same observability and permission controls as built-in ones.
 
 ## Observability
 
