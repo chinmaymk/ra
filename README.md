@@ -26,9 +26,7 @@
 
 **Build your agent with ra.**
 
-Most agents work great — until you need to change something. Swap the model, add a guardrail, write a custom tool, enforce a policy. That's where closed boxes break down.
-
-ra is the infinitely customizable alternative. The model, the tools, the permissions, the guardrails, the system prompt, the middleware — every part is yours to configure, extend, or replace. Write custom tools in TypeScript or any scripting language. Intercept every step with middleware. And get full observability on every run — no extra setup.
+Most agents work great — until you need to change something. ra gives you the same power with full control. Every part is yours to configure, extend, or replace — and every run comes with full observability built in.
 
 A coding agent, a code reviewer, a research agent, a multi-agent orchestrator — these aren't separate codebases. They're different configs:
 
@@ -104,7 +102,7 @@ Available hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterMo
 
 ## Custom Tools
 
-Need your agent to deploy, run a health check, or query an internal API? Write a tool in TypeScript:
+Need your agent to deploy, query an internal API, or run a health check? Export a tool:
 
 ```ts
 // tools/deploy.ts
@@ -123,36 +121,20 @@ export default {
 }
 ```
 
-Or a shell script — any language works:
-
-```bash
-#!/bin/bash
-# tools/health-check.sh
-if [ "$1" = "--describe" ]; then
-  echo '{ "name": "HealthCheck", "description": "Check service health", "parameters": { "url": { "type": "string" } } }'
-  exit 0
-fi
-read -r input
-curl -sf "$(echo "$input" | jq -r '.url')" && echo "healthy" || echo "down"
-```
-
-Register them in config:
+Register in config, and the model picks them up automatically:
 
 ```yaml
 agent:
   tools:
     custom:
       - ./tools/deploy.ts
-      - ./tools/health-check.sh
 ```
 
-The model discovers them automatically. Your tools get the same observability and permission controls as built-in ones.
+Works with shell scripts and any scripting language too — [see the docs](https://chinmaymk.github.io/ra/tools/custom).
 
 ## Observability
 
-Every agent you build with ra gets full observability for free — no extra code, no separate tracing library.
-
-Every model call, tool execution, and decision is captured automatically. `ra --inspector` opens a web dashboard showing the full run: iterations, token spend, tool calls, traces, and the complete message history.
+Every model call, tool execution, and decision is captured automatically — including your custom tools. `ra --inspector` opens a web dashboard showing the full run: iterations, token spend, tool calls, traces, and the complete message history.
 
 ```bash
 ra --inspector        # web dashboard
@@ -162,7 +144,7 @@ ra --show-context     # discovered context files
 
 ## Configuration
 
-Everything is configurable and nothing is hidden. Config lives in your repo — no hidden prompts, no default system prompt. One engineer defines the agent's behavior, commits it, and everyone on the team runs the exact same agent.
+Config lives in your repo — no hidden prompts, no default system prompt. One engineer defines the agent's behavior, commits it, and everyone on the team runs the exact same agent.
 
 ```yaml
 # ra.config.yml
