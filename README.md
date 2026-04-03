@@ -23,9 +23,9 @@
 
 ---
 
-Everyone is building agents from scratch — stitching together model calls, tool execution, retries, and guardrails into bespoke code that no one else can audit or reproduce.
+Build your agent with ra.
 
-ra replaces all of that with one loop and a config file. You define what the agent can do, what it can't, and how it behaves — then ra runs it with full observability out of the box.
+Most agents are closed boxes — you can use them, but you can't change how they think, what they're allowed to do, or how they run. ra gives you the same power with full control. Every part of it — the model, the tools, the permissions, the guardrails, the system prompt, the middleware — is yours to configure, extend, or replace. And every run comes with full observability built in.
 
 A coding agent, a code reviewer, a research agent, a multi-agent orchestrator — these aren't separate codebases. They're different configs:
 
@@ -36,7 +36,7 @@ ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache co
 ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
 
-No scaffolding. No custom orchestration code. One tool, any agent.
+One tool, any agent. Swap the model, add a guardrail, wire in custom middleware — it's all just config.
 
 ## Install
 
@@ -67,7 +67,7 @@ agent:
 
 ## Middleware
 
-Intercept any step in the loop. Full context at every step — read it, mutate it, stop it.
+This is where ra becomes truly yours. Intercept any step in the loop — read the full context, mutate it, or stop it entirely.
 
 ```ts
 // middleware/audit.ts — log every tool call
@@ -113,7 +113,7 @@ ra --show-context     # discovered context files
 
 ## Configuration
 
-Config lives in your repo. No hidden prompts, no default system prompt. One engineer defines behavior — everyone else runs the same agent.
+Everything is configurable and nothing is hidden. Config lives in your repo — no hidden prompts, no default system prompt. One engineer defines the agent's behavior, commits it, and everyone on the team runs the exact same agent.
 
 ```yaml
 # ra.config.yml
@@ -158,11 +158,13 @@ Same binary. Same loop. Different behavior — defined entirely in config:
 ra --config recipes/coding-agent "Fix the failing test"
 ```
 
-## More
+## Extend It
 
-[**Tools**](https://chinmaymk.github.io/ra/tools/) — filesystem, shell, web fetch, and a parallel sub-agent spawner. Each independently configurable or disabled.
+ra is designed to be built on. Pick what you need:
 
-[**Skills**](https://chinmaymk.github.io/ra/skills/) — reusable instruction bundles (`code-review`, `architect`, `debugger`, and more). Install from GitHub or npm.
+[**Tools**](https://chinmaymk.github.io/ra/tools/) — filesystem, shell, web fetch, and a parallel sub-agent spawner. Enable, disable, or configure each one independently.
+
+[**Skills**](https://chinmaymk.github.io/ra/skills/) — reusable instruction bundles (`code-review`, `architect`, `debugger`, and more). Install from GitHub or npm, or write your own.
 
 [**MCP**](https://chinmaymk.github.io/ra/modes/mcp/) — expose skills as tools for Cursor, Claude Desktop, or other agents; connect to external MCP servers.
 
