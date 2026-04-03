@@ -23,15 +23,20 @@
 
 ---
 
-Agents run loops you can't see.
+Everyone is building agents from scratch — stitching together model calls, tool execution, retries, and guardrails into bespoke code that no one else can audit or reproduce.
 
-ra makes the loop explicit — and lets you control every step.
+ra replaces all of that with one loop and a config file. You define what the agent can do, what it can't, and how it behaves — then ra runs it with full observability out of the box.
 
-It runs tasks end-to-end like other agents, but unlike them, you can see, constrain, and reproduce everything it does. Not a framework. Not prompt chains. Just the loop, with control and visibility around it.
+A coding agent, a code reviewer, a research agent, a multi-agent orchestrator — these aren't separate codebases. They're different configs:
 
 ```bash
 ra "Fix the failing tests and open a PR"
+ra --config recipes/code-review-agent  "Review the last 3 PRs"
+ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache compression"
+ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
+
+No scaffolding. No custom orchestration code. One tool, any agent.
 
 ## Install
 
@@ -96,9 +101,9 @@ Available hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterMo
 
 ## Observability
 
-Every model call, tool execution, and decision is captured automatically.
+Every agent you build with ra gets full observability for free — no extra code, no separate tracing library.
 
-`ra --inspector` shows the full run: iterations, tokens, tools, traces, message history.
+Every model call, tool execution, and decision is captured automatically. `ra --inspector` opens a web dashboard showing the full run: iterations, token spend, tool calls, traces, and the complete message history.
 
 ```bash
 ra --inspector        # web dashboard
@@ -138,15 +143,19 @@ Layered overrides: `defaults → config file → env vars → CLI flags`. YAML, 
 
 ## Recipes
 
-Complete agent configurations to fork and commit to your repo.
+Each recipe is a complete agent — not a library, not a template, just a config file and optional middleware you commit to your repo.
 
-- **[Coding Agent](recipes/coding-agent/)** — file editing, shell, adaptive thinking, context compaction
-- **[Code Review Agent](recipes/code-review-agent/)** — GitHub MCP, style guide, diff scripts, token budget middleware
-- **[Auto-Research Agent](recipes/karpathy-autoresearch/)** — autonomous ML research: run experiments, evaluate, iterate
-- **[Multi-Agent Orchestrator](recipes/multi-agent/)** — persistent specialist agents as independent processes
+| Recipe | What it does | Model | Key difference from vanilla ra |
+|--------|-------------|-------|-------------------------------|
+| **[Coding Agent](recipes/coding-agent/)** | Edits files, runs tests, ships code | Opus | Memory, high thinking, 200 iterations |
+| **[Code Review Agent](recipes/code-review-agent/)** | Reviews PRs against your style guide | Sonnet | Token budget middleware, custom skills |
+| **[Auto-Research Agent](recipes/karpathy-autoresearch/)** | Runs experiments, evaluates, iterates | Sonnet | 500 iterations, 15-min tool timeout |
+| **[Multi-Agent Orchestrator](recipes/multi-agent/)** | Spawns and coordinates specialist agents | Sonnet | Concurrency 4, orchestrator skill |
+
+Same binary. Same loop. Different behavior — defined entirely in config:
 
 ```bash
-ra --config recipes/coding-agent/ra.config.yaml "Fix the failing test"
+ra --config recipes/coding-agent "Fix the failing test"
 ```
 
 ## More
