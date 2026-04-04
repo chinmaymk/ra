@@ -57,6 +57,19 @@ export default async function benchContext(ctx: LoopContext): Promise<void> {
     }
   }
 
+  // Inject anti-patterns (long-term memory across compaction)
+  if (existsSync("anti-patterns.md")) {
+    const antiPatterns = readFileSync("anti-patterns.md", "utf-8").trim()
+    if (antiPatterns) {
+      parts.push("", "## Anti-Patterns (DO NOT repeat these)", antiPatterns)
+    }
+  }
+
+  // Inject best checkpoint info
+  if (existsSync("best/")) {
+    parts.push("", "## Checkpoint", "`best/` directory exists with the current best config/code. Restore from here if needed.")
+  }
+
   if (parts.length > 0) {
     ctx.messages.push({
       role: "user",
@@ -65,6 +78,8 @@ export default async function benchContext(ctx: LoopContext): Promise<void> {
     ctx.logger.info("bench-context:injected", {
       hasSpec: true,
       hasJournal: existsSync("journal.jsonl"),
+      hasAntiPatterns: existsSync("anti-patterns.md"),
+      hasCheckpoint: existsSync("best/"),
     })
   }
 }

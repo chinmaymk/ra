@@ -1,15 +1,18 @@
 # Example bench.yaml — copy to your working directory and customize.
 #
-# This file tells the auto-improve agent what to benchmark,
+# This file tells the auto-improve orchestrator what to benchmark,
 # what it can tune, and how to evaluate results.
 
 # -------------------------------------------------------------------
 # Benchmark execution
 # -------------------------------------------------------------------
 
-# Command to run the benchmark. Use $CONFIG to reference the config under test.
-# The agent will copy the target config, modify it, and set CONFIG to the copy path.
+# Full benchmark command. Use $CONFIG to reference the config under test.
 run: ra --config $CONFIG --cli "solve the task" < tasks.jsonl
+
+# Fast subset for smoke-testing proposals before a full run (optional).
+# Should test ~10% of cases and return the same score format.
+run_subset: ra --config $CONFIG --cli "solve the task" < tasks_subset.jsonl
 
 # How to extract the top-line score from stdout/stderr
 score:
@@ -21,11 +24,27 @@ results:
   file: results.json
 
 # -------------------------------------------------------------------
+# Variance control
+# -------------------------------------------------------------------
+
+# Number of benchmark runs per evaluation (default: 1).
+# Higher values give more reliable scores but cost more.
+# Use runs > 1 for noisy benchmarks; the orchestrator computes mean ± stddev
+# and only trusts improvements that exceed 2x the standard deviation.
+runs: 3
+
+# -------------------------------------------------------------------
+# Stopping conditions
+# -------------------------------------------------------------------
+
+# Stop when this score is reached (optional). Omit to run indefinitely.
+target_score: 90.0
+
+# -------------------------------------------------------------------
 # Degrees of freedom — what the agent is allowed to tune
 # -------------------------------------------------------------------
 
-# The ra config being optimized. The agent reads this, understands
-# every knob, and proposes changes across all axes.
+# The ra config being optimized
 config: ./agent-under-test.config.yaml
 
 # Source code directories that can be modified (tool implementations,

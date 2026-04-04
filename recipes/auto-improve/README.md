@@ -21,10 +21,88 @@ failures ─┐               │
 ```
 
 1. **Understand** — read benchmark, target config, codebase, and baseline results
-2. **Diagnose** — analyze failures to decide which axes to explore and whether jointly or in isolation
-3. **Explore in parallel** — spawn agents, each tuning one or more axes
+2. **Diagnose** — replay failing cases, cluster by root cause, decide which axes to explore jointly or in isolation
+3. **Explore in parallel** — spawn agents, each tuning one or more axes; smoke-test with subset first
 4. **Layer** — apply proposals in rank order, verifying each addition with a benchmark run
-5. **Iterate** — re-diagnose, evolve strategy (isolated → joint → ablation), repeat
+5. **Checkpoint** — update `best/` directory and git tag on every new best score
+6. **Iterate** — re-diagnose, evolve strategy, consult anti-patterns, repeat
+
+## Key features
+
+### Parallel multi-axis exploration
+Up to 4 agents explore different axes simultaneously via the Agent tool. Agents can explore axes in isolation, jointly, or test ablations.
+
+### Variance-aware scoring
+For noisy benchmarks, set `runs: N` to run the benchmark multiple times. The orchestrator computes mean ± stddev and only trusts improvements that exceed 2x the standard deviation.
+
+### Fast feedback with subset
+Define `run_subset` in bench.yaml for a cheap smoke test (~10% of cases). Agents test proposals on the subset first and only commit to a full run for promising changes.
+
+### Single-case replay
+Before proposing changes, the orchestrator replays specific failing cases with verbose output to diagnose exactly where the agent-under-test goes wrong. Ground truth, not guesswork.
+
+### Checkpointing
+`best/` directory always contains the canonical best config, code, prompt, and skills. Git tags mark each improvement. Campaign can resume from any crash or cron restart.
+
+### Anti-pattern memory
+`anti-patterns.md` persists failed hypotheses across context compaction and cron runs. The orchestrator reads it before every round to avoid repeating mistakes.
+
+### Cron scheduling
+Run the loop on a timer for continuous improvement:
+
+```yaml
+app:
+  interface: cron
+cron:
+  - name: "auto-improve"
+    schedule: "0 */2 * * *"
+    prompt: "Read /auto-improve and continue from where we left off."
+    agent: path/to/recipes/auto-improve/ra.config.yaml
+```
+
+## Setup
+
+### 1. Create bench.yaml
+
+```yaml
+run: python eval.py --config $CONFIG
+run_subset: python eval.py --config $CONFIG --subset 20
+score:
+  pattern: "accuracy:\\s*([\\d.]+)"
+  direction: higher
+results:
+  file: results.json
+runs: 3
+target_score: 90.0
+config: ./agent-under-test.config.yaml
+code:
+  - src/tools/
+prompt: ./system-prompt.md
+validate: bun tsc && bun test
+```
+
+### 2. Run
+
+```bash
+ra --config path/to/recipes/auto-improve/ra.config.yaml
+```
+
+## bench.yaml reference
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `run` | Yes | — | Full benchmark command. `$CONFIG` = config path |
+| `run_subset` | No | — | Fast subset command for smoke-testing |
+| `score.pattern` | Yes | — | Regex with one capture group for the number |
+| `score.direction` | Yes | — | `higher` or `lower` |
+| `results.file` | No | — | Per-case results file for failure analysis |
+| `runs` | No | `1` | Runs per evaluation (for variance estimation) |
+| `target_score` | No | — | Stop when reached |
+| `config` | No | — | Ra config to optimize |
+| `code` | No | — | Source code directories to modify |
+| `prompt` | No | — | System prompt file |
+| `skills` | No | — | Skill directories |
+| `validate` | No | — | Pre-benchmark validation command |
 
 ## Degrees of freedom
 
@@ -40,96 +118,14 @@ failures ─┐               │
 | Middleware | Custom hooks | Add validation hook, context injection |
 | Target code | Tool/middleware implementations | Fix edge cases, improve error messages |
 
-## Setup
+## Output files
 
-### 1. Create bench.yaml
-
-```yaml
-# What to benchmark
-run: python eval.py --config $CONFIG
-score:
-  pattern: "accuracy:\\s*([\\d.]+)"
-  direction: higher
-results:
-  file: results.json
-
-# What can be tuned
-config: ./agent-under-test.config.yaml
-code:
-  - src/tools/
-  - src/middleware/
-prompt: ./system-prompt.md
-skills:
-  - ./skills/
-validate: bun tsc && bun test
-```
-
-### 2. Run
-
-```bash
-ra --config path/to/recipes/auto-improve/ra.config.yaml
-```
-
-The orchestrator reads your bench.yaml, runs a baseline, analyzes failures, and enters the parallel improvement loop.
-
-### 3. Continuous improvement with cron
-
-For long-running campaigns, add cron scheduling to run the loop on a timer:
-
-```yaml
-app:
-  interface: cron
-
-cron:
-  - name: "auto-improve"
-    schedule: "0 */2 * * *"    # Every 2 hours
-    prompt: "Read /auto-improve and continue from where we left off."
-    agent: path/to/recipes/auto-improve/ra.config.yaml
-```
-
-Each cron run reads `journal.jsonl`, picks up where the last run left off, and does another round of parallel exploration.
-
-## bench.yaml reference
-
-```yaml
-# Required
-run: <benchmark command>           # Use $CONFIG for the config path
-score:
-  pattern: <regex>                 # One capture group for the number
-  direction: higher | lower
-
-# Optional
-results:
-  file: <path>                     # Per-case results for failure analysis
-config: <path>                     # Ra config to optimize
-code:                              # Source code to modify
-  - <path or glob>
-prompt: <path>                     # System prompt file
-skills:                            # Skill directories
-  - <path>
-validate: <command>                # Pre-benchmark validation
-```
-
-## Output
-
-All progress is logged to `journal.jsonl` — one JSON line per outer-loop iteration:
-
-```json
-{
-  "iteration": 3,
-  "score": 78.2,
-  "best": 76.5,
-  "delta": "+1.7",
-  "axes_explored": ["prompt", "tools", "thinking"],
-  "proposals": [
-    {"axis": "prompt", "score": 77.8, "applied": true, "description": "Added output format examples"},
-    {"axis": "tools", "score": 78.2, "applied": true, "description": "Improved Grep description"},
-    {"axis": "thinking", "score": 76.1, "applied": false, "description": "Tried adaptive thinking"}
-  ],
-  "combined_score": 78.2,
-  "remaining_failures": 35
-}
-```
+| File | Purpose |
+|------|---------|
+| `journal.jsonl` | One JSON line per iteration: score, proposals, diffs, case-level impact |
+| `anti-patterns.md` | Failed hypotheses and why they didn't work (survives compaction) |
+| `best/` | Canonical best config/code/prompt/skills (always restorable) |
+| `bench.log` | Latest benchmark stdout/stderr |
 
 ## Configuration
 
