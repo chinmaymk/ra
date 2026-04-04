@@ -1,0 +1,29 @@
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  systemPrompt: |
+    Read /auto-improve and begin.
+
+    Benchmark command: ${BENCH_CMD}
+    Metric pattern: ${BENCH_METRIC_PATTERN}
+    Direction: ${BENCH_DIRECTION:-higher}
+    Target files: ${BENCH_TARGET:-packages/ra/src}
+  permissions:
+    no_rules_rules: true
+  maxIterations: 500
+  toolTimeout: 600000
+  tools:
+    builtin: true
+    overrides:
+      Agent:
+        enabled: false
+      WebFetch:
+        enabled: false
+  skillDirs:
+    - ./skills
+  middleware:
+    beforeLoopBegin:
+      - ./middleware/score-gate.ts
+  compaction:
+    enabled: true
+    threshold: 0.8
