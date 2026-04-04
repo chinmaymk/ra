@@ -341,7 +341,7 @@ async function main(): Promise<void> {
     env: process.env as Record<string, string | undefined>,
     recipeName: parsed.meta.recipeName,
   }
-  const { config, filePath: configFilePath } = await loadConfigWithPath(loadOptions)
+  const { config, filePath: configFilePath, systemPromptPath } = await loadConfigWithPath(loadOptions)
 
   if (parsed.meta.showConfig || parsed.meta.showContext) {
     const { discoverContextFiles, buildContextMessages } = await import('./context')
@@ -359,7 +359,7 @@ async function main(): Promise<void> {
   }
 
   const isInspector = config.app.interface === 'inspector'
-  const app = await bootstrap(config, { resume: parsed.meta.resume, skipSession: isInspector, configFilePath, loadOptions })
+  const app = await bootstrap(config, { resume: parsed.meta.resume, skipSession: isInspector, configFilePath, systemPromptPath, loadOptions })
 
   const signals = onSignals(app.shutdown)
   if (!isInspector) await handleStandaloneCommands(parsed, app)

@@ -298,6 +298,8 @@ export interface LoadConfigResult {
   config: RaConfig
   /** Absolute path to the config file that was loaded, if any. */
   filePath: string | undefined
+  /** Absolute path to the system prompt file, if systemPrompt was loaded from a file. */
+  systemPromptPath: string | undefined
 }
 
 /** Load config, returning just the RaConfig (backward-compatible). */
@@ -405,15 +407,17 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
   delete config.agent.recipe
 
   // Only try loading systemPrompt as a file if it looks like a path
+  let systemPromptPath: string | undefined
   if (config.agent.systemPrompt && looksLikePath(config.agent.systemPrompt, ['.txt', '.md'])) {
     const resolved = resolvePath(config.agent.systemPrompt, configDir)
     const f = Bun.file(resolved)
     if (await f.exists()) {
+      systemPromptPath = resolved
       config.agent.systemPrompt = await f.text()
       log.debug('system prompt loaded from file', { path: resolved })
     }
   }
 
   log.debug('config resolved', { provider: config.agent.provider, model: config.agent.model, interface: config.app.interface })
-  return { config, filePath: configFilePath }
+  return { config, filePath: configFilePath, systemPromptPath }
 }

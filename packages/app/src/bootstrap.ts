@@ -216,7 +216,7 @@ export interface AppContext {
 
 export async function bootstrap(
   config: RaConfig,
-  opts: { resume?: string | true; skipSession?: boolean; configFilePath?: string; loadOptions?: LoadConfigOptions },
+  opts: { resume?: string | true; skipSession?: boolean; configFilePath?: string; systemPromptPath?: string; loadOptions?: LoadConfigOptions },
 ): Promise<AppContext> {
   const { app, agent } = config
 
@@ -503,7 +503,7 @@ export async function bootstrap(
 
   // ── Config hot-reload ──────────────────────────────────────────────
   const configManager = new ConfigManager(config, opts.configFilePath, opts.loadOptions ?? {})
-  await configManager.init()
+  await configManager.init(opts.systemPromptPath)
 
   // ── Shutdown ───────────────────────────────────────────────────────
   const shutdown = async () => {
