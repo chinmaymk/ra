@@ -1,0 +1,25 @@
+# Example bench.yaml — copy to your working directory and customize.
+#
+# This file tells the auto-improve agent what benchmark to run,
+# how to read results, and what code it's allowed to modify.
+
+# Shell command that runs the benchmark
+run: python eval.py --output results.json
+
+# How to extract the top-line score from stdout/stderr
+score:
+  pattern: "accuracy:\\s*([\\d.]+)"   # regex with one capture group
+  direction: higher                    # "higher" or "lower"
+
+# Per-case detailed results (optional but recommended)
+# The agent reads this file directly — any format works (json, jsonl, csv, log)
+results:
+  file: results.json
+
+# What files the agent is allowed to modify
+target:
+  - src/
+
+# Pre-benchmark validation (optional)
+# Runs before each benchmark. If it fails, the agent fixes or reverts.
+validate: npm test

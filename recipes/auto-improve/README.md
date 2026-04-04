@@ -1,70 +1,118 @@
 # auto-improve
 
-Autonomous self-improvement loop. Point it at any benchmark and ra will iteratively modify its own code (or any target codebase), running experiments and keeping only changes that improve the score.
+Failure-driven self-improvement loop. Point it at any benchmark and ra autonomously diagnoses what's failing, makes targeted fixes, and validates they work — without blind mutation.
 
-## How it works
+## How it's different
 
-1. Agent reads the target codebase and runs a baseline benchmark
-2. Enters an autonomous loop: hypothesize → modify code → commit → benchmark → evaluate → keep/revert
-3. Results are tracked in `results.tsv`
+Most auto-improvement approaches are **mutation-driven**: change something, check the score, keep or revert. This recipe is **failure-driven**:
 
-The agent optimizes for the benchmark metric while preserving type safety and test correctness. Each iteration makes exactly one change so improvements can be attributed to specific modifications.
+1. **Diagnose** — read the failing cases, trace the code, identify the root cause
+2. **Fix** — make a targeted change that addresses a specific failure
+3. **Validate** — check that the fix works AND nothing regressed
+4. **Iterate** — re-diagnose the new failure landscape
 
-## Prerequisites
+Every change is traceable to a specific failure. No random walks through the search space.
 
-- A benchmark that outputs a numeric score to stdout/stderr
-- A regex pattern that extracts the score from the output
+## Setup
 
-## Usage
+Create a `bench.yaml` in your working directory:
 
-```bash
-BENCH_CMD="python eval.py" \
-BENCH_METRIC_PATTERN="accuracy:\s*([\d.]+)" \
-BENCH_DIRECTION=higher \
-BENCH_TARGET=packages/ra/src \
-ra --config recipes/auto-improve/ra.config.yaml
+```yaml
+run: python eval.py
+score:
+  pattern: "accuracy:\\s*([\\d.]+)"
+  direction: higher
+results:
+  file: results.json
+target:
+  - src/
+validate: bun tsc && bun test
 ```
 
-## Environment Variables
+Then run:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `BENCH_CMD` | Yes | — | Shell command that runs the benchmark |
-| `BENCH_METRIC_PATTERN` | Yes | — | Regex with one capture group for the numeric score |
-| `BENCH_DIRECTION` | No | `higher` | `higher` or `lower` — which direction is better |
-| `BENCH_TARGET` | No | `packages/ra/src` | Directory/files the agent is allowed to modify |
+```bash
+ra --config path/to/recipes/auto-improve/ra.config.yaml
+```
+
+## bench.yaml Reference
+
+```yaml
+# Required: command that executes the benchmark
+run: <shell command>
+
+# Required: how to extract the top-line score
+score:
+  pattern: <regex with one capture group>    # e.g. "pass@1:\s*([\d.]+)"
+  direction: higher | lower                  # which way is better
+
+# Optional: per-case detailed results (enables failure-driven diagnosis)
+results:
+  file: <path>    # json, jsonl, csv, or log file — agent reads it directly
+
+# Optional: what code the agent is allowed to modify
+target:
+  - <path or glob>    # defaults to cwd if not specified
+
+# Optional: pre-benchmark validation
+validate: <shell command>    # e.g. "bun tsc && bun test"
+```
 
 ## Examples
 
 ### SWE-bench
 
-```bash
-BENCH_CMD="python -m swebench.harness.run_evaluation --predictions_path preds.json --swe_bench_tasks test.json" \
-BENCH_METRIC_PATTERN="Resolved:\s*([\d.]+)%" \
-BENCH_DIRECTION=higher \
-BENCH_TARGET=packages/ra/src \
-ra --config recipes/auto-improve/ra.config.yaml
+```yaml
+run: python -m swebench.harness.run_evaluation --output_dir results/
+score:
+  pattern: "Resolved:\\s*([\\d.]+)%"
+  direction: higher
+results:
+  file: results/results.json
+target:
+  - packages/ra/src/
+validate: bun tsc
 ```
 
 ### HumanEval
 
-```bash
-BENCH_CMD="python run_humaneval.py" \
-BENCH_METRIC_PATTERN="pass@1:\s*([\d.]+)" \
-BENCH_DIRECTION=higher \
-BENCH_TARGET=packages/ra/src \
-ra --config recipes/auto-improve/ra.config.yaml
+```yaml
+run: python run_humaneval.py --output results.jsonl
+score:
+  pattern: "pass@1:\\s*([\\d.]+)"
+  direction: higher
+results:
+  file: results.jsonl
+target:
+  - packages/ra/src/
 ```
 
-### Custom benchmark
+### Custom eval suite
 
-```bash
-BENCH_CMD="bun run bench:tool-use" \
-BENCH_METRIC_PATTERN="score:\s*([\d.]+)" \
-BENCH_DIRECTION=higher \
-BENCH_TARGET=packages/ra/src/agent,packages/ra/src/tools \
-ra --config recipes/auto-improve/ra.config.yaml
+```yaml
+run: bun run eval:tool-use
+score:
+  pattern: "score:\\s*([\\d.]+)"
+  direction: higher
+results:
+  file: eval-results.json
+target:
+  - packages/ra/src/agent/
+  - packages/ra/src/tools/
+validate: bun tsc && bun test
 ```
+
+## What the agent does
+
+The agent follows a strict diagnostic protocol:
+
+1. **Understand** — reads the benchmark, the target code, and the detailed results
+2. **Diagnose** — categorizes failures by root cause, traces code paths, estimates impact
+3. **Fix** — addresses the highest-impact root cause with a minimal, targeted change
+4. **Validate** — runs the benchmark, compares per-case results, checks for regressions
+5. **Iterate** — returns to diagnosis with updated understanding
+
+All progress is logged to `journal.jsonl` with per-iteration diagnosis, changes, and case-level impact.
 
 ## Configuration
 
@@ -74,15 +122,4 @@ ra --config recipes/auto-improve/ra.config.yaml
 | `toolTimeout` | `600000` | 10 min timeout for benchmark runs |
 | `WebFetch` | disabled | Keeps agent focused on local code |
 | `Agent` | disabled | No subagents needed |
-| `permissions` | `no_rules_rules` | Agent needs unrestricted shell access for benchmarks |
 | `compaction` | enabled | Essential for long-running sessions |
-
-## How the agent decides what to change
-
-The agent works through improvement strategies roughly in order of expected impact:
-
-1. **System prompts & instructions** — Clarify, add examples, restructure
-2. **Tool implementations** — Better descriptions, schemas, error messages, edge cases
-3. **Core loop & middleware** — Compaction, context management, parallelism, retries
-4. **Provider integration** — Request construction, streaming, thinking modes
-5. **Combinatorial** — Combine past successes, invert past failures, revisit with new approach

@@ -1,13 +1,7 @@
 agent:
   provider: anthropic
   model: claude-sonnet-4-6
-  systemPrompt: |
-    Read /auto-improve and begin.
-
-    Benchmark command: ${BENCH_CMD}
-    Metric pattern: ${BENCH_METRIC_PATTERN}
-    Direction: ${BENCH_DIRECTION:-higher}
-    Target files: ${BENCH_TARGET:-packages/ra/src}
+  systemPrompt: Read /auto-improve and begin.
   permissions:
     no_rules_rules: true
   maxIterations: 500
@@ -23,7 +17,7 @@ agent:
     - ./skills
   middleware:
     beforeLoopBegin:
-      - ./middleware/score-gate.ts
+      - ./middleware/bench-context.ts
   compaction:
     enabled: true
     threshold: 0.8
