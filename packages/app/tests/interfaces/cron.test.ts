@@ -101,6 +101,7 @@ function makeApp(overrides?: { provider?: IProvider }) {
         ollama: { host: '' },
         bedrock: { region: '' },
         azure: { endpoint: '', deployment: '', apiKey: '' },
+        'agent-sdk': {},
       },
       mcpServers: [],
       mcpLazySchemas: false,

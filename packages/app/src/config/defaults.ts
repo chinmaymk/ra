@@ -20,6 +20,7 @@ export const defaultConfig: RaConfig = {
       ollama: { host: '${OLLAMA_HOST:-http://localhost:11434}' },
       bedrock: { region: '${AWS_REGION:-us-east-1}' },
       azure: { endpoint: '${AZURE_OPENAI_ENDPOINT:-}', deployment: '${AZURE_OPENAI_DEPLOYMENT:-}', apiKey: '${AZURE_OPENAI_API_KEY:-}' },
+      'agent-sdk': {},
     },
     mcpServers: [],
     mcpLazySchemas: true,
