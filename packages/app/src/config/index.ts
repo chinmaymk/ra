@@ -294,7 +294,19 @@ function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
 
 // ── Main config loader ──────────────────────────────────────────────
 
+export interface LoadConfigResult {
+  config: RaConfig
+  /** Absolute path to the config file that was loaded, if any. */
+  filePath: string | undefined
+}
+
+/** Load config, returning just the RaConfig (backward-compatible). */
 export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logger): Promise<RaConfig> {
+  return (await loadConfigWithPath(options, logger)).config
+}
+
+/** Load config, returning both the resolved config and the file path it was loaded from. */
+export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger?: Logger): Promise<LoadConfigResult> {
   const log = logger ?? new NoopLogger()
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
@@ -403,5 +415,5 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   }
 
   log.debug('config resolved', { provider: config.agent.provider, model: config.agent.model, interface: config.app.interface })
-  return config
+  return { config, filePath: configFilePath }
 }

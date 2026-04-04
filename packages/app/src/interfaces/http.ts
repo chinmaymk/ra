@@ -6,7 +6,8 @@ import {
   type StreamChunkContext,
 } from '@chinmaymk/ra'
 import type { SessionStorage } from '../storage/sessions'
-import { buildMessagePrefix, buildThreadMessages, createSessionLoop, type BaseLoopOptions } from './messages'
+import { buildMessagePrefix, buildThreadMessages, buildLoopOptions, createSessionLoop, type BaseLoopOptions } from './messages'
+import type { AppContext } from '../bootstrap'
 import { timingSafeEqual } from 'crypto'
 
 function timingSafeCompare(a: string, b: string): boolean {
@@ -27,6 +28,8 @@ export interface HttpOptions extends BaseLoopOptions {
   port: number
   token?: string
   storage: SessionStorage
+  /** AppContext reference for hot-reloading config between requests. */
+  appContext?: AppContext
 }
 
 export class HttpServer {
@@ -148,6 +151,17 @@ export class HttpServer {
     return { sessionId: session.id, isNew: true }
   }
 
+  /** Check for config changes and refresh options if needed. */
+  private async refreshOptions(): Promise<void> {
+    const ctx = this.options.appContext
+    if (!ctx) return
+    const reloaded = await ctx.refreshIfNeeded()
+    if (reloaded) {
+      const fresh = buildLoopOptions(ctx)
+      Object.assign(this.options, fresh)
+    }
+  }
+
   /** Create a session-scoped AgentLoop. */
   private createLoop(sessionId: string, priorCount: number, extraMiddleware?: Partial<MiddlewareConfig>, resumed = false) {
     return createSessionLoop(this.options, {
@@ -160,6 +174,8 @@ export class HttpServer {
   }
 
   private async handleChatSync(req: Request): Promise<Response> {
+    await this.refreshOptions()
+
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
@@ -181,6 +197,8 @@ export class HttpServer {
   }
 
   private async handleChatStream(req: Request): Promise<Response> {
+    await this.refreshOptions()
+
     const body = await this.parseBody(req)
     if (!body) return HttpServer.badRequest()
 
