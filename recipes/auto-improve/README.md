@@ -1,30 +1,30 @@
 # auto-improve
 
-Parallel self-improvement loop that explores all of ra's degrees of freedom simultaneously. Point it at any benchmark and it spawns parallel agents — each tuning a different axis (prompts, model, thinking, tools, compaction, code, skills, middleware) — then combines winners and iterates.
+Parallel self-improvement loop that explores all of ra's degrees of freedom. Point it at any benchmark and it spawns parallel agents — each tuning one or more axes (prompts, model, thinking, tools, compaction, code, skills, middleware) — then layers winners and iterates.
+
+Axes interact: a prompt change that fails alone might succeed paired with a thinking mode change. The orchestrator decides when to explore axes in isolation, when to combine them, and when to ablate accumulated changes.
 
 ## How it works
 
 ```
-                          ┌─── Agent: system prompt ──── benchmark ──→ score
+                          ┌── Agent: prompt + thinking ── benchmark ──→ score
                           │
-Orchestrator ─── analyze  ├─── Agent: thinking mode ──── benchmark ──→ score
+Orchestrator ── diagnose  ├── Agent: tools + code ─────── benchmark ──→ score
 failures ─┐               │
-          │               ├─── Agent: tool config ────── benchmark ──→ score
-          │               │
-          └── spawn ──────└─── Agent: target code ────── benchmark ──→ score
-                                      │
-                              collect results
-                                      │
-                              combine winners ──── benchmark ──→ combined score
-                                      │
-                              commit + iterate
+          │               └── Agent: compaction ────────── benchmark ──→ score
+          │                           │
+          │                 rank proposals
+          │                           │
+          └── layer best ── benchmark ──→ combined ── benchmark ──→ commit
+                add next ── benchmark ──→ still better? keep : discard
+                add next ── benchmark ──→ ...
 ```
 
 1. **Understand** — read benchmark, target config, codebase, and baseline results
-2. **Diagnose** — analyze failures to know which axes matter most
-3. **Explore in parallel** — spawn agents via the Agent tool, each tuning one axis
-4. **Combine** — apply winners, verify combined score, commit
-5. **Iterate** — re-diagnose, explore new axes, repeat
+2. **Diagnose** — analyze failures to decide which axes to explore and whether jointly or in isolation
+3. **Explore in parallel** — spawn agents, each tuning one or more axes
+4. **Layer** — apply proposals in rank order, verifying each addition with a benchmark run
+5. **Iterate** — re-diagnose, evolve strategy (isolated → joint → ablation), repeat
 
 ## Degrees of freedom
 
