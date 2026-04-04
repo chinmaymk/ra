@@ -5,7 +5,7 @@ import { GoogleProvider, type GoogleProviderOptions } from './google'
 import { OllamaProvider, type OllamaProviderOptions } from './ollama'
 import { BedrockProvider, type BedrockProviderOptions } from './bedrock'
 import { AzureProvider, type AzureProviderOptions } from './azure'
-import { AgentSdkProvider, type AgentSdkProviderOptions } from './agent-sdk'
+import { AnthropicAgentsSdkProvider, type AnthropicAgentsSdkProviderOptions } from './anthropic-agents-sdk'
 
 type ProviderOptionsMap = {
   anthropic: AnthropicProviderOptions
@@ -15,7 +15,7 @@ type ProviderOptionsMap = {
   ollama: OllamaProviderOptions
   bedrock: BedrockProviderOptions
   azure: AzureProviderOptions
-  'agent-sdk': AgentSdkProviderOptions
+  'anthropic-agents-sdk': AnthropicAgentsSdkProviderOptions
 }
 
 export type ProviderConfig = {
@@ -37,7 +37,7 @@ const constructors = {
   ollama: OllamaProvider,
   bedrock: BedrockProvider,
   azure: AzureProvider,
-  'agent-sdk': AgentSdkProvider,
+  'anthropic-agents-sdk': AnthropicAgentsSdkProvider,
 } as const
 
 export function createProvider(config: ProviderConfig): IProvider {

@@ -9,7 +9,7 @@ import type {
   OllamaProviderOptions,
   BedrockProviderOptions,
   AzureProviderOptions,
-  AgentSdkProviderOptions,
+  AnthropicAgentsSdkProviderOptions,
 } from '@chinmaymk/ra'
 
 export type { ProviderName } from '@chinmaymk/ra'
@@ -78,7 +78,7 @@ export interface AppConfig {
     ollama: OllamaProviderOptions
     bedrock: BedrockProviderOptions
     azure: AzureProviderOptions
-    'agent-sdk': AgentSdkProviderOptions
+    'anthropic-agents-sdk': AnthropicAgentsSdkProviderOptions
   }
   /** External MCP servers to connect to. */
   mcpServers: McpServerEntry[]

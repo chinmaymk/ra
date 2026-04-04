@@ -1,20 +1,44 @@
 import { query, createSdkMcpServer, tool as sdkTool } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKMessage, SDKResultSuccess, SDKAssistantMessage, SDKPartialAssistantMessage, ThinkingConfig } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKMessage, SDKAssistantMessage, SDKPartialAssistantMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import { z } from 'zod'
-import { withDoneGuard, extractSystemMessages, extractTextContent } from './utils'
-import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, TokenUsage, ThinkingLevel } from './types'
+import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
+import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage, ThinkingLevel } from './types'
 
-export interface AgentSdkProviderOptions {
-  /** Optional model override (can also be set per-request via ChatRequest.model). */
+export interface AnthropicAgentsSdkProviderOptions {
+  /** Default model (overridden by ChatRequest.model). */
   model?: string
 }
 
-export class AgentSdkProvider implements IProvider {
-  readonly name = 'agent-sdk'
+/**
+ * Provider that wraps the Anthropic Agent SDK (claude-agent-sdk).
+ *
+ * Uses the Anthropic subscription for model calls instead of API credits.
+ * Each stream() call creates a fresh query() session with maxTurns: 1 so the
+ * SDK makes exactly one model call and returns — ra handles tool execution,
+ * middleware, and the agent loop itself.
+ *
+ * All SDK "magic" is explicitly disabled:
+ * - settingSources: []          → no CLAUDE.md / .claude/settings.json loading
+ * - settings.autoMemoryEnabled: false → no auto-memory
+ * - persistSession: false       → no session files written to disk
+ * - tools: []                   → no built-in tools (Read, Write, Bash, etc.)
+ * - permissionMode: 'bypassPermissions' → no permission prompts
+ * - systemPrompt: string        → REPLACES SDK default (no hidden instructions)
+ *
+ * Limitations:
+ * - Images and files in conversation history are described as metadata (binary
+ *   data cannot be embedded in a text prompt). The latest user message's
+ *   text content IS preserved.
+ * - Each stream() call spawns a Claude Code subprocess. This adds latency
+ *   compared to direct API providers.
+ * - Requires Claude Code to be installed and the user to be logged in.
+ */
+export class AnthropicAgentsSdkProvider implements IProvider {
+  readonly name = 'anthropic-agents-sdk'
   private defaultModel?: string
 
-  constructor(options: AgentSdkProviderOptions = {}) {
+  constructor(options: AnthropicAgentsSdkProviderOptions = {}) {
     this.defaultModel = options.model
   }
 
@@ -38,59 +62,101 @@ export class AgentSdkProvider implements IProvider {
     }
   }
 
-  async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
+  buildParams(request: ChatRequest) {
     const { system, filtered } = extractSystemMessages(request.messages)
     const prompt = this.formatConversation(filtered)
-    const mcpServer = request.tools?.length ? this.buildMcpServer(request.tools) : undefined
     const model = request.model || this.defaultModel
+    const mcpServer = request.tools?.length ? this.buildMcpServer(request.tools) : undefined
+
+    return {
+      prompt,
+      model,
+      // REPLACES the SDK default system prompt entirely — no hidden instructions
+      systemPrompt: system || 'You are a helpful AI assistant.',
+      maxTurns: 1,
+      // Disable ALL built-in tools — ra provides tools via MCP
+      tools: [] as string[],
+      includePartialMessages: true,
+      // Disable all automatic context/settings loading
+      settingSources: [] as SettingSource[],
+      // Disable session persistence to disk
+      persistSession: false,
+      // Skip all permission checks — ra handles permissions
+      permissionMode: 'bypassPermissions' as const,
+      allowDangerouslySkipPermissions: true,
+      // Disable auto-memory and consolidation
+      settings: {
+        autoMemoryEnabled: false,
+        autoDreamEnabled: false,
+      },
+      // Thinking / effort
+      ...this.mapThinking(request.thinking, request.thinkingBudgetCap),
+      ...this.mapEffort(request.thinking),
+      // Provider options passthrough
+      ...(request.providerOptions?.maxTurns ? { maxTurns: request.providerOptions.maxTurns as number } : {}),
+      // MCP tools
+      ...(mcpServer && { mcpServers: { 'ra-tools': mcpServer } }),
+    }
+  }
+
+  async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
+    const params = this.buildParams(request)
 
     const abortController = new AbortController()
     if (request.signal) {
+      if (request.signal.aborted) { abortController.abort(); yield { type: 'done' }; return }
       request.signal.addEventListener('abort', () => abortController.abort(), { once: true })
     }
 
+    const { prompt, ...options } = params
     const session = query({
       prompt,
       options: {
-        ...(model && { model }),
-        maxTurns: 1,
-        tools: [],
-        ...(system && { systemPrompt: system }),
-        includePartialMessages: true,
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
-        ...(mcpServer && { mcpServers: { 'ra-tools': mcpServer } }),
+        ...options,
         abortController,
-        ...this.mapThinking(request.thinking),
       },
     })
 
     yield* withDoneGuard(this.parseSession(session))
   }
 
-  /** Map ra's ThinkingLevel to Agent SDK thinking config. */
-  private mapThinking(thinking?: ThinkingLevel): { thinking?: ThinkingConfig } {
+  /** Map ra's ThinkingLevel + budget cap to Agent SDK thinking config. */
+  private mapThinking(thinking?: ThinkingLevel, budgetCap?: number): { thinking?: ThinkingConfig } {
     if (!thinking) return {}
-    const budgets = { low: 1024, medium: 16000, high: 32000 } as const
-    return { thinking: { type: 'enabled', budgetTokens: budgets[thinking] } }
+    const budget = resolveThinkingBudget(THINKING_BUDGETS, thinking, budgetCap)
+    return { thinking: { type: 'enabled', budgetTokens: budget } }
   }
 
-  /** Format ra message history into a string prompt for the Agent SDK. */
+  /** Map thinking level to Agent SDK effort level. */
+  private mapEffort(thinking?: ThinkingLevel): { effort?: EffortLevel } {
+    if (!thinking) return {}
+    const map: Record<ThinkingLevel, EffortLevel> = { low: 'low', medium: 'medium', high: 'high' }
+    return { effort: map[thinking] }
+  }
+
+  /**
+   * Format ra message history into a string prompt for the Agent SDK.
+   *
+   * The Agent SDK's query() accepts a string prompt (treated as the user message).
+   * For multi-turn conversations, we encode the full history as structured text
+   * so the model can understand the context and continue appropriately.
+   *
+   * Content parts (images, files) in history are described as metadata since
+   * binary data cannot be embedded in a text prompt.
+   */
   formatConversation(messages: IMessage[]): string {
     if (messages.length === 0) return ''
-    // Single user message — pass through directly
     if (messages.length === 1 && messages[0]!.role === 'user') {
-      return extractTextContent(messages[0]!.content)
+      return this.formatContent(messages[0]!.content)
     }
-    // Multi-turn: format as structured conversation
     const parts: string[] = []
     for (const msg of messages) {
       switch (msg.role) {
         case 'user':
-          parts.push(`[User]\n${extractTextContent(msg.content)}`)
+          parts.push(`[User]\n${this.formatContent(msg.content)}`)
           break
         case 'assistant': {
-          let text = extractTextContent(msg.content)
+          let text = this.formatContent(msg.content)
           if (msg.toolCalls?.length) {
             for (const tc of msg.toolCalls) {
               text += `\n<tool_call id="${tc.id}" name="${tc.name}">${tc.arguments}</tool_call>`
@@ -100,11 +166,30 @@ export class AgentSdkProvider implements IProvider {
           break
         }
         case 'tool':
-          parts.push(`[Tool Result id="${msg.toolCallId}"${msg.isError ? ' error="true"' : ''}]\n${extractTextContent(msg.content)}`)
+          parts.push(`[Tool Result id="${msg.toolCallId}"${msg.isError ? ' error="true"' : ''}]\n${this.formatContent(msg.content)}`)
           break
       }
     }
     return parts.join('\n\n')
+  }
+
+  /**
+   * Format message content, preserving text and describing non-text parts.
+   * Binary content (images, files) cannot be embedded in a text prompt,
+   * so they are described as metadata.
+   */
+  private formatContent(content: string | ContentPart[]): string {
+    if (typeof content === 'string') return content
+    return content.map(part => {
+      if (part.type === 'text') return part.text
+      if (part.type === 'image') {
+        const src = part.source
+        return src.type === 'url'
+          ? `[Image: ${src.url}]`
+          : `[Image: ${src.mediaType} (base64, ${src.data.length} chars)]`
+      }
+      return `[File: ${part.mimeType}]`
+    }).join('\n')
   }
 
   /** Build an in-process MCP server from ra's tool definitions. */
@@ -128,23 +213,20 @@ export class AgentSdkProvider implements IProvider {
 
     for await (const msg of session) {
       if (msg.type === 'stream_event') {
-        const event = (msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent
-        yield* this.parseStreamEvent(event, activeToolCalls)
+        yield* this.parseStreamEvent((msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent, activeToolCalls)
       } else if (msg.type === 'assistant') {
-        // Complete assistant message — extract tool calls if streaming didn't catch them
         yield* this.parseAssistantMessage(msg as SDKAssistantMessage, activeToolCalls)
       } else if (msg.type === 'result') {
-        usage = this.extractUsage(msg as SDKResultSuccess | { subtype: string })
+        usage = this.extractUsage(msg)
       }
+      // All other SDK events (system, status, hooks, etc.) are intentionally ignored —
+      // ra does not need them since it manages its own loop and lifecycle.
     }
     yield { type: 'done', ...(usage && { usage }) }
   }
 
   /** Parse a single BetaRawMessageStreamEvent into StreamChunks. */
-  private *parseStreamEvent(
-    event: BetaRawMessageStreamEvent,
-    activeToolCalls: Map<number, string>,
-  ): Iterable<StreamChunk> {
+  private *parseStreamEvent(event: BetaRawMessageStreamEvent, activeToolCalls: Map<number, string>): Iterable<StreamChunk> {
     switch (event.type) {
       case 'content_block_start':
         if (event.content_block.type === 'tool_use') {
@@ -156,8 +238,7 @@ export class AgentSdkProvider implements IProvider {
         if (event.delta.type === 'text_delta') {
           yield { type: 'text', delta: event.delta.text }
         } else if (event.delta.type === 'input_json_delta') {
-          const id = activeToolCalls.get(event.index) ?? ''
-          yield { type: 'tool_call_delta', id, argsDelta: event.delta.partial_json }
+          yield { type: 'tool_call_delta', id: activeToolCalls.get(event.index) ?? '', argsDelta: event.delta.partial_json }
         } else if (event.delta.type === 'thinking_delta') {
           yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
         }
@@ -173,13 +254,9 @@ export class AgentSdkProvider implements IProvider {
     }
   }
 
-  /** Fallback: extract tool calls from a complete assistant message when stream events are missing. */
-  private *parseAssistantMessage(
-    msg: SDKAssistantMessage,
-    alreadySeen: Map<number, string>,
-  ): Iterable<StreamChunk> {
+  /** Fallback: extract tool calls from a complete assistant message when stream events were not emitted. */
+  private *parseAssistantMessage(msg: SDKAssistantMessage, alreadySeen: Map<number, string>): Iterable<StreamChunk> {
     if (!msg.message?.content) return
-    // If we already got tool calls from streaming, skip
     if (alreadySeen.size > 0) return
     for (const block of msg.message.content) {
       if (block.type === 'tool_use') {
@@ -191,9 +268,9 @@ export class AgentSdkProvider implements IProvider {
     }
   }
 
-  /** Extract token usage from result message. */
-  private extractUsage(msg: { subtype: string; usage?: unknown }): TokenUsage | undefined {
-    if (!('usage' in msg) || !msg.usage) return undefined
+  /** Extract token usage from an SDK result message. */
+  private extractUsage(msg: { subtype?: string; usage?: unknown }): TokenUsage | undefined {
+    if (!msg.usage) return undefined
     const u = msg.usage as {
       input_tokens?: number
       output_tokens?: number
