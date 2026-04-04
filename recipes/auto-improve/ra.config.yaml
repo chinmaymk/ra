@@ -20,6 +20,8 @@ agent:
   middleware:
     beforeLoopBegin:
       - ./middleware/bench-context.ts
+    afterLoopIteration:
+      - ./middleware/auto-save.ts
   compaction:
     enabled: true
     threshold: 0.8

@@ -44,56 +44,51 @@ If `journal.jsonl` and `best/` already exist, you're resuming. Read the journal,
 
 ## Phase 2: Map Degrees of Freedom
 
-After understanding the system, enumerate what you can tune. These are ra's axes of variation:
+After understanding the system, enumerate what you can **actually** tune based on what `bench.yaml` declares. Write the available axes to `state.md` (see below).
 
-### Axis 1: System Prompt
-- Instruction clarity, structure, ordering
-- Few-shot examples
-- Persona and constraints
-- Output format specifications
+### Always available (from the config)
+- **System prompt** — instruction clarity, structure, ordering, few-shot examples, output format
+- **Model & provider** — model selection (opus/sonnet/haiku, GPT-4o, etc.)
+- **Thinking mode** — off/low/medium/high/adaptive, thinking budget cap
+- **Tool configuration** — which tools enabled/disabled, descriptions, schemas, timeouts, `parallelToolCalls`
+- **Compaction** — threshold, compaction prompt, enabled/disabled
+- **Resource allocation** — maxIterations, maxTokenBudget, maxDuration, toolTimeout
 
-### Axis 2: Model & Provider
-- Model selection (opus vs sonnet vs haiku, GPT-4o, etc.)
-- Provider-specific features
+### Conditionally available (only if declared in bench.yaml)
+- **Skills** — only if `skills` dirs are specified. Content, descriptions, add/remove.
+- **Middleware** — only if the config references middleware files you can read/write.
+- **Target code** — only if `code` paths are specified. Tool/middleware/provider implementations.
+- **Prompt file** — only if `prompt` is specified as a separate file.
 
-### Axis 3: Thinking Mode
-- off, low, medium, high, adaptive
-- Thinking budget cap
+Write down which axes are available and which aren't. Don't waste time exploring axes that don't exist.
 
-### Axis 4: Tool Configuration
-- Which tools are enabled/disabled
-- Tool descriptions (these drive tool selection)
-- Input schema descriptions and defaults
-- Tool timeout values
-- `parallelToolCalls` setting
+### state.md — your working memory
 
-### Axis 5: Compaction
-- Threshold (when to compact)
-- Compaction prompt (what to preserve)
-- Enabled/disabled
+After every phase, update `state.md` with:
 
-### Axis 6: Resource Allocation
-- maxIterations (how many loops before stopping)
-- maxTokenBudget (total token spend)
-- maxDuration (wall-clock limit)
-- toolTimeout (per-tool timeout)
+```markdown
+## Current Best
+Score: 76.3 (±0.8), iteration 5
 
-### Axis 7: Skills
-- Skill content (instructions, examples, checklists)
-- Skill descriptions (control when they activate)
-- Add/remove skills
+## Available Axes
+- prompt: ./system-prompt.md (modified 3 times, last improved at iter 2)
+- thinking: currently high (tried: medium=72.5, high=74.1)
+- tools: 4 overrides configured (Grep description changed at iter 3)
+- code: src/tools/ (2 files modified)
+- compaction: threshold 0.85 (changed from 0.8 at iter 4)
+- skills: not available
+- middleware: not available
 
-### Axis 8: Middleware
-- Custom preprocessing/postprocessing hooks
-- Context injection strategies
-- Safety/validation guardrails
+## Current Failure Landscape
+- 15 format failures (agent doesn't wrap output in expected tags)
+- 10 reasoning failures (wrong logic on multi-step tasks)
+- 6 timeout failures (agent runs out of iterations)
 
-### Axis 9: Target Code
-- Tool implementations (if `code` paths specified)
-- Middleware hook implementations
-- Provider integration code
+## Next Priority
+Format failures are the largest cluster. Try prompt + skills (add a formatting skill).
+```
 
-Not all axes will be available for every benchmark. If `code` is not specified, skip Axis 9. If there are no skills, skip Axis 7. Focus on what's present and modifiable.
+This file is your scratchpad. Unlike the journal (append-only) and anti-patterns (negative learnings), `state.md` is overwritten each round with the current picture. The middleware injects it at loop start, so even after compaction you have your latest analysis.
 
 ## Diagnosis Toolkit
 
@@ -236,21 +231,25 @@ Before every exploration round, re-read `anti-patterns.md` and tell agents what 
 
 ## Phase 5: Iterate
 
-After integrating winners, the landscape has changed:
+After integrating winners, the landscape has changed.
 
 1. **Re-read results** — new failure patterns may have emerged.
-2. **Re-diagnose** — categorize remaining failures. The distribution has shifted.
-3. **Decide strategy** — based on what you've learned:
-   - Are failures concentrated in one area? → isolated exploration of that axis.
-   - Are failures spread across interacting concerns? → joint exploration.
-   - Has a previously successful axis plateaued? → shift focus elsewhere.
-   - Have you accumulated many changes? → try ablation to simplify.
-4. **Spawn new agents** — with updated context.
-5. **Repeat**.
+2. **Re-diagnose** — replay 2-3 new representative failing cases. The failure distribution has shifted.
+3. **Update state.md** — record the new failure landscape, which axes yielded gains, which saturated.
+4. **Track axis ROI** — in `state.md`, note how many times each axis has been explored and the cumulative gain from each. An axis that's been explored 4 times with diminishing returns is saturated — deprioritize it. An axis that's never been tried is high-value even if you don't know if it'll help.
+5. **Decide strategy** — based on the updated picture:
+   - **High-ROI axis still yielding** → keep exploring it (isolated or joint).
+   - **Saturated axis** → deprioritize. Don't waste agents on it unless failure analysis specifically points to it.
+   - **Untried axis** → worth an isolated exploration to measure baseline impact.
+   - **Multiple saturated axes** → try joint exploration (combining saturated axes might unlock synergies neither has alone).
+   - **Everything saturated** → ablation round (remove accumulated complexity, see if simpler works equally well).
+   - **Post-ablation plateau** → try radical changes: different model, major prompt restructure, add/remove entire tools.
+6. **Spawn new agents** — with updated context including anti-patterns and state.
+7. **Repeat**.
 
 ## Scheduling Continuous Improvement
 
-For long-running campaigns, the recipe supports cron mode. Each scheduled run does one iteration of the outer loop (Phase 3-5). The orchestrator picks up where the last run left off by reading `journal.jsonl`.
+For long-running campaigns, the recipe supports cron mode. Each scheduled run does one outer-loop iteration (Phase 3-5).
 
 Example cron config (add to your project's ra.config.yaml):
 
@@ -267,26 +266,100 @@ cron:
       maxIterations: 100
 ```
 
-This gives you continuous improvement without babysitting — each cron run reads the journal, analyzes remaining failures, runs a round of parallel exploration, and records results.
+### How resumption works
+
+Each cron run is a fresh agent session, but it picks up full context from persistent files:
+
+1. **bench-context middleware** injects: bench.yaml, target config, journal history, anti-patterns, state.md, and checkpoint status.
+2. **state.md** contains the latest failure analysis, axis ROI data, and next-priority decision — so the agent doesn't need to re-derive these.
+3. **journal.jsonl** provides the full history of proposals, scores, and diffs.
+4. **anti-patterns.md** prevents repeating failed ideas.
+5. **best/** provides the canonical best state to restore from.
+6. **progress.json** shows when the last run completed and its token usage.
+
+The agent reads these, understands the current state, and immediately enters Phase 3 without needing to redo the understanding or diagnosis from scratch (unless state.md is missing or stale).
 
 ## Journal
 
 Append one JSON line to `journal.jsonl` per outer-loop iteration:
 
 ```json
-{"iteration": 2, "score": 76.3, "best": 74.1, "delta": "+2.2", "strategy": "joint", "proposals": [{"axes": ["prompt", "thinking"], "score": 76.3, "applied": true, "description": "Chain-of-thought prompt + thinking:high"}, {"axes": ["tools", "code"], "score": 75.0, "applied": true, "description": "Improved Grep description + fixed result truncation"}, {"axes": ["compaction"], "score": 73.9, "applied": false, "description": "Raised threshold to 0.9"}], "combined_score": 76.8, "cases_fixed": 12, "cases_regressed": 1, "remaining_failures": 31}
+{
+  "iteration": 2,
+  "score": 76.3,
+  "best": 74.1,
+  "delta": "+2.2",
+  "stddev": 0.8,
+  "strategy": "joint",
+  "bench_runs": 9,
+  "proposals": [
+    {
+      "axes": ["prompt", "thinking"],
+      "score": 76.3,
+      "applied": true,
+      "diff": "--- a/system-prompt.md\n+++ b/system-prompt.md\n...",
+      "description": "Chain-of-thought prompt + thinking:high"
+    },
+    {
+      "axes": ["tools", "code"],
+      "score": 75.0,
+      "applied": true,
+      "diff": "--- a/agent.config.yaml\n+++ b/agent.config.yaml\n...",
+      "description": "Improved Grep description + fixed result truncation"
+    },
+    {
+      "axes": ["compaction"],
+      "score": 73.9,
+      "applied": false,
+      "description": "Raised threshold to 0.9"
+    }
+  ],
+  "combined_score": 76.8,
+  "cases_fixed": 12,
+  "cases_regressed": 1,
+  "remaining_failures": 31
+}
 ```
 
-Fields:
+Write it as a single line in the file (JSONL format), but for readability here's what each field means:
+
 - **iteration**: outer-loop counter
-- **score**: final score after this iteration (best applied proposal alone)
+- **score**: final score after this iteration
 - **best**: best score before this iteration
-- **delta**: improvement
+- **delta**: improvement over previous best
+- **stddev**: standard deviation if `runs > 1` (omit if `runs: 1`)
 - **strategy**: `isolated`, `joint`, `mixed`, or `ablation`
-- **proposals**: each with `axes` (array — one or many), `score`, `applied`, `description`
-- **combined_score**: score with all applied proposals layered together
-- **cases_fixed/regressed**: net case-level changes after integration
+- **bench_runs**: total benchmark executions this iteration (subset + full across all agents + layering)
+- **proposals**: each with `axes`, `score`, `applied`, `diff` (for applied proposals), `description`
+- **combined_score**: score with all applied proposals layered
+- **cases_fixed/regressed**: net case-level changes
 - **remaining_failures**: how many cases still fail
+
+## Structured Agent Reports
+
+When spawning agents, always end the task prompt with:
+
+```
+Report your results as a JSON block:
+{
+  "score": <number>,
+  "cases_fixed": [<list of case IDs that flipped fail→pass>],
+  "cases_regressed": [<list of case IDs that flipped pass→fail>],
+  "diff": "<unified diff of all changes>",
+  "description": "<one sentence summary>"
+}
+```
+
+This ensures you can parse agent results reliably during integration. If an agent returns prose instead of JSON, extract what you can but flag it as unreliable.
+
+## Cost Awareness
+
+Every benchmark run costs time and (if the benchmark invokes LLM calls) money. Be cost-conscious:
+
+- **Smoke test first**: Always use `run_subset` if available. A full run is 10-100x the cost.
+- **Don't re-benchmark unchanged state**: If you already have a score for the current config, don't rerun.
+- **Kill lost causes early**: If a subagent's subset score is worse than baseline, abort. Don't waste a full run.
+- **Track cumulative runs**: Note in each journal entry how many benchmark runs were executed that iteration. If you're burning runs on marginal improvements, shift to cheaper axes (config tweaks) or more careful diagnosis.
 
 ## Stopping Conditions
 

@@ -47,6 +47,18 @@ Before proposing changes, the orchestrator replays specific failing cases with v
 ### Anti-pattern memory
 `anti-patterns.md` persists failed hypotheses across context compaction and cron runs. The orchestrator reads it before every round to avoid repeating mistakes.
 
+### Working state
+`state.md` is the orchestrator's scratchpad — current failure landscape, axis ROI, next priority. Overwritten each round so it's always current. Injected at loop start so the agent has its latest analysis even after compaction.
+
+### Axis ROI tracking
+The orchestrator tracks how many times each axis has been explored and the cumulative gain. Saturated axes are deprioritized. Untried axes are high-value exploration targets.
+
+### Auto-save
+`afterLoopIteration` middleware writes `progress.json` after every iteration — if the process crashes, the next run knows where things left off.
+
+### Structured agent reports
+Subagents are told to return results as JSON blocks with score, case diffs, unified diffs, and descriptions. This makes integration reliable and journal entries reproducible.
+
 ### Cron scheduling
 Run the loop on a timer for continuous improvement:
 
@@ -124,7 +136,9 @@ ra --config path/to/recipes/auto-improve/ra.config.yaml
 |------|---------|
 | `journal.jsonl` | One JSON line per iteration: score, proposals, diffs, case-level impact |
 | `anti-patterns.md` | Failed hypotheses and why they didn't work (survives compaction) |
+| `state.md` | Current failure landscape, axis ROI, next priority (overwritten each round) |
 | `best/` | Canonical best config/code/prompt/skills (always restorable) |
+| `progress.json` | Last iteration number, timestamp, token usage (auto-saved) |
 | `bench.log` | Latest benchmark stdout/stderr |
 
 ## Configuration
