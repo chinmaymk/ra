@@ -5,12 +5,14 @@ agent:
   permissions:
     no_rules_rules: true
   maxIterations: 500
+  thinking: high
   toolTimeout: 600000
   tools:
     builtin: true
     overrides:
       Agent:
-        enabled: false
+        maxConcurrency: 4
+        maxDepth: 2
       WebFetch:
         enabled: false
   skillDirs:

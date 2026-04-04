@@ -1,25 +1,46 @@
 # Example bench.yaml — copy to your working directory and customize.
 #
-# This file tells the auto-improve agent what benchmark to run,
-# how to read results, and what code it's allowed to modify.
+# This file tells the auto-improve agent what to benchmark,
+# what it can tune, and how to evaluate results.
 
-# Shell command that runs the benchmark
-run: python eval.py --output results.json
+# -------------------------------------------------------------------
+# Benchmark execution
+# -------------------------------------------------------------------
+
+# Command to run the benchmark. Use $CONFIG to reference the config under test.
+# The agent will copy the target config, modify it, and set CONFIG to the copy path.
+run: ra --config $CONFIG --cli "solve the task" < tasks.jsonl
 
 # How to extract the top-line score from stdout/stderr
 score:
-  pattern: "accuracy:\\s*([\\d.]+)"   # regex with one capture group
-  direction: higher                    # "higher" or "lower"
+  pattern: "accuracy:\\s*([\\d.]+)"
+  direction: higher   # "higher" or "lower"
 
-# Per-case detailed results (optional but recommended)
-# The agent reads this file directly — any format works (json, jsonl, csv, log)
+# Per-case detailed results (optional, enables failure-level diagnosis)
 results:
   file: results.json
 
-# What files the agent is allowed to modify
-target:
-  - src/
+# -------------------------------------------------------------------
+# Degrees of freedom — what the agent is allowed to tune
+# -------------------------------------------------------------------
+
+# The ra config being optimized. The agent reads this, understands
+# every knob, and proposes changes across all axes.
+config: ./agent-under-test.config.yaml
+
+# Source code directories that can be modified (tool implementations,
+# middleware, providers, etc). Optional — omit to restrict to config-only.
+code:
+  - src/tools/
+  - src/middleware/
+
+# System prompt file, if extracted separately from the config.
+# Optional — if omitted, the agent modifies systemPrompt inline in the config.
+prompt: ./system-prompt.md
+
+# Skill directories the agent can modify
+skills:
+  - ./skills/
 
 # Pre-benchmark validation (optional)
-# Runs before each benchmark. If it fails, the agent fixes or reverts.
-validate: npm test
+validate: bun tsc && bun test

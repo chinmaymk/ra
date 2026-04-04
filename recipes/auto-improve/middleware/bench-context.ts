@@ -2,52 +2,69 @@ import type { LoopContext } from "@chinmaymk/ra"
 import { readFileSync, existsSync } from "node:fs"
 
 /**
- * Loads bench.yaml config and injects it along with past journal entries
- * into the conversation at loop start.
+ * Injects bench.yaml spec, target config summary, and recent journal
+ * entries into the conversation at loop start so the orchestrator has
+ * full context before its first model call.
  */
 export default async function benchContext(ctx: LoopContext): Promise<void> {
-  if (!existsSync("bench.yaml")) {
+  const parts: string[] = []
+
+  // Inject bench spec
+  if (existsSync("bench.yaml")) {
+    const spec = readFileSync("bench.yaml", "utf-8").trim()
+    parts.push("## Benchmark Spec (bench.yaml)", "```yaml", spec, "```")
+
+    // Parse config path and inject target config summary
+    const configMatch = spec.match(/^config:\s*(.+)$/m)
+    if (configMatch) {
+      const configPath = configMatch[1].trim()
+      if (existsSync(configPath)) {
+        const config = readFileSync(configPath, "utf-8").trim()
+        parts.push("", "## Target Config", "```yaml", config, "```")
+      }
+    }
+  } else {
     ctx.logger.info("bench-context:no-spec", { path: "bench.yaml" })
     // Don't stop — let the agent prompt the user to create one
     return
   }
 
-  const spec = readFileSync("bench.yaml", "utf-8")
-  const parts = [
-    "## Benchmark Spec (bench.yaml)",
-    "```yaml",
-    spec.trim(),
-    "```",
-  ]
-
-  // Inject recent journal entries if they exist
+  // Inject journal history
   if (existsSync("journal.jsonl")) {
     const raw = readFileSync("journal.jsonl", "utf-8").trim()
     if (raw) {
       const lines = raw.split("\n")
-      const recent = lines.length > 20
-        ? ["...", ...lines.slice(-20)]
-        : lines
 
-      // Parse last entry to show current best
-      try {
-        const last = JSON.parse(lines[lines.length - 1])
-        const best = Math.max(
-          ...lines.map(l => { try { return JSON.parse(l).score } catch { return 0 } })
-        )
-        parts.push("", `## Progress: ${lines.length} iterations, best score: ${best}`)
-      } catch {
-        // Malformed last line — just show the raw entries
+      // Compute current best score
+      let best = 0
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line)
+          if (typeof entry.score === "number" && entry.score > best) best = entry.score
+        } catch { /* skip malformed lines */ }
       }
 
-      parts.push("", "## Recent Journal Entries", "```jsonl", ...recent, "```")
+      parts.push(
+        "",
+        `## Progress: ${lines.length} iterations, best score: ${best}`,
+      )
+
+      // Show last 15 entries to keep context manageable
+      const recent = lines.length > 15
+        ? ["...", ...lines.slice(-15)]
+        : lines
+      parts.push("", "## Recent Journal", "```jsonl", ...recent, "```")
     }
   }
 
-  ctx.messages.push({
-    role: "user",
-    content: `<system-reminder>\n${parts.join("\n")}\n</system-reminder>`,
-  })
-
-  ctx.logger.info("bench-context:injected", { journalExists: existsSync("journal.jsonl") })
+  if (parts.length > 0) {
+    ctx.messages.push({
+      role: "user",
+      content: `<system-reminder>\n${parts.join("\n")}\n</system-reminder>`,
+    })
+    ctx.logger.info("bench-context:injected", {
+      hasSpec: true,
+      hasJournal: existsSync("journal.jsonl"),
+    })
+  }
 }

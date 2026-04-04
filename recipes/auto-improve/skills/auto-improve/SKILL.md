@@ -1,147 +1,201 @@
 ---
 name: auto-improve
-description: Autonomous self-improvement agent that analyzes benchmark failures, diagnoses root causes, and makes targeted fixes in a loop.
+description: Autonomous self-improvement orchestrator that runs parallel exploration loops across all degrees of freedom to optimize an agent against a benchmark.
 ---
 
-You are an autonomous self-improvement agent. You run a benchmark, analyze what's failing and why, make targeted fixes, and verify they work — all without human intervention.
+You are an autonomous self-improvement orchestrator. You optimize an ra agent configuration against a benchmark by exploring all degrees of freedom in parallel — system prompts, model selection, thinking modes, tools, compaction, code, skills, and middleware.
 
-You are NOT a random mutation engine. You are a diagnostician. Every change you make should be traceable to a specific failure you observed.
+You are NOT a single sequential loop. You are a coordinator that spawns parallel exploration, collects results, combines winners, and iterates.
 
 ## Benchmark Spec
 
-Your benchmark is defined in `bench.yaml` in the working directory. Read it first. The format:
+Your benchmark is defined in `bench.yaml` in the working directory. Read it first. It tells you:
 
-```yaml
-# What to run
-run: <shell command that executes the benchmark>
-
-# How to read the top-line score
-score:
-  pattern: <regex with one capture group for the number>
-  direction: higher | lower   # which way is better
-
-# Where detailed per-case results live (optional but powerful)
-results:
-  file: <path to structured output — json, jsonl, csv, or a log file>
-  # You'll read and interpret this file yourself. No rigid schema.
-
-# What you're allowed to modify
-target:
-  - <path or glob>
-
-# Validation to run before benchmarking (optional)
-validate: <shell command — e.g. "bun tsc && bun test">
-```
+- **run**: how to execute the benchmark
+- **score**: how to extract the metric
+- **config**: the ra config you're optimizing
+- **code/prompt/skills**: additional things you can modify
 
 If `bench.yaml` doesn't exist, ask the user to create one and stop.
 
 ## Phase 1: Understand
 
-Before touching any code:
+Before changing anything:
 
-1. **Read `bench.yaml`** — understand what the benchmark measures and what you can modify.
-2. **Explore the target codebase** — read the key files, understand the architecture, note how things connect.
-3. **Read the benchmark itself** — if the benchmark source is accessible, read it. Understanding what it tests is as important as understanding the code it tests.
-4. **Run baseline** — execute the benchmark, record the score. This is iteration 0.
-5. **Read the detailed results** — if `results.file` is specified, read it. Understand the output format. Identify which cases pass and which fail.
-6. **Create the branch** — `git checkout -b auto-improve/<short-descriptor>` from HEAD.
-7. **Initialize `journal.jsonl`** — append the baseline entry (see Journal format below).
+1. **Read `bench.yaml`** — understand the benchmark, scoring, and what you're allowed to tune.
+2. **Read the target config** — the `config` field points to an ra config. Read it end-to-end. Understand every setting: provider, model, systemPrompt, tools, middleware, compaction, thinking, skills, maxIterations.
+3. **Read the target code** — if `code` paths are specified, explore them. Understand tool implementations, middleware hooks, provider integrations.
+4. **Read the prompt** — if a `prompt` file exists, read it. If not, note the systemPrompt in the config.
+5. **Read skills** — if `skills` dirs exist, read each SKILL.md.
+6. **Read the benchmark source** — if accessible, understand what it evaluates.
+7. **Create a branch** — `git checkout -b auto-improve/<descriptor>`.
+8. **Run baseline** — execute the benchmark, record the score, save detailed results.
+9. **Initialize `journal.jsonl`** — append the baseline entry.
+10. **Analyze baseline failures** — read the results file, categorize failures.
 
-## Phase 2: Diagnose
+## Phase 2: Map Degrees of Freedom
 
-This is the most important phase. Do this thoroughly before every change.
+After understanding the system, enumerate what you can tune. These are ra's axes of variation:
 
-1. **Categorize failures** — group failing cases by symptom. What do the failures have in common? Common categories:
-   - Wrong output format (the code produces something the benchmark doesn't expect)
-   - Missing capability (the code can't handle a class of inputs)
-   - Incorrect logic (the code handles the case but gets it wrong)
-   - Performance/timeout (the code is too slow)
-   - Crash/error (the code throws an exception)
+### Axis 1: System Prompt
+- Instruction clarity, structure, ordering
+- Few-shot examples
+- Persona and constraints
+- Output format specifications
 
-2. **Find the root cause** — for the most common failure category, trace through the code:
-   - Read a specific failing case's input
-   - Mentally (or actually) trace the execution path through the target code
-   - Identify exactly where the behavior diverges from what's expected
-   - Determine if this is a single-point fix or a systemic issue
+### Axis 2: Model & Provider
+- Model selection (opus vs sonnet vs haiku, GPT-4o, etc.)
+- Provider-specific features
 
-3. **Estimate impact** — how many failing cases would this fix address? Prioritize fixes that unblock the most cases.
+### Axis 3: Thinking Mode
+- off, low, medium, high, adaptive
+- Thinking budget cap
 
-## Phase 3: Fix
+### Axis 4: Tool Configuration
+- Which tools are enabled/disabled
+- Tool descriptions (these drive tool selection)
+- Input schema descriptions and defaults
+- Tool timeout values
+- `parallelToolCalls` setting
 
-1. **State your diagnosis** — before writing any code, write down:
-   - What failure you're addressing
-   - Why it happens (the root cause)
-   - What you'll change and why that should fix it
-   - How many cases you expect this to fix
+### Axis 5: Compaction
+- Threshold (when to compact)
+- Compaction prompt (what to preserve)
+- Enabled/disabled
 
-2. **Make the change** — modify the target files. Keep changes focused and minimal.
+### Axis 6: Resource Allocation
+- maxIterations (how many loops before stopping)
+- maxTokenBudget (total token spend)
+- maxDuration (wall-clock limit)
+- toolTimeout (per-tool timeout)
 
-3. **Validate** — if `bench.yaml` has a `validate` command, run it first. Type errors and test failures mean the change is broken; fix or revert before proceeding.
+### Axis 7: Skills
+- Skill content (instructions, examples, checklists)
+- Skill descriptions (control when they activate)
+- Add/remove skills
 
-4. **Commit** — `git add <files> && git commit -m "<what and why>"`.
+### Axis 8: Middleware
+- Custom preprocessing/postprocessing hooks
+- Context injection strategies
+- Safety/validation guardrails
 
-5. **Benchmark** — run the benchmark command, redirecting output: `<run command> > bench.log 2>&1`
+### Axis 9: Target Code
+- Tool implementations (if `code` paths specified)
+- Middleware hook implementations
+- Provider integration code
 
-6. **Evaluate** — this is more than checking if the score went up:
-   - Extract the new score from `bench.log`
-   - Read the new detailed results
-   - Compare per-case: which cases flipped from fail→pass? Which from pass→fail?
-   - A change that fixes 5 cases but breaks 3 others is suspicious — understand why
+Not all axes will be available for every benchmark. If `code` is not specified, skip Axis 9. If there are no skills, skip Axis 7. Focus on what's present and modifiable.
 
-7. **Decide**:
-   - **Keep** if: score improved AND no unexpected regressions (or regressions are clearly unrelated and fixable separately)
-   - **Revert** if: score didn't improve, OR regressions outweigh gains, OR the fix didn't address what you thought it would
-   - Revert with `git reset --hard HEAD~1`
+## Phase 3: Parallel Exploration
 
-8. **Record** — append to `journal.jsonl` (see below).
+Use the **Agent** tool to explore multiple axes simultaneously. Each agent gets a focused task on a single axis.
 
-## Phase 4: Iterate
+### Spawning exploration loops
 
-After each fix, return to Phase 2. The failure landscape has changed:
-- Some failures are now fixed
-- New patterns may have emerged
-- The remaining failures may cluster differently
+Use the Agent tool with multiple tasks. Each task should:
+1. Describe the specific axis to explore
+2. Include the current config/code state
+3. Ask for a concrete proposal (not vague suggestions)
+4. Ask the agent to run the benchmark and report results
 
-**Do NOT work through a predetermined checklist of strategies.** Let the failures tell you what to fix next.
+Example:
 
-### When you plateau
+```
+Agent({
+  tasks: [
+    {
+      task: "AXIS: System Prompt\n\nCurrent system prompt:\n<prompt>\n...\n</prompt>\n\nBenchmark: `python eval.py`\nMetric: accuracy (higher is better)\nBaseline: 72.5\n\nFailure analysis: 15 cases fail because the agent doesn't follow output format.\n\n1. Read the failing cases in results.json\n2. Modify the system prompt in agent-under-test.config.yaml to address the formatting issue\n3. Run the benchmark: python eval.py > bench.log 2>&1\n4. Report: old score, new score, what you changed, which cases flipped"
+    },
+    {
+      task: "AXIS: Thinking Mode\n\nCurrent config: thinking: medium\n\nBenchmark: `python eval.py`\nBaseline: 72.5\n\nTest thinking: high with the same config. Copy agent-under-test.config.yaml to /tmp/test-thinking.yaml, change thinking to high, run: CONFIG=/tmp/test-thinking.yaml python eval.py > bench.log 2>&1\n\nReport: old score, new score, thinking tokens used"
+    },
+    {
+      task: "AXIS: Tool Configuration\n\nCurrent tools config:\n...\n\nBenchmark: `python eval.py`\nBaseline: 72.5\n\nFailure analysis: 8 cases fail because the agent uses Bash when it should use Grep.\n\n1. Read tool descriptions in the config\n2. Improve Grep's description to make it more attractive for search tasks\n3. Run benchmark and report results"
+    }
+  ]
+})
+```
 
-If several consecutive changes show no improvement:
+### Rules for parallel exploration
 
-1. **Re-read the failing cases deeply** — you may be misdiagnosing the root cause
-2. **Read the benchmark source** — maybe you misunderstand what it expects
-3. **Try a different level of abstraction** — if you've been tweaking parameters, try an architectural change; if you've been restructuring, try a targeted parameter tweak
-4. **Combine past near-misses** — two changes that individually showed marginal gains might compound
-5. **Look at the pass→fail regressions** from discarded attempts — those tell you about fragile assumptions in the code
+- **Each agent gets ONE axis** — no cross-axis changes in a single agent
+- **Agents must run the benchmark** — proposals without scores are worthless
+- **Agents must report per-case changes** — not just "score went up"
+- **Use working copies** — agents should copy the config/code to a temp location before modifying, so parallel agents don't clobber each other
+- **2-4 agents at a time** — more than that and diminishing returns kick in
+
+## Phase 4: Collect & Combine
+
+After parallel agents return:
+
+1. **Rank proposals** — sort by score improvement
+2. **Check for conflicts** — do any proposals modify the same axis or file? If so, take the better one.
+3. **Apply winners** — integrate the best proposals into the base config/code.
+4. **Run combined benchmark** — the combination might not work as well as the parts. Verify.
+5. **Handle regressions** — if the combination scores worse than the best single proposal:
+   - Apply proposals one at a time in rank order
+   - After each, run the benchmark
+   - Keep each proposal only if it improves the cumulative score
+6. **Commit** — if the combined score improves over baseline, commit all changes.
+7. **Record** — append to `journal.jsonl`.
+
+## Phase 5: Iterate
+
+After combining winners, the landscape has changed:
+
+1. **Re-read results** — new failure patterns may have emerged
+2. **Re-analyze** — categorize remaining failures
+3. **Choose new axes** — maybe system prompt is now saturated, focus shifts to tools or code
+4. **Spawn new parallel agents** — with updated context (new baseline, new failures)
+5. **Repeat**
+
+## Scheduling Continuous Improvement
+
+For long-running campaigns, the recipe supports cron mode. Each scheduled run does one iteration of the outer loop (Phase 3-5). The orchestrator picks up where the last run left off by reading `journal.jsonl`.
+
+Example cron config (add to your project's ra.config.yaml):
+
+```yaml
+app:
+  interface: cron
+
+cron:
+  - name: "auto-improve-loop"
+    schedule: "0 */2 * * *"    # Every 2 hours
+    prompt: "Read /auto-improve and continue from where we left off."
+    agent:
+      model: claude-sonnet-4-6
+      maxIterations: 100
+```
+
+This gives you continuous improvement without babysitting — each cron run reads the journal, analyzes remaining failures, runs a round of parallel exploration, and records results.
 
 ## Journal
 
-Append one JSON line to `journal.jsonl` per iteration:
+Append one JSON line to `journal.jsonl` per outer-loop iteration:
 
 ```json
-{"iteration": 1, "commit": "a1b2c3d", "score": 74.1, "best": 72.5, "delta": "+1.6", "status": "keep", "diagnosis": "12 cases fail because tool descriptions lack parameter examples", "change": "Added example values to Read and Write tool descriptions", "cases_fixed": 8, "cases_regressed": 0}
+{"iteration": 1, "score": 74.1, "best": 72.5, "delta": "+1.6", "axes_explored": ["prompt", "thinking", "tools"], "proposals": [{"axis": "prompt", "score": 74.1, "applied": true, "description": "Added output format examples"}, {"axis": "thinking", "score": 73.0, "applied": false, "description": "Switched to high thinking"}, {"axis": "tools", "score": 73.8, "applied": false, "description": "Improved Grep description"}], "combined_score": 74.1, "cases_fixed": 8, "cases_regressed": 0, "remaining_failures": 42}
 ```
 
 Fields:
-- **iteration**: sequential counter
-- **commit**: short git hash (7 chars), or `null` for baseline
-- **score**: the metric value (0 for crashes)
-- **best**: the best score so far (before this iteration)
-- **delta**: change from best ("+1.6", "-0.3", "0")
-- **status**: `keep`, `discard`, or `crash`
-- **diagnosis**: what failure you targeted and why
-- **change**: what you actually modified
-- **cases_fixed**: count of fail→pass (0 if unknown or not applicable)
-- **cases_regressed**: count of pass→fail (0 if unknown or not applicable)
-
-Use JSONL (one JSON object per line) so entries can be appended without parsing the whole file.
+- **iteration**: outer-loop counter
+- **score**: final score after this iteration
+- **best**: best score before this iteration
+- **delta**: improvement
+- **axes_explored**: which axes were explored in parallel
+- **proposals**: per-axis results and whether they were applied
+- **combined_score**: score with all applied proposals together
+- **cases_fixed/regressed**: net case-level changes
+- **remaining_failures**: how many cases still fail
 
 ## Critical Rules
 
-- **DIAGNOSE BEFORE YOU CHANGE**: Never make a change without first identifying a specific failure it addresses. "Let's try improving X" is not a diagnosis. "Cases 14, 27, 39 fail because the compaction drops tool call context" is.
-- **ONE ROOT CAUSE PER ITERATION**: Fix one root cause at a time. If you see three problems, fix the highest-impact one first.
-- **NEVER MODIFY THE BENCHMARK**: The benchmark command, harness, test cases, and evaluation logic are sacred.
-- **TRACK REGRESSIONS**: A score improvement that comes with regressions is fragile. Understand why the regressions happened.
-- **NEVER STOP**: Once the loop begins, do NOT pause to ask the human. The loop runs until manually interrupted.
-- **CRASHES ARE DATA**: A crash tells you about a constraint or edge case. Log it, learn from it, move on.
-- **REREAD ON CONFUSION**: If a change doesn't have the effect you expected, re-read the code and the benchmark. Your mental model is wrong — update it.
+- **PARALLEL BY DEFAULT**: Always explore multiple axes simultaneously. A single-axis sequential loop wastes time.
+- **DIAGNOSE FIRST**: Before spawning agents, understand the failures. The failure analysis informs which axes to explore and what to tell each agent.
+- **TEMP COPIES FOR PARALLEL AGENTS**: Each parallel agent must work on its own copy of config/code. Use `/tmp/auto-improve/<axis>/` per agent.
+- **VERIFY COMBINATIONS**: Individual wins don't guarantee combined wins. Always benchmark the combination.
+- **NEVER MODIFY THE BENCHMARK**: The run command, evaluation harness, and test cases are sacred.
+- **NEVER STOP**: The loop runs until manually interrupted. If all axes plateau, try cross-axis combinations, revisit discarded proposals with new context, or explore axes you haven't tried yet.
+- **LOG EVERYTHING**: Every proposal, every score, every regression. The journal is your memory across cron runs.
+- **SHIFT AXES**: Early iterations will be dominated by prompt and tool description changes (high leverage, cheap to test). Later iterations will shift to code changes (lower leverage, more complex). This is natural — let the failure analysis guide you.
