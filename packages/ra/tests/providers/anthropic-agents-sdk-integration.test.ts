@@ -279,14 +279,21 @@ describe('AnthropicAgentsSdkProvider + AgentLoop integration', () => {
     // Both calls must have magic disabled
     for (let i = 0; i < mockQuery.mock.calls.length; i++) {
       const opts = mockQuery.mock.calls[i]![0].options
+      // Context isolation — ra owns all context engineering
       expect(opts.settingSources).toEqual([])
-      expect(opts.persistSession).toBe(false)
       expect(opts.settings.autoMemoryEnabled).toBe(false)
       expect(opts.settings.autoDreamEnabled).toBe(false)
+      expect(opts.settings.includeGitInstructions).toBe(false)
+      expect(opts.settings.respectGitignore).toBe(false)
+      expect(opts.persistSession).toBe(false)
+      expect(opts.enableFileCheckpointing).toBe(false)
+      expect(opts.plugins).toEqual([])
+      // Tool & permission isolation
       expect(opts.tools).toEqual([])
       expect(opts.permissionMode).toBe('bypassPermissions')
       expect(opts.allowDangerouslySkipPermissions).toBe(true)
       expect(opts.maxTurns).toBe(1)
+      // System prompt is a plain string (replaces SDK default, no hidden instructions)
       expect(typeof opts.systemPrompt).toBe('string')
     }
   })
@@ -402,16 +409,22 @@ describe('AnthropicAgentsSdkProvider + AgentLoop integration', () => {
   })
 
   it('abort stops the loop', async () => {
-    // The query will hang — abort will stop it
-    mockQuery.mockImplementation(() => (async function* () {
-      await new Promise(r => setTimeout(r, 5000))
-      yield resultMsg()
-    })())
+    // The query yields nothing useful then hangs — abort cuts it short
+    mockQuery.mockImplementation((params: { options: { abortController: AbortController } }) => {
+      const ac = params.options.abortController
+      return (async function* () {
+        // Wait until aborted or a long timeout
+        await new Promise<void>(resolve => {
+          ac.signal.addEventListener('abort', () => resolve(), { once: true })
+          setTimeout(resolve, 10000)
+        })
+        yield resultMsg()
+      })()
+    })
 
     const provider = new AnthropicAgentsSdkProvider()
     const loop = new AgentLoop({ provider, tools: new ToolRegistry(), maxIterations: 10, model: 'claude-sonnet-4-6' })
 
-    // Abort after a short delay
     setTimeout(() => loop.abort(), 50)
     const result = await loop.run([{ role: 'user', content: 'wait' }])
 

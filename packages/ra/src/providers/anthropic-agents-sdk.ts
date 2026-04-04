@@ -19,12 +19,17 @@ export interface AnthropicAgentsSdkProviderOptions {
  * middleware, and the agent loop itself.
  *
  * All SDK "magic" is explicitly disabled:
- * - settingSources: []          → no CLAUDE.md / .claude/settings.json loading
- * - settings.autoMemoryEnabled: false → no auto-memory
- * - persistSession: false       → no session files written to disk
- * - tools: []                   → no built-in tools (Read, Write, Bash, etc.)
- * - permissionMode: 'bypassPermissions' → no permission prompts
- * - systemPrompt: string        → REPLACES SDK default (no hidden instructions)
+ * - settingSources: []                    → no CLAUDE.md / .claude/settings.json loading
+ * - settings.autoMemoryEnabled: false     → no auto-memory files
+ * - settings.autoDreamEnabled: false      → no background memory consolidation
+ * - settings.includeGitInstructions: false→ no git workflow instructions injected
+ * - settings.respectGitignore: false      → no .gitignore file reading
+ * - persistSession: false                 → no session files written to/read from disk
+ * - enableFileCheckpointing: false        → no file change tracking
+ * - plugins: []                           → no plugins loaded from disk
+ * - tools: []                             → no built-in tools (Read, Write, Bash, etc.)
+ * - permissionMode: 'bypassPermissions'   → no permission prompts
+ * - systemPrompt: string                  → REPLACES SDK default (no hidden instructions)
  *
  * Limitations:
  * - Images and files in conversation history are described as metadata (binary
@@ -71,30 +76,42 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     return {
       prompt,
       model,
-      // REPLACES the SDK default system prompt entirely — no hidden instructions
+      // ── Context isolation: ra owns ALL context engineering ──────────
+      // REPLACES the SDK default system prompt — no hidden instructions
       systemPrompt: system || 'You are a helpful AI assistant.',
-      maxTurns: 1,
-      // Disable ALL built-in tools — ra provides tools via MCP
-      tools: [] as string[],
-      includePartialMessages: true,
-      // Disable all automatic context/settings loading
+      // No filesystem settings/CLAUDE.md/.claude/ loading at all
       settingSources: [] as SettingSource[],
-      // Disable session persistence to disk
+      // Inline settings — never load from file. Disable every auto-read feature.
+      settings: {
+        autoMemoryEnabled: false,       // no auto-memory files
+        autoDreamEnabled: false,        // no background consolidation
+        includeGitInstructions: false,  // no git workflow instructions injected
+        respectGitignore: false,        // don't read .gitignore
+      },
+      // No session files written to or read from disk
       persistSession: false,
+      // No file change tracking
+      enableFileCheckpointing: false,
+      // No plugins loaded from disk
+      plugins: [],
+
+      // ── Tool & permission isolation: ra owns tools and permissions ─
+      // No built-in tools (Read, Write, Bash, etc.) — ra provides via MCP
+      tools: [] as string[],
       // Skip all permission checks — ra handles permissions
       permissionMode: 'bypassPermissions' as const,
       allowDangerouslySkipPermissions: true,
-      // Disable auto-memory and consolidation
-      settings: {
-        autoMemoryEnabled: false,
-        autoDreamEnabled: false,
-      },
-      // Thinking / effort
+      maxTurns: 1,
+      includePartialMessages: true,
+
+      // ── Thinking / effort ─────────────────────────────────────────
       ...this.mapThinking(request.thinking, request.thinkingBudgetCap),
       ...this.mapEffort(request.thinking),
-      // Provider options passthrough
+
+      // ── Provider options passthrough ──────────────────────────────
       ...(request.providerOptions?.maxTurns ? { maxTurns: request.providerOptions.maxTurns as number } : {}),
-      // MCP tools
+
+      // ── MCP tools (ra's tools bridged to the SDK) ─────────────────
       ...(mcpServer && { mcpServers: { 'ra-tools': mcpServer } }),
     }
   }

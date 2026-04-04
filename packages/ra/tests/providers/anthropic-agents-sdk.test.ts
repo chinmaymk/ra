@@ -78,6 +78,22 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(opts.settings.autoDreamEnabled).toBe(false)
     })
 
+    it('disables git instructions and gitignore reading', async () => {
+      const opts = await getOptions()
+      expect(opts.settings.includeGitInstructions).toBe(false)
+      expect(opts.settings.respectGitignore).toBe(false)
+    })
+
+    it('disables file checkpointing', async () => {
+      const opts = await getOptions()
+      expect(opts.enableFileCheckpointing).toBe(false)
+    })
+
+    it('disables plugins', async () => {
+      const opts = await getOptions()
+      expect(opts.plugins).toEqual([])
+    })
+
     it('disables built-in tools', async () => {
       const opts = await getOptions()
       expect(opts.tools).toEqual([])
