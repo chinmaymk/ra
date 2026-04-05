@@ -112,9 +112,52 @@ export class StreamBuffer {
   }
 }
 
+/** Max lines to show per side of an Edit diff preview. */
+const EDIT_DIFF_MAX_LINES = 4
+
+function formatEditCall(args: string, cols: number): string {
+  let parsed: { path?: string; old_string?: string; new_string?: string }
+  try { parsed = JSON.parse(args) } catch { return '' }
+  if (!parsed.path || parsed.old_string == null || parsed.new_string == null) return ''
+
+  const indent = '    '
+  const usable = cols - indent.length - 2 // -2 for "- " / "+ " prefix
+  const lines: string[] = []
+
+  lines.push(`  ${ansi.yellow}◆ Edit${ansi.reset} ${ansi.dim}${parsed.path}${ansi.reset}`)
+
+  const oldLines = parsed.old_string.split('\n')
+  const newLines = parsed.new_string.split('\n')
+  const oldTrunc = oldLines.length > EDIT_DIFF_MAX_LINES
+  const newTrunc = newLines.length > EDIT_DIFF_MAX_LINES
+  const oldShow = oldTrunc ? oldLines.slice(0, EDIT_DIFF_MAX_LINES) : oldLines
+  const newShow = newTrunc ? newLines.slice(0, EDIT_DIFF_MAX_LINES) : newLines
+
+  for (const l of oldShow) {
+    const text = l.length > usable ? l.slice(0, usable - 1) + '…' : l
+    lines.push(`${indent}${ansi.red}- ${text}${ansi.reset}`)
+  }
+  if (oldTrunc) lines.push(`${indent}${ansi.dim}… ${oldLines.length - EDIT_DIFF_MAX_LINES} more lines${ansi.reset}`)
+
+  for (const l of newShow) {
+    const text = l.length > usable ? l.slice(0, usable - 1) + '…' : l
+    lines.push(`${indent}${ansi.green}+ ${text}${ansi.reset}`)
+  }
+  if (newTrunc) lines.push(`${indent}${ansi.dim}… ${newLines.length - EDIT_DIFF_MAX_LINES} more lines${ansi.reset}`)
+
+  return lines.join('\n') + '\n'
+}
+
 export function printToolCall(name: string, args: string): void {
   const cols = process.stdout.columns || 80
-  // Collapse JSON args to a single line and trim outer braces/whitespace
+
+  // Edit tool gets a pretty diff view
+  if (name === 'Edit') {
+    const pretty = formatEditCall(args, cols)
+    if (pretty) { process.stdout.write(pretty); return }
+  }
+
+  // Default: collapse JSON args to a single line
   let flat: string
   try {
     flat = JSON.stringify(JSON.parse(args))

@@ -80,6 +80,29 @@ describe('printToolCall', () => {
     expect(output).toContain('/tmp/x')
     expect(output).toEndWith('\n')
   })
+
+  it('formats Edit tool as a diff with file path', () => {
+    const args = JSON.stringify({
+      path: 'src/main.ts',
+      old_string: 'const x = 1',
+      new_string: 'const x = 2',
+    })
+    const output = captureStdout(() => printToolCall('Edit', args))
+    expect(output).toContain('◆ Edit')
+    expect(output).toContain('src/main.ts')
+    expect(output).toContain('- const x = 1')
+    expect(output).toContain('+ const x = 2')
+    expect(output).toEndWith('\n')
+  })
+
+  it('truncates long Edit diffs and shows line count', () => {
+    const oldLines = Array.from({ length: 10 }, (_, i) => `old line ${i}`).join('\n')
+    const newLines = Array.from({ length: 10 }, (_, i) => `new line ${i}`).join('\n')
+    const args = JSON.stringify({ path: 'big.ts', old_string: oldLines, new_string: newLines })
+    const output = captureStdout(() => printToolCall('Edit', args))
+    expect(output).toContain('… 6 more lines')
+    expect(output).not.toContain('old line 5')
+  })
 })
 
 describe('printToolResult', () => {
