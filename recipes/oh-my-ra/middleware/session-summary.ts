@@ -9,18 +9,13 @@ export default async function sessionSummary(ctx: LoopContext): Promise<void> {
   const toolCalls = messages.filter(
     (m) =>
       m.role === "assistant" &&
-      Array.isArray(m.content) &&
-      m.content.some(
-        (b: { type: string }) => b.type === "tool_use" || b.type === "tool_call"
-      )
+      Array.isArray((m as { toolCalls?: unknown[] }).toolCalls) &&
+      ((m as { toolCalls?: unknown[] }).toolCalls?.length ?? 0) > 0
   ).length
 
   const toolResults = messages.filter((m) => m.role === "tool").length
   const errors = messages.filter(
-    (m) =>
-      m.role === "tool" &&
-      Array.isArray(m.content) &&
-      m.content.some((b: { isError?: boolean }) => b.isError)
+    (m) => m.role === "tool" && (m as { isError?: boolean }).isError === true
   ).length
 
   const summary = [

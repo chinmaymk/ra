@@ -24,10 +24,8 @@ export default async function progressTracker(
   const toolCalls = ctx.messages.filter(
     (m) =>
       m.role === "assistant" &&
-      Array.isArray(m.content) &&
-      m.content.some(
-        (b: { type: string }) => b.type === "tool_use" || b.type === "tool_call"
-      )
+      Array.isArray((m as { toolCalls?: unknown[] }).toolCalls) &&
+      ((m as { toolCalls?: unknown[] }).toolCalls?.length ?? 0) > 0
   ).length
 
   ctx.logger.info("iteration_complete", {

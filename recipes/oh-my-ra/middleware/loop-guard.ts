@@ -3,25 +3,26 @@ import type { LoopContext } from "@chinmaymk/ra"
 const MAX_REPEATED_ERRORS = 3
 const recentErrors: string[] = []
 
-function extractErrors(messages: { role: string; content: unknown }[]): string[] {
+function extractErrors(messages: { role: string; content: unknown; isError?: boolean }[]): string[] {
   const errors: string[] = []
   for (const msg of messages) {
     if (msg.role !== "tool") continue
     const content = msg.content
+
+    // Tool results that are marked as errors
+    if (msg.isError) {
+      const text = typeof content === "string" ? content : ""
+      const snippet = text.slice(0, 100).trim()
+      if (snippet) errors.push(snippet)
+      continue
+    }
+
+    // Tool results containing error-like patterns
     if (typeof content === "string" && content.length < 500) {
-      // Look for error-like patterns
       const match = content.match(
         /(?:error|Error|ERROR|exception|Exception|EXCEPTION|fail|FAIL)[:.\s](.{10,80})/
       )
       if (match) errors.push(match[1]!.trim())
-    } else if (Array.isArray(content)) {
-      for (const block of content) {
-        const b = block as { type?: string; text?: string; isError?: boolean }
-        if (b.isError && b.text) {
-          const snippet = b.text.slice(0, 100).trim()
-          if (snippet) errors.push(snippet)
-        }
-      }
     }
   }
   return errors

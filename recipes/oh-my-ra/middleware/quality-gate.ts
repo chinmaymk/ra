@@ -24,15 +24,21 @@ const SECRET_PATTERNS = [
   /id_ed25519/,
 ]
 
-function getToolInput(toolCall: { name: string; input: unknown }): {
+function parseArgs(toolCall: { arguments: string }): {
   command?: string
   file_path?: string
+  path?: string
   content?: string
 } {
-  return (toolCall.input ?? {}) as {
-    command?: string
-    file_path?: string
-    content?: string
+  try {
+    return JSON.parse(toolCall.arguments || "{}") as {
+      command?: string
+      file_path?: string
+      path?: string
+      content?: string
+    }
+  } catch {
+    return {}
   }
 }
 
@@ -40,7 +46,7 @@ export default async function qualityGate(
   ctx: ToolExecutionContext
 ): Promise<void> {
   const { toolCall } = ctx
-  const input = getToolInput(toolCall)
+  const input = parseArgs(toolCall)
 
   if (toolCall.name === "Bash" && input.command) {
     for (const pattern of DESTRUCTIVE_PATTERNS) {
@@ -53,14 +59,15 @@ export default async function qualityGate(
     }
   }
 
+  const filePath = input.file_path || input.path
   if (
     (toolCall.name === "Write" || toolCall.name === "Edit") &&
-    input.file_path
+    filePath
   ) {
     for (const pattern of SECRET_PATTERNS) {
-      if (pattern.test(input.file_path)) {
+      if (pattern.test(filePath)) {
         ctx.deny(
-          `Blocked write to sensitive file: "${input.file_path}". Secret files should not be modified by the agent.`
+          `Blocked write to sensitive file: "${filePath}". Secret files should not be modified by the agent.`
         )
         return
       }
