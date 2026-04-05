@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { useData } from 'vitepress'
 import VersionPicker from './VersionPicker.vue'
 
-const { site } = useData()
+// Always link to the root site, not the versioned build base.
+const SITE_ROOT = '/ra/'
 </script>
 
 <template>
-  <a class="blog-link" :href="site.base + 'blog/'">Blog</a>
+  <a class="blog-link" :href="SITE_ROOT + 'blog/'">Blog</a>
   <VersionPicker />
 </template>
 
