@@ -62,9 +62,7 @@ export default defineConfig({
   },
   themeConfig: {
     logo: '/logo.svg',
-    nav: [
-      { text: 'Blog', link: '/blog/' },
-    ],
+    nav: [],
     sidebar: {
       '/blog/': [
         {
