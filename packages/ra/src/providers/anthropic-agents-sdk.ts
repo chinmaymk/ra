@@ -5,9 +5,22 @@ import { z } from 'zod'
 import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage, ThinkingLevel } from './types'
 
+/**
+ * Called before each tool execution in the MCP bridge.
+ * Return a string to deny (the string is the denial reason).
+ * Return undefined to allow.
+ */
+export type ToolPermissionCheck = (toolName: string, toolInput: Record<string, unknown>) => Promise<string | undefined>
+
 export interface AnthropicAgentsSdkProviderOptions {
   /** Default model (overridden by ChatRequest.model). */
   model?: string
+  /**
+   * Permission check called before each MCP tool execution.
+   * Wire this to ra's permission system (createPermissionsMiddleware) in bootstrap.
+   * When it returns a string, the tool call is denied and the reason is sent to the model.
+   */
+  checkToolPermission?: ToolPermissionCheck
 }
 
 /**
@@ -18,11 +31,13 @@ export interface AnthropicAgentsSdkProviderOptions {
  * execution (via MCP bridge to ra's tool registry), and multi-turn
  * conversations all happen inside a single stream() call.
  *
- * Ra's tools are registered as MCP tools with real handlers that call
- * tool.execute(). The SDK invokes them when the model generates tool_use
- * blocks. Text and thinking chunks from all turns are streamed back to ra.
- * Ra's loop sees the final text response with no pending tool calls and
- * completes in a single iteration.
+ * Ra's tools are registered as MCP tools with real handlers that:
+ * 1. Check permissions via the checkToolPermission callback
+ * 2. Execute the tool via tool.execute()
+ * 3. Return the result (or denial reason) to the SDK
+ *
+ * Tool activity (calls + results) is streamed as text chunks so the user
+ * sees what's happening in real time.
  *
  * All SDK context engineering is disabled — ra owns context:
  * - settingSources: []                    → no CLAUDE.md / .claude/settings.json
@@ -35,21 +50,15 @@ export interface AnthropicAgentsSdkProviderOptions {
  * - plugins: []                           → no plugins from disk
  * - tools: []                             → no built-in tools
  * - systemPrompt: string                  → REPLACES SDK default
- *
- * Limitations:
- * - Images/files in conversation history described as metadata (binary
- *   data cannot be embedded in a text prompt).
- * - Each stream() spawns a Claude Code subprocess (adds latency).
- * - Requires Claude Code installed and the user logged in.
- * - Ra's beforeToolExecution/afterToolExecution middleware hooks do not
- *   fire — the SDK handles tool execution directly via MCP.
  */
 export class AnthropicAgentsSdkProvider implements IProvider {
   readonly name = 'anthropic-agents-sdk'
   private defaultModel?: string
+  private checkToolPermission?: ToolPermissionCheck
 
   constructor(options: AnthropicAgentsSdkProviderOptions = {}) {
     this.defaultModel = options.model
+    this.checkToolPermission = options.checkToolPermission
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
@@ -100,7 +109,11 @@ export class AnthropicAgentsSdkProvider implements IProvider {
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
     const params = this.buildParams(request)
-    const mcpServer = request.tools?.length ? this.buildMcpServer(request.tools) : undefined
+    // Collect text chunks from tool activity so we can yield them between stream events
+    const toolTextQueue: string[] = []
+    const mcpServer = request.tools?.length
+      ? this.buildMcpServer(request.tools, toolTextQueue)
+      : undefined
 
     const abortController = new AbortController()
     if (request.signal) {
@@ -118,7 +131,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       },
     })
 
-    yield* withDoneGuard(this.parseSession(session))
+    yield* withDoneGuard(this.parseSession(session, toolTextQueue))
   }
 
   private mapThinking(thinking?: ThinkingLevel, budgetCap?: number): { thinking?: ThinkingConfig } {
@@ -178,10 +191,16 @@ export class AnthropicAgentsSdkProvider implements IProvider {
 
   /**
    * Build an MCP server that bridges ra's tools to the Agent SDK.
-   * The SDK calls these handlers when the model generates tool_use blocks.
-   * Each handler executes the real tool via tool.execute().
+   *
+   * Each MCP handler:
+   * 1. Pushes a text description of the tool call to toolTextQueue (for streaming display)
+   * 2. Checks permissions via checkToolPermission (if configured)
+   * 3. Executes the tool via tool.execute()
+   * 4. Pushes a text description of the result to toolTextQueue
+   * 5. Returns the result (or error) to the SDK
    */
-  buildMcpServer(tools: ITool[]) {
+  buildMcpServer(tools: ITool[], toolTextQueue: string[] = []) {
+    const permCheck = this.checkToolPermission
     const mcpTools = tools.map(t => {
       const zodShape = jsonSchemaToZodShape(t.inputSchema)
       return sdkTool(
@@ -189,12 +208,27 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         t.description,
         zodShape,
         async (args: Record<string, unknown>) => {
+          const argsStr = JSON.stringify(args)
+          toolTextQueue.push(`\n◆ ${t.name} ${argsStr}\n`)
+
+          // Permission check
+          if (permCheck) {
+            const denial = await permCheck(t.name, args)
+            if (denial) {
+              toolTextQueue.push(`✗ denied: ${denial}\n`)
+              return { content: [{ type: 'text' as const, text: denial }], isError: true }
+            }
+          }
+
           try {
             const result = await t.execute(args)
             const text = typeof result === 'string' ? result : JSON.stringify(result)
+            const preview = text.length > 200 ? text.slice(0, 200) + '…' : text
+            toolTextQueue.push(`✓ ${t.name} (${text.length} chars)\n`)
             return { content: [{ type: 'text' as const, text }] }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
+            toolTextQueue.push(`✗ ${t.name} error: ${message}\n`)
             return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true }
           }
         },
@@ -206,15 +240,19 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   /**
    * Parse Agent SDK events into ra StreamChunks.
    *
-   * The SDK handles the full agent loop (model → tools → model → ...).
-   * We stream text and thinking deltas from ALL turns so the user sees
-   * intermediate output. Tool call chunks are NOT yielded — the SDK
-   * already executed them via the MCP bridge.
+   * Yields text and thinking from all model turns. Between stream events,
+   * flushes any tool activity text that MCP handlers have queued up,
+   * so the user sees tool calls and results in real time.
    */
-  private async *parseSession(session: AsyncIterable<SDKMessage>): AsyncIterable<StreamChunk> {
+  private async *parseSession(session: AsyncIterable<SDKMessage>, toolTextQueue: string[]): AsyncIterable<StreamChunk> {
     let usage: TokenUsage | undefined
 
     for await (const msg of session) {
+      // Flush any pending tool activity text before processing the next event
+      while (toolTextQueue.length > 0) {
+        yield { type: 'text', delta: toolTextQueue.shift()! }
+      }
+
       if (msg.type === 'stream_event') {
         const event = (msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent
         if (event.type === 'content_block_delta') {
@@ -223,12 +261,15 @@ export class AnthropicAgentsSdkProvider implements IProvider {
           } else if (event.delta.type === 'thinking_delta') {
             yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
           }
-          // input_json_delta (tool call args) intentionally not yielded —
-          // tool execution is handled by the SDK via MCP.
         }
       } else if (msg.type === 'result') {
         usage = this.extractUsage(msg)
       }
+    }
+
+    // Final flush of any remaining tool text
+    while (toolTextQueue.length > 0) {
+      yield { type: 'text', delta: toolTextQueue.shift()! }
     }
     yield { type: 'done', ...(usage && { usage }) }
   }

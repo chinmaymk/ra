@@ -25,15 +25,39 @@ function checkField(tool: string, field: string, value: string, rule: CompiledFi
   }
 }
 
-/** Create a beforeToolExecution middleware that enforces permission rules. */
-export function createPermissionsMiddleware(config: PermissionsConfig): Middleware<ToolExecutionContext> {
-  if (config.no_rules_rules || !config.rules?.length) return async () => {}
+/**
+ * Create a standalone permission check function for use outside the middleware chain.
+ * Used by the anthropic-agents-sdk provider to check permissions in MCP handlers.
+ */
+export function checkToolPermissionFromConfig(config: PermissionsConfig): (toolName: string, toolInput: Record<string, unknown>) => Promise<string | undefined> {
+  if (config.no_rules_rules || !config.rules?.length) return async () => undefined
 
   const defaultAction = config.default_action ?? 'allow'
+  const rulesByTool = buildRulesIndex(config.rules)
 
-  // Index rules by tool name and pre-compile field regexes
+  return async (toolName: string, toolInput: Record<string, unknown>) => {
+    const toolRules = rulesByTool.get(toolName)
+    if (!toolRules) {
+      return defaultAction === 'deny'
+        ? `Permission denied: no rules configured for tool '${toolName}' and default_action is 'deny'`
+        : undefined
+    }
+    for (const rule of toolRules) {
+      for (const [key, compiledRule] of rule.fields) {
+        const val = toolInput[key]
+        if (val == null) continue
+        const reason = checkField(toolName, key, typeof val === 'string' ? val : JSON.stringify(val), compiledRule)
+        if (reason) return reason
+      }
+    }
+    return undefined
+  }
+}
+
+/** Index rules by tool name and pre-compile field regexes. */
+function buildRulesIndex(rules: { tool: string; [field: string]: unknown }[]) {
   const rulesByTool = new Map<string, Array<{ tool: string; fields: Map<string, CompiledFieldRule> }>>()
-  for (const rule of config.rules) {
+  for (const rule of rules) {
     const fields = new Map<string, CompiledFieldRule>()
     for (const [key, fieldRule] of Object.entries(rule)) {
       if (key === 'tool' || !fieldRule || typeof fieldRule !== 'object' || Array.isArray(fieldRule)) continue
@@ -44,6 +68,15 @@ export function createPermissionsMiddleware(config: PermissionsConfig): Middlewa
     if (list) list.push(entry)
     else rulesByTool.set(rule.tool, [entry])
   }
+  return rulesByTool
+}
+
+/** Create a beforeToolExecution middleware that enforces permission rules. */
+export function createPermissionsMiddleware(config: PermissionsConfig): Middleware<ToolExecutionContext> {
+  if (config.no_rules_rules || !config.rules?.length) return async () => {}
+
+  const defaultAction = config.default_action ?? 'allow'
+  const rulesByTool = buildRulesIndex(config.rules)
 
   return async (ctx) => {
     const { name, arguments: args } = ctx.toolCall
