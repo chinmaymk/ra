@@ -73,12 +73,88 @@ describe('closeAssistantBox', () => {
 })
 
 describe('printToolCall', () => {
-  it('outputs tool name with diamond marker and args on its own line', () => {
+  it('shows Read with path only', () => {
     const output = captureStdout(() => printToolCall('Read', '{"path":"/tmp/x"}'))
     expect(output).toContain('◆')
     expect(output).toContain('Read')
     expect(output).toContain('/tmp/x')
     expect(output).toEndWith('\n')
+  })
+
+  it('shows Read with offset and limit', () => {
+    const output = captureStdout(() => printToolCall('Read', '{"path":"/tmp/x","offset":10,"limit":5}'))
+    expect(output).toContain('/tmp/x')
+    expect(output).toContain('offset=10')
+    expect(output).toContain('limit=5')
+  })
+
+  it('shows Write with path', () => {
+    const output = captureStdout(() => printToolCall('Write', '{"path":"src/index.ts","content":"hello"}'))
+    expect(output).toContain('◆ Write')
+    expect(output).toContain('src/index.ts')
+    expect(output).not.toContain('hello')
+  })
+
+  it('formats Edit tool as a diff with file path', () => {
+    const args = JSON.stringify({ path: 'src/main.ts', old_string: 'const x = 1', new_string: 'const x = 2' })
+    const output = captureStdout(() => printToolCall('Edit', args))
+    expect(output).toContain('◆ Edit')
+    expect(output).toContain('src/main.ts')
+    expect(output).toContain('- const x = 1')
+    expect(output).toContain('+ const x = 2')
+  })
+
+  it('truncates long Edit diffs and shows line count', () => {
+    const oldLines = Array.from({ length: 10 }, (_, i) => `old line ${i}`).join('\n')
+    const newLines = Array.from({ length: 10 }, (_, i) => `new line ${i}`).join('\n')
+    const args = JSON.stringify({ path: 'big.ts', old_string: oldLines, new_string: newLines })
+    const output = captureStdout(() => printToolCall('Edit', args))
+    expect(output).toContain('… 6 more lines')
+    expect(output).not.toContain('old line 5')
+  })
+
+  it('shows Bash with first line of command', () => {
+    const output = captureStdout(() => printToolCall('Bash', '{"command":"git status"}'))
+    expect(output).toContain('◆ Bash')
+    expect(output).toContain('git status')
+  })
+
+  it('shows Bash with only first line of multi-line command', () => {
+    const output = captureStdout(() => printToolCall('Bash', '{"command":"echo hello\\necho world"}'))
+    expect(output).toContain('echo hello')
+    expect(output).not.toContain('echo world')
+  })
+
+  it('shows Grep with pattern and path', () => {
+    const output = captureStdout(() => printToolCall('Grep', '{"pattern":"TODO","path":"src/","include":"*.ts"}'))
+    expect(output).toContain('◆ Grep')
+    expect(output).toContain('"TODO"')
+    expect(output).toContain('src/')
+    expect(output).toContain('*.ts')
+  })
+
+  it('shows Glob with pattern', () => {
+    const output = captureStdout(() => printToolCall('Glob', '{"pattern":"**/*.ts","path":"src/"}'))
+    expect(output).toContain('◆ Glob')
+    expect(output).toContain('**/*.ts')
+    expect(output).toContain('src/')
+  })
+
+  it('shows MoveFile with arrow', () => {
+    const output = captureStdout(() => printToolCall('MoveFile', '{"source":"a.ts","destination":"b.ts"}'))
+    expect(output).toContain('a.ts → b.ts')
+  })
+
+  it('shows WebFetch with method and url', () => {
+    const output = captureStdout(() => printToolCall('WebFetch', '{"url":"https://example.com","method":"POST"}'))
+    expect(output).toContain('POST')
+    expect(output).toContain('https://example.com')
+  })
+
+  it('falls back to flat JSON for unknown tools', () => {
+    const output = captureStdout(() => printToolCall('CustomTool', '{"key":"value"}'))
+    expect(output).toContain('◆ CustomTool')
+    expect(output).toContain('value')
   })
 })
 
@@ -88,6 +164,61 @@ describe('printToolResult', () => {
     expect(output).toContain('✔')
     expect(output).toContain('Read')
     expect(output).toContain('42ms')
+  })
+
+  it('shows line count for Read results', () => {
+    const content = '1: foo\n2: bar\n3: baz\n'
+    const output = captureStdout(() => printToolResult('Read', 5, content))
+    expect(output).toContain('3 lines')
+    expect(output).toContain('5ms')
+  })
+
+  it('shows match count for Grep results', () => {
+    const content = 'src/a.ts:10:match1\nsrc/b.ts:20:match2\n'
+    const output = captureStdout(() => printToolResult('Grep', 12, content))
+    expect(output).toContain('2 matches')
+  })
+
+  it('shows no matches for empty Grep', () => {
+    const output = captureStdout(() => printToolResult('Grep', 3, 'No matches found for "foo"'))
+    expect(output).toContain('no matches')
+  })
+
+  it('shows file count for Glob results', () => {
+    const content = 'src/a.ts\nsrc/b.ts\n'
+    const output = captureStdout(() => printToolResult('Glob', 8, content))
+    expect(output).toContain('2 files')
+  })
+
+  it('shows entry count for LS results', () => {
+    const content = 'src/\npackage.json\ntsconfig.json\n'
+    const output = captureStdout(() => printToolResult('LS', 2, content))
+    expect(output).toContain('3 entries')
+  })
+
+  it('shows exit code and line count for Bash results', () => {
+    const content = '<stdout>line 1\nline 2\n</stdout>\n<exit_code>0</exit_code>'
+    const output = captureStdout(() => printToolResult('Bash', 100, content))
+    expect(output).toContain('exit 0')
+    expect(output).toContain('2 lines')
+  })
+
+  it('shows non-zero exit code for Bash', () => {
+    const content = '<stderr>err\n</stderr>\n<exit_code>1</exit_code>'
+    const output = captureStdout(() => printToolResult('Bash', 50, content))
+    expect(output).toContain('exit 1')
+  })
+
+  it('shows status for WebFetch results', () => {
+    const content = JSON.stringify({ status: 200, headers: {}, body: 'ok' })
+    const output = captureStdout(() => printToolResult('WebFetch', 200, content))
+    expect(output).toContain('200')
+  })
+
+  it('shows only timing when no content provided', () => {
+    const output = captureStdout(() => printToolResult('Edit', 10))
+    expect(output).toContain('10ms')
+    expect(output).toContain('✔')
   })
 })
 
