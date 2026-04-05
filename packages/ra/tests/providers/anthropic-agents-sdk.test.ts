@@ -16,8 +16,8 @@ function streamEvent(event: unknown) {
   return { type: 'stream_event', event, parent_tool_use_id: null, uuid: 'u', session_id: 's' }
 }
 
-function resultMsg(usage: Record<string, number> = { input_tokens: 0, output_tokens: 0 }) {
-  return { type: 'result', subtype: 'success', usage, uuid: 'u', session_id: 's' }
+function resultMsg(overrides: Record<string, unknown> = {}) {
+  return { type: 'result', subtype: 'success', usage: { input_tokens: 0, output_tokens: 0 }, uuid: 'u', session_id: 's', ...overrides }
 }
 
 function mockQueryWith(...messages: unknown[]) {
@@ -200,6 +200,59 @@ describe('AnthropicAgentsSdkProvider', () => {
       await handler({ path: 'f.txt' })
       expect(queue.length).toBeGreaterThan(0)
       expect(queue.some(t => t.includes('◆ Read'))).toBe(true)
+    })
+
+    it('extracts usage from modelUsage (preferred — has cache tokens)', async () => {
+      mockQueryWith(
+        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hi' } }),
+        resultMsg({
+          usage: { input_tokens: 100, output_tokens: 20 },
+          modelUsage: {
+            'claude-sonnet-4-6': {
+              inputTokens: 100,
+              outputTokens: 20,
+              cacheReadInputTokens: 500,
+              cacheCreationInputTokens: 200,
+            },
+          },
+        }),
+      )
+      const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as any[]
+      const done = chunks.find((c: any) => c.type === 'done')
+      expect(done.usage.inputTokens).toBe(100 + 500 + 200)
+      expect(done.usage.outputTokens).toBe(20)
+      expect(done.usage.cacheReadTokens).toBe(500)
+      expect(done.usage.cacheCreationTokens).toBe(200)
+    })
+
+    it('aggregates usage across multiple models in modelUsage', async () => {
+      mockQueryWith(
+        resultMsg({
+          modelUsage: {
+            'claude-sonnet-4-6': { inputTokens: 50, outputTokens: 10, cacheReadInputTokens: 100, cacheCreationInputTokens: 0 },
+            'claude-haiku-4-5-20251001': { inputTokens: 30, outputTokens: 5, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+          },
+        }),
+      )
+      const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as any[]
+      const done = chunks.find((c: any) => c.type === 'done')
+      expect(done.usage.inputTokens).toBe(50 + 30 + 100)
+      expect(done.usage.outputTokens).toBe(15)
+      expect(done.usage.cacheReadTokens).toBe(100)
+    })
+
+    it('falls back to raw usage when modelUsage is absent', async () => {
+      mockQueryWith(
+        resultMsg({
+          usage: { input_tokens: 42, output_tokens: 7, cache_read_input_tokens: 100, cache_creation_input_tokens: 50 },
+        }),
+      )
+      const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as any[]
+      const done = chunks.find((c: any) => c.type === 'done')
+      expect(done.usage.inputTokens).toBe(42 + 100 + 50)
+      expect(done.usage.outputTokens).toBe(7)
+      expect(done.usage.cacheReadTokens).toBe(100)
+      expect(done.usage.cacheCreationTokens).toBe(50)
     })
 
     it('always yields done', async () => {

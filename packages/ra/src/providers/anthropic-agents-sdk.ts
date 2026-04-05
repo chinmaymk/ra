@@ -274,7 +274,36 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     yield { type: 'done', ...(usage && { usage }) }
   }
 
-  private extractUsage(msg: { subtype?: string; usage?: unknown }): TokenUsage | undefined {
+  /**
+   * Extract token usage from an SDK result message.
+   * Prefers modelUsage (aggregated per-model breakdown with cache tokens)
+   * over the raw API usage field.
+   */
+  private extractUsage(msg: { subtype?: string; usage?: unknown; modelUsage?: unknown }): TokenUsage | undefined {
+    // modelUsage is a Record<string, ModelUsage> with camelCase fields — aggregated across all turns
+    if (msg.modelUsage && typeof msg.modelUsage === 'object') {
+      const models = msg.modelUsage as Record<string, {
+        inputTokens?: number
+        outputTokens?: number
+        cacheReadInputTokens?: number
+        cacheCreationInputTokens?: number
+      }>
+      let inputTokens = 0, outputTokens = 0, cacheRead = 0, cacheCreate = 0
+      for (const m of Object.values(models)) {
+        inputTokens += m.inputTokens ?? 0
+        outputTokens += m.outputTokens ?? 0
+        cacheRead += m.cacheReadInputTokens ?? 0
+        cacheCreate += m.cacheCreationInputTokens ?? 0
+      }
+      return {
+        inputTokens: inputTokens + cacheRead + cacheCreate,
+        outputTokens,
+        ...(cacheRead && { cacheReadTokens: cacheRead }),
+        ...(cacheCreate && { cacheCreationTokens: cacheCreate }),
+      }
+    }
+
+    // Fallback: raw API usage (snake_case fields from BetaUsage)
     if (!msg.usage) return undefined
     const u = msg.usage as {
       input_tokens?: number
