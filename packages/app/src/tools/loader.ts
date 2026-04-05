@@ -67,7 +67,8 @@ async function loadOne(entry: string, cwd: string, logger: Logger): Promise<IToo
   const resolved = resolvePath(entry, cwd)
   let mod: Record<string, unknown>
   try {
-    mod = await import(resolved)
+    // Bust Bun's module cache so re-imports pick up file changes
+    mod = await import(resolved + '?t=' + Date.now())
   } catch (err) {
     throw new Error(`Failed to import tool file "${resolved}": ${errorMessage(err)}`)
   }

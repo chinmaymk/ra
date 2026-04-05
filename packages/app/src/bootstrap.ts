@@ -39,6 +39,10 @@ import type { Middleware } from '@chinmaymk/ra'
  * Check config mtime and rebuild derived state if the file changed.
  * Rebuilds: provider, builtin tools, custom tools, middleware, skills, context.
  * Preserves: storage, MCP connections, memory/scratchpad stores, observability.
+ *
+ * Since the reload may be triggered by a referenced file change (not just
+ * the config file), we always rebuild tools and middleware to pick up
+ * any modified scripts, custom tools, or prompt files.
  */
 async function refreshAppContext(ctx: AppContext, configManager: ConfigManager): Promise<boolean> {
   const reloaded = await configManager.maybeReload(ctx.logger)
@@ -60,11 +64,8 @@ async function refreshAppContext(ctx: AppContext, configManager: ConfigManager):
     ctx.logger.info('provider rebuilt', { provider: agent.provider, model: agent.model })
   }
 
-  // ── Tools (builtin + custom, skip MCP — connections are long-lived) ─
-  const toolsChanged =
-    JSON.stringify(agent.tools) !== JSON.stringify(prev.agent.tools)
-
-  if (toolsChanged) {
+  // ── Tools (always rebuild — referenced tool files may have changed) ─
+  {
     const newTools = new ToolRegistry()
     if (agent.tools.builtin || Object.keys(agent.tools.overrides).length > 0) {
       registerBuiltinTools(newTools, agent.tools)
@@ -109,11 +110,8 @@ async function refreshAppContext(ctx: AppContext, configManager: ConfigManager):
     ctx.logger.info('tools rebuilt', { toolCount: newTools.all().length })
   }
 
-  // ── Middleware ───────────────────────────────────────────────────
-  const middlewareChanged =
-    JSON.stringify(agent.middleware) !== JSON.stringify(prev.agent.middleware)
-
-  if (middlewareChanged) {
+  // ── Middleware (always rebuild — referenced scripts may have changed) ─
+  {
     const mw: Partial<MiddlewareConfig> = await loadMiddleware(next, app.configDir, ctx.logger)
 
     if (agent.context.enabled) {
@@ -142,13 +140,9 @@ async function refreshAppContext(ctx: AppContext, configManager: ConfigManager):
   }
 
   // ── Skills ──────────────────────────────────────────────────────
-  const skillsChanged =
-    JSON.stringify(agent.skillDirs) !== JSON.stringify(prev.agent.skillDirs)
-
-  if (skillsChanged) {
+  {
     const resolvedSkillDirs = agent.skillDirs.map(d => resolvePath(d, app.configDir))
     ctx.skillIndex = await loadSkillIndex(resolvedSkillDirs, ctx.logger)
-    ctx.logger.info('skills rebuilt', { skillCount: ctx.skillIndex.size })
   }
 
   // ── Context files ───────────────────────────────────────────────

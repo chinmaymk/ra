@@ -18,7 +18,8 @@ async function loadOne<T>(entry: string, hook: string, cwd: string, logger: Logg
   }
   if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)
-    const mod = await import(resolved)
+    // Bust Bun's module cache so re-imports pick up file changes
+    const mod = await import(resolved + '?t=' + Date.now())
     if (typeof mod.default !== 'function') {
       throw new Error(`Middleware file "${resolved}" must export a default function`)
     }
