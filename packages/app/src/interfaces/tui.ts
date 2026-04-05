@@ -115,46 +115,95 @@ export class StreamBuffer {
 /** Max lines to show per side of an Edit diff preview. */
 const EDIT_DIFF_MAX_LINES = 4
 
-function formatEditCall(args: string, cols: number): string {
-  let parsed: { path?: string; old_string?: string; new_string?: string }
-  try { parsed = JSON.parse(args) } catch { return '' }
-  if (!parsed.path || parsed.old_string == null || parsed.new_string == null) return ''
+/** Try to parse JSON args, returning undefined on failure. */
+function parseArgs(args: string): Record<string, unknown> | undefined {
+  try { return JSON.parse(args) } catch { return undefined }
+}
+
+/** Truncate a string to fit within `max` visible chars, adding … if needed. */
+function truncLine(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1) + '…' : s
+}
+
+/** Format the ◆ header line for a tool call. */
+function toolHeader(name: string, detail: string): string {
+  return `  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${detail}${ansi.reset}\n`
+}
+
+function formatEditCall(parsed: Record<string, unknown>, cols: number): string {
+  const { path, old_string, new_string } = parsed as { path?: string; old_string?: string; new_string?: string }
+  if (!path || old_string == null || new_string == null) return ''
 
   const indent = '    '
   const usable = cols - indent.length - 2 // -2 for "- " / "+ " prefix
   const lines: string[] = []
 
-  lines.push(`  ${ansi.yellow}◆ Edit${ansi.reset} ${ansi.dim}${parsed.path}${ansi.reset}`)
+  lines.push(`  ${ansi.yellow}◆ Edit${ansi.reset} ${ansi.dim}${path}${ansi.reset}`)
 
-  const oldLines = parsed.old_string.split('\n')
-  const newLines = parsed.new_string.split('\n')
+  const oldLines = old_string.split('\n')
+  const newLines = new_string.split('\n')
   const oldTrunc = oldLines.length > EDIT_DIFF_MAX_LINES
   const newTrunc = newLines.length > EDIT_DIFF_MAX_LINES
   const oldShow = oldTrunc ? oldLines.slice(0, EDIT_DIFF_MAX_LINES) : oldLines
   const newShow = newTrunc ? newLines.slice(0, EDIT_DIFF_MAX_LINES) : newLines
 
-  for (const l of oldShow) {
-    const text = l.length > usable ? l.slice(0, usable - 1) + '…' : l
-    lines.push(`${indent}${ansi.red}- ${text}${ansi.reset}`)
-  }
+  for (const l of oldShow) lines.push(`${indent}${ansi.red}- ${truncLine(l, usable)}${ansi.reset}`)
   if (oldTrunc) lines.push(`${indent}${ansi.dim}… ${oldLines.length - EDIT_DIFF_MAX_LINES} more lines${ansi.reset}`)
 
-  for (const l of newShow) {
-    const text = l.length > usable ? l.slice(0, usable - 1) + '…' : l
-    lines.push(`${indent}${ansi.green}+ ${text}${ansi.reset}`)
-  }
+  for (const l of newShow) lines.push(`${indent}${ansi.green}+ ${truncLine(l, usable)}${ansi.reset}`)
   if (newTrunc) lines.push(`${indent}${ansi.dim}… ${newLines.length - EDIT_DIFF_MAX_LINES} more lines${ansi.reset}`)
 
   return lines.join('\n') + '\n'
 }
 
+/** Tool-specific call formatters. Return empty string to fall through to default. */
+const toolCallFormatters: Record<string, (p: Record<string, unknown>, cols: number) => string> = {
+  Edit: formatEditCall,
+  Read(p) {
+    const detail = [p.path as string]
+    if (p.offset) detail.push(`offset=${p.offset}`)
+    if (p.limit) detail.push(`limit=${p.limit}`)
+    return toolHeader('Read', detail.join(' '))
+  },
+  Write(p) { return toolHeader('Write', p.path as string) },
+  AppendFile(p) { return toolHeader('AppendFile', p.path as string) },
+  DeleteFile(p) { return toolHeader('DeleteFile', p.path as string) },
+  MoveFile(p) { return toolHeader('MoveFile', `${p.source} → ${p.destination}`) },
+  CopyFile(p) { return toolHeader('CopyFile', `${p.source} → ${p.destination}`) },
+  LS(p) { return toolHeader('LS', `${p.path}${p.recursive ? ' (recursive)' : ''}`) },
+  Glob(p) { return toolHeader('Glob', `${p.pattern}${p.path ? ` in ${p.path}` : ''}`) },
+  Grep(p) {
+    const parts = [`"${p.pattern}"`]
+    if (p.path) parts.push(`in ${p.path}`)
+    if (p.include) parts.push(`${p.include}`)
+    return toolHeader('Grep', parts.join(' '))
+  },
+  Bash(p, cols) {
+    const cmd = String(p.command ?? '')
+    const firstLine = cmd.split('\n')[0] ?? ''
+    const maxLen = cols - 8 // "  ◆ Bash " prefix
+    return toolHeader('Bash', truncLine(firstLine, maxLen))
+  },
+  WebFetch(p) {
+    const method = (p.method as string) ?? 'GET'
+    return toolHeader('WebFetch', `${method} ${p.url}`)
+  },
+  Agent(p) {
+    const tasks = p.tasks as Array<unknown> | undefined
+    return toolHeader('Agent', `${tasks?.length ?? '?'} task(s)`)
+  },
+}
+
 export function printToolCall(name: string, args: string): void {
   const cols = process.stdout.columns || 80
+  const parsed = parseArgs(args)
 
-  // Edit tool gets a pretty diff view
-  if (name === 'Edit') {
-    const pretty = formatEditCall(args, cols)
-    if (pretty) { process.stdout.write(pretty); return }
+  if (parsed) {
+    const formatter = toolCallFormatters[name]
+    if (formatter) {
+      const out = formatter(parsed, cols)
+      if (out) { process.stdout.write(out); return }
+    }
   }
 
   // Default: collapse JSON args to a single line
@@ -166,15 +215,60 @@ export function printToolCall(name: string, args: string): void {
   } catch {
     flat = args.replace(/\s+/g, ' ').trim()
   }
-  // Budget: indent(2) + '◆ '(2) + name + ' '(1) + '…'(1) + reset codes — keep it simple
   const prefix = `  ◆ ${name} `
-  const maxFlat = cols - prefix.length - 1  // -1 for the ellipsis if truncated
+  const maxFlat = cols - prefix.length - 1
   const truncated = flat.length > maxFlat ? flat.slice(0, maxFlat) + '…' : flat
   process.stdout.write(`  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${truncated}${ansi.reset}\n`)
 }
 
-export function printToolResult(name: string, ms: number): void {
-  process.stdout.write(`  ${ansi.greenBright}✔ ${name}${ansi.dim} (${ms}ms)${ansi.reset}\n`)
+/** Summarize tool result content for display. */
+function summarizeResult(name: string, content: string): string {
+  switch (name) {
+    case 'Read': {
+      const lines = content.split('\n')
+      const count = lines[lines.length - 1] === '' ? lines.length - 1 : lines.length
+      return `${count} lines`
+    }
+    case 'Grep': {
+      if (content.startsWith('No matches')) return 'no matches'
+      const lines = content.split('\n').filter(l => l.length > 0)
+      return `${lines.length} match${lines.length === 1 ? '' : 'es'}`
+    }
+    case 'Glob': {
+      if (content.startsWith('No files')) return 'no files'
+      const lines = content.split('\n').filter(l => l.length > 0)
+      return `${lines.length} file${lines.length === 1 ? '' : 's'}`
+    }
+    case 'LS': {
+      const lines = content.split('\n').filter(l => l.length > 0)
+      return `${lines.length} entr${lines.length === 1 ? 'y' : 'ies'}`
+    }
+    case 'Bash':
+    case 'PowerShell': {
+      const exitMatch = content.match(/<exit_code>(\d+)<\/exit_code>/)
+      const code = exitMatch ? exitMatch[1] : '?'
+      const stdoutMatch = content.match(/<stdout>([\s\S]*?)<\/stdout>/)
+      const stdout = stdoutMatch?.[1]?.trim() ?? ''
+      const lines = stdout ? stdout.split('\n').length : 0
+      return code === '0'
+        ? `exit 0${lines ? `, ${lines} line${lines === 1 ? '' : 's'}` : ''}`
+        : `exit ${code}`
+    }
+    case 'WebFetch': {
+      try {
+        const r = JSON.parse(content) as { status?: number }
+        return `${r.status ?? '?'}`
+      } catch { return '' }
+    }
+    default:
+      return ''
+  }
+}
+
+export function printToolResult(name: string, ms: number, content?: string): void {
+  const summary = content ? summarizeResult(name, content) : ''
+  const detail = summary ? `${summary}, ${ms}ms` : `${ms}ms`
+  process.stdout.write(`  ${ansi.greenBright}✔ ${name}${ansi.dim} ${detail}${ansi.reset}\n`)
 }
 
 export function printStatus(msg: string): void {
