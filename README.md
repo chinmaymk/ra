@@ -10,12 +10,10 @@
 
 <p align="center">
   <a href="#install">Install</a> &middot;
-  <a href="#the-loop">The Loop</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
-  <a href="#custom-tools">Custom Tools</a> &middot;
-  <a href="#observability">Observability</a> &middot;
-  <a href="#configuration">Configuration</a> &middot;
-  <a href="#recipes">Recipes</a>
+  <a href="#tools">Tools</a> &middot;
+  <a href="#recipes">Recipes</a> &middot;
+  <a href="#docs">Docs</a>
 </p>
 
 <p align="center">
@@ -24,11 +22,9 @@
 
 ---
 
-**Build your agent with ra.**
+Most agent frameworks lock you in. ra doesn't — every decision the agent makes flows through hooks you control, tools you define, and configs you commit. No hidden prompts, no black-box loops, no vendor lock-in.
 
-Most agents work great — until you need to change something. ra gives you the same power with full control. Every part is yours to configure, extend, or replace — and every run comes with full observability built in.
-
-A coding agent, a code reviewer, a research agent, a multi-agent orchestrator — these aren't separate codebases. They're different configs:
+One config file is the difference between a coding agent, a code reviewer, a research loop, and a multi-agent orchestrator:
 
 ```bash
 ra "Fix the failing tests and open a PR"
@@ -37,7 +33,14 @@ ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache co
 ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
 
-One tool, any agent.
+Set a budget and walk away — ra runs until the job is done or the budget runs out, whichever comes first.
+
+```yaml
+agent:
+  maxTokenBudget: 500_000   # hard cap on total token spend
+  maxDuration: 600_000      # max wall-clock time in ms
+  thinking: adaptive        # scales reasoning effort automatically
+```
 
 ## Install
 
@@ -45,45 +48,17 @@ One tool, any agent.
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
 ```
 
-Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, [OpenRouter](https://chinmaymk.github.io/ra/providers/openrouter), and [LiteLLM](https://chinmaymk.github.io/ra/providers/litellm) — switch with `--provider`.
-
-## The Loop
-
-Stream the model response, execute tool calls in parallel, repeat. Every step fires a middleware hook.
-
-```
-User message → [beforeLoopBegin]
-  → [beforeModelCall] → stream response → [afterModelResponse]
-  → [beforeToolExecution] → execute tools → [afterToolExecution]
-  → [afterLoopIteration] → repeat or [afterLoopComplete]
-```
-
-The loop runs until the model stops calling tools or a guardrail fires — no arbitrary iteration caps. Token budgets and duration limits trigger a clean shutdown:
-
-```yaml
-agent:
-  maxTokenBudget: 500_000
-  maxDuration: 600_000
-```
+Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and LiteLLM — switch with `--provider`. [All providers →](https://chinmaymk.github.io/ra/providers/)
 
 ## Middleware
 
-This is where ra becomes truly yours. Intercept any step in the loop — read the full context, mutate it, or stop it entirely.
+Intercept any step in the loop — read the full context, mutate it, or stop it entirely.
 
 ```ts
 // middleware/audit.ts — log every tool call
 export default async (ctx) => {
   const { name, arguments: args } = ctx.toolCall
   ctx.logger.info('tool', { name, args })
-}
-```
-
-```ts
-// middleware/guard.ts — block destructive commands
-export default async (ctx) => {
-  if (ctx.toolCall.name === 'Bash' && ctx.toolCall.arguments.includes('--force')) {
-    ctx.deny("Blocked: --force not allowed")
-  }
 }
 ```
 
@@ -94,57 +69,49 @@ agent:
   middleware:
     afterToolExecution:
       - ./middleware/audit.ts
-    beforeToolExecution:
-      - ./middleware/guard.ts
 ```
 
-Available hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelResponse`, `beforeToolExecution`, `afterToolExecution`, `afterLoopIteration`, `afterLoopComplete`, `onError`.
+**Available hooks:** `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelResponse`, `beforeToolExecution`, `afterToolExecution`, `afterLoopIteration`, `afterLoopComplete`, `onError`.
 
-## Custom Tools
+## Tools
 
-Need your agent to deploy, query an internal API, or run a health check? Export a tool:
-
-```ts
-// tools/deploy.ts
-export default {
-  name: 'Deploy',
-  description: 'Deploy a branch to staging',
-  parameters: {
-    branch: { type: 'string', description: 'Git branch to deploy' },
-    dryRun: { type: 'boolean', description: 'Preview only', optional: true },
-  },
-  async execute(input) {
-    const { branch, dryRun } = input as { branch: string; dryRun?: boolean }
-    // your logic here
-    return `Deployed ${branch} to staging`
-  },
-}
-```
-
-Register in config, and the model picks them up automatically:
+**Built-in:** `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `WebFetch`, `Agent` (parallel sub-agents), and more — enable, disable, or configure each one independently. Permissions use a simple regex allow/deny system — no custom DSL, just patterns you already know:
 
 ```yaml
-agent:
-  tools:
-    custom:
-      - ./tools/deploy.ts
+permissions:
+  rules:
+    - tool: Bash
+      command:
+        allow: ["^git ", "^bun "]
+        deny: ["--force", "--no-verify"]
+    - tool: Write
+      path:
+        deny: ["\\.env", "secrets"]
 ```
 
-Works with shell scripts and any scripting language too — [see the docs](https://chinmaymk.github.io/ra/tools/custom).
+**Custom tools** — export a function, register it in config, and the model picks it up. Works with TypeScript, shell scripts, and any scripting language — [see the docs](https://chinmaymk.github.io/ra/tools/custom).
 
-## Observability
+## Recipes
 
-Every model call, tool execution, and decision is captured automatically — including your custom tools. `ra --inspector` opens a web dashboard showing the full run: iterations, token spend, tool calls, traces, and the complete message history.
+Each recipe is a complete agent — config, middleware, tools, and skills — committed to your repo with the same observability and control as everything else.
+
+| Recipe | What it does | Model | Key difference |
+|--------|-------------|-------|----------------|
+| **[Coding Agent](recipes/coding-agent/)** | Edits files, runs tests, ships code | Opus | Memory, high thinking, read-before-write discipline |
+| **[Code Review Agent](recipes/code-review-agent/)** | Reviews PRs against your style guide | Sonnet | Token budget middleware, severity tiers |
+| **[Auto-Research](recipes/karpathy-autoresearch/)** | Runs experiments, evaluates, iterates | Sonnet | 500 iterations, 15-min tool timeouts |
+| **[Multi-Agent](recipes/multi-agent/)** | Spawns and coordinates specialist agents | Sonnet | Concurrency 4, orchestrator skill |
+| **[oh-my-ra](recipes/oh-my-ra/)** | Batteries-included: coding + research + debugging + delivery | Sonnet | 16 skills, 8 middleware, 2 custom tools |
+| **[Auto-Improve](recipes/auto-improve/)** | Hyperparameter and prompt optimization | Sonnet | Parallel axis exploration, checkpoint recovery |
+| **[ra-claude-code](recipes/ra-claude-code/)** | Coding agent inspired by Claude Code | Opus | 10 on-demand skills, session memory |
 
 ```bash
-ra --inspector        # web dashboard
-ra --show-config      # resolved config as JSON
-ra --show-context     # discovered context files
+ra --config recipes/oh-my-ra "Refactor the auth module and write tests"
 ```
 
 ## Configuration
 
-Config lives in your repo — no hidden prompts, no default system prompt. One engineer defines the agent's behavior, commits it, and everyone on the team runs the exact same agent.
+Config lives in your repo — no hidden prompts, no default system prompt. One engineer defines the agent, commits it, everyone runs the exact same thing.
 
 ```yaml
 # ra.config.yml
@@ -154,15 +121,6 @@ agent:
   thinking: adaptive
   maxTokenBudget: 500_000
   skillDirs: [./skills]
-  permissions:
-    rules:
-      - tool: Bash
-        command:
-          allow: ["^git ", "^bun "]
-          deny: ["--force", "--hard", "--no-verify"]
-      - tool: Write
-        path:
-          deny: ["\\.env"]
   middleware:
     - ./middleware/token-budget.ts
     - ./middleware/audit-log.ts
@@ -172,40 +130,34 @@ agent:
 
 Layered overrides: `defaults → config file → env vars → CLI flags`. YAML, JSON, or TOML.
 
-## Recipes
+## Run Anywhere
 
-Each recipe is a complete agent — not a library, not a template, just a config file and optional middleware you commit to your repo.
+ra isn't just a CLI. Pick the interface that fits your workflow:
 
-| Recipe | What it does | Model | Key difference from vanilla ra |
-|--------|-------------|-------|-------------------------------|
-| **[Coding Agent](recipes/coding-agent/)** | Edits files, runs tests, ships code | Opus | Memory, high thinking, 200 iterations |
-| **[Code Review Agent](recipes/code-review-agent/)** | Reviews PRs against your style guide | Sonnet | Token budget middleware, custom skills |
-| **[Auto-Research Agent](recipes/karpathy-autoresearch/)** | Runs experiments, evaluates, iterates | Sonnet | 500 iterations, 15-min tool timeout |
-| **[Multi-Agent Orchestrator](recipes/multi-agent/)** | Spawns and coordinates specialist agents | Sonnet | Concurrency 4, orchestrator skill |
+| Mode | Command | Use case |
+|------|---------|----------|
+| **REPL** | `ra` | Interactive multi-turn with history, slash commands, file attachments |
+| **CLI** | `ra "prompt"` | One-shot prompts, piping, scripting |
+| **HTTP** | `ra --http` | Streaming chat API with session management |
+| **MCP** | `ra --mcp-stdio` | Expose as a tool for Cursor, Claude Desktop, or other agents |
+| **Cron** | `ra --interface cron` | Scheduled autonomous jobs with isolated logs |
+| **Inspector** | `ra --inspector` | Web dashboard — iterations, tokens, tool calls, traces |
 
-Same binary. Same loop. Different behavior — defined entirely in config:
+## Observability
+
+Every model call, tool execution, and decision is captured automatically — structured JSONL logs, trace spans, and a built-in web inspector that shows the full picture: iterations, token spend, tool calls, and the complete message history.
 
 ```bash
-ra --config recipes/coding-agent "Fix the failing test"
+ra --inspector
 ```
 
-## Extend It
+<p align="center">
+  <img src="docs/site/public/inspector-overview.png" alt="ra inspector dashboard" width="800">
+</p>
 
-ra is designed to be built on. Pick what you need:
+## Docs
 
-[**Tools**](https://chinmaymk.github.io/ra/tools/) — filesystem, shell, web fetch, and a parallel sub-agent spawner. Enable, disable, or configure each one independently.
-
-[**Skills**](https://chinmaymk.github.io/ra/skills/) — reusable instruction bundles (`code-review`, `architect`, `debugger`, and more). Install from GitHub or npm, or write your own.
-
-[**MCP**](https://chinmaymk.github.io/ra/modes/mcp/) — expose skills as tools for Cursor, Claude Desktop, or other agents; connect to external MCP servers.
-
-[**Memory**](https://chinmaymk.github.io/ra/tools/#memory) — SQLite-backed persistent memory with full-text search, scoped per project.
-
-[**Cron**](https://chinmaymk.github.io/ra/modes/cron/) — run agent jobs on a schedule, each with isolated logs and traces.
-
-[**GitHub Actions**](https://chinmaymk.github.io/ra/modes/github-actions/) — `uses: chinmaymk/ra@latest`, no install step.
-
-Full reference in the [docs](https://chinmaymk.github.io/ra/).
+Full reference at [chinmaymk.github.io/ra](https://chinmaymk.github.io/ra/) — tools, skills, middleware, providers, configuration, and deployment guides.
 
 ## License
 
