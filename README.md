@@ -13,7 +13,6 @@
   <a href="#the-loop">The Loop</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
   <a href="#tools">Tools</a> &middot;
-  <a href="#skills">Skills</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
   <a href="#docs">Docs</a>
 </p>
@@ -122,17 +121,6 @@ agent:
 ```
 
 Works with shell scripts and any scripting language too — [see the docs](https://chinmaymk.github.io/ra/tools/custom).
-
-## Skills
-
-Skills are reusable instruction bundles — `/code-review`, `/architect`, `/debugger`, `/deep-research`. What makes them powerful in ra is that they compose with everything else: a skill can trigger middleware, use custom tools, and respect the same permissions and observability as the rest of the agent.
-
-```yaml
-agent:
-  skillDirs: [./skills]
-```
-
-Each skill is a Markdown file with optional scripts and reference docs. Install from GitHub, npm, or write your own — the agent picks them up automatically.
 
 ## Recipes
 
