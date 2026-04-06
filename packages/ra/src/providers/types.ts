@@ -82,4 +82,4 @@ export interface IProvider {
   stream(request: ChatRequest): AsyncIterable<StreamChunk>
 }
 
-export type ProviderName = 'anthropic' | 'openai' | 'openai-completions' | 'google' | 'ollama' | 'bedrock' | 'azure'
+export type ProviderName = 'anthropic' | 'openai' | 'openai-completions' | 'google' | 'ollama' | 'bedrock' | 'azure' | 'anthropic-agents-sdk'
