@@ -429,10 +429,12 @@ describe('BedrockProvider - credential wiring', () => {
     expect(lastClientConfig.endpoint).toBeUndefined()
   })
 
-  it('uses fetch-based handler when baseURL is set (custom gateways rarely speak HTTP/2 and may need system DNS)', () => {
+  it('uses minimal fetch-based handler when baseURL is set (avoids Bun-incompatible request options)', () => {
     new BedrockProvider({ baseURL: 'https://gateway.example.com' })
     expect(lastClientConfig.requestHandler).toBeDefined()
-    expect((lastClientConfig.requestHandler as object).constructor.name).toBe('FetchHttpHandler')
+    expect((lastClientConfig.requestHandler as object).constructor.name).toBe('FetchRequestHandler')
+    // The handler must expose the smithy HttpHandler shape so the SDK accepts it.
+    expect(typeof (lastClientConfig.requestHandler as { handle: unknown }).handle).toBe('function')
   })
 
   it('does not override requestHandler when no baseURL is set', () => {
