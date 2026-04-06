@@ -16,6 +16,9 @@ export interface BedrockProviderOptions {
   region?: string
   apiKey?: string
   baseURL?: string
+  accessKeyId?: string
+  secretAccessKey?: string
+  sessionToken?: string
 }
 
 export class BedrockProvider implements IProvider {
@@ -23,10 +26,21 @@ export class BedrockProvider implements IProvider {
   private client: BedrockRuntimeClient
 
   constructor(options: BedrockProviderOptions) {
+    const hasExplicitCredentials = !!(options.accessKeyId && options.secretAccessKey)
     this.client = new BedrockRuntimeClient({
       region: options.region ?? 'us-east-1',
-      ...(options.apiKey && { token: { token: options.apiKey } }),
       ...(options.baseURL && { endpoint: options.baseURL }),
+      ...(hasExplicitCredentials && {
+        credentials: {
+          accessKeyId: options.accessKeyId!,
+          secretAccessKey: options.secretAccessKey!,
+          ...(options.sessionToken && { sessionToken: options.sessionToken }),
+        },
+      }),
+      ...(!hasExplicitCredentials && options.apiKey && {
+        token: { token: options.apiKey },
+        authSchemePreference: ['httpBearerAuth'],
+      }),
     })
   }
 
