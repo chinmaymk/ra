@@ -175,6 +175,8 @@ ra --inspector
 - [x] Anthropic and Codex subscription support
 - [ ] Self-improving agent
 - [ ] Teams of agents
+- [ ] Multi-agent orchestration via config
+- [ ] Smarter compaction
 
 ## Docs
 
