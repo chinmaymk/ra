@@ -39,8 +39,27 @@ async function loadRegistryOps(kind: 'skill' | 'recipe'): Promise<RegistryOps> {
   return { install: installRecipe, remove: removeRecipe, list: listInstalledRecipes, defaultDir: defaultRecipeInstallDir }
 }
 
+/** Handle `ra login codex [--device-code]` subcommand. */
+async function runLoginCommand(cmd: SubCommand): Promise<void> {
+  if (cmd.action !== 'codex') {
+    console.error(`Unknown login provider: ${cmd.action}. Supported: codex`)
+    process.exit(1)
+  }
+  const deviceCode = cmd.args.includes('--device-code')
+  const { loginCodex } = await import('../auth/codex')
+  try {
+    await loginCodex({ deviceCode })
+  } catch (err) {
+    console.error('Login failed:', errorMessage(err))
+    process.exit(1)
+  }
+  process.exit(0)
+}
+
 /** Handle `ra skill|recipe install|remove|list` subcommands. Exits the process. */
 export async function runSubCommand(cmd: SubCommand): Promise<void> {
+  if (cmd.kind === 'login') return runLoginCommand(cmd)
+
   const { kind, action, args } = cmd
   const ops = await loadRegistryOps(kind)
 
@@ -139,7 +158,7 @@ export function runMemoryCommand(
   }
 }
 
-const REDACT_KEYS = new Set(['token', 'apiKey', 'api_key', 'secret', 'password'])
+const REDACT_KEYS = new Set(['token', 'apiKey', 'api_key', 'secret', 'password', 'accessToken', 'access_token'])
 
 /** Handle --show-config: print resolved config as JSON with secrets redacted. */
 export function showConfig(config: RaConfig, contextFiles: string[] = []): void {

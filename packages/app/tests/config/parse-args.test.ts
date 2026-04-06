@@ -235,6 +235,23 @@ describe('parseArgs', () => {
     }
   })
 
+  describe('login subcommand', () => {
+    it('parses "login codex"', () => {
+      const r = parseArgs(dev('login', 'codex'))
+      expect(r.meta.subCommand).toEqual({ kind: 'login', action: 'codex', args: [] })
+    })
+
+    it('defaults to codex when no provider given', () => {
+      const r = parseArgs(dev('login'))
+      expect(r.meta.subCommand).toEqual({ kind: 'login', action: 'codex', args: [] })
+    })
+
+    it('passes --device-code in args', () => {
+      const r = parseArgs(dev('login', 'codex', '--device-code'))
+      expect(r.meta.subCommand).toEqual({ kind: 'login', action: 'codex', args: ['--device-code'] })
+    })
+  })
+
   describe('--recipe flag', () => {
     it('parses --recipe into meta.recipeName', () => {
       const r = parseArgs(dev('--recipe', 'user/repo'))
