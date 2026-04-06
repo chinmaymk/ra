@@ -48,8 +48,13 @@ export class CodexProvider extends OpenAIResponsesProvider {
 
   override buildParams(request: ChatRequest) {
     const params = super.buildParams(request)
+    const raw = params as Record<string, unknown>
+    // Codex backend requires `instructions` — provide a default if absent
+    if (!raw.instructions) raw.instructions = 'You are a helpful assistant.'
     // Codex backend may not support `reasoning` — strip to be safe
-    delete (params as Record<string, unknown>).reasoning
+    delete raw.reasoning
+    // Codex backend does not support server-side storage
+    raw.store = false
     return params
   }
 }

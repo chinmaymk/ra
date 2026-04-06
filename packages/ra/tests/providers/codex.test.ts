@@ -50,6 +50,24 @@ describe('CodexProvider', () => {
     expect(params.model).toBe('gpt-5.4')
   })
 
+  it('always includes instructions in buildParams', () => {
+    const p = new CodexProvider({ accessToken: 'test-token' })
+    const params = p.buildParams({
+      model: 'gpt-5.4',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect((params as Record<string, unknown>).instructions).toBeDefined()
+  })
+
+  it('sets store to false in buildParams', () => {
+    const p = new CodexProvider({ accessToken: 'test-token' })
+    const params = p.buildParams({
+      model: 'gpt-5.4',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect((params as Record<string, unknown>).store).toBe(false)
+  })
+
   it('extracts chatgpt-account-id from JWT', () => {
     // Build a fake JWT with the account ID claim
     const payload = {
