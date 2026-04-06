@@ -43,5 +43,10 @@ const constructors = {
 export function createProvider(config: ProviderConfig): IProvider {
   const { provider, ...opts } = config
   const Ctor = constructors[provider]
-  return new (Ctor as new (opts: Record<string, unknown>) => IProvider)(opts)
+  try {
+    return new (Ctor as new (opts: Record<string, unknown>) => IProvider)(opts)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`Failed to initialize "${provider}" provider: ${msg}. Check your provider configuration in app.providers.${provider}.`)
+  }
 }

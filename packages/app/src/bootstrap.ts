@@ -240,7 +240,7 @@ export async function bootstrap(
   } else if (opts.resume) {
     if (opts.resume === true) {
       const latest = await storage.latest()
-      if (!latest) throw new Error('No sessions to resume')
+      if (!latest) throw new Error('No sessions to resume. Start a new session first, then use --resume to continue it.')
       sessionId = latest.id
     } else {
       const ensured = await storage.ensureSession(opts.resume, sessionOpts)

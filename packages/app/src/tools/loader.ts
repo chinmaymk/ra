@@ -40,17 +40,14 @@ export function buildInputSchema(parameters: Record<string, ParameterDef>): Reco
 
 /** Validate that an object has all required ITool fields. */
 function validateTool(tool: Record<string, unknown>, source: string): ITool {
-  if (typeof tool.name !== 'string' || !tool.name) {
-    throw new Error(`Tool from "${source}" is missing a "name" string`)
-  }
-  if (typeof tool.description !== 'string') {
-    throw new Error(`Tool "${tool.name}" from "${source}" is missing a "description" string`)
-  }
-  if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
-    throw new Error(`Tool "${tool.name}" from "${source}" is missing an "inputSchema" object`)
-  }
-  if (typeof tool.execute !== 'function') {
-    throw new Error(`Tool "${tool.name}" from "${source}" is missing an "execute" function`)
+  const fields: string[] = []
+  if (typeof tool.name !== 'string' || !tool.name) fields.push('"name" (string)')
+  if (typeof tool.description !== 'string') fields.push('"description" (string)')
+  if (!tool.inputSchema || typeof tool.inputSchema !== 'object') fields.push('"inputSchema" (object)')
+  if (typeof tool.execute !== 'function') fields.push('"execute" (function)')
+  if (fields.length > 0) {
+    const toolId = typeof tool.name === 'string' && tool.name ? `Tool "${tool.name}"` : 'Tool'
+    throw new Error(`${toolId} from "${source}" is missing required fields: ${fields.join(', ')}. A custom tool must export { name, description, inputSchema, execute }.`)
   }
   return tool as unknown as ITool
 }
@@ -63,26 +60,30 @@ async function loadOne(entry: string, cwd: string, logger: Logger): Promise<IToo
   }
 
   if (!looksLikePath(entry)) {
-    throw new Error(`Tool entry must be a file path (got: "${entry}")`)
+    throw new Error(`Custom tool entry "${entry}" is not a valid file path. Entries must be relative or absolute paths to .ts/.js files.`)
   }
   const resolved = resolvePath(entry, cwd)
   let mod: Record<string, unknown>
   try {
     mod = await importFresh(resolved)
   } catch (err) {
-    throw new Error(`Failed to import tool file "${resolved}": ${errorMessage(err)}`)
+    const detail = errorMessage(err)
+    if (detail.includes('Cannot find module') || detail.includes('ENOENT') || detail.includes('not found')) {
+      throw new Error(`Custom tool file not found: "${resolved}". Check the path in your config.`)
+    }
+    throw new Error(`Failed to import custom tool "${resolved}": ${detail}`)
   }
 
   const exported = mod.default
   if (exported === undefined) {
-    throw new Error(`Tool file "${resolved}" must have a default export`)
+    throw new Error(`Custom tool file "${resolved}" has no default export. The file must export a tool object or factory function as its default export.`)
   }
 
   // Factory function: call it to get the tool object (supports async factories)
   const raw = typeof exported === 'function' ? await exported() : exported
 
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error(`Tool from "${resolved}" must export an object with { name, description, execute }`)
+    throw new Error(`Custom tool "${resolved}" default export must be an object with { name, description, inputSchema, execute }, got ${typeof raw}.`)
   }
 
   const obj = raw as Record<string, unknown>
