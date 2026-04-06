@@ -48,7 +48,7 @@ agent:
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
 ```
 
-Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and LiteLLM — switch with `--provider`. [All providers →](https://chinmaymk.github.io/ra/providers/)
+Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and LiteLLM — switch with `--provider`. Bring your own API key, or use your existing [Anthropic](https://console.anthropic.com/) or [OpenAI / Codex](https://platform.openai.com/) subscription. [All providers →](https://chinmaymk.github.io/ra/providers/)
 
 ## Middleware
 
