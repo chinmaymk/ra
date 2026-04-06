@@ -90,8 +90,8 @@ export default async function autoSkill(ctx: LoopContext): Promise<void> {
       ? lastMessage.content
       : Array.isArray(lastMessage.content)
         ? lastMessage.content
-            .filter((b: { type: string }) => b.type === "text")
-            .map((b: { text?: string }) => b.text ?? "")
+            .filter((b): b is { type: "text"; text: string } => b.type === "text")
+            .map((b) => b.text)
             .join(" ")
         : ""
 
