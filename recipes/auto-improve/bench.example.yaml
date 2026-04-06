@@ -44,7 +44,9 @@ target_score: 90.0
 # Degrees of freedom — what the agent is allowed to tune
 # -------------------------------------------------------------------
 
-# The ra config being optimized
+# The ra config being optimized.
+# Ensure hotReload: true (the default) so config/prompt/tool/middleware
+# changes take effect automatically on the next benchmark run.
 config: ./agent-under-test.config.yaml
 
 # Source code directories that can be modified (tool implementations,

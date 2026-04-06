@@ -8,16 +8,18 @@ Axes interact: a prompt change that fails alone might succeed paired with a thin
 
 ```
                           ┌── Agent: prompt + thinking ── benchmark ──→ score
-                          │
+                          │         (temp copy)
 Orchestrator ── diagnose  ├── Agent: tools + code ─────── benchmark ──→ score
-failures ─┐               │
+failures ─┐               │         (temp copy)
           │               └── Agent: compaction ────────── benchmark ──→ score
-          │                           │
+          │                           │       (temp copy)
           │                 rank proposals
           │                           │
-          └── layer best ── benchmark ──→ combined ── benchmark ──→ commit
-                add next ── benchmark ──→ still better? keep : discard
-                add next ── benchmark ──→ ...
+          │   ┌───────── hot-reload: edit real files directly ──────────┐
+          └── │ write best ── benchmark ──→ ✓                          │
+              │ add next ──── benchmark ──→ still better? keep : revert│
+              │ add next ──── benchmark ──→ ...                        │
+              └── commit ──────────────────────────────────────────────┘
 ```
 
 1. **Understand** — read benchmark, target config, codebase, and baseline results
@@ -28,6 +30,9 @@ failures ─┐               │
 6. **Iterate** — re-diagnose, evolve strategy, consult anti-patterns, repeat
 
 ## Key features
+
+### Hot-reload integration
+Changes to config, system prompt, middleware, and custom tool files take effect immediately — no restart needed. The integration phase writes changes directly to the real files, benchmarks against them, and iterates. Parallel exploration agents still use temp copies, but sequential layering is instant.
 
 ### Parallel multi-axis exploration
 Up to 4 agents explore different axes simultaneously via the Agent tool. Agents can explore axes in isolation, jointly, or test ablations.
