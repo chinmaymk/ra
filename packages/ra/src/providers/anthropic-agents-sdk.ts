@@ -174,13 +174,9 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       }
     }
     const formatted = parts.join('\n\n')
-    const lastMsg = messages[messages.length - 1]
-    // For multi-turn conversations with tool results, add a preamble so the
-    // model treats the XML as prior history rather than echoing the tags.
-    if (lastMsg?.role === 'tool') {
-      return HISTORY_PREAMBLE + formatted
-    }
-    return formatted
+    // Always prepend the preamble so the model treats XML as prior history
+    // (not a format to echo) and keeps a stable prefix for prompt caching.
+    return HISTORY_PREAMBLE + formatted
   }
 
   // ── MCP tool schemas ────────────────────────────────────────────────

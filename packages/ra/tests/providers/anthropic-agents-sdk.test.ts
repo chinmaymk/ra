@@ -104,9 +104,10 @@ describe('AnthropicAgentsSdkProvider', () => {
   describe('formatConversation', () => {
     const provider = new AnthropicAgentsSdkProvider()
 
-    it('wraps single user message in XML for cache-stable prefix', () => {
+    it('always prepends history preamble for cache-stable prefix', () => {
       const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
-      expect(result).toBe('<user>\nhello\n</user>')
+      expect(result).toStartWith('The following is your previous conversation history')
+      expect(result).toContain('<user>\nhello\n</user>')
     })
 
     it('formats multi-turn with XML tags', () => {
@@ -132,7 +133,7 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(result).toContain('<tool_result id="tc_1" error="true">')
     })
 
-    it('adds history preamble and continuation instruction when ending with tool result', () => {
+    it('includes preamble on tool-result conversations too', () => {
       const result = provider.formatConversation([
         { role: 'user', content: 'read it' },
         { role: 'assistant', content: 'Sure.', toolCalls: [{ id: 'tc_1', name: 'Read', arguments: '{}' }] },
@@ -140,12 +141,6 @@ describe('AnthropicAgentsSdkProvider', () => {
       ])
       expect(result).toStartWith('The following is your previous conversation history')
       expect(result).toContain('<tool_result id="tc_1">')
-      expect(result).toContain('</tool_result>')
-    })
-
-    it('does not add preamble when conversation ends with user message', () => {
-      const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
-      expect(result).not.toContain('previous conversation history')
     })
   })
 
@@ -173,7 +168,8 @@ describe('AnthropicAgentsSdkProvider', () => {
       await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
       const { prompt } = mockQuery.mock.calls[0]![0]
       expect(typeof prompt).toBe('string')
-      expect(prompt).toBe('<user>\nhi\n</user>')
+      expect(prompt).toContain('<user>\nhi\n</user>')
+      expect(prompt).toStartWith('The following is your previous conversation history')
     })
 
     it('yields text chunks', async () => {
