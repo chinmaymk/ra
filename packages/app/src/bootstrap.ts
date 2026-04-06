@@ -188,13 +188,6 @@ export async function bootstrap(
 
   // ── Provider ───────────────────────────────────────────────────────
   const providerOpts = { ...app.providers[agent.provider] } as Record<string, unknown>
-
-  // Wire permission checking into the Agent SDK provider's MCP handlers
-  if (agent.provider === 'anthropic-agents-sdk' && agent.permissions.rules?.length && !agent.permissions.no_rules_rules) {
-    const { checkToolPermissionFromConfig } = await import('./agent/permissions')
-    providerOpts.checkToolPermission = checkToolPermissionFromConfig(agent.permissions)
-  }
-
   const provider = createProvider(buildProviderConfig(agent.provider, providerOpts as typeof app.providers[typeof agent.provider]))
   logger.info('provider initialized', { provider: agent.provider, model: agent.model })
 
