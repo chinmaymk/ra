@@ -80,7 +80,6 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       tools: [] as string[],
       permissionMode: 'bypassPermissions' as const,
       allowDangerouslySkipPermissions: true,
-      includePartialMessages: true,
 
       // ── Single turn — ra owns the loop ────────────────────────────
       maxTurns: 1,
@@ -169,9 +168,8 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   /**
    * Build an MCP server with tool schemas only (no-op handlers).
    *
-   * The model sees these tools and can call them. The SDK may try to
-   * execute them, but we interrupt before that happens. Ra's loop
-   * handles actual tool execution.
+   * The model sees these tools and can call them. With maxTurns=1 the
+   * SDK never executes the handlers — ra's loop handles tool execution.
    */
   buildMcpToolSchemas(tools: ITool[]) {
     const mcpTools = tools.map(t => {

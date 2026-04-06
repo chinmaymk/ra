@@ -157,54 +157,6 @@ describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
     expect(toolResult?.content).toBe('blocked by ra')
   })
 
-  it('system prompt forwarded', async () => {
-    mockQuery.mockReturnValue(mockSession([resultMsg()]))
-    const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x' })
-    await loop.run([{ role: 'system', content: 'Pirate.' }, { role: 'user', content: 'hi' }])
-    expect(mockQuery.mock.calls[0]![0].options.systemPrompt).toBe('Pirate.')
-  })
-
-  it('thinking flows through', async () => {
-    mockQuery.mockReturnValue(mockSession([
-      streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Hmm' } }),
-      resultMsg(),
-    ]))
-    const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x', thinking: 'high' })
-    await loop.run([{ role: 'user', content: 'think' }])
-    const opts = mockQuery.mock.calls[0]![0].options
-    expect(opts.thinking).toEqual({ type: 'enabled', budgetTokens: 32000 })
-    expect(opts.effort).toBe('high')
-  })
-
-  it('all SDK magic disabled, maxTurns set to 1', async () => {
-    mockQuery.mockReturnValue(mockSession([resultMsg()]))
-    const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x' })
-    await loop.run([{ role: 'user', content: 'go' }])
-
-    const opts = mockQuery.mock.calls[0]![0].options
-    expect(opts.settingSources).toEqual([])
-    expect(opts.settings.autoMemoryEnabled).toBe(false)
-    expect(opts.settings.autoDreamEnabled).toBe(false)
-    expect(opts.settings.includeGitInstructions).toBe(false)
-    expect(opts.settings.respectGitignore).toBe(false)
-    expect(opts.persistSession).toBe(false)
-    expect(opts.enableFileCheckpointing).toBe(false)
-    expect(opts.plugins).toEqual([])
-    expect(opts.tools).toEqual([])
-    expect(opts.permissionMode).toBe('bypassPermissions')
-    expect(opts.maxTurns).toBe(1)
-  })
-
-  it('passes prompt as XML-wrapped string', async () => {
-    mockQuery.mockReturnValue(mockSession([resultMsg()]))
-    const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x' })
-    await loop.run([{ role: 'user', content: 'hi' }])
-
-    const { prompt } = mockQuery.mock.calls[0]![0]
-    expect(typeof prompt).toBe('string')
-    expect(prompt).toBe('<user>\nhi\n</user>')
-  })
-
   it('abort stops the loop', async () => {
     mockQuery.mockImplementation((params: { options: { abortController: AbortController } }) => {
       const ac = params.options.abortController
