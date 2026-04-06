@@ -104,9 +104,11 @@ describe('AnthropicAgentsSdkProvider', () => {
   describe('formatConversation', () => {
     const provider = new AnthropicAgentsSdkProvider()
 
-    it('wraps single user message in XML for cache-stable prefix', () => {
+    it('wraps output in conversation_history tag', () => {
       const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
-      expect(result).toBe('<user>\nhello\n</user>')
+      expect(result).toStartWith('<conversation_history>')
+      expect(result).toEndWith('</conversation_history>')
+      expect(result).toContain('<user>\nhello\n</user>')
     })
 
     it('formats multi-turn with XML tags', () => {
@@ -132,18 +134,15 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(result).toContain('<tool_result id="tc_1" error="true">')
     })
 
-    it('appends opening assistant tag when conversation ends with tool result', () => {
+    it('wraps tool-result conversations in conversation_history tag', () => {
       const result = provider.formatConversation([
         { role: 'user', content: 'read it' },
         { role: 'assistant', content: 'Sure.', toolCalls: [{ id: 'tc_1', name: 'Read', arguments: '{}' }] },
         { role: 'tool', content: 'contents', toolCallId: 'tc_1' },
       ])
-      expect(result).toEndWith('\n\n<assistant>\n')
-    })
-
-    it('does not append assistant tag when conversation ends with user message', () => {
-      const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
-      expect(result).not.toContain('<assistant>')
+      expect(result).toStartWith('<conversation_history>')
+      expect(result).toEndWith('</conversation_history>')
+      expect(result).toContain('<tool_result id="tc_1">')
     })
   })
 
@@ -171,7 +170,8 @@ describe('AnthropicAgentsSdkProvider', () => {
       await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
       const { prompt } = mockQuery.mock.calls[0]![0]
       expect(typeof prompt).toBe('string')
-      expect(prompt).toBe('<user>\nhi\n</user>')
+      expect(prompt).toStartWith('<conversation_history>')
+      expect(prompt).toContain('<user>\nhi\n</user>')
     })
 
     it('yields text chunks', async () => {

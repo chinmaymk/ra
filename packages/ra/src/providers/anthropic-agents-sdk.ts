@@ -174,13 +174,9 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       }
     }
     const formatted = parts.join('\n\n')
-    // When conversation ends with tool results, add an opening assistant tag
-    // so the model continues as the assistant instead of echoing the XML history
-    const lastMsg = messages[messages.length - 1]
-    if (lastMsg?.role === 'tool') {
-      return formatted + '\n\n<assistant>\n'
-    }
-    return formatted
+    // Wrap in a conversation_history tag so the model knows where history
+    // starts and ends, and keeps a stable prefix for prompt caching.
+    return `<conversation_history>\n${formatted}\n</conversation_history>`
   }
 
   // ── MCP tool schemas ────────────────────────────────────────────────
