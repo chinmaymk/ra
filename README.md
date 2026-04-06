@@ -171,8 +171,8 @@ ra --inspector
 - [x] Multiple interfaces (REPL, CLI, HTTP, MCP, Cron)
 - [x] Built-in inspector / observability
 - [x] Recipes system
-- [ ] Multi-agent orchestration improvements
-- [ ] Compaction
+- [ ] Multi-agent orchestration via config
+- [ ] Smarter compaction
 
 ## Docs
 
