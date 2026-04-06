@@ -429,10 +429,10 @@ describe('BedrockProvider - credential wiring', () => {
     expect(lastClientConfig.endpoint).toBeUndefined()
   })
 
-  it('uses HTTP/1.1 handler when baseURL is set (custom gateways rarely support HTTP/2)', () => {
+  it('uses fetch-based handler when baseURL is set (custom gateways rarely speak HTTP/2 and may need system DNS)', () => {
     new BedrockProvider({ baseURL: 'https://gateway.example.com' })
     expect(lastClientConfig.requestHandler).toBeDefined()
-    expect((lastClientConfig.requestHandler as object).constructor.name).toBe('NodeHttpHandler')
+    expect((lastClientConfig.requestHandler as object).constructor.name).toBe('FetchHttpHandler')
   })
 
   it('does not override requestHandler when no baseURL is set', () => {
