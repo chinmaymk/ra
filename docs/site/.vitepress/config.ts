@@ -102,6 +102,7 @@ export default defineConfig({
           items: [
             { text: 'The Agent Loop', link: '/core/agent-loop' },
             { text: 'Context Control', link: '/core/context-control' },
+            { text: 'Hot-Reload', link: '/core/hot-reload' },
             { text: 'Sessions', link: '/core/sessions' },
             { text: 'File Attachments', link: '/core/file-attachments' },
           ],

@@ -47,6 +47,7 @@ export const defaultConfig: RaConfig = {
     parallelToolCalls: true,
     maxTokenBudget: 0,
     maxDuration: 0,
+    hotReload: true,
     tools: {
       builtin: true,
       overrides: {},

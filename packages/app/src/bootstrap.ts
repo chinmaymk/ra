@@ -16,7 +16,8 @@ import {
   type Logger,
 } from '@chinmaymk/ra'
 import { createPermissionsMiddleware } from './agent/permissions'
-import type { RaConfig } from './config/types'
+import type { RaConfig, LoadConfigOptions } from './config/types'
+import { ConfigManager } from './config/manager'
 import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware, createSkillResolver } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
 import { loadResolvers } from './context/resolver-loader'
@@ -33,6 +34,135 @@ import { loadCustomTools } from './tools/loader'
 import { resolvePath, configHandle } from './utils/paths'
 import type { Tracer } from './observability/tracer'
 import type { Middleware } from '@chinmaymk/ra'
+
+/**
+ * Check config mtime and rebuild derived state if the file changed.
+ * Rebuilds: provider, builtin tools, custom tools, middleware, skills, context.
+ * Preserves: storage, MCP connections, memory/scratchpad stores, observability.
+ *
+ * Since the reload may be triggered by a referenced file change (not just
+ * the config file), we always rebuild tools and middleware to pick up
+ * any modified scripts, custom tools, or prompt files.
+ */
+async function refreshAppContext(ctx: AppContext, configManager: ConfigManager): Promise<boolean> {
+  const reloaded = await configManager.maybeReload(ctx.logger)
+  if (!reloaded) return false
+
+  const prev = ctx.config
+  const next = configManager.config
+  ctx.config = next
+
+  const { app, agent } = next
+
+  // ── Provider ────────────────────────────────────────────────────
+  const providerChanged =
+    agent.provider !== prev.agent.provider ||
+    JSON.stringify(app.providers[agent.provider]) !== JSON.stringify(prev.app.providers[prev.agent.provider])
+
+  if (providerChanged) {
+    ctx.provider = createProvider(buildProviderConfig(agent.provider, app.providers[agent.provider]))
+    ctx.logger.info('provider rebuilt', { provider: agent.provider, model: agent.model })
+  }
+
+  // ── Tools (always rebuild — referenced tool files may have changed) ─
+  {
+    const newTools = new ToolRegistry()
+    if (agent.tools.builtin || Object.keys(agent.tools.overrides).length > 0) {
+      registerBuiltinTools(newTools, agent.tools)
+    }
+    if (agent.tools.custom?.length) {
+      const customTools = await loadCustomTools(agent.tools.custom, app.configDir, ctx.logger)
+      for (const tool of customTools) newTools.register(tool)
+    }
+    // Re-register memory/scratchpad tools (they reference existing stores)
+    if (ctx.memoryStore) {
+      newTools.register(memorySearchTool(ctx.memoryStore))
+      newTools.register(memorySaveTool(ctx.memoryStore))
+      newTools.register(memoryForgetTool(ctx.memoryStore))
+    }
+    if (ctx.scratchpadStore) {
+      newTools.register(scratchpadWriteTool(ctx.scratchpadStore))
+      newTools.register(scratchpadDeleteTool(ctx.scratchpadStore))
+    }
+    // Re-register MCP tools from existing connections
+    for (const tool of ctx.tools.all()) {
+      if (!newTools.get(tool.name)) newTools.register(tool)
+    }
+    // Re-register subagent tool
+    const agentSettings = agent.tools.overrides.Agent ?? {}
+    if (agentSettings.enabled !== false && agent.tools.builtin) {
+      newTools.register(subagentTool({
+        provider: ctx.provider,
+        tools: newTools,
+        model: agent.model,
+        systemPrompt: agent.systemPrompt,
+        middleware: ctx.middleware,
+        thinking: agent.thinking,
+        thinkingBudgetCap: agent.thinkingBudgetCap,
+        compaction: agent.compaction,
+        toolTimeout: agent.toolTimeout,
+        maxIterations: agent.maxIterations,
+        maxConcurrency: (agentSettings.maxConcurrency as number | undefined) ?? agent.maxConcurrency,
+        logger: ctx.logger,
+      }))
+    }
+    ctx.tools = newTools
+    ctx.logger.info('tools rebuilt', { toolCount: newTools.all().length })
+  }
+
+  // ── Middleware (always rebuild — referenced scripts may have changed) ─
+  {
+    const mw: Partial<MiddlewareConfig> = await loadMiddleware(next, app.configDir, ctx.logger)
+
+    if (agent.context.enabled) {
+      const root = (await findGitRoot(process.cwd())) ?? process.cwd()
+      const discoveryMw = createDiscoveryMiddleware(agent.context.patterns, root, new Set(), { subdirectoryWalk: agent.context.subdirectoryWalk })
+      mw.beforeModelCall = append(mw.beforeModelCall, discoveryMw)
+    }
+
+    if (agent.permissions.rules?.length && !agent.permissions.no_rules_rules) {
+      const permMw = createPermissionsMiddleware(agent.permissions)
+      mw.beforeToolExecution = prepend(mw.beforeToolExecution, permMw)
+    }
+
+    if (ctx.memoryStore) {
+      const memMw = createMemoryMiddleware({ store: ctx.memoryStore, injectLimit: agent.memory.injectLimit })
+      mw.beforeLoopBegin = prepend(mw.beforeLoopBegin, memMw.beforeLoopBegin)
+    }
+
+    if (ctx.scratchpadStore) {
+      const scratchpadMw = createScratchpadMiddleware(ctx.scratchpadStore)
+      mw.beforeModelCall = append(mw.beforeModelCall, scratchpadMw)
+    }
+
+    ctx.middleware = mw
+    ctx.logger.info('middleware rebuilt')
+  }
+
+  // ── Skills ──────────────────────────────────────────────────────
+  {
+    const resolvedSkillDirs = agent.skillDirs.map(d => resolvePath(d, app.configDir))
+    ctx.skillIndex = await loadSkillIndex(resolvedSkillDirs, ctx.logger)
+  }
+
+  // ── Context files ───────────────────────────────────────────────
+  const contextChanged =
+    JSON.stringify(agent.context) !== JSON.stringify(prev.agent.context)
+
+  if (contextChanged && agent.context.enabled) {
+    const contextFiles = await discoverContextFiles({ cwd: process.cwd(), patterns: agent.context.patterns })
+    ctx.contextMessages = buildContextMessages(contextFiles)
+    ctx.logger.info('context files rebuilt', { fileCount: contextFiles.length })
+  }
+
+  // ── Compaction model default ────────────────────────────────────
+  if (!agent.compaction.model) {
+    agent.compaction.model = getDefaultCompactionModel(agent.provider) || undefined
+  }
+  agent.compaction.onCompact = (info) => ctx.logger.info('context compacted', info)
+
+  return true
+}
 
 /** Sanitize config for snapshot (mask secrets). */
 function sanitizeConfigSnapshot(config: RaConfig): unknown {
@@ -74,11 +204,13 @@ export interface AppContext {
   logger: Logger
   tracer: Tracer
   shutdown: () => Promise<void>
+  /** Check config file mtime and rebuild derived state if changed. */
+  refreshIfNeeded: () => Promise<boolean>
 }
 
 export async function bootstrap(
   config: RaConfig,
-  opts: { resume?: string | true; skipSession?: boolean },
+  opts: { resume?: string | true; skipSession?: boolean; configFilePath?: string; systemPromptPath?: string; loadOptions?: LoadConfigOptions },
 ): Promise<AppContext> {
   const { app, agent } = config
 
@@ -363,6 +495,17 @@ export async function bootstrap(
     writeFile(join(app.dataDir, 'handle-snapshot.json'), JSON.stringify(snapshot, null, 2)).catch(() => {})
   }
 
+  // ── Config hot-reload ──────────────────────────────────────────────
+  let refreshIfNeeded: () => Promise<boolean>
+  if (agent.hotReload) {
+    const configManager = new ConfigManager(config, opts.configFilePath, opts.loadOptions ?? {})
+    await configManager.init(opts.systemPromptPath)
+    refreshIfNeeded = async () => refreshAppContext(ctx, configManager)
+    logger.info('hot-reload enabled')
+  } else {
+    refreshIfNeeded = async () => false
+  }
+
   // ── Shutdown ───────────────────────────────────────────────────────
   const shutdown = async () => {
     logger.info('shutting down')
@@ -372,7 +515,7 @@ export async function bootstrap(
     await tracer.flush()
   }
 
-  return {
+  const ctx: AppContext = {
     config,
     provider,
     tools,
@@ -389,5 +532,8 @@ export async function bootstrap(
     logger,
     tracer,
     shutdown,
+    refreshIfNeeded,
   }
+
+  return ctx
 }

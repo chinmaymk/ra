@@ -51,6 +51,7 @@ agent:
   parallelToolCalls: true       # run tool calls concurrently (default)
   maxTokenBudget: 0             # 0 = unlimited, or set e.g. 200000
   maxDuration: 0                # 0 = unlimited, or set e.g. 300000 (5 min)
+  hotReload: true               # reload config & referenced files between loops
 
   skillDirs:
     - ./skills
@@ -101,6 +102,7 @@ agent:
 | `agent.parallelToolCalls` | — | `true` | Execute tool calls in parallel when the model returns multiple |
 | `agent.maxTokenBudget` | `--max-token-budget` | `0` | Max total tokens (input + output) before the loop stops. 0 = unlimited |
 | `agent.maxDuration` | `--max-duration` | `0` | Max wall-clock duration (ms) before the loop stops. 0 = unlimited |
+| `agent.hotReload` | — | `true` | [Hot-reload](/core/hot-reload) config and referenced files between loops |
 | `agent.tools.builtin` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
 
 ### Agent — Permissions
