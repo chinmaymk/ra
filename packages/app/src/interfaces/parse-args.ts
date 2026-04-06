@@ -46,6 +46,7 @@ const FLAG_RULES: Record<string, CoercionRule> = {
   'openai-base-url':             { type: 'string', path: ['app', 'providers', 'openai', 'baseURL'] },
   'google-base-url':             { type: 'string', path: ['app', 'providers', 'google', 'baseURL'] },
   'ollama-host':                 { type: 'string', path: ['app', 'providers', 'ollama', 'host'] },
+  'bedrock-base-url':            { type: 'string', path: ['app', 'providers', 'bedrock', 'baseURL'] },
   'azure-endpoint':              { type: 'string', path: ['app', 'providers', 'azure', 'endpoint'] },
   'azure-deployment':            { type: 'string', path: ['app', 'providers', 'azure', 'deployment'] },
   'http-port':                   { type: 'int',    path: ['app', 'http', 'port'] },

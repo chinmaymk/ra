@@ -35,6 +35,23 @@ export AWS_REGION=us-east-1
 ra --provider bedrock "Hello"
 ```
 
+## Custom endpoint
+
+Use `baseURL` to point at a custom or proxy endpoint (e.g. a VPC endpoint, LocalStack, or a Bedrock-compatible gateway):
+
+```yaml
+app:
+  providers:
+    bedrock:
+      baseURL: https://vpce-abc123.bedrock-runtime.us-east-1.vpce.amazonaws.com
+```
+
+Or via CLI flag:
+
+```bash
+ra --provider bedrock --bedrock-base-url https://vpce-abc123.bedrock-runtime.us-east-1.vpce.amazonaws.com "Hello"
+```
+
 ## Environment variables
 
 | Variable | Required | Description |
