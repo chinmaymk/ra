@@ -279,6 +279,23 @@ describe('printToolResult', () => {
     // Non-TTY falls through, but tool should still be trackable
     expect(state.activeTools).toHaveLength(0)
   })
+
+  it('shows ✗ for failed tools', () => {
+    const state = createStreamState()
+    captureStdout(() => printToolCall(state, 'tc-1', 'Bash', '{"command":"false"}'))
+    const output = captureStdout(() => printToolResult(state, 'tc-1', 'Bash', 50, 'error', true))
+    expect(output).toContain('✗')
+    expect(output).toContain(ansi.red)
+    expect(output).not.toContain('✔')
+  })
+
+  it('shows ✔ for successful tools', () => {
+    const state = createStreamState()
+    captureStdout(() => printToolCall(state, 'tc-1', 'Read', '{"path":"/tmp/x"}'))
+    const output = captureStdout(() => printToolResult(state, 'tc-1', 'Read', 5, '1: hello\n'))
+    expect(output).toContain('✔')
+    expect(output).not.toContain('✗')
+  })
 })
 
 describe('printStatus', () => {
@@ -297,9 +314,9 @@ describe('printCommandResponse', () => {
 })
 
 describe('printError', () => {
-  it('outputs red error message', () => {
+  it('outputs red error message with ✗ prefix', () => {
     const output = captureStdout(() => printError('something went wrong'))
-    expect(output).toContain('Error:')
+    expect(output).toContain('✗')
     expect(output).toContain('something went wrong')
     expect(output).toContain(ansi.red)
   })
@@ -430,6 +447,112 @@ describe('StreamBuffer', () => {
     const b = new StreamBuffer(40)
     const out = b.write('para one\n\npara two\n')
     expect(out).toBe('para one\n' + P + '\n' + P + 'para two\n' + P)
+  })
+})
+
+describe('StreamBuffer markdown mode', () => {
+  const P = RESPONSE_PREFIX
+
+  it('passes through plain text like non-markdown mode', () => {
+    const b = new StreamBuffer(80, true)
+    expect(b.write('hello world')).toBe('hello world')
+  })
+
+  it('handles newlines with prefix', () => {
+    const b = new StreamBuffer(80, true)
+    const out = b.write('line one\nline two\n')
+    expect(out).toContain('line one')
+    expect(out).toContain('line two')
+    expect(out).toContain(P)
+  })
+
+  it('renders code blocks with │ border', () => {
+    const b = new StreamBuffer(80, true)
+    const out = b.write('text\n```js\nconst x = 1\n```\nmore\n')
+    expect(out).toContain('│')
+    expect(out).toContain('const x = 1')
+    expect(out).not.toContain('```')
+    expect(out).toContain('text')
+    expect(out).toContain('more')
+  })
+
+  it('hides code fence lines', () => {
+    const b = new StreamBuffer(80, true)
+    const out = b.write('```python\nprint("hi")\n```\n')
+    expect(out).not.toContain('```')
+    expect(out).not.toContain('python')
+    expect(out).toContain('print("hi")')
+  })
+
+  it('renders headings as bold', () => {
+    const b = new StreamBuffer(80, true)
+    const out = b.write('# Hello World\n')
+    expect(out).toContain(ansi.bold)
+    expect(out).toContain('Hello World')
+    expect(out).not.toContain('# ')
+  })
+
+  it('renders h2 and h3 headings', () => {
+    const b = new StreamBuffer(80, true)
+    const out2 = b.write('## Subtitle\n')
+    expect(out2).toContain(ansi.bold)
+    expect(out2).toContain('Subtitle')
+
+    const b3 = new StreamBuffer(80, true)
+    const out3 = b3.write('### Sub-sub\n')
+    expect(out3).toContain(ansi.bold)
+    expect(out3).toContain('Sub-sub')
+  })
+
+  it('renders bold text with ** markers', () => {
+    const b = new StreamBuffer(80, true)
+    const out = b.write('this is **bold** text\n')
+    expect(out).toContain(ansi.bold)
+    expect(out).toContain('bold')
+    expect(out).not.toContain('**')
+  })
+
+  it('renders inline code with backticks', () => {
+    const b = new StreamBuffer(80, true)
+    const out = b.write('use `foo()` here\n')
+    expect(out).toContain(ansi.cyan)
+    expect(out).toContain('foo()')
+    expect(out).not.toContain('`')
+  })
+
+  it('does not apply inline formatting inside code blocks', () => {
+    const b = new StreamBuffer(80, true)
+    const out = b.write('```\nconst **x** = `y`\n```\n')
+    // Inside code blocks, ** and ` should pass through unchanged
+    expect(out).toContain('**x**')
+    expect(out).toContain('`y`')
+  })
+
+  it('handles code fence split across multiple writes', () => {
+    const b = new StreamBuffer(80, true)
+    const out1 = b.write('`')
+    const out2 = b.write('`')
+    const out3 = b.write('`\ncode line\n')
+    const combined = out1 + out2 + out3
+    expect(combined).toContain('│')
+    expect(combined).toContain('code line')
+  })
+
+  it('shows │ for empty lines inside code blocks', () => {
+    const b = new StreamBuffer(80, true)
+    const out = b.write('```\nline1\n\nline2\n```\n')
+    // Should have │ for the empty line too
+    const lines = out.split('\n')
+    const borderLines = lines.filter(l => l.includes('│'))
+    expect(borderLines.length).toBeGreaterThanOrEqual(3) // line1, empty, line2
+  })
+
+  it('flushes pending state on end()', () => {
+    const b = new StreamBuffer(80, true)
+    b.write('**bold start')
+    const end = b.end()
+    // Should close the bold styling
+    expect(end).toContain('\x1b[22m') // bold off
   })
 })
 

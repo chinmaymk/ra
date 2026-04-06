@@ -283,7 +283,7 @@ describe('Repl', () => {
     }
 
     const output = chunks.join('')
-    expect(output).toContain('Error')
+    expect(output).toContain('✗')
     expect(output).toContain('Provider error')
   })
 

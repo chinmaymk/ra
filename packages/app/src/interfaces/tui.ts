@@ -90,20 +90,156 @@ export const RESPONSE_PREFIX = `  `
 /** Visible column width of RESPONSE_PREFIX. */
 export const RESPONSE_PREFIX_LEN = 2
 
-/** Pass-through stream writer that outputs text immediately for responsive
- * token display. Newlines are re-prefixed with RESPONSE_PREFIX so each new
- * line retains the proper indent. No buffering — tokens appear as they arrive. */
-export class StreamBuffer {
-  constructor(private readonly contentWidth: number) {}
+// ANSI-specific off codes (don't reset ALL styles, just the specific one)
+const ansiOff = { bold: '\x1b[22m', fg: '\x1b[39m' } as const
 
-  /** Write text immediately, replacing newlines with newline + indent prefix. */
-  write(text: string): string {
-    return text.replaceAll('\n', '\n' + RESPONSE_PREFIX)
+/** Stream writer with optional incremental markdown rendering.
+ *  Plain mode: replaces newlines with newline + indent prefix.
+ *  Markdown mode: detects code fences, headings, bold, and inline code
+ *  character-by-character for flicker-free streaming display. */
+export class StreamBuffer {
+  private markdown: boolean
+  // Markdown state
+  private inCodeBlock = false
+  private inHeading = false
+  private inBold = false
+  private inInlineCode = false
+  private atLineStart = true
+  private lineStartBuf = ''
+  private skipLine = false   // skip to next \n (fence line)
+  private pendingStar = false // buffered single * waiting for **
+
+  constructor(private readonly contentWidth: number, markdown = false) {
+    this.markdown = markdown
   }
 
-  /** No-op — all content was already written during streaming. */
+  write(text: string): string {
+    if (!this.markdown) return text.replaceAll('\n', '\n' + RESPONSE_PREFIX)
+    let out = ''
+    for (const ch of text) out += this.processChar(ch)
+    return out
+  }
+
   end(): string {
-    return ''
+    let out = ''
+    if (this.lineStartBuf) {
+      const buf = this.lineStartBuf
+      this.lineStartBuf = ''
+      if (this.inCodeBlock) {
+        out += buf ? `${ansi.dim}│${ansi.reset} ${buf}` : `${ansi.dim}│${ansi.reset}`
+      } else {
+        this.atLineStart = false
+        for (const c of buf) out += this.processChar(c)
+      }
+    }
+    if (this.pendingStar) { out += '*'; this.pendingStar = false }
+    if (this.inHeading) { out += ansiOff.bold; this.inHeading = false }
+    if (this.inBold) { out += ansiOff.bold; this.inBold = false }
+    if (this.inInlineCode) { out += ansiOff.fg; this.inInlineCode = false }
+    return out
+  }
+
+  private processChar(ch: string): string {
+    // Skipping rest of a fence line (```javascript...)
+    if (this.skipLine) {
+      if (ch === '\n') {
+        this.skipLine = false
+        this.atLineStart = true
+        this.lineStartBuf = ''
+        return '\n' + RESPONSE_PREFIX
+      }
+      return ''
+    }
+
+    // Buffering at line start to detect code fences and headings
+    if (this.atLineStart) {
+      if (ch === '\n') {
+        const out = this.flushBuf() + '\n' + RESPONSE_PREFIX
+        this.lineStartBuf = ''
+        return out
+      }
+      this.lineStartBuf += ch
+
+      // Code fence? (3+ backticks at line start)
+      if (this.lineStartBuf.length >= 3 && this.lineStartBuf.startsWith('```')) {
+        this.inCodeBlock = !this.inCodeBlock
+        this.skipLine = true
+        this.atLineStart = false
+        this.lineStartBuf = ''
+        return ''
+      }
+      // Might still be a fence (all backticks, < 3)
+      if (this.lineStartBuf.length < 3 && /^`+$/.test(this.lineStartBuf)) return ''
+
+      // Heading? (# followed by space)
+      if (/^#{1,3} /.test(this.lineStartBuf)) {
+        this.atLineStart = false
+        this.inHeading = true
+        const afterHash = this.lineStartBuf.replace(/^#{1,3} /, '')
+        this.lineStartBuf = ''
+        return `${ansi.bold}${afterHash}`
+      }
+      // Might still be a heading (all # so far, < 4 chars)
+      if (this.lineStartBuf.length < 4 && /^#{1,3}$/.test(this.lineStartBuf)) return ''
+
+      // Not a special line — flush buffer through inline formatting
+      this.atLineStart = false
+      const buf = this.lineStartBuf
+      this.lineStartBuf = ''
+      if (this.inCodeBlock) return buf ? `${ansi.dim}│${ansi.reset} ${buf}` : `${ansi.dim}│${ansi.reset}`
+      let out = ''
+      for (const c of buf) out += this.processChar(c)
+      return out
+    }
+
+    // Newline — reset line state
+    if (ch === '\n') {
+      let out = ''
+      if (this.pendingStar) { out += '*'; this.pendingStar = false }
+      if (this.inHeading) { out += ansiOff.bold; this.inHeading = false }
+      out += '\n' + RESPONSE_PREFIX
+      this.atLineStart = true
+      this.lineStartBuf = ''
+      return out
+    }
+
+    // Inside code block — no inline formatting
+    if (this.inCodeBlock) return ch
+
+    // Inline code toggle
+    if (ch === '`') {
+      if (this.pendingStar) { this.pendingStar = false; return '*`' }
+      this.inInlineCode = !this.inInlineCode
+      return this.inInlineCode ? ansi.cyan : ansiOff.fg
+    }
+
+    // Bold toggle (**)
+    if (ch === '*' && !this.inInlineCode) {
+      if (this.pendingStar) {
+        this.pendingStar = false
+        this.inBold = !this.inBold
+        return this.inBold ? ansi.bold : ansiOff.bold
+      }
+      this.pendingStar = true
+      return ''
+    }
+    if (this.pendingStar) {
+      this.pendingStar = false
+      return '*' + ch
+    }
+
+    return ch
+  }
+
+  /** Flush the line-start buffer with appropriate styling. */
+  private flushBuf(): string {
+    if (!this.lineStartBuf) {
+      return this.inCodeBlock ? `${ansi.dim}│${ansi.reset}` : ''
+    }
+    if (this.inCodeBlock) {
+      return `${ansi.dim}│${ansi.reset} ${this.lineStartBuf}`
+    }
+    return this.lineStartBuf
   }
 }
 
@@ -125,10 +261,11 @@ function toolHeader(name: string, detail: string): string {
   return `  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${detail}${ansi.reset}\n`
 }
 
-/** Format the ✔ result line that replaces the ◆ header. */
-function toolResultHeader(name: string, detail: string, resultDetail: string): string {
+/** Format the ✔/✗ result line that replaces the ◆ header. */
+function toolResultHeader(name: string, detail: string, resultDetail: string, isError = false): string {
   const suffix = detail ? `${detail} ${ansi.dim}— ${resultDetail}` : resultDetail
-  return `  ${ansi.greenBright}✔ ${name}${ansi.reset} ${ansi.dim}${suffix}${ansi.reset}`
+  const icon = isError ? `${ansi.red}✗` : `${ansi.greenBright}✔`
+  return `  ${icon} ${name}${ansi.reset} ${ansi.dim}${suffix}${ansi.reset}`
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +444,7 @@ function summarizeResult(name: string, content: string): string {
 // printToolResult — overwrite ◆ line in-place (TTY) or append (non-TTY)
 // ---------------------------------------------------------------------------
 
-export function printToolResult(state: TuiStreamState, id: string, name: string, ms: number, content?: string): void {
+export function printToolResult(state: TuiStreamState, id: string, name: string, ms: number, content?: string, isError = false): void {
   const summary = content ? summarizeResult(name, content) : ''
   const resultDetail = summary ? `${summary}, ${ms}ms` : `${ms}ms`
 
@@ -315,9 +452,9 @@ export function printToolResult(state: TuiStreamState, id: string, name: string,
   const tool = idx !== -1 ? state.activeTools[idx] : undefined
   const detail = tool?.detail ?? ''
 
-  // Non-TTY or untracked tool: append a separate ✔ line (no cursor movement)
+  // Non-TTY or untracked tool: append a separate ✔/✗ line (no cursor movement)
   if (!process.stdout.isTTY || !tool) {
-    process.stdout.write(toolResultHeader(name, detail, resultDetail) + '\n')
+    process.stdout.write(toolResultHeader(name, detail, resultDetail, isError) + '\n')
     if (idx !== -1) state.activeTools.splice(idx, 1)
     return
   }
@@ -331,7 +468,7 @@ export function printToolResult(state: TuiStreamState, id: string, name: string,
 
   // Move up → overwrite header → move back down
   process.stdout.write(`\x1b[${linesUp}A\r\x1b[K`)
-  process.stdout.write(toolResultHeader(tool.name, tool.detail, resultDetail))
+  process.stdout.write(toolResultHeader(tool.name, tool.detail, resultDetail, isError))
   process.stdout.write(`\x1b[${linesUp}B\r`)
 
   // Remove completed tool from tracking
@@ -351,7 +488,7 @@ export function printCommandResponse(msg: string): void {
 }
 
 export function printError(msg: string): void {
-  process.stdout.write(`${ansi.red}Error: ${msg}${ansi.reset}\n`)
+  process.stdout.write(`  ${ansi.red}✗ ${msg}${ansi.reset}\n`)
 }
 
 export function printInterrupt(msg: string): void {
@@ -430,7 +567,7 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
       }
       state.boxOpened = true
       const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
-      state.streamBuf = new StreamBuffer(contentWidth)
+      state.streamBuf = new StreamBuffer(contentWidth, true)
     }
     if (delta && state.streamBuf) process.stdout.write(state.streamBuf.write(delta))
   } else if (chunkType === 'tool_call_start' && toolName) {

@@ -184,7 +184,7 @@ export class Repl {
       afterToolExecution: [
         async (ctx: ToolResultContext) => {
           const resultStr = typeof ctx.result.content === 'string' ? ctx.result.content : ''
-          tui.printToolResult(tuiState, ctx.toolCall.id, ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()), resultStr)
+          tui.printToolResult(tuiState, ctx.toolCall.id, ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()), resultStr, ctx.result.isError)
           tui.startSpinner()
         },
       ],
