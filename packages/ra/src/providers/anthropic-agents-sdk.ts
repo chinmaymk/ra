@@ -174,9 +174,9 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       }
     }
     const formatted = parts.join('\n\n')
-    // Always prepend the preamble so the model treats XML as prior history
-    // (not a format to echo) and keeps a stable prefix for prompt caching.
-    return HISTORY_PREAMBLE + formatted
+    // Wrap in a conversation_history tag so the model knows where history
+    // starts and ends, and keeps a stable prefix for prompt caching.
+    return `<conversation_history>\n${formatted}\n</conversation_history>`
   }
 
   // ── MCP tool schemas ────────────────────────────────────────────────
@@ -321,9 +321,6 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     }
   }
 }
-
-/** Preamble added before XML-serialized history on tool-result turns to prevent the model from echoing XML tags. */
-const HISTORY_PREAMBLE = 'The following is your previous conversation history including tool calls you made and their results. Use this context to continue the conversation.\n\n'
 
 const MCP_SERVER_NAME = 'ra-tools'
 const MCP_PREFIX = `mcp__${MCP_SERVER_NAME}__`

@@ -104,9 +104,10 @@ describe('AnthropicAgentsSdkProvider', () => {
   describe('formatConversation', () => {
     const provider = new AnthropicAgentsSdkProvider()
 
-    it('always prepends history preamble for cache-stable prefix', () => {
+    it('wraps output in conversation_history tag', () => {
       const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
-      expect(result).toStartWith('The following is your previous conversation history')
+      expect(result).toStartWith('<conversation_history>')
+      expect(result).toEndWith('</conversation_history>')
       expect(result).toContain('<user>\nhello\n</user>')
     })
 
@@ -133,13 +134,14 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(result).toContain('<tool_result id="tc_1" error="true">')
     })
 
-    it('includes preamble on tool-result conversations too', () => {
+    it('wraps tool-result conversations in conversation_history tag', () => {
       const result = provider.formatConversation([
         { role: 'user', content: 'read it' },
         { role: 'assistant', content: 'Sure.', toolCalls: [{ id: 'tc_1', name: 'Read', arguments: '{}' }] },
         { role: 'tool', content: 'contents', toolCallId: 'tc_1' },
       ])
-      expect(result).toStartWith('The following is your previous conversation history')
+      expect(result).toStartWith('<conversation_history>')
+      expect(result).toEndWith('</conversation_history>')
       expect(result).toContain('<tool_result id="tc_1">')
     })
   })
@@ -168,8 +170,8 @@ describe('AnthropicAgentsSdkProvider', () => {
       await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
       const { prompt } = mockQuery.mock.calls[0]![0]
       expect(typeof prompt).toBe('string')
+      expect(prompt).toStartWith('<conversation_history>')
       expect(prompt).toContain('<user>\nhi\n</user>')
-      expect(prompt).toStartWith('The following is your previous conversation history')
     })
 
     it('yields text chunks', async () => {
