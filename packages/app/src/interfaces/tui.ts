@@ -509,14 +509,19 @@ export function printInterrupt(msg: string): void {
   process.stdout.write(`\n${ansi.yellow}${msg}${ansi.reset}\n`)
 }
 
-/** Print the separator line above the prompt input area. */
+/** Print the separator line above the prompt input area.
+ *  Adds padding below so the prompt doesn't stick to the terminal bottom. */
 export function printPromptLine(): void {
   const cols = process.stdout.columns || 80
+  // Write empty lines to push content up, then move cursor back
+  const pad = 4
   process.stdout.write(`${ansi.dim}${'─'.repeat(cols)}${ansi.reset}\n`)
+  process.stdout.write('\n'.repeat(pad))
+  process.stdout.write(`\x1b[${pad}A`)
 }
 
-// Prompt — empty, input sits between separator lines
-export const PROMPT = ''
+// Prompt character
+export const PROMPT = `${ansi.cyanBright}❯${ansi.reset} `
 
 // ---------------------------------------------------------------------------
 // TUI streaming state

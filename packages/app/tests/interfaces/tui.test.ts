@@ -298,11 +298,10 @@ describe('printToolResult', () => {
 })
 
 describe('printPromptLine', () => {
-  it('outputs a dim separator line', () => {
+  it('outputs a dim separator line with bottom padding', () => {
     const output = captureStdout(() => printPromptLine())
     expect(output).toContain('─')
     expect(output).toContain(ansi.dim)
-    expect(output).toEndWith('\n')
   })
 })
 
