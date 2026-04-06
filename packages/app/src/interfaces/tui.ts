@@ -61,26 +61,21 @@ export function printResumeHeader(sessionId: string, messageCount: number): void
   process.stdout.write(`  ${ansi.dim}↩ ${sessionId}  ·  ${messageCount} messages${ansi.reset}\n\n`)
 }
 
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const SPINNER_TICK_MS = 80
-let spinnerTimer: ReturnType<typeof setInterval> | null = null
-let spinnerFrame = 0
+// ---------------------------------------------------------------------------
+// Spinner — static "…" indicator (no animation, no flicker)
+// ---------------------------------------------------------------------------
+
+let spinnerActive = false
 
 export function startSpinner(): void {
-  if (spinnerTimer) return
-  spinnerFrame = 0
-  const tick = () => {
-    process.stdout.write(`\r${ansi.dim}${SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]}${ansi.reset}`)
-    spinnerFrame++
-  }
-  tick()
-  spinnerTimer = setInterval(tick, SPINNER_TICK_MS)
+  if (spinnerActive) return
+  spinnerActive = true
+  process.stdout.write(`  ${ansi.dim}…${ansi.reset}`)
 }
 
 export function stopSpinner(silent = false): void {
-  if (spinnerTimer) {
-    clearInterval(spinnerTimer)
-    spinnerTimer = null
+  if (spinnerActive) {
+    spinnerActive = false
     process.stdout.write('\r\x1b[K')
   }
   if (!silent) process.stdout.write(RESPONSE_PREFIX)
@@ -130,15 +125,23 @@ function toolHeader(name: string, detail: string): string {
   return `  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${detail}${ansi.reset}\n`
 }
 
-function formatEditCall(parsed: Record<string, unknown>, cols: number): string {
-  const { path, old_string, new_string } = parsed as { path?: string; old_string?: string; new_string?: string }
-  if (!path || old_string == null || new_string == null) return ''
+/** Format the ✔ result line that replaces the ◆ header. */
+function toolResultHeader(name: string, detail: string, resultDetail: string): string {
+  const suffix = detail ? `${detail} ${ansi.dim}— ${resultDetail}` : resultDetail
+  return `  ${ansi.greenBright}✔ ${name}${ansi.reset} ${ansi.dim}${suffix}${ansi.reset}`
+}
+
+// ---------------------------------------------------------------------------
+// Edit diff formatting
+// ---------------------------------------------------------------------------
+
+function formatEditDiffLines(parsed: Record<string, unknown>, cols: number): string[] {
+  const { old_string, new_string } = parsed as { old_string?: string; new_string?: string }
+  if (old_string == null || new_string == null) return []
 
   const indent = '    '
   const usable = cols - indent.length - 2 // -2 for "- " / "+ " prefix
   const lines: string[] = []
-
-  lines.push(`  ${ansi.yellow}◆ Edit${ansi.reset} ${ansi.dim}${path}${ansi.reset}`)
 
   const oldLines = old_string.split('\n')
   const newLines = new_string.split('\n')
@@ -153,73 +156,108 @@ function formatEditCall(parsed: Record<string, unknown>, cols: number): string {
   for (const l of newShow) lines.push(`${indent}${ansi.green}+ ${truncLine(l, usable)}${ansi.reset}`)
   if (newTrunc) lines.push(`${indent}${ansi.dim}… ${newLines.length - EDIT_DIFF_MAX_LINES} more lines${ansi.reset}`)
 
-  return lines.join('\n') + '\n'
+  return lines
 }
 
-/** Tool-specific call formatters. Return empty string to fall through to default. */
-const toolCallFormatters: Record<string, (p: Record<string, unknown>, cols: number) => string> = {
-  Edit: formatEditCall,
+// ---------------------------------------------------------------------------
+// Tool detail extractors — return the short detail string for each tool type
+// ---------------------------------------------------------------------------
+
+/** Tool-specific detail extractors. Return empty string to fall through to default. */
+const toolDetailExtractors: Record<string, (p: Record<string, unknown>, cols: number) => string> = {
   Read(p) {
-    const detail = [p.path as string]
-    if (p.offset) detail.push(`offset=${p.offset}`)
-    if (p.limit) detail.push(`limit=${p.limit}`)
-    return toolHeader('Read', detail.join(' '))
+    const parts = [p.path as string]
+    if (p.offset) parts.push(`offset=${p.offset}`)
+    if (p.limit) parts.push(`limit=${p.limit}`)
+    return parts.join(' ')
   },
-  Write(p) { return toolHeader('Write', p.path as string) },
-  AppendFile(p) { return toolHeader('AppendFile', p.path as string) },
-  DeleteFile(p) { return toolHeader('DeleteFile', p.path as string) },
-  MoveFile(p) { return toolHeader('MoveFile', `${p.source} → ${p.destination}`) },
-  CopyFile(p) { return toolHeader('CopyFile', `${p.source} → ${p.destination}`) },
-  LS(p) { return toolHeader('LS', `${p.path}${p.recursive ? ' (recursive)' : ''}`) },
-  Glob(p) { return toolHeader('Glob', `${p.pattern}${p.path ? ` in ${p.path}` : ''}`) },
+  Write(p) { return p.path as string },
+  AppendFile(p) { return p.path as string },
+  DeleteFile(p) { return p.path as string },
+  MoveFile(p) { return `${p.source} → ${p.destination}` },
+  CopyFile(p) { return `${p.source} → ${p.destination}` },
+  LS(p) { return `${p.path}${p.recursive ? ' (recursive)' : ''}` },
+  Glob(p) { return `${p.pattern}${p.path ? ` in ${p.path}` : ''}` },
   Grep(p) {
     const parts = [`"${p.pattern}"`]
     if (p.path) parts.push(`in ${p.path}`)
     if (p.include) parts.push(`${p.include}`)
-    return toolHeader('Grep', parts.join(' '))
+    return parts.join(' ')
   },
   Bash(p, cols) {
     const cmd = String(p.command ?? '')
     const firstLine = cmd.split('\n')[0] ?? ''
     const maxLen = cols - 8 // "  ◆ Bash " prefix
-    return toolHeader('Bash', truncLine(firstLine, maxLen))
+    return truncLine(firstLine, maxLen)
   },
   WebFetch(p) {
     const method = (p.method as string) ?? 'GET'
-    return toolHeader('WebFetch', `${method} ${p.url}`)
+    return `${method} ${p.url}`
   },
   Agent(p) {
     const tasks = p.tasks as Array<unknown> | undefined
-    return toolHeader('Agent', `${tasks?.length ?? '?'} task(s)`)
+    return `${tasks?.length ?? '?'} task(s)`
   },
 }
 
-export function printToolCall(name: string, args: string): void {
+// ---------------------------------------------------------------------------
+// Active tool tracking for in-place ◆ → ✔ updates
+// ---------------------------------------------------------------------------
+
+interface ActiveToolEntry {
+  id: string
+  name: string
+  detail: string
+  lineCount: number
+}
+
+// ---------------------------------------------------------------------------
+// printToolCall — show ◆ and register for in-place update
+// ---------------------------------------------------------------------------
+
+export function printToolCall(state: TuiStreamState, id: string, name: string, args: string): void {
   const cols = process.stdout.columns || 80
   const parsed = parseArgs(args)
 
-  if (parsed) {
-    const formatter = toolCallFormatters[name]
-    if (formatter) {
-      const out = formatter(parsed, cols)
-      if (out) { process.stdout.write(out); return }
+  // Edit: header + diff lines
+  if (name === 'Edit' && parsed) {
+    const path = (parsed.path as string) ?? ''
+    const diffLines = formatEditDiffLines(parsed, cols)
+    if (diffLines.length > 0) {
+      process.stdout.write(toolHeader('Edit', path))
+      for (const line of diffLines) process.stdout.write(line + '\n')
+      state.activeTools.push({ id, name: 'Edit', detail: path, lineCount: 1 + diffLines.length })
+      return
     }
   }
 
-  // Default: collapse JSON args to a single line
-  let flat: string
-  try {
-    flat = JSON.stringify(JSON.parse(args))
-      .replace(/^\{|\}$/g, '')   // strip outer braces
-      .replace(/^"|"$/g, '')     // strip outer quotes for scalar values
-  } catch {
-    flat = args.replace(/\s+/g, ' ').trim()
+  // Extract detail string
+  let detail = ''
+  if (parsed) {
+    const extractor = toolDetailExtractors[name]
+    if (extractor) detail = extractor(parsed, cols)
   }
-  const prefix = `  ◆ ${name} `
-  const maxFlat = cols - prefix.length - 1
-  const truncated = flat.length > maxFlat ? flat.slice(0, maxFlat) + '…' : flat
-  process.stdout.write(`  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${truncated}${ansi.reset}\n`)
+  if (!detail) {
+    // Default: collapse JSON args to a single line
+    try {
+      detail = JSON.stringify(JSON.parse(args))
+        .replace(/^\{|\}$/g, '')
+        .replace(/^"|"$/g, '')
+    } catch {
+      detail = args.replace(/\s+/g, ' ').trim()
+    }
+    const prefix = `  ◆ ${name} `
+    const maxFlat = cols - prefix.length - 1
+    detail = detail.length > maxFlat ? detail.slice(0, maxFlat) + '…' : detail
+  }
+
+  process.stdout.write(toolHeader(name, detail))
+  state.activeTools.push({ id, name, detail, lineCount: 1 })
 }
+
+// ---------------------------------------------------------------------------
+// Summarize tool result content
+// ---------------------------------------------------------------------------
 
 /** Summarize tool result content for display. */
 function summarizeResult(name: string, content: string): string {
@@ -265,11 +303,44 @@ function summarizeResult(name: string, content: string): string {
   }
 }
 
-export function printToolResult(name: string, ms: number, content?: string): void {
+// ---------------------------------------------------------------------------
+// printToolResult — overwrite ◆ line in-place (TTY) or append (non-TTY)
+// ---------------------------------------------------------------------------
+
+export function printToolResult(state: TuiStreamState, id: string, name: string, ms: number, content?: string): void {
   const summary = content ? summarizeResult(name, content) : ''
-  const detail = summary ? `${summary}, ${ms}ms` : `${ms}ms`
-  process.stdout.write(`  ${ansi.greenBright}✔ ${name}${ansi.dim} ${detail}${ansi.reset}\n`)
+  const resultDetail = summary ? `${summary}, ${ms}ms` : `${ms}ms`
+
+  const idx = state.activeTools.findIndex(t => t.id === id)
+  const tool = idx !== -1 ? state.activeTools[idx] : undefined
+  const detail = tool?.detail ?? ''
+
+  // Non-TTY or untracked tool: append a separate ✔ line (no cursor movement)
+  if (!process.stdout.isTTY || !tool) {
+    process.stdout.write(toolResultHeader(name, detail, resultDetail) + '\n')
+    if (idx !== -1) state.activeTools.splice(idx, 1)
+    return
+  }
+
+  // Calculate how many lines above the cursor the tool's header line is.
+  // Each tool after this one contributes its lineCount.
+  let linesUp = tool.lineCount
+  for (let i = idx + 1; i < state.activeTools.length; i++) {
+    linesUp += state.activeTools[i]!.lineCount
+  }
+
+  // Move up → overwrite header → move back down
+  process.stdout.write(`\x1b[${linesUp}A\r\x1b[K`)
+  process.stdout.write(toolResultHeader(tool.name, tool.detail, resultDetail))
+  process.stdout.write(`\x1b[${linesUp}B\r`)
+
+  // Remove completed tool from tracking
+  state.activeTools.splice(idx, 1)
 }
+
+// ---------------------------------------------------------------------------
+// Status / error output
+// ---------------------------------------------------------------------------
 
 export function printStatus(msg: string): void {
   process.stdout.write(`${ansi.dim}${msg}${ansi.reset}\n`)
@@ -290,6 +361,10 @@ export function printInterrupt(msg: string): void {
 // Styled prompt for readline — ANSI OK here, cursor math only breaks on very long wrapped lines
 export const PROMPT = `\x1b[96m›\x1b[0m `
 
+// ---------------------------------------------------------------------------
+// TUI streaming state
+// ---------------------------------------------------------------------------
+
 /** TUI streaming state — tracks thinking/text display and stream buffer. */
 export interface TuiStreamState {
   boxOpened: boolean
@@ -303,6 +378,8 @@ export interface TuiStreamState {
   toolStartTimes: Map<string, number>
   /** Tool names shown during streaming (before execution starts). */
   pendingToolNames: string[]
+  /** Active tool entries for in-place ◆ → ✔ updates. */
+  activeTools: ActiveToolEntry[]
 }
 
 /** Create a new TUI streaming state for a single agent loop run. */
@@ -312,6 +389,7 @@ export function createStreamState(): TuiStreamState {
     thinkingLines: 0, thinkingStartTime: 0,
     streamBuf: null, thinkingBuf: null, toolStartTimes: new Map(),
     pendingToolNames: [],
+    activeTools: [],
   }
 }
 
@@ -345,6 +423,11 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
     if (state.thinkingOpened) collapseThinking(state)
     if (!state.boxOpened) {
       stopSpinner()
+      // Add visual separation after a tools section
+      if (state.activeTools.length > 0) {
+        process.stdout.write('\n')
+        state.activeTools = []
+      }
       state.boxOpened = true
       const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
       state.streamBuf = new StreamBuffer(contentWidth)
@@ -367,7 +450,7 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
 
 /** Reposition cursor to overwrite pending tool preview lines.
  *  Called once before tool execution begins — cursor moves up so
- *  printToolCall/printToolResult naturally overwrite each preview line. */
+ *  printToolCall naturally overwrites each preview line. */
 export function clearPendingTools(state: TuiStreamState): void {
   if (state.pendingToolNames.length > 0) {
     // Move cursor up to the first pending line (no erase — execution will overwrite)
@@ -404,5 +487,5 @@ export function flushStreamState(state: TuiStreamState): void {
   if (out) process.stdout.write(out)
   if (state.boxOpened) closeAssistantBox()
   else process.stdout.write('\n')
+  state.activeTools = []
 }
-

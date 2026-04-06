@@ -57,13 +57,13 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
         tui.clearPendingTools(tuiState)
         if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
         tuiState.toolStartTimes.set(ctx.toolCall.id, Date.now())
-        tui.printToolCall(ctx.toolCall.name, ctx.toolCall.arguments)
+        tui.printToolCall(tuiState, ctx.toolCall.id, ctx.toolCall.name, ctx.toolCall.arguments)
       },
     ],
     afterToolExecution: [
       async (ctx: ToolResultContext) => {
         const resultStr = typeof ctx.result.content === 'string' ? ctx.result.content : ''
-        tui.printToolResult(ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()), resultStr)
+        tui.printToolResult(tuiState, ctx.toolCall.id, ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()), resultStr)
       },
     ],
   }
