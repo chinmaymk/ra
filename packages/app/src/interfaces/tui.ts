@@ -52,13 +52,13 @@ function tagline(sessionId: string): string {
 
 export function printHeader(model: string, sessionId: string): void {
   process.stdout.write('\n')
-  process.stdout.write(`  ${ansi.bold}${ansi.cyanBright}ra${ansi.reset}  ${ansi.dim}${tagline(sessionId)}${ansi.reset}\n`)
-  process.stdout.write(`  ${ansi.dim}${model}  ·  ${sessionId}${ansi.reset}\n`)
-  process.stdout.write(`  ${ansi.dim}/clear  /attach  /skill  /resume${ansi.reset}\n\n`)
+  process.stdout.write(`${ansi.bold}${ansi.cyanBright}ra${ansi.reset}  ${ansi.dim}${tagline(sessionId)}${ansi.reset}\n`)
+  process.stdout.write(`${ansi.dim}${model}  ·  ${sessionId}${ansi.reset}\n`)
+  process.stdout.write(`${ansi.dim}/clear  /attach  /skill  /resume${ansi.reset}\n\n`)
 }
 
 export function printResumeHeader(sessionId: string, messageCount: number): void {
-  process.stdout.write(`  ${ansi.dim}↩ ${sessionId}  ·  ${messageCount} messages${ansi.reset}\n\n`)
+  process.stdout.write(`${ansi.dim}↩ ${sessionId}  ·  ${messageCount} messages${ansi.reset}\n\n`)
 }
 
 // ---------------------------------------------------------------------------
@@ -71,10 +71,10 @@ let spinnerStart = 0
 export function startSpinner(): void {
   if (spinnerTimer) return
   spinnerStart = Date.now()
-  process.stdout.write(`  ${ansi.dim}…${ansi.reset}`)
+  process.stdout.write(`${ansi.dim}…${ansi.reset}`)
   spinnerTimer = setInterval(() => {
     const elapsed = ((Date.now() - spinnerStart) / 1000).toFixed(1)
-    process.stdout.write(`\r  ${ansi.dim}… ${elapsed}s${ansi.reset}`)
+    process.stdout.write(`\r${ansi.dim}… ${elapsed}s${ansi.reset}`)
   }, 200)
 }
 
@@ -84,23 +84,17 @@ export function stopSpinner(silent = false): void {
     spinnerTimer = null
     process.stdout.write('\r\x1b[K')
   }
-  if (!silent) process.stdout.write(RESPONSE_PREFIX)
 }
 
 export function closeAssistantBox(): void {
   process.stdout.write('\n\n')
 }
 
-/** Prefix written at the start of each response line (2 visible chars). */
-export const RESPONSE_PREFIX = `  `
-/** Visible column width of RESPONSE_PREFIX. */
-export const RESPONSE_PREFIX_LEN = 2
-
 // ANSI-specific off codes (don't reset ALL styles, just the specific one)
 const ansiOff = { bold: '\x1b[22m', fg: '\x1b[39m' } as const
 
 /** Stream writer with optional incremental markdown rendering.
- *  Plain mode: replaces newlines with newline + indent prefix.
+ *  Plain mode: passes text through unchanged.
  *  Markdown mode: detects code fences, headings, bold, and inline code
  *  character-by-character for flicker-free streaming display. */
 export class StreamBuffer {
@@ -120,7 +114,7 @@ export class StreamBuffer {
   }
 
   write(text: string): string {
-    if (!this.markdown) return text.replaceAll('\n', '\n' + RESPONSE_PREFIX)
+    if (!this.markdown) return text
     let out = ''
     for (const ch of text) out += this.processChar(ch)
     return out
@@ -152,7 +146,7 @@ export class StreamBuffer {
         this.skipLine = false
         this.atLineStart = true
         this.lineStartBuf = ''
-        return '\n' + RESPONSE_PREFIX
+        return '\n'
       }
       return ''
     }
@@ -160,7 +154,7 @@ export class StreamBuffer {
     // Buffering at line start to detect code fences and headings
     if (this.atLineStart) {
       if (ch === '\n') {
-        const out = this.flushBuf() + '\n' + RESPONSE_PREFIX
+        const out = this.flushBuf() + '\n'
         this.lineStartBuf = ''
         return out
       }
@@ -203,7 +197,7 @@ export class StreamBuffer {
       let out = ''
       if (this.pendingStar) { out += '*'; this.pendingStar = false }
       if (this.inHeading) { out += ansiOff.bold; this.inHeading = false }
-      out += '\n' + RESPONSE_PREFIX
+      out += '\n'
       this.atLineStart = true
       this.lineStartBuf = ''
       return out
@@ -264,14 +258,14 @@ function truncLine(s: string, max: number): string {
 
 /** Format the ◆ header line for a tool call. */
 function toolHeader(name: string, detail: string): string {
-  return `  ${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${detail}${ansi.reset}\n`
+  return `${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${detail}${ansi.reset}\n`
 }
 
 /** Format the ✔/✗ result line that replaces the ◆ header. */
 function toolResultHeader(name: string, detail: string, resultDetail: string, isError = false): string {
   const suffix = detail ? `${detail} ${ansi.dim}— ${resultDetail}` : resultDetail
   const icon = isError ? `${ansi.red}✗` : `${ansi.greenBright}✔`
-  return `  ${icon} ${name}${ansi.reset} ${ansi.dim}${suffix}${ansi.reset}`
+  return `${icon} ${name}${ansi.reset} ${ansi.dim}${suffix}${ansi.reset}`
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +276,7 @@ function formatEditDiffLines(parsed: Record<string, unknown>, cols: number): str
   const { old_string, new_string } = parsed as { old_string?: string; new_string?: string }
   if (old_string == null || new_string == null) return []
 
-  const indent = '    '
+  const indent = '  '
   const usable = cols - indent.length - 2 // -2 for "- " / "+ " prefix
   const lines: string[] = []
 
@@ -330,7 +324,7 @@ const toolDetailExtractors: Record<string, (p: Record<string, unknown>, cols: nu
   Bash(p, cols) {
     const cmd = String(p.command ?? '')
     const firstLine = cmd.split('\n')[0] ?? ''
-    const maxLen = cols - 8 // "  ◆ Bash " prefix
+    const maxLen = cols - 6 // "◆ Bash " prefix
     return truncLine(firstLine, maxLen)
   },
   WebFetch(p) {
@@ -389,7 +383,7 @@ export function printToolCall(state: TuiStreamState, id: string, name: string, a
     } catch {
       detail = args.replace(/\s+/g, ' ').trim()
     }
-    const prefix = `  ◆ ${name} `
+    const prefix = `◆ ${name} `
     const maxFlat = cols - prefix.length - 1
     detail = detail.length > maxFlat ? detail.slice(0, maxFlat) + '…' : detail
   }
@@ -482,6 +476,19 @@ export function printToolResult(state: TuiStreamState, id: string, name: string,
 }
 
 // ---------------------------------------------------------------------------
+// User message echo — framed with dim lines to separate from model output
+// ---------------------------------------------------------------------------
+
+export function printUserMessage(msg: string): void {
+  const cols = process.stdout.columns || 80
+  const line = `${ansi.dim}${'─'.repeat(cols)}${ansi.reset}`
+  const truncated = msg.length > cols ? msg.slice(0, cols - 1) + '…' : msg
+  // Move up to overwrite the readline prompt line and redraw with framing
+  process.stdout.write('\x1b[A\r\x1b[J')
+  process.stdout.write(`${line}\n${ansi.bold}${truncated}${ansi.reset}\n${line}\n\n`)
+}
+
+// ---------------------------------------------------------------------------
 // Status / error output
 // ---------------------------------------------------------------------------
 
@@ -490,19 +497,19 @@ export function printStatus(msg: string): void {
 }
 
 export function printCommandResponse(msg: string): void {
-  process.stdout.write(`  ${ansi.dim}${msg}${ansi.reset}\n`)
+  process.stdout.write(`${ansi.dim}${msg}${ansi.reset}\n`)
 }
 
 export function printError(msg: string): void {
-  process.stdout.write(`  ${ansi.red}✗ ${msg}${ansi.reset}\n`)
+  process.stdout.write(`${ansi.red}✗ ${msg}${ansi.reset}\n`)
 }
 
 export function printInterrupt(msg: string): void {
   process.stdout.write(`\n${ansi.yellow}${msg}${ansi.reset}\n`)
 }
 
-// Styled prompt for readline — ANSI OK here, cursor math only breaks on very long wrapped lines
-export const PROMPT = `\x1b[96m›\x1b[0m `
+// Styled prompt for readline
+export const PROMPT = `${ansi.dim}>${ansi.reset} `
 
 // ---------------------------------------------------------------------------
 // TUI streaming state
@@ -551,11 +558,11 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
     if (state.thinkingCollapsed) return
     if (!state.thinkingOpened) {
       stopSpinner(true)
-      process.stdout.write(`  ${ansi.dim}╌╌ thinking ╌╌${ansi.reset}\n  ${ansi.dim}`)
+      process.stdout.write(`${ansi.dim}╌╌ thinking ╌╌${ansi.reset}\n${ansi.dim}`)
       state.thinkingOpened = true
       state.thinkingStartTime = Date.now()
-      state.thinkingLines = 1 // printThinkingStart writes 1 \n
-      const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
+      state.thinkingLines = 1
+      const contentWidth = process.stdout.columns || 80
       state.thinkingBuf = new StreamBuffer(contentWidth)
     }
     if (delta && state.thinkingBuf) {
@@ -568,14 +575,14 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
   } else if (chunkType === 'text') {
     if (state.thinkingOpened) collapseThinking(state)
     if (!state.boxOpened) {
-      stopSpinner()
+      stopSpinner(true)
       // Add visual separation after a tools section
       if (state.activeTools.length > 0) {
         process.stdout.write('\n')
         state.activeTools = []
       }
       state.boxOpened = true
-      const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
+      const contentWidth = process.stdout.columns || 80
       state.streamBuf = new StreamBuffer(contentWidth, state.markdown)
     }
     if (delta && state.streamBuf) process.stdout.write(state.streamBuf.write(delta))
@@ -590,7 +597,7 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
     }
     stopSpinner(true)
     state.pendingToolNames.push(toolName)
-    process.stdout.write(`  ${ansi.yellow}◆ ${toolName}${ansi.reset}\n`)
+    process.stdout.write(`${ansi.yellow}◆ ${toolName}${ansi.reset}\n`)
   }
 }
 
@@ -618,7 +625,7 @@ export function collapseThinking(state: TuiStreamState): void {
   }
 
   const elapsed = ((Date.now() - state.thinkingStartTime) / 1000).toFixed(1)
-  process.stdout.write(`  ${ansi.dim}╌╌ thinking (${elapsed}s) ╌╌${ansi.reset}\n`)
+  process.stdout.write(`${ansi.dim}╌╌ thinking (${elapsed}s) ╌╌${ansi.reset}\n`)
 
   state.thinkingCollapsed = true
   state.thinkingOpened = false

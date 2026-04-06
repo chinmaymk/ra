@@ -2,8 +2,8 @@ import { describe, it, expect, afterEach } from 'bun:test'
 import {
   ansi, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
-  printCommandResponse, printError, collapseThinking, createStreamState,
-  handleStreamChunk, clearPendingTools, StreamBuffer, RESPONSE_PREFIX,
+  printCommandResponse, printError, printUserMessage, collapseThinking, createStreamState,
+  handleStreamChunk, clearPendingTools, StreamBuffer,
 } from '../../src/interfaces/tui'
 import { captureStdout } from '../fixtures'
 
@@ -57,11 +57,11 @@ describe('spinner', () => {
     expect(output).toContain('\x1b[K')
   })
 
-  it('stopSpinner writes prefix even when no spinner running', () => {
+  it('stopSpinner is no-op when no spinner running', () => {
     const output = captureStdout(() => {
-      stopSpinner() // no spinner running, just writes response prefix
+      stopSpinner()
     })
-    expect(output).toBe('  ')
+    expect(output).toBe('')
   })
 
   it('shows elapsed indicator', () => {
@@ -276,7 +276,6 @@ describe('printToolResult', () => {
     captureStdout(() => printToolCall(state, 'tc-1', 'Read', '{"path":"/tmp/x"}'))
     expect(state.activeTools).toHaveLength(1)
     captureStdout(() => printToolResult(state, 'tc-1', 'Read', 5))
-    // Non-TTY falls through, but tool should still be trackable
     expect(state.activeTools).toHaveLength(0)
   })
 
@@ -298,6 +297,21 @@ describe('printToolResult', () => {
   })
 })
 
+describe('printUserMessage', () => {
+  it('outputs user message with separator lines', () => {
+    const output = captureStdout(() => printUserMessage('hello world'))
+    expect(output).toContain('─')
+    expect(output).toContain('hello world')
+    expect(output).toContain(ansi.bold)
+  })
+
+  it('truncates long messages', () => {
+    const long = 'x'.repeat(200)
+    const output = captureStdout(() => printUserMessage(long))
+    expect(output).toContain('…')
+  })
+})
+
 describe('printStatus', () => {
   it('outputs dimmed status message', () => {
     const output = captureStdout(() => printStatus('Processing...'))
@@ -307,7 +321,7 @@ describe('printStatus', () => {
 })
 
 describe('printCommandResponse', () => {
-  it('outputs indented dimmed response', () => {
+  it('outputs dimmed response', () => {
     const output = captureStdout(() => printCommandResponse('Session saved.'))
     expect(output).toContain('Session saved.')
   })
@@ -348,16 +362,13 @@ describe('collapseThinking', () => {
 describe('handleStreamChunk text', () => {
   it('outputs each text chunk immediately to stdout', () => {
     const state = createStreamState()
-    // First text chunk should open the box AND output the text
     const out1 = captureStdout(() => handleStreamChunk(state, 'text', 'Hello'))
     expect(out1).toContain('Hello')
     expect(state.boxOpened).toBe(true)
 
-    // Subsequent chunks also appear immediately (no buffering until newline)
     const out2 = captureStdout(() => handleStreamChunk(state, 'text', ' world'))
     expect(out2).toContain(' world')
 
-    // Newline chunk also appears immediately
     const out3 = captureStdout(() => handleStreamChunk(state, 'text', '\nline two'))
     expect(out3).toContain('\n')
     expect(out3).toContain('line two')
@@ -365,10 +376,8 @@ describe('handleStreamChunk text', () => {
 
   it('adds spacing after tools section when text starts', () => {
     const state = createStreamState()
-    // Simulate a completed tool
     state.activeTools.push({ id: 'tc-1', name: 'Read', detail: '/tmp/x', lineCount: 1 })
     const output = captureStdout(() => handleStreamChunk(state, 'text', 'Hello'))
-    // Should contain an extra newline for spacing
     expect(output).toContain('\n')
     expect(output).toContain('Hello')
     expect(state.activeTools).toHaveLength(0)
@@ -413,57 +422,30 @@ describe('handleStreamChunk tool_call_start', () => {
   })
 })
 
-describe('StreamBuffer', () => {
-  const P = RESPONSE_PREFIX
-
-  it('outputs text immediately without buffering', () => {
+describe('StreamBuffer plain mode', () => {
+  it('passes through text unchanged', () => {
     const b = new StreamBuffer(40)
     expect(b.write('hello world')).toBe('hello world')
-    // end() is a no-op since everything was already written
     expect(b.end()).toBe('')
   })
 
-  it('replaces newlines with newline + prefix', () => {
+  it('passes through newlines unchanged', () => {
     const b = new StreamBuffer(40)
-    const out = b.write('hello world\n')
-    expect(out).toBe('hello world\n' + P)
-  })
-
-  it('streams each chunk immediately', () => {
-    const b = new StreamBuffer(40)
-    expect(b.write('hel')).toBe('hel')
-    expect(b.write('lo ')).toBe('lo ')
-    expect(b.write('world')).toBe('world')
-    expect(b.write('\n')).toBe('\n' + P)
-  })
-
-  it('handles multiple lines in one chunk', () => {
-    const b = new StreamBuffer(40)
-    const out = b.write('line one\nline two\n')
-    expect(out).toBe('line one\n' + P + 'line two\n' + P)
-  })
-
-  it('handles blank lines (paragraph breaks)', () => {
-    const b = new StreamBuffer(40)
-    const out = b.write('para one\n\npara two\n')
-    expect(out).toBe('para one\n' + P + '\n' + P + 'para two\n' + P)
+    expect(b.write('line one\nline two\n')).toBe('line one\nline two\n')
   })
 })
 
 describe('StreamBuffer markdown mode', () => {
-  const P = RESPONSE_PREFIX
-
-  it('passes through plain text like non-markdown mode', () => {
+  it('passes through plain text', () => {
     const b = new StreamBuffer(80, true)
     expect(b.write('hello world')).toBe('hello world')
   })
 
-  it('handles newlines with prefix', () => {
+  it('handles newlines', () => {
     const b = new StreamBuffer(80, true)
     const out = b.write('line one\nline two\n')
     expect(out).toContain('line one')
     expect(out).toContain('line two')
-    expect(out).toContain(P)
   })
 
   it('renders code blocks with │ border', () => {
@@ -523,7 +505,6 @@ describe('StreamBuffer markdown mode', () => {
   it('does not apply inline formatting inside code blocks', () => {
     const b = new StreamBuffer(80, true)
     const out = b.write('```\nconst **x** = `y`\n```\n')
-    // Inside code blocks, ** and ` should pass through unchanged
     expect(out).toContain('**x**')
     expect(out).toContain('`y`')
   })
@@ -541,17 +522,15 @@ describe('StreamBuffer markdown mode', () => {
   it('shows │ for empty lines inside code blocks', () => {
     const b = new StreamBuffer(80, true)
     const out = b.write('```\nline1\n\nline2\n```\n')
-    // Should have │ for the empty line too
     const lines = out.split('\n')
     const borderLines = lines.filter(l => l.includes('│'))
-    expect(borderLines.length).toBeGreaterThanOrEqual(3) // line1, empty, line2
+    expect(borderLines.length).toBeGreaterThanOrEqual(3)
   })
 
   it('flushes pending state on end()', () => {
     const b = new StreamBuffer(80, true)
     b.write('**bold start')
     const end = b.end()
-    // Should close the bold styling
     expect(end).toContain('\x1b[22m') // bold off
   })
 })
@@ -564,7 +543,6 @@ describe('tagline determinism', () => {
   })
 
   it('can produce different taglines for different session ids', () => {
-    // With enough different IDs, we should get at least one different tagline
     const outputs = new Set<string>()
     for (let i = 0; i < 100; i++) {
       const out = captureStdout(() => printHeader('m', `session-${i}`))

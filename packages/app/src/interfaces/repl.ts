@@ -108,6 +108,7 @@ export class Repl {
             tui.printError(errorMessage(err))
           }
         } else {
+          tui.printUserMessage(trimmed)
           await this.processInput(trimmed)
         }
         processing = false
