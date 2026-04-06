@@ -10,7 +10,6 @@
 
 <p align="center">
   <a href="#install">Install</a> &middot;
-  <a href="#the-loop">The Loop</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
   <a href="#tools">Tools</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
@@ -34,17 +33,7 @@ ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache co
 ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
 
-## Install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
-```
-
-Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and LiteLLM — switch with `--provider`. [All providers →](https://chinmaymk.github.io/ra/providers/)
-
-## The Loop
-
-No arbitrary iteration caps — the agent runs until the job is done. You set the budget, ra enforces it:
+No arbitrary iteration caps — the agent runs until the job is done. You set the budget, ra enforces it. Token limits and duration caps trigger a clean shutdown, not a crash. Adaptive thinking scales reasoning effort automatically — high for planning, low for execution — so you're not burning tokens on boilerplate.
 
 ```yaml
 agent:
@@ -53,7 +42,13 @@ agent:
   thinking: adaptive        # scales reasoning effort automatically
 ```
 
-Token budgets and duration limits trigger a clean shutdown, not a crash. Adaptive thinking starts high for planning and tapers off during execution — so you're not burning tokens on boilerplate. Context compaction kicks in automatically near the window limit — no dropped conversations, no silent truncation.
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
+```
+
+Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and LiteLLM — switch with `--provider`. [All providers →](https://chinmaymk.github.io/ra/providers/)
 
 ## Middleware
 
