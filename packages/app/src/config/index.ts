@@ -448,7 +448,7 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
 }
 
 const VALID_PROVIDERS = new Set<string>([
-  'anthropic', 'openai', 'openai-completions', 'google', 'ollama', 'bedrock', 'azure', 'anthropic-agents-sdk',
+  'anthropic', 'openai', 'openai-completions', 'google', 'ollama', 'bedrock', 'azure', 'codex', 'anthropic-agents-sdk',
 ])
 
 const VALID_INTERFACES = new Set<string>([
