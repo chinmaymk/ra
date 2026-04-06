@@ -15,6 +15,7 @@ import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool
 export interface BedrockProviderOptions {
   region?: string
   apiKey?: string
+  baseURL?: string
 }
 
 export class BedrockProvider implements IProvider {
@@ -25,6 +26,7 @@ export class BedrockProvider implements IProvider {
     this.client = new BedrockRuntimeClient({
       region: options.region ?? 'us-east-1',
       ...(options.apiKey && { token: { token: options.apiKey } }),
+      ...(options.baseURL && { endpoint: options.baseURL }),
     })
   }
 
