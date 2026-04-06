@@ -1,7 +1,7 @@
 import { query, createSdkMcpServer, tool as sdkTool } from '@anthropic-ai/claude-agent-sdk'
 import type { SDKMessage, SDKPartialAssistantMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import { z } from 'zod'
+import { z } from 'zod/v4'
 import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, TokenUsage, ThinkingLevel } from './types'
 
@@ -74,6 +74,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       },
       persistSession: false,
       enableFileCheckpointing: false,
+      includePartialMessages: true,
       plugins: [],
 
       // ── Tool & permission isolation ───────────────────────────────
@@ -172,7 +173,14 @@ export class AnthropicAgentsSdkProvider implements IProvider {
           break
       }
     }
-    return parts.join('\n\n')
+    const formatted = parts.join('\n\n')
+    // When conversation ends with tool results, add an opening assistant tag
+    // so the model continues as the assistant instead of echoing the XML history
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg?.role === 'tool') {
+      return formatted + '\n\n<assistant>\n'
+    }
+    return formatted
   }
 
   // ── MCP tool schemas ────────────────────────────────────────────────
@@ -353,7 +361,7 @@ function jsonSchemaTypeToZod(prop: Record<string, unknown>): z.ZodType {
       return z.array(z.unknown())
     case 'object':
       if (prop.properties) return z.object(jsonSchemaToZodShape(prop))
-      return z.record(z.unknown())
+      return z.record(z.string(), z.unknown())
     default:
       return z.unknown()
   }

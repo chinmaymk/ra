@@ -69,6 +69,7 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(o.settings.respectGitignore).toBe(false)
     })
     it('disables file checkpointing', async () => { expect((await getOptions()).enableFileCheckpointing).toBe(false) })
+    it('enables partial messages for streaming', async () => { expect((await getOptions()).includePartialMessages).toBe(true) })
     it('disables plugins', async () => { expect((await getOptions()).plugins).toEqual([]) })
     it('disables built-in tools', async () => { expect((await getOptions()).tools).toEqual([]) })
     it('bypasses permissions', async () => {
@@ -129,6 +130,20 @@ describe('AnthropicAgentsSdkProvider', () => {
         { role: 'tool', content: 'not found', toolCallId: 'tc_1', isError: true },
       ])
       expect(result).toContain('<tool_result id="tc_1" error="true">')
+    })
+
+    it('appends opening assistant tag when conversation ends with tool result', () => {
+      const result = provider.formatConversation([
+        { role: 'user', content: 'read it' },
+        { role: 'assistant', content: 'Sure.', toolCalls: [{ id: 'tc_1', name: 'Read', arguments: '{}' }] },
+        { role: 'tool', content: 'contents', toolCallId: 'tc_1' },
+      ])
+      expect(result).toEndWith('\n\n<assistant>\n')
+    })
+
+    it('does not append assistant tag when conversation ends with user message', () => {
+      const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
+      expect(result).not.toContain('<assistant>')
     })
   })
 
