@@ -172,7 +172,7 @@ ra --inspector
 - [x] Built-in inspector / observability
 - [x] Recipes system
 - [ ] Multi-agent orchestration improvements
-- [ ] Smarter context management and compaction
+- [ ] Compaction
 
 ## Docs
 
