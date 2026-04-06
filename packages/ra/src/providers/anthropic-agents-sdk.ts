@@ -3,62 +3,35 @@ import type { SDKMessage, SDKPartialAssistantMessage, ThinkingConfig, EffortLeve
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import { z } from 'zod'
 import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
-import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage, ThinkingLevel } from './types'
-
-/**
- * Called before each tool execution in the MCP bridge.
- * Return a string to deny (the string is the denial reason).
- * Return undefined to allow.
- */
-export type ToolPermissionCheck = (toolName: string, toolInput: Record<string, unknown>) => Promise<string | undefined>
+import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, TokenUsage, ThinkingLevel } from './types'
 
 export interface AnthropicAgentsSdkProviderOptions {
   /** Default model (overridden by ChatRequest.model). */
   model?: string
-  /**
-   * Permission check called before each MCP tool execution.
-   * Wire this to ra's permission system (createPermissionsMiddleware) in bootstrap.
-   * When it returns a string, the tool call is denied and the reason is sent to the model.
-   */
-  checkToolPermission?: ToolPermissionCheck
 }
 
 /**
- * Provider that wraps the Anthropic Agent SDK (claude-agent-sdk).
+ * Provider that wraps the Anthropic Agent SDK as a **model interface only**.
  *
- * Uses the Anthropic subscription for model calls instead of API credits.
- * The SDK handles the full agent loop autonomously — model calls, tool
- * execution (via MCP bridge to ra's tool registry), and multi-turn
- * conversations all happen inside a single stream() call.
+ * The SDK handles model calls (using the user's Anthropic subscription),
+ * while ra owns everything else: context engineering, tool execution,
+ * permissions, middleware, and the agent loop.
  *
- * Ra's tools are registered as MCP tools with real handlers that:
- * 1. Check permissions via the checkToolPermission callback
- * 2. Execute the tool via tool.execute()
- * 3. Return the result (or denial reason) to the SDK
- *
- * Tool activity (calls + results) is streamed as text chunks so the user
- * sees what's happening in real time.
- *
- * All SDK context engineering is disabled — ra owns context:
- * - settingSources: []                    → no CLAUDE.md / .claude/settings.json
- * - settings.autoMemoryEnabled: false     → no auto-memory files
- * - settings.autoDreamEnabled: false      → no background consolidation
- * - settings.includeGitInstructions: false→ no git instructions injected
- * - settings.respectGitignore: false      → no .gitignore reading
- * - persistSession: false                 → no session files on disk
- * - enableFileCheckpointing: false        → no file tracking
- * - plugins: []                           → no plugins from disk
- * - tools: []                             → no built-in tools
- * - systemPrompt: string                  → REPLACES SDK default
+ * Key design:
+ * - Fresh subprocess per turn — `query()` is called each `stream()` invocation
+ *   with the full conversation history serialized as XML-tagged text.
+ * - Tools registered as MCP schemas with no-op handlers (model sees them)
+ * - maxTurns=1 ensures the SDK does exactly one model call and returns
+ * - Raw stream events parsed into tool_call_start/delta/end chunks for ra's loop
+ * - Tool names stripped of SDK's `mcp__<server>__` prefix to match ra's registry
+ * - All SDK context engineering disabled — ra owns context
  */
 export class AnthropicAgentsSdkProvider implements IProvider {
   readonly name = 'anthropic-agents-sdk'
   private defaultModel?: string
-  private checkToolPermission?: ToolPermissionCheck
 
   constructor(options: AnthropicAgentsSdkProviderOptions = {}) {
     this.defaultModel = options.model
-    this.checkToolPermission = options.checkToolPermission
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
@@ -67,20 +40,28 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       chunks.push(chunk)
     }
     const text = chunks.filter(c => c.type === 'text').map(c => c.delta).join('')
+    const toolCalls: IToolCall[] = []
+    const toolArgBuffers = new Map<string, { name: string; args: string }>()
+    for (const c of chunks) {
+      if (c.type === 'tool_call_start') toolArgBuffers.set(c.id, { name: c.name, args: '' })
+      else if (c.type === 'tool_call_delta') { const buf = toolArgBuffers.get(c.id); if (buf) buf.args += c.argsDelta }
+      else if (c.type === 'tool_call_end') {
+        const buf = toolArgBuffers.get(c.id)
+        if (buf) { toolCalls.push({ id: c.id, name: buf.name, arguments: buf.args }); toolArgBuffers.delete(c.id) }
+      }
+    }
     const done = chunks.find(c => c.type === 'done') as { type: 'done'; usage?: TokenUsage } | undefined
     return {
-      message: { role: 'assistant', content: text },
+      message: { role: 'assistant', content: text, ...(toolCalls.length && { toolCalls }) },
       usage: done?.usage,
     }
   }
 
-  buildParams(request: ChatRequest) {
-    const { system, filtered } = extractSystemMessages(request.messages)
-    const prompt = this.formatConversation(filtered)
+  buildOptions(request: ChatRequest) {
+    const { system } = extractSystemMessages(request.messages)
     const model = request.model || this.defaultModel
 
     return {
-      prompt,
       model,
       // ── Context isolation: ra owns ALL context engineering ──────────
       systemPrompt: system || 'You are a helpful AI assistant.',
@@ -101,6 +82,9 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       allowDangerouslySkipPermissions: true,
       includePartialMessages: true,
 
+      // ── Single turn — ra owns the loop ────────────────────────────
+      maxTurns: 1,
+
       // ── Thinking / effort ─────────────────────────────────────────
       ...this.mapThinking(request.thinking, request.thinkingBudgetCap),
       ...this.mapEffort(request.thinking),
@@ -108,11 +92,10 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const params = this.buildParams(request)
-    // Collect text chunks from tool activity so we can yield them between stream events
-    const toolTextQueue: string[] = []
+    const { filtered } = extractSystemMessages(request.messages)
+    const options = this.buildOptions(request)
     const mcpServer = request.tools?.length
-      ? this.buildMcpServer(request.tools, toolTextQueue)
+      ? this.buildMcpToolSchemas(request.tools)
       : undefined
 
     const abortController = new AbortController()
@@ -121,17 +104,17 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       request.signal.addEventListener('abort', () => abortController.abort(), { once: true })
     }
 
-    const { prompt, ...options } = params
+    const prompt = this.formatConversation(filtered)
     const session = query({
       prompt,
       options: {
         ...options,
         abortController,
-        ...(mcpServer && { mcpServers: { 'ra-tools': mcpServer } }),
+        ...(mcpServer && { mcpServers: { [MCP_SERVER_NAME]: mcpServer } }),
       },
     })
 
-    yield* withDoneGuard(this.parseSession(session, toolTextQueue))
+    yield* withDoneGuard(this.parseSession(session))
   }
 
   private mapThinking(thinking?: ThinkingLevel, budgetCap?: number): { thinking?: ThinkingConfig } {
@@ -146,130 +129,126 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     return { effort: map[thinking] }
   }
 
+  // ── Message formatting ───────────────────────────────────────────────
+
+  /**
+   * Format ra's conversation history as a text prompt for the SDK.
+   *
+   * For multi-turn conversations (after tool execution), the history is
+   * serialized as XML-tagged messages so the model can clearly follow
+   * the conversation thread.
+   */
   formatConversation(messages: IMessage[]): string {
     if (messages.length === 0) return ''
-    if (messages.length === 1 && messages[0]!.role === 'user') {
-      return this.formatContent(messages[0]!.content)
-    }
     const parts: string[] = []
     for (const msg of messages) {
       switch (msg.role) {
         case 'user':
-          parts.push(`[User]\n${this.formatContent(msg.content)}`)
+          parts.push(`<user>\n${extractTextContent(msg.content)}\n</user>`)
           break
         case 'assistant': {
-          let text = this.formatContent(msg.content)
+          let text = extractTextContent(msg.content)
           if (msg.toolCalls?.length) {
             for (const tc of msg.toolCalls) {
               text += `\n<tool_call id="${tc.id}" name="${tc.name}">${tc.arguments}</tool_call>`
             }
           }
-          parts.push(`[Assistant]\n${text}`)
+          parts.push(`<assistant>\n${text}\n</assistant>`)
           break
         }
         case 'tool':
-          parts.push(`[Tool Result id="${msg.toolCallId}"${msg.isError ? ' error="true"' : ''}]\n${this.formatContent(msg.content)}`)
+          parts.push(`<tool_result id="${msg.toolCallId}"${msg.isError ? ' error="true"' : ''}>\n${extractTextContent(msg.content)}\n</tool_result>`)
           break
       }
     }
     return parts.join('\n\n')
   }
 
-  private formatContent(content: string | ContentPart[]): string {
-    if (typeof content === 'string') return content
-    return content.map(part => {
-      if (part.type === 'text') return part.text
-      if (part.type === 'image') {
-        const src = part.source
-        return src.type === 'url'
-          ? `[Image: ${src.url}]`
-          : `[Image: ${src.mediaType} (base64, ${src.data.length} chars)]`
-      }
-      return `[File: ${part.mimeType}]`
-    }).join('\n')
-  }
+  // ── MCP tool schemas ────────────────────────────────────────────────
 
   /**
-   * Build an MCP server that bridges ra's tools to the Agent SDK.
+   * Build an MCP server with tool schemas only (no-op handlers).
    *
-   * Each MCP handler:
-   * 1. Pushes a text description of the tool call to toolTextQueue (for streaming display)
-   * 2. Checks permissions via checkToolPermission (if configured)
-   * 3. Executes the tool via tool.execute()
-   * 4. Pushes a text description of the result to toolTextQueue
-   * 5. Returns the result (or error) to the SDK
+   * The model sees these tools and can call them. The SDK may try to
+   * execute them, but we interrupt before that happens. Ra's loop
+   * handles actual tool execution.
    */
-  buildMcpServer(tools: ITool[], toolTextQueue: string[] = []) {
-    const permCheck = this.checkToolPermission
+  buildMcpToolSchemas(tools: ITool[]) {
     const mcpTools = tools.map(t => {
       const zodShape = jsonSchemaToZodShape(t.inputSchema)
       return sdkTool(
         t.name,
         t.description,
         zodShape,
-        async (args: Record<string, unknown>) => {
-          const argsStr = JSON.stringify(args)
-          toolTextQueue.push(`\n◆ ${t.name} ${argsStr}\n`)
-
-          // Permission check
-          if (permCheck) {
-            const denial = await permCheck(t.name, args)
-            if (denial) {
-              toolTextQueue.push(`✗ denied: ${denial}\n`)
-              return { content: [{ type: 'text' as const, text: denial }], isError: true }
-            }
-          }
-
-          try {
-            const result = await t.execute(args)
-            const text = typeof result === 'string' ? result : JSON.stringify(result)
-            const preview = text.length > 200 ? text.slice(0, 200) + '…' : text
-            toolTextQueue.push(`✓ ${t.name} (${text.length} chars)\n`)
-            return { content: [{ type: 'text' as const, text }] }
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            toolTextQueue.push(`✗ ${t.name} error: ${message}\n`)
-            return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true }
-          }
-        },
+        async () => ({ content: [{ type: 'text' as const, text: '' }] }),
       )
     })
-    return createSdkMcpServer({ name: 'ra-tools', tools: mcpTools })
+    return createSdkMcpServer({ name: MCP_SERVER_NAME, tools: mcpTools })
   }
+
+  // ── Stream parsing ──────────────────────────────────────────────────
 
   /**
    * Parse Agent SDK events into ra StreamChunks.
    *
-   * Yields text and thinking from all model turns. Between stream events,
-   * flushes any tool activity text that MCP handlers have queued up,
-   * so the user sees tool calls and results in real time.
+   * Reads messages from the session until the model turn completes.
+   * Tool calls are emitted as tool_call_start/delta/end so ra's AgentLoop
+   * can execute them. maxTurns=1 ensures the SDK stops after one model call.
+   *
+   * Tool names are stripped of the SDK's `mcp__<server>__` prefix.
    */
-  private async *parseSession(session: AsyncIterable<SDKMessage>, toolTextQueue: string[]): AsyncIterable<StreamChunk> {
+  private async *parseSession(session: AsyncIterable<SDKMessage>): AsyncIterable<StreamChunk> {
     let usage: TokenUsage | undefined
+    const activeToolCalls = new Map<number, string>()
 
-    for await (const msg of session) {
-      // Flush any pending tool activity text before processing the next event
-      while (toolTextQueue.length > 0) {
-        yield { type: 'text', delta: toolTextQueue.shift()! }
-      }
-
-      if (msg.type === 'stream_event') {
-        const event = (msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent
-        if (event.type === 'content_block_delta') {
-          if (event.delta.type === 'text_delta') {
-            yield { type: 'text', delta: event.delta.text }
-          } else if (event.delta.type === 'thinking_delta') {
-            yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
+    try {
+      for await (const msg of session) {
+        if (msg.type === 'stream_event') {
+          const event = (msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent
+          switch (event.type) {
+            case 'content_block_start':
+              if (event.content_block.type === 'tool_use') {
+                activeToolCalls.set(event.index, event.content_block.id)
+                yield { type: 'tool_call_start', id: event.content_block.id, name: stripMcpPrefix(event.content_block.name) }
+              }
+              break
+            case 'content_block_delta':
+              if (event.delta.type === 'text_delta') {
+                yield { type: 'text', delta: event.delta.text }
+              } else if (event.delta.type === 'input_json_delta') {
+                const toolCallId = activeToolCalls.get(event.index) ?? ''
+                yield { type: 'tool_call_delta', id: toolCallId, argsDelta: event.delta.partial_json }
+              } else if (event.delta.type === 'thinking_delta') {
+                yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
+              }
+              break
+            case 'content_block_stop': {
+              const toolCallId = activeToolCalls.get(event.index)
+              if (toolCallId) {
+                yield { type: 'tool_call_end', id: toolCallId }
+                activeToolCalls.delete(event.index)
+              }
+              break
+            }
           }
+        } else if (msg.type === 'result') {
+          usage = this.extractUsage(msg)
+          break
         }
-      } else if (msg.type === 'result') {
-        usage = this.extractUsage(msg)
       }
-    }
-
-    // Final flush of any remaining tool text
-    while (toolTextQueue.length > 0) {
-      yield { type: 'text', delta: toolTextQueue.shift()! }
+    } catch (err) {
+      // Expected SDK error when maxTurns is reached with pending tool calls:
+      // - "Reached maximum number of turns" — SDK's error_max_turns
+      // The tool call chunks have already been yielded; ra will execute them.
+      if (err && typeof err === 'object' && 'message' in err) {
+        const message = (err as Error).message
+        const isExpected =
+          message.includes('maximum number of turns') ||
+          message.includes('max_turns')
+        if (!isExpected) throw err
+      } else {
+        throw err
+      }
     }
     yield { type: 'done', ...(usage && { usage }) }
   }
@@ -280,7 +259,6 @@ export class AnthropicAgentsSdkProvider implements IProvider {
    * over the raw API usage field.
    */
   private extractUsage(msg: { subtype?: string; usage?: unknown; modelUsage?: unknown }): TokenUsage | undefined {
-    // modelUsage is a Record<string, ModelUsage> with camelCase fields — aggregated across all turns
     if (msg.modelUsage && typeof msg.modelUsage === 'object') {
       const models = msg.modelUsage as Record<string, {
         inputTokens?: number
@@ -303,7 +281,6 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       }
     }
 
-    // Fallback: raw API usage (snake_case fields from BetaUsage)
     if (!msg.usage) return undefined
     const u = msg.usage as {
       input_tokens?: number
@@ -320,6 +297,14 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       ...(cacheCreate && { cacheCreationTokens: cacheCreate }),
     }
   }
+}
+
+const MCP_SERVER_NAME = 'ra-tools'
+const MCP_PREFIX = `mcp__${MCP_SERVER_NAME}__`
+
+/** Strip the SDK's `mcp__ra-tools__` prefix from tool names so they match ra's registry. */
+function stripMcpPrefix(name: string): string {
+  return name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name
 }
 
 function jsonSchemaToZodShape(schema: Record<string, unknown>): Record<string, z.ZodType> {

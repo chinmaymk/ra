@@ -80,85 +80,85 @@ describe('AnthropicAgentsSdkProvider', () => {
       const o = await getOptions({ messages: [{ role: 'system', content: 'Pirate.' }, { role: 'user', content: 'hi' }] })
       expect(o.systemPrompt).toBe('Pirate.')
     })
-    it('does not set maxTurns', async () => { expect((await getOptions()).maxTurns).toBeUndefined() })
+    it('sets maxTurns to 1', async () => { expect((await getOptions()).maxTurns).toBe(1) })
   })
 
-  // ── buildParams ───────────────────────────────────────────────────
+  // ── buildOptions ──────────────────────────────────────────────────
 
-  describe('buildParams', () => {
+  describe('buildOptions', () => {
     it('maps thinking with budget cap', () => {
-      const p = new AnthropicAgentsSdkProvider().buildParams({ model: 'x', messages: [], thinking: 'high', thinkingBudgetCap: 10000 })
-      expect((p.thinking as { budgetTokens: number }).budgetTokens).toBe(10000)
+      const o = new AnthropicAgentsSdkProvider().buildOptions({ model: 'x', messages: [], thinking: 'high', thinkingBudgetCap: 10000 })
+      expect((o.thinking as { budgetTokens: number }).budgetTokens).toBe(10000)
     })
     it('maps thinking to effort', () => {
-      expect(new AnthropicAgentsSdkProvider().buildParams({ model: 'x', messages: [], thinking: 'low' }).effort).toBe('low')
+      expect(new AnthropicAgentsSdkProvider().buildOptions({ model: 'x', messages: [], thinking: 'low' }).effort).toBe('low')
+    })
+    it('always sets maxTurns to 1', () => {
+      expect(new AnthropicAgentsSdkProvider().buildOptions({ model: 'x', messages: [] }).maxTurns).toBe(1)
     })
   })
 
-  // ── MCP tool handlers ─────────────────────────────────────────────
+  // ── formatConversation ─────────────────────────────────────────────
 
-  describe('buildMcpServer', () => {
-    it('executes real tool', async () => {
-      new AnthropicAgentsSdkProvider().buildMcpServer([
-        { name: 'add', description: 'add', inputSchema: {}, execute: async (input: { a: number; b: number }) => input.a + input.b },
+  describe('formatConversation', () => {
+    const provider = new AnthropicAgentsSdkProvider()
+
+    it('wraps single user message in XML for cache-stable prefix', () => {
+      const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
+      expect(result).toBe('<user>\nhello\n</user>')
+    })
+
+    it('formats multi-turn with XML tags', () => {
+      const result = provider.formatConversation([
+        { role: 'user', content: 'read it' },
+        { role: 'assistant', content: 'Sure.', toolCalls: [{ id: 'tc_1', name: 'Read', arguments: '{"path":"f.txt"}' }] },
+        { role: 'tool', content: 'file contents', toolCallId: 'tc_1' },
       ])
-      const handler = mockSdkTool.mock.calls[0]![3] as (args: Record<string, unknown>) => Promise<unknown>
-      const result = await handler({ a: 1, b: 2 }) as { content: { text: string }[] }
-      expect(result.content[0]!.text).toBe('3')
+      expect(result).toContain('<user>')
+      expect(result).toContain('</user>')
+      expect(result).toContain('<assistant>')
+      expect(result).toContain('</assistant>')
+      expect(result).toContain('<tool_call id="tc_1" name="Read">')
+      expect(result).toContain('<tool_result id="tc_1">')
+      expect(result).toContain('</tool_result>')
+      expect(result).toContain('file contents')
     })
 
-    it('returns error on tool failure', async () => {
-      new AnthropicAgentsSdkProvider().buildMcpServer([
-        { name: 'fail', description: 'fail', inputSchema: {}, execute: async () => { throw new Error('boom') } },
+    it('marks error tool results', () => {
+      const result = provider.formatConversation([
+        { role: 'tool', content: 'not found', toolCallId: 'tc_1', isError: true },
       ])
-      const handler = mockSdkTool.mock.calls[0]![3] as (args: Record<string, unknown>) => Promise<unknown>
-      const result = await handler({}) as { content: { text: string }[]; isError: boolean }
-      expect(result.isError).toBe(true)
-      expect(result.content[0]!.text).toContain('boom')
+      expect(result).toContain('<tool_result id="tc_1" error="true">')
     })
+  })
 
-    it('pushes tool activity text to queue', async () => {
-      const queue: string[] = []
-      new AnthropicAgentsSdkProvider().buildMcpServer([
-        { name: 'echo', description: 'echo', inputSchema: {}, execute: async () => 'hello' },
-      ], queue)
-      const handler = mockSdkTool.mock.calls[0]![3] as (args: Record<string, unknown>) => Promise<unknown>
-      await handler({ text: 'hi' })
-      expect(queue.some(t => t.includes('echo'))).toBe(true)
-      expect(queue.some(t => t.includes('✓'))).toBe(true)
-    })
+  // ── MCP tool schemas ─────────────────────────────────────────────
 
-    it('checks permissions before executing', async () => {
-      const provider = new AnthropicAgentsSdkProvider({
-        checkToolPermission: async (name) => name === 'danger' ? 'blocked' : undefined,
-      })
-      const queue: string[] = []
-      provider.buildMcpServer([
-        { name: 'danger', description: 'danger', inputSchema: {}, execute: async () => 'should not run' },
-      ], queue)
-      const handler = mockSdkTool.mock.calls[0]![3] as (args: Record<string, unknown>) => Promise<unknown>
-      const result = await handler({}) as { content: { text: string }[]; isError: boolean }
-      expect(result.isError).toBe(true)
-      expect(result.content[0]!.text).toBe('blocked')
-      expect(queue.some(t => t.includes('denied'))).toBe(true)
-    })
-
-    it('allows tool when permission check passes', async () => {
-      const provider = new AnthropicAgentsSdkProvider({
-        checkToolPermission: async () => undefined,
-      })
-      provider.buildMcpServer([
-        { name: 'safe', description: 'safe', inputSchema: {}, execute: async () => 'ok' },
+  describe('buildMcpToolSchemas', () => {
+    it('registers tools with no-op handlers', async () => {
+      new AnthropicAgentsSdkProvider().buildMcpToolSchemas([
+        { name: 'read', description: 'read a file', inputSchema: { type: 'object', properties: { path: { type: 'string' } } }, execute: async () => 'contents' },
       ])
-      const handler = mockSdkTool.mock.calls[0]![3] as (args: Record<string, unknown>) => Promise<unknown>
-      const result = await handler({}) as { content: { text: string }[] }
-      expect(result.content[0]!.text).toBe('ok')
+      expect(mockSdkTool).toHaveBeenCalledTimes(1)
+      expect(mockSdkTool.mock.calls[0]![0]).toBe('read')
+
+      const handler = mockSdkTool.mock.calls[0]![3] as () => Promise<unknown>
+      const result = await handler() as { content: { text: string }[] }
+      expect(result.content[0]!.text).toBe('')
     })
   })
 
   // ── stream() ──────────────────────────────────────────────────────
 
   describe('stream()', () => {
+    it('passes prompt as XML-wrapped string', async () => {
+      mockQueryWith(resultMsg())
+      await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      const { prompt } = mockQuery.mock.calls[0]![0]
+      expect(typeof prompt).toBe('string')
+      expect(prompt).toBe('<user>\nhi\n</user>')
+    })
+
     it('yields text chunks', async () => {
       mockQueryWith(
         streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } }),
@@ -177,29 +177,43 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(chunks[0]).toEqual({ type: 'thinking', delta: 'Hmm' })
     })
 
-    it('flushes tool activity text between stream events', async () => {
-      // Simulate: SDK yields text, then tool handler pushes activity, then more text
-      const toolQueue: string[] = []
-      const provider = new AnthropicAgentsSdkProvider()
-      // Pre-push some tool activity text
-      toolQueue.push('\n◆ Read {"path":"f.txt"}\n')
-      toolQueue.push('✓ Read (42 chars)\n')
+    it('yields tool_call_start/delta/end chunks for tool_use blocks', async () => {
+      mockQueryWith(
+        streamEvent({ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tc_1', name: 'read_file' } }),
+        streamEvent({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"path":' } }),
+        streamEvent({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '"foo.txt"}' } }),
+        streamEvent({ type: 'content_block_stop', index: 1 }),
+        resultMsg(),
+      )
+      const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'read foo' }] }))
+      expect(chunks[0]).toEqual({ type: 'tool_call_start', id: 'tc_1', name: 'read_file' })
+      expect(chunks[1]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '{"path":' })
+      expect(chunks[2]).toEqual({ type: 'tool_call_delta', id: 'tc_1', argsDelta: '"foo.txt"}' })
+      expect(chunks[3]).toEqual({ type: 'tool_call_end', id: 'tc_1' })
+    })
 
-      // Access parseSession directly by building a mock session
-      mockQuery.mockReturnValue((async function* () {
-        yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Done' } })
-        yield resultMsg()
-      })())
+    it('strips mcp__ra-tools__ prefix from tool names', async () => {
+      mockQueryWith(
+        streamEvent({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tc_1', name: 'mcp__ra-tools__Read' } }),
+        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{}' } }),
+        streamEvent({ type: 'content_block_stop', index: 0 }),
+        resultMsg(),
+      )
+      const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'go' }] })) as { type: string; name?: string }[]
+      expect(chunks[0]!.name).toBe('Read')
+    })
 
-      // We can't easily inject toolQueue into stream(), so test the integration indirectly
-      // by verifying buildMcpServer pushes to queue
-      const tools = [{ name: 'Read', description: 'Read', inputSchema: {}, execute: async () => 'contents' }]
-      const queue: string[] = []
-      provider.buildMcpServer(tools, queue)
-      const handler = mockSdkTool.mock.calls[0]![3] as (args: Record<string, unknown>) => Promise<unknown>
-      await handler({ path: 'f.txt' })
-      expect(queue.length).toBeGreaterThan(0)
-      expect(queue.some(t => t.includes('◆ Read'))).toBe(true)
+    it('handles interleaved text and tool calls', async () => {
+      mockQueryWith(
+        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Let me read that.' } }),
+        streamEvent({ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tc_2', name: 'read' } }),
+        streamEvent({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{}' } }),
+        streamEvent({ type: 'content_block_stop', index: 1 }),
+        resultMsg(),
+      )
+      const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'go' }] })) as { type: string }[]
+      const types = chunks.map(c => c.type)
+      expect(types).toEqual(['text', 'tool_call_start', 'tool_call_delta', 'tool_call_end', 'done'])
     })
 
     it('extracts usage from modelUsage (preferred — has cache tokens)', async () => {
@@ -208,48 +222,25 @@ describe('AnthropicAgentsSdkProvider', () => {
         resultMsg({
           usage: { input_tokens: 100, output_tokens: 20 },
           modelUsage: {
-            'claude-sonnet-4-6': {
-              inputTokens: 100,
-              outputTokens: 20,
-              cacheReadInputTokens: 500,
-              cacheCreationInputTokens: 200,
-            },
+            'claude-sonnet-4-6': { inputTokens: 100, outputTokens: 20, cacheReadInputTokens: 500, cacheCreationInputTokens: 200 },
           },
         }),
       )
       const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as any[]
       const done = chunks.find((c: any) => c.type === 'done')
-      expect(done.usage.inputTokens).toBe(100 + 500 + 200)
+      expect(done.usage.inputTokens).toBe(800)
       expect(done.usage.outputTokens).toBe(20)
       expect(done.usage.cacheReadTokens).toBe(500)
       expect(done.usage.cacheCreationTokens).toBe(200)
     })
 
-    it('aggregates usage across multiple models in modelUsage', async () => {
-      mockQueryWith(
-        resultMsg({
-          modelUsage: {
-            'claude-sonnet-4-6': { inputTokens: 50, outputTokens: 10, cacheReadInputTokens: 100, cacheCreationInputTokens: 0 },
-            'claude-haiku-4-5-20251001': { inputTokens: 30, outputTokens: 5, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
-          },
-        }),
-      )
-      const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as any[]
-      const done = chunks.find((c: any) => c.type === 'done')
-      expect(done.usage.inputTokens).toBe(50 + 30 + 100)
-      expect(done.usage.outputTokens).toBe(15)
-      expect(done.usage.cacheReadTokens).toBe(100)
-    })
-
     it('falls back to raw usage when modelUsage is absent', async () => {
       mockQueryWith(
-        resultMsg({
-          usage: { input_tokens: 42, output_tokens: 7, cache_read_input_tokens: 100, cache_creation_input_tokens: 50 },
-        }),
+        resultMsg({ usage: { input_tokens: 42, output_tokens: 7, cache_read_input_tokens: 100, cache_creation_input_tokens: 50 } }),
       )
       const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as any[]
       const done = chunks.find((c: any) => c.type === 'done')
-      expect(done.usage.inputTokens).toBe(42 + 100 + 50)
+      expect(done.usage.inputTokens).toBe(192)
       expect(done.usage.outputTokens).toBe(7)
       expect(done.usage.cacheReadTokens).toBe(100)
       expect(done.usage.cacheCreationTokens).toBe(50)
@@ -265,6 +256,23 @@ describe('AnthropicAgentsSdkProvider', () => {
       const c = new AbortController(); c.abort()
       const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }], signal: c.signal }))
       expect(chunks).toEqual([{ type: 'done' }])
+    })
+  })
+
+  // ── chat() ────────────────────────────────────────────────────────
+
+  describe('chat()', () => {
+    it('collects tool calls from stream into response message', async () => {
+      mockQueryWith(
+        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Sure.' } }),
+        streamEvent({ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tc_1', name: 'calc' } }),
+        streamEvent({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"x":1}' } }),
+        streamEvent({ type: 'content_block_stop', index: 1 }),
+        resultMsg(),
+      )
+      const response = await new AnthropicAgentsSdkProvider().chat({ model: 'x', messages: [{ role: 'user', content: 'go' }] })
+      expect(response.message.content).toBe('Sure.')
+      expect(response.message.toolCalls).toEqual([{ id: 'tc_1', name: 'calc', arguments: '{"x":1}' }])
     })
   })
 })

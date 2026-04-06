@@ -21,6 +21,11 @@ function resultMsg(usage: Record<string, number> = { input_tokens: 10, output_to
   return { type: 'result', subtype: 'success', usage, uuid: 'u', session_id: 's' }
 }
 
+/** Create a mock async generator from messages. */
+function mockSession(messages: unknown[]) {
+  return (async function* () { for (const m of messages) yield m })()
+}
+
 describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
   beforeEach(() => {
     mockQuery.mockReset()
@@ -33,10 +38,10 @@ describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
   })
 
   it('text response flows through the loop', async () => {
-    mockQuery.mockReturnValue((async function* () {
-      yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } })
-      yield resultMsg()
-    })())
+    mockQuery.mockReturnValue(mockSession([
+      streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } }),
+      resultMsg(),
+    ]))
 
     const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x' })
     const result = await loop.run([{ role: 'user', content: 'hi' }])
@@ -44,97 +49,126 @@ describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
     expect(result.messages.at(-1)?.content).toContain('Hello')
   })
 
-  it('SDK handles tools autonomously — ra sees final text', async () => {
-    mockQuery.mockReturnValue((async function* () {
-      // SDK runs model → tool → model internally; we get text from all turns
-      yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Let me check.\n' } })
-      // Tool activity would be pushed to toolTextQueue by MCP handler
-      yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'The answer is 42.' } })
-      yield resultMsg()
-    })())
+  it('ra loop handles tool calls — executes tools and iterates', async () => {
+    let callCount = 0
+    mockQuery.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return mockSession([
+          streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Let me check.' } }),
+          streamEvent({ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tc_1', name: 'calc' } }),
+          streamEvent({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"x":21}' } }),
+          streamEvent({ type: 'content_block_stop', index: 1 }),
+          resultMsg(),
+        ])
+      }
+      return mockSession([
+        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'The answer is 42.' } }),
+        resultMsg(),
+      ])
+    })
 
     const tools = new ToolRegistry()
-    tools.register({ name: 'calc', description: 'calc', inputSchema: {}, execute: async () => 42 })
+    tools.register({ name: 'calc', description: 'calc', inputSchema: { type: 'object', properties: { x: { type: 'number' } } }, execute: async (input: { x: number }) => input.x * 2 })
 
     const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools, maxIterations: 10, model: 'x' })
     const result = await loop.run([{ role: 'user', content: 'calculate' }])
 
-    expect(result.iterations).toBe(1)
+    expect(result.iterations).toBe(2)
     expect(result.messages.at(-1)?.content).toContain('The answer is 42.')
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    expect(toolResult).toBeDefined()
+    expect(toolResult!.content).toBe('42')
   })
 
-  it('MCP handlers execute real tools', async () => {
-    mockQuery.mockReturnValue((async function* () {
-      yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'done' } })
-      yield resultMsg()
-    })())
-
-    const calls: unknown[] = []
-    const tools = new ToolRegistry()
-    tools.register({
-      name: 'track',
-      description: 'track',
-      inputSchema: { type: 'object', properties: { x: { type: 'number' } } },
-      execute: async (input: { x: number }) => { calls.push(input); return input.x * 2 },
+  it('ra middleware fires for tool execution', async () => {
+    let callCount = 0
+    mockQuery.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return mockSession([
+          streamEvent({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tc_1', name: 'echo' } }),
+          streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{}' } }),
+          streamEvent({ type: 'content_block_stop', index: 0 }),
+          resultMsg(),
+        ])
+      }
+      return mockSession([
+        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'done' } }),
+        resultMsg(),
+      ])
     })
 
-    const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools, maxIterations: 10, model: 'x' })
+    const tools = new ToolRegistry()
+    tools.register({ name: 'echo', description: 'echo', inputSchema: {}, execute: async () => 'ok' })
+
+    const middlewareCalls: string[] = []
+    const loop = new AgentLoop({
+      provider: new AnthropicAgentsSdkProvider(),
+      tools,
+      maxIterations: 10,
+      model: 'x',
+      middleware: {
+        beforeToolExecution: [async (ctx) => { middlewareCalls.push(`before:${ctx.toolCall.name}`) }],
+        afterToolExecution: [async (ctx) => { middlewareCalls.push(`after:${ctx.toolCall.name}`) }],
+      },
+    })
     await loop.run([{ role: 'user', content: 'go' }])
 
-    // Verify the MCP handler calls the real tool
-    const handler = mockSdkTool.mock.calls[0]![3] as (args: Record<string, unknown>) => Promise<unknown>
-    const result = await handler({ x: 5 }) as { content: { text: string }[] }
-    expect(result.content[0]!.text).toBe('10')
-    expect(calls).toEqual([{ x: 5 }])
+    expect(middlewareCalls).toEqual(['before:echo', 'after:echo'])
   })
 
-  it('permission check blocks denied tools', async () => {
-    mockQuery.mockReturnValue((async function* () {
-      yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } })
-      yield resultMsg()
-    })())
+  it('permissions middleware can deny tool calls', async () => {
+    let callCount = 0
+    mockQuery.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return mockSession([
+          streamEvent({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tc_1', name: 'danger' } }),
+          streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{}' } }),
+          streamEvent({ type: 'content_block_stop', index: 0 }),
+          resultMsg(),
+        ])
+      }
+      return mockSession([
+        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } }),
+        resultMsg(),
+      ])
+    })
 
     const executed: string[] = []
     const tools = new ToolRegistry()
-    tools.register({ name: 'safe', description: 'safe', inputSchema: {}, execute: async () => { executed.push('safe'); return 'ok' } })
     tools.register({ name: 'danger', description: 'danger', inputSchema: {}, execute: async () => { executed.push('danger'); return 'bad' } })
 
-    const provider = new AnthropicAgentsSdkProvider({
-      checkToolPermission: async (name) => name === 'danger' ? 'Permission denied: danger is blocked' : undefined,
+    const loop = new AgentLoop({
+      provider: new AnthropicAgentsSdkProvider(),
+      tools,
+      maxIterations: 10,
+      model: 'x',
+      middleware: {
+        beforeToolExecution: [async (ctx) => { if (ctx.toolCall.name === 'danger') ctx.deny('blocked by ra') }],
+      },
     })
+    const result = await loop.run([{ role: 'user', content: 'go' }])
 
-    const loop = new AgentLoop({ provider, tools, maxIterations: 10, model: 'x' })
-    await loop.run([{ role: 'user', content: 'go' }])
-
-    // Find handlers by tool name
-    const handlers = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>()
-    for (const call of mockSdkTool.mock.calls) {
-      handlers.set(call![0] as string, call![3] as (args: Record<string, unknown>) => Promise<unknown>)
-    }
-
-    // Verify safe tool works
-    const safeResult = await handlers.get('safe')!({}) as { content: { text: string }[] }
-    expect(safeResult.content[0]!.text).toBe('ok')
-
-    // Verify danger tool is blocked
-    const dangerResult = await handlers.get('danger')!({}) as { content: { text: string }[]; isError: boolean }
-    expect(dangerResult.isError).toBe(true)
-    expect(dangerResult.content[0]!.text).toContain('Permission denied')
-    expect(executed).toEqual(['safe']) // danger was never executed
+    expect(executed).toEqual([])
+    const toolResult = result.messages.find(m => m.role === 'tool')
+    expect(toolResult?.isError).toBe(true)
+    expect(toolResult?.content).toBe('blocked by ra')
   })
 
   it('system prompt forwarded', async () => {
-    mockQuery.mockReturnValue((async function* () { yield resultMsg() })())
+    mockQuery.mockReturnValue(mockSession([resultMsg()]))
     const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x' })
     await loop.run([{ role: 'system', content: 'Pirate.' }, { role: 'user', content: 'hi' }])
     expect(mockQuery.mock.calls[0]![0].options.systemPrompt).toBe('Pirate.')
   })
 
   it('thinking flows through', async () => {
-    mockQuery.mockReturnValue((async function* () {
-      yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Hmm' } })
-      yield resultMsg()
-    })())
+    mockQuery.mockReturnValue(mockSession([
+      streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Hmm' } }),
+      resultMsg(),
+    ]))
     const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x', thinking: 'high' })
     await loop.run([{ role: 'user', content: 'think' }])
     const opts = mockQuery.mock.calls[0]![0].options
@@ -142,8 +176,8 @@ describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
     expect(opts.effort).toBe('high')
   })
 
-  it('all SDK magic disabled', async () => {
-    mockQuery.mockReturnValue((async function* () { yield resultMsg() })())
+  it('all SDK magic disabled, maxTurns set to 1', async () => {
+    mockQuery.mockReturnValue(mockSession([resultMsg()]))
     const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x' })
     await loop.run([{ role: 'user', content: 'go' }])
 
@@ -158,7 +192,17 @@ describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
     expect(opts.plugins).toEqual([])
     expect(opts.tools).toEqual([])
     expect(opts.permissionMode).toBe('bypassPermissions')
-    expect(opts.maxTurns).toBeUndefined()
+    expect(opts.maxTurns).toBe(1)
+  })
+
+  it('passes prompt as XML-wrapped string', async () => {
+    mockQuery.mockReturnValue(mockSession([resultMsg()]))
+    const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x' })
+    await loop.run([{ role: 'user', content: 'hi' }])
+
+    const { prompt } = mockQuery.mock.calls[0]![0]
+    expect(typeof prompt).toBe('string')
+    expect(prompt).toBe('<user>\nhi\n</user>')
   })
 
   it('abort stops the loop', async () => {
