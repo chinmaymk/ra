@@ -498,7 +498,7 @@ export function printUserMessage(msg: string): void {
   // The top ─── line is already on screen from printPromptLine().
   // Move up to overwrite the "> " prompt line, redraw with bold, add bottom line.
   process.stdout.write('\x1b[A\r\x1b[J')
-  process.stdout.write(`${ansi.bold}${truncated}${ansi.reset}\n${line}\n\n`)
+  process.stdout.write(`${ansi.bold}${truncated}${ansi.reset}\n${line}\n`)
 }
 
 // ---------------------------------------------------------------------------
