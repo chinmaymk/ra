@@ -86,7 +86,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
   }
 
-  // Check for login subcommand: ra login codex
+  // Check for login subcommand: ra login <provider>
   if (userArgs[0] === 'login') {
     const provider = userArgs[1] ?? 'codex'
     return {
@@ -99,7 +99,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         runImmediately: false,
         listMemories: false,
         files: [],
-        subCommand: { kind: 'login', action: provider as 'codex', args: userArgs.slice(2) },
+        subCommand: { kind: 'login', action: provider, args: userArgs.slice(2) },
       },
     }
   }

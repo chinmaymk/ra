@@ -39,21 +39,36 @@ async function loadRegistryOps(kind: 'skill' | 'recipe'): Promise<RegistryOps> {
   return { install: installRecipe, remove: removeRecipe, list: listInstalledRecipes, defaultDir: defaultRecipeInstallDir }
 }
 
-/** Handle `ra login codex [--device-code]` subcommand. */
+/** Handle `ra login <provider>` subcommand. */
 async function runLoginCommand(cmd: SubCommand): Promise<void> {
-  if (cmd.action !== 'codex') {
-    console.error(`Unknown login provider: ${cmd.action}. Supported: codex`)
-    process.exit(1)
+  switch (cmd.action) {
+    case 'codex': {
+      const deviceCode = cmd.args.includes('--device-code')
+      const { loginCodex } = await import('../auth/codex')
+      try {
+        await loginCodex({ deviceCode })
+      } catch (err) {
+        console.error('Login failed:', errorMessage(err))
+        process.exit(1)
+      }
+      process.exit(0)
+      break
+    }
+    case 'claude': {
+      const proc = Bun.spawn(['claude', 'auth', 'login'], {
+        stdin: 'inherit',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      })
+      const exitCode = await proc.exited
+      process.exit(exitCode)
+      break
+    }
+    default:
+      console.error(`Unknown login provider: ${cmd.action}`)
+      console.error('Supported providers: codex, claude')
+      process.exit(1)
   }
-  const deviceCode = cmd.args.includes('--device-code')
-  const { loginCodex } = await import('../auth/codex')
-  try {
-    await loginCodex({ deviceCode })
-  } catch (err) {
-    console.error('Login failed:', errorMessage(err))
-    process.exit(1)
-  }
-  process.exit(0)
 }
 
 /** Handle `ra skill|recipe install|remove|list` subcommands. Exits the process. */

@@ -250,6 +250,11 @@ describe('parseArgs', () => {
       const r = parseArgs(dev('login', 'codex', '--device-code'))
       expect(r.meta.subCommand).toEqual({ kind: 'login', action: 'codex', args: ['--device-code'] })
     })
+
+    it('parses "login claude"', () => {
+      const r = parseArgs(dev('login', 'claude'))
+      expect(r.meta.subCommand).toEqual({ kind: 'login', action: 'claude', args: [] })
+    })
   })
 
   describe('--recipe flag', () => {
