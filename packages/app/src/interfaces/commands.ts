@@ -1,6 +1,6 @@
 import { errorMessage } from '@chinmaymk/ra'
 import { resolve } from 'path'
-import type { SubCommand } from './parse-args'
+import type { SubCommand, LoginSubCommand } from './parse-args'
 import type { IMessage } from '@chinmaymk/ra'
 import type { MemoryStore } from '../memory'
 import type { RaConfig } from '../config/types'
@@ -39,8 +39,32 @@ async function loadRegistryOps(kind: 'skill' | 'recipe'): Promise<RegistryOps> {
   return { install: installRecipe, remove: removeRecipe, list: listInstalledRecipes, defaultDir: defaultRecipeInstallDir }
 }
 
+const LOGIN_PROVIDERS: Record<string, { command: string; args: string[] }> = {
+  claude: { command: 'claude', args: ['auth', 'login'] },
+}
+
+/** Handle `ra login <provider>`. Spawns the provider's CLI for auth. Exits the process. */
+async function runLoginCommand(cmd: LoginSubCommand): Promise<void> {
+  const entry = LOGIN_PROVIDERS[cmd.provider]
+  if (!entry) {
+    console.error(`Unknown login provider: ${cmd.provider}`)
+    console.error('Supported providers:', Object.keys(LOGIN_PROVIDERS).join(', '))
+    process.exit(1)
+  }
+
+  const proc = Bun.spawn([entry.command, ...entry.args], {
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit',
+  })
+  const exitCode = await proc.exited
+  process.exit(exitCode)
+}
+
 /** Handle `ra skill|recipe install|remove|list` subcommands. Exits the process. */
 export async function runSubCommand(cmd: SubCommand): Promise<void> {
+  if (cmd.kind === 'login') return runLoginCommand(cmd)
+
   const { kind, action, args } = cmd
   const ops = await loadRegistryOps(kind)
 

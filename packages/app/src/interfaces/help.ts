@@ -63,6 +63,9 @@ PROVIDER OPTIONS
   --version, -v                       Print version and exit
   --help, -h                          Print this help message
 
+LOGIN
+  ra login claude                    Sign in via Claude Code (OAuth)
+
 SKILL MANAGEMENT
   ra skill install <source>           Install skill from GitHub, npm, or URL
   ra skill remove <name>              Remove an installed skill
