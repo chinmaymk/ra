@@ -4,6 +4,13 @@ News, releases, and updates from the ra project.
 
 <div class="blog-list">
 
+### [ra 0.0.7: Subscriptions, Shell Tools, and Hot-Reload](/blog/v0-0-7)
+<span class="blog-date">April 6, 2026</span>
+
+Two new providers for ChatGPT and Claude subscriptions, shell script tools in any language, config hot-reload, the oh-my-ra recipe, config validation, and better tool formatting.
+
+---
+
 ### [oh-my-ra: Your Agent, Your Rules](/blog/oh-my-ra)
 <span class="blog-date">April 6, 2026</span>
 

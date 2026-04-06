@@ -69,6 +69,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All Posts', link: '/blog/' },
+            { text: 'ra 0.0.7: Subscriptions, Shell Tools, and Hot-Reload', link: '/blog/v0-0-7' },
             { text: 'oh-my-ra: Your Agent, Your Rules', link: '/blog/oh-my-ra' },
             { text: 'Building AutoDream with ra', link: '/blog/autodream' },
             { text: 'Introducing ra', link: '/blog/introducing-ra' },
