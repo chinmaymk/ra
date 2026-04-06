@@ -1,4 +1,5 @@
 import { looksLikePath, resolvePath } from '../utils/paths'
+import { importFresh } from '../utils/import-fresh'
 import { errorMessage, NoopLogger } from '@chinmaymk/ra'
 import type { Logger, ITool } from '@chinmaymk/ra'
 import { hasShellPrefix, isShellPath } from '../shell'
@@ -67,8 +68,7 @@ async function loadOne(entry: string, cwd: string, logger: Logger): Promise<IToo
   const resolved = resolvePath(entry, cwd)
   let mod: Record<string, unknown>
   try {
-    // Bust Bun's module cache so re-imports pick up file changes
-    mod = await import(resolved + '?t=' + Date.now())
+    mod = await importFresh(resolved)
   } catch (err) {
     throw new Error(`Failed to import tool file "${resolved}": ${errorMessage(err)}`)
   }

@@ -1,4 +1,5 @@
 import { looksLikePath, resolvePath } from '../utils/paths'
+import { importFresh } from '../utils/import-fresh'
 import { errorMessage, NoopLogger } from '@chinmaymk/ra'
 import type { Logger } from '@chinmaymk/ra'
 import type { RaConfig } from '../config/types'
@@ -18,8 +19,7 @@ async function loadOne<T>(entry: string, hook: string, cwd: string, logger: Logg
   }
   if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)
-    // Bust Bun's module cache so re-imports pick up file changes
-    const mod = await import(resolved + '?t=' + Date.now())
+    const mod = await importFresh(resolved)
     if (typeof mod.default !== 'function') {
       throw new Error(`Middleware file "${resolved}" must export a default function`)
     }

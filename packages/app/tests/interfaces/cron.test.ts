@@ -120,6 +120,7 @@ function makeApp(overrides?: { provider?: IProvider }) {
       parallelToolCalls: true,
       maxTokenBudget: 0,
       maxDuration: 0,
+      hotReload: true,
       tools: { builtin: false, overrides: {} },
       skillDirs: [],
       permissions: {},

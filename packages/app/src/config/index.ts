@@ -62,7 +62,7 @@ const AGENT_KEYS = new Set([
   'provider', 'model', 'thinking', 'systemPrompt',
   'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
   'tools', 'skillDirs', 'permissions',
-  'middleware', 'context', 'compaction', 'memory',
+  'middleware', 'context', 'compaction', 'memory', 'hotReload',
 ])
 
 // Keys that belong under `app` when found at the top level (legacy flat config)

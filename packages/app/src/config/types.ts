@@ -110,6 +110,8 @@ export interface AgentConfig {
   maxTokenBudget: number
   /** Max wall-clock duration in milliseconds before the loop stops. 0 = unlimited. */
   maxDuration: number
+  /** Hot-reload config and referenced files (system prompt, tools, middleware) between loops. Default true. */
+  hotReload: boolean
   tools: ToolsConfig
   skillDirs: string[]
   permissions: PermissionsConfig

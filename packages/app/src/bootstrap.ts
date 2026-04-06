@@ -496,8 +496,15 @@ export async function bootstrap(
   }
 
   // ── Config hot-reload ──────────────────────────────────────────────
-  const configManager = new ConfigManager(config, opts.configFilePath, opts.loadOptions ?? {})
-  await configManager.init(opts.systemPromptPath)
+  let refreshIfNeeded: () => Promise<boolean>
+  if (agent.hotReload) {
+    const configManager = new ConfigManager(config, opts.configFilePath, opts.loadOptions ?? {})
+    await configManager.init(opts.systemPromptPath)
+    refreshIfNeeded = async () => refreshAppContext(ctx, configManager)
+    logger.info('hot-reload enabled')
+  } else {
+    refreshIfNeeded = async () => false
+  }
 
   // ── Shutdown ───────────────────────────────────────────────────────
   const shutdown = async () => {
@@ -525,7 +532,7 @@ export async function bootstrap(
     logger,
     tracer,
     shutdown,
-    refreshIfNeeded: async () => refreshAppContext(ctx, configManager),
+    refreshIfNeeded,
   }
 
   return ctx
