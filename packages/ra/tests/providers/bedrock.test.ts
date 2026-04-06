@@ -409,6 +409,26 @@ describe('BedrockProvider - credential wiring', () => {
     expect(lastClientConfig.endpoint).toBe('https://vpce.example.com')
   })
 
+  it('prepends https:// when baseURL has no protocol', () => {
+    new BedrockProvider({ baseURL: 'vpce.example.com' })
+    expect(lastClientConfig.endpoint).toBe('https://vpce.example.com')
+  })
+
+  it('prepends https:// when baseURL has host and port but no protocol', () => {
+    new BedrockProvider({ baseURL: 'proxy.local:8080' })
+    expect(lastClientConfig.endpoint).toBe('https://proxy.local:8080')
+  })
+
+  it('preserves http:// protocol in baseURL', () => {
+    new BedrockProvider({ baseURL: 'http://localhost:4566' })
+    expect(lastClientConfig.endpoint).toBe('http://localhost:4566')
+  })
+
+  it('does not set endpoint when baseURL is empty', () => {
+    new BedrockProvider({ baseURL: '' })
+    expect(lastClientConfig.endpoint).toBeUndefined()
+  })
+
   it('defaults region to us-east-1', () => {
     new BedrockProvider({})
     expect(lastClientConfig.region).toBe('us-east-1')

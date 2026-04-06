@@ -27,9 +27,10 @@ export class BedrockProvider implements IProvider {
 
   constructor(options: BedrockProviderOptions) {
     const hasExplicitCredentials = !!(options.accessKeyId && options.secretAccessKey)
+    const endpoint = normalizeEndpoint(options.baseURL)
     this.client = new BedrockRuntimeClient({
       region: options.region ?? 'us-east-1',
-      ...(options.baseURL && { endpoint: options.baseURL }),
+      ...(endpoint && { endpoint }),
       ...(hasExplicitCredentials && {
         credentials: {
           accessKeyId: options.accessKeyId!,
@@ -175,4 +176,10 @@ export class BedrockProvider implements IProvider {
     }
     return { role: 'assistant', content: textContent, ...(toolCalls.length && { toolCalls }) }
   }
+}
+
+/** Ensure the endpoint URL has a protocol so the AWS SDK can parse it. */
+function normalizeEndpoint(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`
 }
