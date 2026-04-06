@@ -172,9 +172,7 @@ ra --inspector
 - [x] Built-in inspector / observability
 - [x] Recipes system
 - [ ] Multi-agent orchestration improvements
-- [ ] Agent-to-agent communication protocol
 - [ ] Smarter context management and compaction
-- [ ] Plugin marketplace
 
 ## Docs
 
