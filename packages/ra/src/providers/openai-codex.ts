@@ -35,6 +35,9 @@ export class CodexProvider extends OpenAIResponsesProvider {
     const headers: Record<string, string> = {
       'oai-device-id': options.deviceId || randomUUID(),
       'oai-language': 'en-US',
+      // Required by the Codex backend — signals Responses API support
+      'openai-beta': 'responses=experimental',
+      'originator': 'ra',
     }
     const accountId = extractAccountId(options.accessToken)
     if (accountId) headers['chatgpt-account-id'] = accountId
