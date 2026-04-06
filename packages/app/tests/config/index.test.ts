@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { loadConfig } from '../../src/config'
+import { loadConfig, ConfigError } from '../../src/config'
 import { configHandle, homeDir } from '../../src/utils/paths'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
@@ -344,12 +344,12 @@ describe('type coercion after interpolation', () => {
     expect(c.app.logsEnabled).toBe(false)
   })
 
-  it('negative numbers are coerced correctly', async () => {
+  it('numbers from env vars are coerced correctly', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       agent: { maxIterations: '${ITERS}' },
     }))
-    const c = await loadConfig({ cwd: tmp, env: { ITERS: '-5' } })
-    expect(c.agent.maxIterations).toBe(-5)
+    const c = await loadConfig({ cwd: tmp, env: { ITERS: '5' } })
+    expect(c.agent.maxIterations).toBe(5)
   })
 
   it('zero is coerced correctly', async () => {
@@ -453,9 +453,9 @@ describe('config edge cases', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
-  it('empty config file throws during loading', async () => {
+  it('empty config file throws ConfigError', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), '')
-    await expect(loadConfig({ cwd: tmp })).rejects.toThrow()
+    await expect(loadConfig({ cwd: tmp })).rejects.toThrow('Config file is empty')
   })
 
   it('config file with empty JSON object uses all defaults', async () => {
@@ -561,10 +561,10 @@ describe('env var interpolation in config files', () => {
 
   it('resolves ${VAR-default} keeping empty string when var is empty', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      agent: { model: '${EMPTY_VAR-fallback}' },
+      agent: { systemPrompt: '${EMPTY_VAR-fallback}' },
     }))
     const c = await loadConfig({ cwd: tmp, env: { EMPTY_VAR: '' } })
-    expect(c.agent.model).toBe('')
+    expect(c.agent.systemPrompt).toBe('')
   })
 
   it('leaves strings without ${} patterns untouched', async () => {
@@ -836,5 +836,79 @@ describe('legacy flat config migration', () => {
     ].join('\n'))
     const c = await loadConfig({ cwd: tmp, env: {} })
     expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-direct')
+  })
+})
+
+describe('config validation', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-config-validate-${Date.now()}`)
+    mkdirSync(tmp, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('rejects invalid provider name', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ agent: { provider: 'invalid-provider' } }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow(ConfigError)
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('not a valid provider')
+  })
+
+  it('rejects invalid interface', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ app: { interface: 'websocket' } }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow(ConfigError)
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('not valid')
+  })
+
+  it('rejects negative maxIterations', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ agent: { maxIterations: -1 } }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('maxIterations')
+  })
+
+  it('rejects compaction threshold outside 0-1 range', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ agent: { compaction: { threshold: 2.0 } } }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('threshold')
+  })
+
+  it('rejects invalid HTTP port', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({ app: { http: { port: 99999 } } }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('port')
+  })
+
+  it('reports invalid JSON with file path and parse detail', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), '{ invalid json }')
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('Invalid JSON')
+  })
+
+  it('reports invalid YAML with file path and parse detail', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), 'agent:\n  provider: "unclosed')
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('Invalid YAML')
+  })
+
+  it('accepts valid config without errors', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { provider: 'openai', model: 'gpt-4o', maxIterations: 10 },
+      app: { interface: 'cli' },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('openai')
+  })
+
+  it('collects multiple validation errors into one message', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { provider: 'bad', maxRetries: -5 },
+    }))
+    try {
+      await loadConfig({ cwd: tmp, env: {} })
+      expect.unreachable('should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ConfigError)
+      const msg = (err as ConfigError).message
+      expect(msg).toContain('not a valid provider')
+      expect(msg).toContain('maxRetries')
+    }
   })
 })

@@ -146,6 +146,63 @@ describe('errorMessage', () => {
     expect(errorMessage(42)).toBe('42')
     expect(errorMessage(null)).toBe('null')
   })
+
+  it('returns userMessage for ProviderError instances', () => {
+    const err = new ProviderError('Unauthorized', { category: 'auth', statusCode: 401 })
+    expect(errorMessage(err)).toContain('Authentication failed')
+    expect(errorMessage(err)).toContain('API key')
+  })
+})
+
+describe('ProviderError.userMessage', () => {
+  it('auth error mentions API key', () => {
+    const err = new ProviderError('Unauthorized', { category: 'auth', statusCode: 401 })
+    expect(err.userMessage).toContain('Authentication failed')
+    expect(err.userMessage).toContain('unauthorized')
+    expect(err.userMessage).toContain('API key')
+  })
+
+  it('auth error with 403 mentions forbidden', () => {
+    const err = new ProviderError('Forbidden', { category: 'auth', statusCode: 403 })
+    expect(err.userMessage).toContain('forbidden')
+  })
+
+  it('rate limit error includes wait time when available', () => {
+    const err = new ProviderError('rate limited', { category: 'rate_limit', statusCode: 429, retryAfterMs: 30000 })
+    expect(err.userMessage).toContain('Rate limit exceeded')
+    expect(err.userMessage).toContain('30s')
+  })
+
+  it('rate limit error without retryAfterMs omits wait time', () => {
+    const err = new ProviderError('rate limited', { category: 'rate_limit', statusCode: 429 })
+    expect(err.userMessage).toContain('Rate limit exceeded')
+    expect(err.userMessage).not.toContain('Try again in')
+  })
+
+  it('overloaded error suggests waiting', () => {
+    const err = new ProviderError('overloaded', { category: 'overloaded', statusCode: 529 })
+    expect(err.userMessage).toContain('overloaded')
+  })
+
+  it('server error includes status code', () => {
+    const err = new ProviderError('internal', { category: 'server', statusCode: 502 })
+    expect(err.userMessage).toContain('502')
+  })
+
+  it('network error with ECONNREFUSED gives specific advice', () => {
+    const err = new ProviderError('connect ECONNREFUSED 127.0.0.1:443', { category: 'network' })
+    expect(err.userMessage).toContain('Connection refused')
+  })
+
+  it('network error with ENOTFOUND gives DNS advice', () => {
+    const err = new ProviderError('getaddrinfo ENOTFOUND api.example.com', { category: 'network' })
+    expect(err.userMessage).toContain('DNS lookup failed')
+  })
+
+  it('unknown error returns raw message', () => {
+    const err = new ProviderError('something broke', { category: 'unknown' })
+    expect(err.userMessage).toBe('something broke')
+  })
 })
 
 describe('ProviderError classification', () => {

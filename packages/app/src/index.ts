@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { AgentLoop, serializeContent, errorMessage, type IMessage } from '@chinmaymk/ra'
-import { loadConfigWithPath } from './config'
+import { AgentLoop, serializeContent, errorMessage, ProviderError, type IMessage } from '@chinmaymk/ra'
+import { loadConfigWithPath, ConfigError } from './config'
 import type { RaConfig } from './config/types'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
@@ -378,6 +378,12 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(errorMessage(err))
+  if (err instanceof ConfigError) {
+    console.error(`\x1b[31mConfiguration error:\x1b[0m ${err.message}`)
+  } else if (err instanceof ProviderError) {
+    console.error(`\x1b[31mProvider error:\x1b[0m ${err.userMessage}`)
+  } else {
+    console.error(errorMessage(err))
+  }
   process.exit(1)
 })

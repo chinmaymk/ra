@@ -1,4 +1,4 @@
-import { errorMessage, withRetry } from '../utils/errors'
+import { errorMessage, withRetry, ProviderError } from '../utils/errors'
 import type { IProvider, IMessage, IToolCall, TokenUsage, ThinkingMode, ThinkingLevel } from '../providers/types'
 import type { MiddlewareConfig, LoopContext, ModelCallContext, StreamChunkContext, ToolExecutionContext, ToolResultContext, ErrorContext, StoppableContext } from './types'
 import { runMiddlewareChain } from './middleware'
@@ -331,7 +331,11 @@ export class AgentLoop {
         }
         this.logger.error('compaction recovery failed', { attempt: _compactionRetries + 1 })
       }
+      const providerError = err instanceof ProviderError ? err : null
       const error = err instanceof Error ? err : new Error(String(err))
+      if (providerError) {
+        this.logger.error('provider error', { category: providerError.category, statusCode: providerError.statusCode, retryable: providerError.retryable, phase: currentPhase })
+      }
       await runMiddlewareChain({ ...stoppable, error, loop: loopCtx(), phase: currentPhase } satisfies ErrorContext, this.middleware.onError, this.toolTimeout)
       throw err
     }
