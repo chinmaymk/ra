@@ -16,6 +16,9 @@ export interface BedrockProviderOptions {
   region?: string
   apiKey?: string
   baseURL?: string
+  accessKeyId?: string
+  secretAccessKey?: string
+  sessionToken?: string
 }
 
 export class BedrockProvider implements IProvider {
@@ -27,6 +30,13 @@ export class BedrockProvider implements IProvider {
       region: options.region ?? 'us-east-1',
       ...(options.apiKey && { token: { token: options.apiKey } }),
       ...(options.baseURL && { endpoint: options.baseURL }),
+      ...(options.accessKeyId && options.secretAccessKey && {
+        credentials: {
+          accessKeyId: options.accessKeyId,
+          secretAccessKey: options.secretAccessKey,
+          ...(options.sessionToken && { sessionToken: options.sessionToken }),
+        },
+      }),
     })
   }
 

@@ -105,7 +105,7 @@ ENV VARS
 
   Provider API keys are resolved from standard env vars by default:
     ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY
-    OLLAMA_HOST, AWS_REGION
+    OLLAMA_HOST, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
     AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_API_KEY
 
   To override any config field via env, use \${} in ra.config.yml:
