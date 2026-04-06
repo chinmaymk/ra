@@ -261,10 +261,21 @@ function toolHeader(name: string, detail: string): string {
   return `${ansi.yellow}◆ ${name}${ansi.reset} ${ansi.dim}${detail}${ansi.reset}\n`
 }
 
-/** Format the ✔/✗ result line that replaces the ◆ header. */
+/** Format the ✔/✗ result line that replaces the ◆ header.
+ *  Truncates to terminal width to prevent wrapping. */
 function toolResultHeader(name: string, detail: string, resultDetail: string, isError = false): string {
-  const suffix = detail ? `${detail} ${ansi.dim}— ${resultDetail}` : resultDetail
+  const cols = process.stdout.columns || 80
   const icon = isError ? `${ansi.red}✗` : `${ansi.greenBright}✔`
+  const prefix = `✔ ${name} ` // visible prefix length (icon is same width)
+  const sep = ' — '
+  const maxVisible = cols - prefix.length - 1
+  let suffix: string
+  if (!detail) {
+    suffix = resultDetail.length > maxVisible ? resultDetail.slice(0, maxVisible - 1) + '…' : resultDetail
+  } else {
+    const full = `${detail}${sep}${resultDetail}`
+    suffix = full.length > maxVisible ? `${detail.slice(0, maxVisible - sep.length - resultDetail.length - 1)}…${sep}${resultDetail}` : full
+  }
   return `${icon} ${name}${ansi.reset} ${ansi.dim}${suffix}${ansi.reset}`
 }
 
@@ -356,18 +367,6 @@ export function printToolCall(state: TuiStreamState, id: string, name: string, a
   const cols = process.stdout.columns || 80
   const parsed = parseArgs(args)
 
-  // Edit: header + diff lines
-  if (name === 'Edit' && parsed) {
-    const path = (parsed.path as string) ?? ''
-    const diffLines = formatEditDiffLines(parsed, cols)
-    if (diffLines.length > 0) {
-      process.stdout.write(toolHeader('Edit', path))
-      for (const line of diffLines) process.stdout.write(line + '\n')
-      state.activeTools.push({ id, name: 'Edit', detail: path, lineCount: 1 + diffLines.length })
-      return
-    }
-  }
-
   // Extract detail string
   let detail = ''
   if (parsed) {
@@ -383,9 +382,22 @@ export function printToolCall(state: TuiStreamState, id: string, name: string, a
     } catch {
       detail = args.replace(/\s+/g, ' ').trim()
     }
-    const prefix = `◆ ${name} `
-    const maxFlat = cols - prefix.length - 1
-    detail = detail.length > maxFlat ? detail.slice(0, maxFlat) + '…' : detail
+  }
+
+  // Truncate detail to prevent line wrapping — ANSI cursor movement counts
+  // visual rows, so wrapped lines break the in-place ◆→✔ update.
+  const maxDetail = cols - `◆ ${name} `.length - 1
+  if (detail.length > maxDetail) detail = detail.slice(0, maxDetail - 1) + '…'
+
+  // Edit: header + diff lines
+  if (name === 'Edit' && parsed) {
+    const diffLines = formatEditDiffLines(parsed, cols)
+    if (diffLines.length > 0) {
+      process.stdout.write(toolHeader('Edit', detail))
+      for (const line of diffLines) process.stdout.write(line + '\n')
+      state.activeTools.push({ id, name: 'Edit', detail, lineCount: 1 + diffLines.length })
+      return
+    }
   }
 
   process.stdout.write(toolHeader(name, detail))

@@ -46,7 +46,13 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
       const toolName = chunk.type === 'tool_call_start' ? chunk.name : undefined
       if (chunk.type === 'text' && delta) {
         if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
-        if (!tuiState.boxOpened) { tuiState.boxOpened = true }
+        if (!tuiState.boxOpened) {
+          if (tuiState.activeTools.length > 0) {
+            process.stdout.write('\n')
+            tuiState.activeTools = []
+          }
+          tuiState.boxOpened = true
+        }
         onChunk(delta)
       } else {
         tui.handleStreamChunk(tuiState, chunk.type, delta, toolName)
