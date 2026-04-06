@@ -49,11 +49,34 @@ async function loadConfigFile(cwd: string, configPath?: string): Promise<{ confi
   return { config: {} }
 }
 
+/** Error thrown when a config file has issues (parse errors, invalid values). */
+export class ConfigError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message)
+    this.name = 'ConfigError'
+    if (options?.cause) this.cause = options.cause
+  }
+}
+
 async function parseFile(path: string): Promise<Partial<RaConfig>> {
-  const content = await Bun.file(path).text()
-  if (path.endsWith('.json')) return JSON.parse(content) as Partial<RaConfig>
-  if (path.endsWith('.yaml') || path.endsWith('.yml')) return yaml.load(content) as Partial<RaConfig>
-  if (path.endsWith('.toml')) return parseToml(content) as Partial<RaConfig>
+  let content: string
+  try {
+    content = await Bun.file(path).text()
+  } catch (err) {
+    throw new ConfigError(`Cannot read config file: ${path}`, { cause: err })
+  }
+  if (!content.trim()) {
+    throw new ConfigError(`Config file is empty: ${path}`)
+  }
+  try {
+    if (path.endsWith('.json')) return JSON.parse(content) as Partial<RaConfig>
+    if (path.endsWith('.yaml') || path.endsWith('.yml')) return yaml.load(content) as Partial<RaConfig>
+    if (path.endsWith('.toml')) return parseToml(content) as Partial<RaConfig>
+  } catch (err) {
+    const format = path.endsWith('.json') ? 'JSON' : path.endsWith('.toml') ? 'TOML' : 'YAML'
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new ConfigError(`Invalid ${format} in config file ${path}:\n  ${detail}`, { cause: err })
+  }
   return {}
 }
 
@@ -418,6 +441,75 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
     }
   }
 
+  validateConfig(config)
+
   log.debug('config resolved', { provider: config.agent.provider, model: config.agent.model, interface: config.app.interface })
   return { config, filePath: configFilePath, systemPromptPath }
+}
+
+const VALID_PROVIDERS = new Set<string>([
+  'anthropic', 'openai', 'openai-completions', 'google', 'ollama', 'bedrock', 'azure', 'anthropic-agents-sdk',
+])
+
+const VALID_INTERFACES = new Set<string>([
+  'cli', 'repl', 'http', 'mcp', 'mcp-stdio', 'inspector', 'cron',
+])
+
+function validateConfig(config: RaConfig): void {
+  const errors: string[] = []
+
+  // Provider
+  if (!config.agent.provider) {
+    errors.push('agent.provider is required (e.g. "anthropic", "openai", "google")')
+  } else if (!VALID_PROVIDERS.has(config.agent.provider)) {
+    errors.push(`agent.provider "${config.agent.provider}" is not a valid provider. Valid options: ${[...VALID_PROVIDERS].join(', ')}`)
+  }
+
+  // Model
+  if (!config.agent.model) {
+    errors.push('agent.model is required (e.g. "claude-sonnet-4-6", "gpt-4o")')
+  }
+
+  // Interface
+  if (config.app.interface && !VALID_INTERFACES.has(config.app.interface)) {
+    errors.push(`app.interface "${config.app.interface}" is not valid. Valid options: ${[...VALID_INTERFACES].join(', ')}`)
+  }
+
+  // Numeric ranges
+  if (typeof config.agent.maxIterations === 'number' && config.agent.maxIterations < 0) {
+    errors.push('agent.maxIterations must be 0 (unlimited) or a positive number')
+  }
+  if (typeof config.agent.maxRetries === 'number' && config.agent.maxRetries < 0) {
+    errors.push('agent.maxRetries must be 0 or a positive number')
+  }
+  if (typeof config.agent.toolTimeout === 'number' && config.agent.toolTimeout < 0) {
+    errors.push('agent.toolTimeout must be 0 (unlimited) or a positive number of milliseconds')
+  }
+
+  // Compaction threshold
+  const threshold = config.agent.compaction?.threshold
+  if (typeof threshold === 'number' && (threshold <= 0 || threshold > 1)) {
+    errors.push('agent.compaction.threshold must be between 0 and 1 (e.g. 0.9 = 90% of context window)')
+  }
+
+  // HTTP port
+  if (typeof config.app.http?.port === 'number' && (config.app.http.port < 0 || config.app.http.port > 65535)) {
+    errors.push('app.http.port must be between 0 and 65535')
+  }
+
+  // MCP servers
+  if (Array.isArray(config.app.mcpServers)) {
+    for (let i = 0; i < config.app.mcpServers.length; i++) {
+      const entry = config.app.mcpServers[i]
+      if (!entry) continue
+      if (!entry.name) errors.push(`app.mcpServers[${i}].name is required`)
+      if (!entry.transport) errors.push(`app.mcpServers[${i}].transport is required ("stdio" or "sse")`)
+      if (entry.transport === 'stdio' && !entry.command) errors.push(`app.mcpServers[${i}].command is required for stdio transport`)
+      if (entry.transport === 'sse' && !entry.url) errors.push(`app.mcpServers[${i}].url is required for sse transport`)
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new ConfigError(`Invalid configuration:\n  ${errors.join('\n  ')}`)
+  }
 }

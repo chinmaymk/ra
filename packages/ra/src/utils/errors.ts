@@ -1,10 +1,37 @@
 /** Extract error message from an unknown thrown value. */
 export function errorMessage(err: unknown): string {
+  if (err instanceof ProviderError) return err.userMessage
   return err instanceof Error ? err.message : String(err)
 }
 
 /** Categorized provider API error for graceful handling. */
 export type ProviderErrorCategory = 'rate_limit' | 'auth' | 'network' | 'server' | 'overloaded' | 'unknown'
+
+const USER_MESSAGES: Record<ProviderErrorCategory, (err: ProviderError) => string> = {
+  auth: (err) => {
+    const status = err.statusCode === 403 ? 'forbidden' : 'unauthorized'
+    return `Authentication failed (${status}). Check that your API key is valid and has the required permissions.`
+  },
+  rate_limit: (err) => {
+    const wait = err.retryAfterMs ? ` Try again in ${Math.ceil(err.retryAfterMs / 1000)}s.` : ''
+    return `Rate limit exceeded — too many requests.${wait}`
+  },
+  overloaded: () => 'The provider API is currently overloaded. Try again in a few moments.',
+  server: (err) => `Provider API returned a server error (HTTP ${err.statusCode ?? 500}). This is usually temporary — try again shortly.`,
+  network: (err) => {
+    const detail = extractNetworkDetail(err.message)
+    return `Network error: unable to reach the provider API.${detail} Check your internet connection and any proxy settings.`
+  },
+  unknown: (err) => err.message,
+}
+
+function extractNetworkDetail(msg: string): string {
+  const lower = msg.toLowerCase()
+  if (lower.includes('econnrefused')) return ' Connection refused — is the provider endpoint correct?'
+  if (lower.includes('enotfound')) return ' DNS lookup failed — check the provider hostname.'
+  if (lower.includes('etimedout')) return ' Connection timed out.'
+  return ''
+}
 
 export class ProviderError extends Error {
   readonly category: ProviderErrorCategory
@@ -13,6 +40,11 @@ export class ProviderError extends Error {
 
   get retryable(): boolean {
     return this.category === 'rate_limit' || this.category === 'server' || this.category === 'overloaded' || this.category === 'network'
+  }
+
+  /** User-facing error message with actionable guidance. */
+  get userMessage(): string {
+    return USER_MESSAGES[this.category](this)
   }
 
   constructor(message: string, options: { category: ProviderErrorCategory; statusCode?: number; retryAfterMs?: number; cause?: unknown }) {

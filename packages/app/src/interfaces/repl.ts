@@ -2,6 +2,7 @@ import readline from 'readline'
 import {
   AgentLoop,
   errorMessage,
+  ProviderError,
   estimateTokens,
   type MiddlewareConfig,
   type StreamChunkContext,
@@ -211,6 +212,8 @@ export class Repl {
       tui.flushStreamState(tuiState)
       if (err instanceof DOMException && err.name === 'AbortError') {
         tui.printInterrupt('Request cancelled.')
+      } else if (err instanceof ProviderError) {
+        tui.printError(err.userMessage)
       } else {
         tui.printError(errorMessage(err))
       }

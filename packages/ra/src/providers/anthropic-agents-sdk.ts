@@ -1,7 +1,7 @@
 import { query, createSdkMcpServer, tool as sdkTool } from '@anthropic-ai/claude-agent-sdk'
 import type { SDKMessage, SDKPartialAssistantMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import { z } from 'zod'
+import { z } from 'zod/v4'
 import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, TokenUsage, ThinkingLevel } from './types'
 
@@ -74,6 +74,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       },
       persistSession: false,
       enableFileCheckpointing: false,
+      includePartialMessages: true,
       plugins: [],
 
       // ── Tool & permission isolation ───────────────────────────────
@@ -104,14 +105,26 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     }
 
     const prompt = this.formatConversation(filtered)
-    const session = query({
-      prompt,
-      options: {
-        ...options,
-        abortController,
-        ...(mcpServer && { mcpServers: { [MCP_SERVER_NAME]: mcpServer } }),
-      },
-    })
+    let session: AsyncIterable<SDKMessage>
+    try {
+      session = query({
+        prompt,
+        options: {
+          ...options,
+          abortController,
+          ...(mcpServer && { mcpServers: { [MCP_SERVER_NAME]: mcpServer } }),
+        },
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('ENOENT') || msg.includes('not found') || msg.includes('claude')) {
+        throw new Error(
+          'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
+          'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
+        )
+      }
+      throw err
+    }
 
     yield* withDoneGuard(this.parseSession(session))
   }
@@ -160,7 +173,14 @@ export class AnthropicAgentsSdkProvider implements IProvider {
           break
       }
     }
-    return parts.join('\n\n')
+    const formatted = parts.join('\n\n')
+    // When conversation ends with tool results, add an opening assistant tag
+    // so the model continues as the assistant instead of echoing the XML history
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg?.role === 'tool') {
+      return formatted + '\n\n<assistant>\n'
+    }
+    return formatted
   }
 
   // ── MCP tool schemas ────────────────────────────────────────────────
@@ -243,7 +263,16 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         const isExpected =
           message.includes('maximum number of turns') ||
           message.includes('max_turns')
-        if (!isExpected) throw err
+        if (!isExpected) {
+          // Provide a better error when the Claude CLI subprocess fails
+          if (message.includes('ENOENT') || message.includes('not found') || message.includes('spawn')) {
+            throw new Error(
+              'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
+              'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
+            )
+          }
+          throw err
+        }
       } else {
         throw err
       }
@@ -332,7 +361,7 @@ function jsonSchemaTypeToZod(prop: Record<string, unknown>): z.ZodType {
       return z.array(z.unknown())
     case 'object':
       if (prop.properties) return z.object(jsonSchemaToZodShape(prop))
-      return z.record(z.unknown())
+      return z.record(z.string(), z.unknown())
     default:
       return z.unknown()
   }

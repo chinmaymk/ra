@@ -4,6 +4,13 @@ News, releases, and updates from the ra project.
 
 <div class="blog-list">
 
+### [oh-my-ra: Your Agent, Your Rules](/blog/oh-my-ra)
+<span class="blog-date">April 6, 2026</span>
+
+16 skills, 8 middleware hooks, 2 custom tools — a batteries-included recipe that brings the best ideas from oh-my-claude and oh-my-codex into ra natively. No prompt injection, no fragile hooks. Just config, skills, middleware, and tools.
+
+---
+
 ### [Building Claude Code's AutoDream with ra](/blog/autodream)
 <span class="blog-date">April 2, 2026</span>
 

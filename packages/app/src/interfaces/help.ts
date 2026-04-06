@@ -63,6 +63,11 @@ PROVIDER OPTIONS
   --version, -v                       Print version and exit
   --help, -h                          Print this help message
 
+LOGIN
+  ra login codex                     Sign in with ChatGPT subscription (OAuth)
+  ra login codex --device-code       Sign in via device code (headless/SSH)
+  ra login claude                    Sign in via Claude Code (OAuth)
+
 SKILL MANAGEMENT
   ra skill install <source>           Install skill from GitHub, npm, or URL
   ra skill remove <name>              Remove an installed skill

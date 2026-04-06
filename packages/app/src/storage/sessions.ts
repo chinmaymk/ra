@@ -161,7 +161,7 @@ export class SessionStorage {
       try {
         const meta = JSON.parse(await Bun.file(join(globalDir, rel)).text()) as SessionMeta
         sessions.push({ id: meta.id, meta })
-      } catch { /* skip corrupt entries */ }
+      } catch { /* skip corrupt session entries */ }
     }
     return sessions
   }
