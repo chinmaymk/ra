@@ -20,6 +20,8 @@ Built-in tools, each in its own file. `index.ts` registers them all.
 | `move-file.ts` | `MoveFile` | Filesystem |
 | `copy-file.ts` | `CopyFile` | Filesystem |
 | `delete-file.ts` | `DeleteFile` | Filesystem |
+| `ensure-dir.ts` | `EnsureDir` | Filesystem |
+| `root-dir.ts` | — | Helper: resolves the workspace root |
 | `shell-exec.ts` | `Bash` / `PowerShell` | Shell (platform-specific) |
 | `web-fetch.ts` | `WebFetch` | Network |
 | `subagent.ts` | `Agent` | Agent interaction (exported separately, not auto-registered) |
