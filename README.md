@@ -13,6 +13,7 @@
   <a href="#middleware">Middleware</a> &middot;
   <a href="#tools">Tools</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
+  <a href="#roadmap">Roadmap</a> &middot;
   <a href="#docs">Docs</a>
 </p>
 
@@ -28,8 +29,9 @@ One config file is the difference between a coding agent, a code reviewer, a res
 
 ```bash
 ra "Fix the failing tests and open a PR"
-ra --config recipes/code-review-agent  "Review the last 3 PRs"
-ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache compression"
+git diff | ra "Review this diff for security issues"
+cat error.log | ra "Explain what went wrong"
+ra --config recipes/code-review-agent "Review the last 3 PRs"
 ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
 
@@ -48,7 +50,7 @@ agent:
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
 ```
 
-Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and LiteLLM — switch with `--provider`. [All providers →](https://chinmaymk.github.io/ra/providers/)
+Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and LiteLLM — switch with `--provider`. Bring your own API key, or use your existing [Anthropic](https://console.anthropic.com/) or [OpenAI / Codex](https://platform.openai.com/) subscription. [All providers →](https://chinmaymk.github.io/ra/providers/)
 
 ## Middleware
 
@@ -154,6 +156,27 @@ ra --inspector
 <p align="center">
   <img src="docs/site/public/inspector-overview.png" alt="ra inspector dashboard" width="800">
 </p>
+
+## Roadmap
+
+- [x] Core agent loop with streaming
+- [x] Multi-provider support (Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, LiteLLM)
+- [x] Middleware hooks at every step of the loop
+- [x] Built-in tools (Read, Write, Edit, Bash, Glob, Grep, WebFetch, Agent)
+- [x] Custom tools (TypeScript, shell, any scripting language)
+- [x] Regex-based permission system
+- [x] Skills and on-demand skill loading
+- [x] Token budgets and duration limits
+- [x] Adaptive thinking
+- [x] Session memory
+- [x] Multiple interfaces (REPL, CLI, HTTP, MCP, Cron)
+- [x] Built-in inspector / observability
+- [x] Recipes system
+- [x] Anthropic and Codex subscription support
+- [ ] Self-improving agent
+- [ ] Teams of agents
+- [ ] Multi-agent orchestration via config
+- [ ] Smarter compaction
 
 ## Docs
 
