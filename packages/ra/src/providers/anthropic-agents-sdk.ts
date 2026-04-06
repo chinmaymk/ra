@@ -178,7 +178,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     // For multi-turn conversations with tool results, add a preamble so the
     // model treats the XML as prior history rather than echoing the tags.
     if (lastMsg?.role === 'tool') {
-      return HISTORY_PREAMBLE + formatted + '\n\nContinue the conversation based on the tool results above. Do not output XML tags.'
+      return HISTORY_PREAMBLE + formatted
     }
     return formatted
   }

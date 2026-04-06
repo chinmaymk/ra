@@ -140,7 +140,7 @@ describe('AnthropicAgentsSdkProvider', () => {
       ])
       expect(result).toStartWith('The following is your previous conversation history')
       expect(result).toContain('<tool_result id="tc_1">')
-      expect(result).toEndWith('Do not output XML tags.')
+      expect(result).toContain('</tool_result>')
     })
 
     it('does not add preamble when conversation ends with user message', () => {
