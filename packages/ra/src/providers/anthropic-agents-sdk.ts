@@ -1,8 +1,9 @@
 import { query, createSdkMcpServer, tool as sdkTool } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKMessage, SDKPartialAssistantMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKMessage, SDKUserMessage, SDKPartialAssistantMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages'
 import { z } from 'zod/v4'
-import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
+import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS, serializeContent } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, TokenUsage, ThinkingLevel } from './types'
 
 export interface AnthropicAgentsSdkProviderOptions {
@@ -18,8 +19,10 @@ export interface AnthropicAgentsSdkProviderOptions {
  * permissions, middleware, and the agent loop.
  *
  * Key design:
- * - Fresh subprocess per turn — `query()` is called each `stream()` invocation
- *   with the full conversation history serialized as XML-tagged text.
+ * - Session resume for multi-turn: first call creates a persisted session;
+ *   subsequent calls (after tool execution) resume it and send tool results
+ *   as structured SDKUserMessage objects with native tool_result content blocks.
+ *   Falls back to XML-serialized conversation if resume fails.
  * - Tools registered as MCP schemas with no-op handlers (model sees them)
  * - maxTurns=1 ensures the SDK does exactly one model call and returns
  * - Raw stream events parsed into tool_call_start/delta/end chunks for ra's loop
@@ -29,9 +32,16 @@ export interface AnthropicAgentsSdkProviderOptions {
 export class AnthropicAgentsSdkProvider implements IProvider {
   readonly name = 'anthropic-agents-sdk'
   private defaultModel?: string
+  /** Session ID from the last successful query — enables resume for tool-result turns. */
+  private currentSessionId?: string
 
   constructor(options: AnthropicAgentsSdkProviderOptions = {}) {
     this.defaultModel = options.model
+  }
+
+  /** Reset the tracked session so the next stream() call starts fresh. */
+  resetSession(): void {
+    this.currentSessionId = undefined
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
@@ -72,7 +82,10 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         includeGitInstructions: false,
         respectGitignore: false,
       },
-      persistSession: false,
+      // Enabled so tool-result turns can resume the session instead of
+      // re-serializing the full conversation as XML (which causes the model
+      // to echo XML tags after many rounds).
+      persistSession: true,
       enableFileCheckpointing: false,
       includePartialMessages: true,
       plugins: [],
@@ -104,17 +117,42 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       request.signal.addEventListener('abort', () => abortController.abort(), { once: true })
     }
 
-    const prompt = this.formatConversation(filtered)
+    // Detect tool-result turns: if the conversation ends with tool results
+    // and we have a session to resume, send structured messages instead of XML.
+    const toolResults = extractTrailingToolResults(filtered)
+    const canResume = !!this.currentSessionId && toolResults.length > 0
+
+    const baseQueryOptions = {
+      ...options,
+      abortController,
+      ...(mcpServer && { mcpServers: { [MCP_SERVER_NAME]: mcpServer } }),
+    }
+
     let session: AsyncIterable<SDKMessage>
+    if (canResume) {
+      // Resume the session — tool results sent as native API content blocks.
+      const prompt = buildToolResultStream(toolResults)
+      try {
+        session = query({ prompt, options: { ...baseQueryOptions, resume: this.currentSessionId } })
+      } catch {
+        // Resume failed (session file missing/corrupt) — fall back to XML.
+        this.currentSessionId = undefined
+        session = this.queryWithXml(filtered, baseQueryOptions)
+      }
+    } else {
+      // Fresh turn — serialize full conversation as XML text.
+      this.currentSessionId = undefined
+      session = this.queryWithXml(filtered, baseQueryOptions)
+    }
+
+    yield* withDoneGuard(this.parseSession(session))
+  }
+
+  /** Start a fresh query with XML-serialized conversation. */
+  private queryWithXml(filtered: IMessage[], queryOptions: Record<string, unknown>): AsyncIterable<SDKMessage> {
+    const prompt = this.formatConversation(filtered)
     try {
-      session = query({
-        prompt,
-        options: {
-          ...options,
-          abortController,
-          ...(mcpServer && { mcpServers: { [MCP_SERVER_NAME]: mcpServer } }),
-        },
-      })
+      return query({ prompt, options: queryOptions })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (msg.includes('ENOENT') || msg.includes('not found') || msg.includes('claude')) {
@@ -125,8 +163,6 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       }
       throw err
     }
-
-    yield* withDoneGuard(this.parseSession(session))
   }
 
   private mapThinking(thinking?: ThinkingLevel, budgetCap?: number): { thinking?: ThinkingConfig } {
@@ -221,6 +257,11 @@ export class AnthropicAgentsSdkProvider implements IProvider {
 
     try {
       for await (const msg of session) {
+        // Capture session ID for future resume calls
+        if ('session_id' in msg && typeof (msg as { session_id?: unknown }).session_id === 'string') {
+          this.currentSessionId = (msg as { session_id: string }).session_id
+        }
+
         if (msg.type === 'stream_event') {
           const event = (msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent
           switch (event.type) {
@@ -332,6 +373,35 @@ const MCP_PREFIX = `mcp__${MCP_SERVER_NAME}__`
 /** Strip the SDK's `mcp__ra-tools__` prefix from tool names so they match ra's registry. */
 function stripMcpPrefix(name: string): string {
   return name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name
+}
+
+/** Extract consecutive tool-result messages from the end of the conversation. */
+function extractTrailingToolResults(messages: IMessage[]): IMessage[] {
+  const results: IMessage[] = []
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === 'tool') results.unshift(messages[i]!)
+    else break
+  }
+  return results
+}
+
+/**
+ * Build an async iterable yielding a single SDKUserMessage with tool_result content blocks.
+ * This sends tool results as native API types so the model sees structured data
+ * instead of XML text that it might echo.
+ */
+async function* buildToolResultStream(toolResults: IMessage[]): AsyncIterable<SDKUserMessage> {
+  const content: MessageParam['content'] = toolResults.map(tr => ({
+    type: 'tool_result' as const,
+    tool_use_id: tr.toolCallId ?? '',
+    content: serializeContent(tr.content),
+    ...(tr.isError && { is_error: true }),
+  }))
+  yield {
+    type: 'user',
+    message: { role: 'user', content },
+    parent_tool_use_id: null,
+  }
 }
 
 function jsonSchemaToZodShape(schema: Record<string, unknown>): Record<string, z.ZodType> {
