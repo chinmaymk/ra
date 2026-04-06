@@ -44,17 +44,16 @@ Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and Li
 
 ## The Loop
 
-Stream the model response, execute tool calls in parallel, repeat. Every step fires a middleware hook you can intercept.
-
-No arbitrary iteration caps. The loop runs until the model stops calling tools or a guardrail fires. Token budgets and duration limits trigger a clean shutdown:
+No arbitrary iteration caps — the agent runs until the job is done. You set the budget, ra enforces it:
 
 ```yaml
 agent:
-  maxTokenBudget: 500_000
-  maxDuration: 600_000
+  maxTokenBudget: 500_000   # hard cap on total token spend
+  maxDuration: 600_000      # max wall-clock time in ms
+  thinking: adaptive        # scales reasoning effort automatically
 ```
 
-**Adaptive thinking** scales reasoning effort — high early for planning, low later for execution. Context compaction kicks in automatically when approaching the window limit — no dropped conversations, no silent truncation.
+Token budgets and duration limits trigger a clean shutdown, not a crash. Adaptive thinking starts high for planning and tapers off during execution — so you're not burning tokens on boilerplate. Context compaction kicks in automatically near the window limit — no dropped conversations, no silent truncation.
 
 ## Middleware
 
@@ -95,32 +94,7 @@ permissions:
         deny: ["\\.env", "secrets"]
 ```
 
-**Custom tools** — deploy, query an internal API, run a health check — export a function and register it:
-
-```ts
-// tools/deploy.ts
-export default {
-  name: 'Deploy',
-  description: 'Deploy a branch to staging',
-  parameters: {
-    branch: { type: 'string', description: 'Git branch to deploy' },
-    dryRun: { type: 'boolean', description: 'Preview only', optional: true },
-  },
-  async execute(input) {
-    const { branch, dryRun } = input as { branch: string; dryRun?: boolean }
-    return `Deployed ${branch} to staging`
-  },
-}
-```
-
-```yaml
-agent:
-  tools:
-    custom:
-      - ./tools/deploy.ts
-```
-
-Works with shell scripts and any scripting language too — [see the docs](https://chinmaymk.github.io/ra/tools/custom).
+**Custom tools** — export a function, register it in config, and the model picks it up. Works with TypeScript, shell scripts, and any scripting language — [see the docs](https://chinmaymk.github.io/ra/tools/custom).
 
 ## Recipes
 
