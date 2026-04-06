@@ -136,6 +136,7 @@ export default defineConfig({
           text: 'Providers',
           items: [
             { text: 'Anthropic', link: '/providers/anthropic' },
+            { text: 'Anthropic Agents SDK', link: '/providers/anthropic-agents-sdk' },
             { text: 'OpenAI', link: '/providers/openai' },
             { text: 'OpenAI Completions', link: '/providers/openai-completions' },
             { text: 'Azure OpenAI', link: '/providers/azure' },
