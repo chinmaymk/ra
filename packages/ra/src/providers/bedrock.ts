@@ -8,6 +8,7 @@ import {
   type ToolInputSchema,
   type ConverseStreamOutput,
 } from '@aws-sdk/client-bedrock-runtime'
+import { NodeHttpHandler } from '@smithy/node-http-handler'
 import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, resolveThinkingBudget, DEFAULT_MAX_TOKENS, withDoneGuard } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
@@ -30,7 +31,12 @@ export class BedrockProvider implements IProvider {
     const endpoint = normalizeEndpoint(options.baseURL)
     this.client = new BedrockRuntimeClient({
       region: options.region ?? 'us-east-1',
-      ...(endpoint && { endpoint }),
+      ...(endpoint && {
+        endpoint,
+        // Bedrock defaults to NodeHttp2Handler, but most custom gateways/proxies only
+        // support HTTP/1.1. Force HTTP/1.1 when a custom endpoint is in use.
+        requestHandler: new NodeHttpHandler(),
+      }),
       ...(hasExplicitCredentials && {
         credentials: {
           accessKeyId: options.accessKeyId!,

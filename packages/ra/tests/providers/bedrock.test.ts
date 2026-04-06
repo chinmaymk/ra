@@ -429,6 +429,17 @@ describe('BedrockProvider - credential wiring', () => {
     expect(lastClientConfig.endpoint).toBeUndefined()
   })
 
+  it('uses HTTP/1.1 handler when baseURL is set (custom gateways rarely support HTTP/2)', () => {
+    new BedrockProvider({ baseURL: 'https://gateway.example.com' })
+    expect(lastClientConfig.requestHandler).toBeDefined()
+    expect((lastClientConfig.requestHandler as object).constructor.name).toBe('NodeHttpHandler')
+  })
+
+  it('does not override requestHandler when no baseURL is set', () => {
+    new BedrockProvider({})
+    expect(lastClientConfig.requestHandler).toBeUndefined()
+  })
+
   it('defaults region to us-east-1', () => {
     new BedrockProvider({})
     expect(lastClientConfig.region).toBe('us-east-1')
