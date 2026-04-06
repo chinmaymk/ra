@@ -173,8 +173,8 @@ ra --inspector
 - [x] Built-in inspector / observability
 - [x] Recipes system
 - [x] Anthropic and Codex subscription support
-- [ ] Multi-agent orchestration via config
-- [ ] Smarter compaction
+- [ ] Self-improving agent
+- [ ] Teams of agents
 
 ## Docs
 
