@@ -18,6 +18,8 @@ export class ConfigManager {
   private loadOptions: LoadConfigOptions
   /** mtime snapshot: filePath → mtimeMs */
   private mtimes = new Map<string, number>()
+  /** Serializes concurrent reload attempts so only one runs at a time. */
+  private reloadInFlight: Promise<boolean> | null = null
 
   constructor(
     config: RaConfig,
@@ -34,8 +36,18 @@ export class ConfigManager {
   /**
    * Check all tracked files' mtimes.  If any changed, reload the config
    * and return `true`.  Returns `false` when nothing changed.
+   *
+   * Serialized: concurrent callers share the same in-flight reload
+   * so two HTTP requests don't trigger two redundant reloads.
    */
   async maybeReload(logger?: Logger): Promise<boolean> {
+    if (this.reloadInFlight) return this.reloadInFlight
+    this.reloadInFlight = this.doReload(logger)
+    try { return await this.reloadInFlight }
+    finally { this.reloadInFlight = null }
+  }
+
+  private async doReload(logger?: Logger): Promise<boolean> {
     if (this.mtimes.size === 0) return false
 
     const changed = await this.anyFileChanged()
