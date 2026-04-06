@@ -24,7 +24,7 @@
 
 ---
 
-Most agents work great — until you need to change something. ra gives you the same power with full control. Every part is yours to configure, extend, or replace.
+Most agent frameworks lock you in. ra doesn't — every decision the agent makes flows through hooks you control, tools you define, and configs you commit. No hidden prompts, no black-box loops, no vendor lock-in.
 
 A coding agent, a code reviewer, a research agent, a multi-agent orchestrator — these aren't separate codebases. They're different configs:
 
@@ -43,18 +43,11 @@ Same binary. Any agent. Defined entirely in config.
 curl -fsSL https://raw.githubusercontent.com/chinmaymk/ra/main/install.sh | bash
 ```
 
-Works with **Anthropic**, **OpenAI**, **Google**, **Ollama**, **Bedrock**, **Azure**, [**OpenRouter**](https://chinmaymk.github.io/ra/providers/openrouter), and [**LiteLLM**](https://chinmaymk.github.io/ra/providers/litellm) — switch with `--provider`.
+Works with Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, and LiteLLM — switch with `--provider`. [All providers →](https://chinmaymk.github.io/ra/providers/)
 
 ## The Loop
 
-Stream the model response, execute tool calls in parallel, repeat. Every step fires a middleware hook.
-
-```
-User message → [beforeLoopBegin]
-  → [beforeModelCall] → stream response → [afterModelResponse]
-  → [beforeToolExecution] → execute tools → [afterToolExecution]
-  → [afterLoopIteration] → repeat or [afterLoopComplete]
-```
+Stream the model response, execute tool calls in parallel, repeat. Every step fires a middleware hook you can intercept.
 
 No arbitrary iteration caps. The loop runs until the model stops calling tools or a guardrail fires. Token budgets and duration limits trigger a clean shutdown:
 
@@ -71,15 +64,6 @@ agent:
 Intercept any step in the loop — read the full context, mutate it, or stop it entirely.
 
 ```ts
-// middleware/guard.ts — block destructive commands
-export default async (ctx) => {
-  if (ctx.toolCall.name === 'Bash' && ctx.toolCall.arguments.includes('--force')) {
-    ctx.deny("Blocked: --force not allowed")
-  }
-}
-```
-
-```ts
 // middleware/audit.ts — log every tool call
 export default async (ctx) => {
   const { name, arguments: args } = ctx.toolCall
@@ -92,8 +76,6 @@ Wire them to hooks in config:
 ```yaml
 agent:
   middleware:
-    beforeToolExecution:
-      - ./middleware/guard.ts
     afterToolExecution:
       - ./middleware/audit.ts
 ```
@@ -102,7 +84,19 @@ agent:
 
 ## Tools
 
-**Built-in:** `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `WebFetch`, `Agent` (parallel sub-agents), and more — enable, disable, or configure each one independently.
+**Built-in:** `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `WebFetch`, `Agent` (parallel sub-agents), and more — enable, disable, or configure each one independently. Permissions use a simple regex allow/deny system — no custom DSL, just patterns you already know:
+
+```yaml
+permissions:
+  rules:
+    - tool: Bash
+      command:
+        allow: ["^git ", "^bun "]
+        deny: ["--force", "--no-verify"]
+    - tool: Write
+      path:
+        deny: ["\\.env", "secrets"]
+```
 
 **Custom tools** — deploy, query an internal API, run a health check — export a function and register it:
 
@@ -172,15 +166,6 @@ agent:
   thinking: adaptive
   maxTokenBudget: 500_000
   skillDirs: [./skills]
-  permissions:
-    rules:
-      - tool: Bash
-        command:
-          allow: ["^git ", "^bun "]
-          deny: ["--force", "--hard", "--no-verify"]
-      - tool: Write
-        path:
-          deny: ["\\.env"]
   middleware:
     - ./middleware/token-budget.ts
     - ./middleware/audit-log.ts
