@@ -486,7 +486,7 @@ export function printUserMessage(msg: string): void {
   // The top ─── line is already on screen from printPromptLine().
   // Move up to overwrite the "> " prompt line, redraw with bold, add bottom line.
   process.stdout.write('\x1b[A\r\x1b[J')
-  process.stdout.write(`${ansi.bold}${truncated}${ansi.reset}\n${line}\n`)
+  process.stdout.write(`${ansi.bold}${truncated}${ansi.reset}\n${line}\n\n`)
 }
 
 // ---------------------------------------------------------------------------
@@ -515,8 +515,8 @@ export function printPromptLine(): void {
   process.stdout.write(`${ansi.dim}${'─'.repeat(cols)}${ansi.reset}\n`)
 }
 
-// Styled prompt for readline
-export const PROMPT = `${ansi.dim}>${ansi.reset} `
+// Prompt — empty, input sits between separator lines
+export const PROMPT = ''
 
 // ---------------------------------------------------------------------------
 // TUI streaming state
