@@ -62,20 +62,26 @@ export function printResumeHeader(sessionId: string, messageCount: number): void
 }
 
 // ---------------------------------------------------------------------------
-// Spinner — static "…" indicator (no animation, no flicker)
+// Spinner — elapsed timer that updates in place (e.g. "… 1.2s")
 // ---------------------------------------------------------------------------
 
-let spinnerActive = false
+let spinnerTimer: ReturnType<typeof setInterval> | null = null
+let spinnerStart = 0
 
 export function startSpinner(): void {
-  if (spinnerActive) return
-  spinnerActive = true
+  if (spinnerTimer) return
+  spinnerStart = Date.now()
   process.stdout.write(`  ${ansi.dim}…${ansi.reset}`)
+  spinnerTimer = setInterval(() => {
+    const elapsed = ((Date.now() - spinnerStart) / 1000).toFixed(1)
+    process.stdout.write(`\r  ${ansi.dim}… ${elapsed}s${ansi.reset}`)
+  }, 200)
 }
 
 export function stopSpinner(silent = false): void {
-  if (spinnerActive) {
-    spinnerActive = false
+  if (spinnerTimer) {
+    clearInterval(spinnerTimer)
+    spinnerTimer = null
     process.stdout.write('\r\x1b[K')
   }
   if (!silent) process.stdout.write(RESPONSE_PREFIX)

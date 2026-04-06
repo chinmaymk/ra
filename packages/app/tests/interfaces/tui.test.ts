@@ -64,7 +64,7 @@ describe('spinner', () => {
     expect(output).toBe('  ')
   })
 
-  it('shows static indicator instead of animated spinner', () => {
+  it('shows elapsed indicator', () => {
     const output = captureStdout(() => {
       startSpinner()
     })
