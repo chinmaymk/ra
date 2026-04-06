@@ -10,6 +10,7 @@ const MODEL_FAMILIES: [string, number][] = [
   ['gpt-3.5', 16_385],
   ['o1', 200_000],
   ['o3', 200_000],
+  ['gpt-5', 1_048_576],
   ['gemini-2.5', 1_048_576],
   ['gemini-2.0', 1_048_576],
   ['gemini-1.5', 1_048_576],
@@ -52,6 +53,7 @@ const DEFAULT_COMPACTION_MODELS: Record<string, string> = {
   ollama: '',
   bedrock: 'anthropic.claude-haiku-4-5-20251001',
   azure: 'gpt-4o-mini',
+  codex: 'gpt-5.4',
 }
 
 export function getDefaultCompactionModel(provider: string): string {

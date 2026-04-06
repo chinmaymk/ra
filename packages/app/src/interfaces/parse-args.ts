@@ -2,18 +2,9 @@ import { parseArgs as utilParseArgs } from 'util'
 import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
-export interface RegistrySubCommand {
-  kind: 'skill' | 'recipe'
-  action: 'install' | 'remove' | 'list'
-  args: string[]
-}
-
-export interface LoginSubCommand {
-  kind: 'login'
-  provider: string
-}
-
-export type SubCommand = RegistrySubCommand | LoginSubCommand
+export type SubCommand =
+  | { kind: 'skill' | 'recipe'; action: 'install' | 'remove' | 'list'; args: string[] }
+  | { kind: 'login'; action: string; args: string[] }
 
 export interface ParsedArgsMeta {
   help: boolean
@@ -76,28 +67,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
   )
   const userArgs = argv.slice(isScriptPath ? 2 : 1)
 
-  // Check for subcommands: ra login <provider>
-  if (userArgs[0] === 'login') {
-    const provider = userArgs[1]
-    if (!provider) {
-      console.error('Usage: ra login <provider> (e.g. ra login claude)')
-      process.exit(1)
-    }
-    return {
-      config: {},
-      meta: {
-        help: false,
-        version: false,
-        showContext: false,
-        showConfig: false,
-        runImmediately: false,
-        listMemories: false,
-        files: [],
-        subCommand: { kind: 'login', provider },
-      },
-    }
-  }
-
   // Check for subcommands: ra skill|recipe install|remove|list [args...]
   const SUB_KINDS = ['skill', 'recipe'] as const
   const kind = userArgs[0] as typeof SUB_KINDS[number]
@@ -113,6 +82,24 @@ export function parseArgs(argv: string[]): ParsedArgs {
         listMemories: false,
         files: [],
         subCommand: { kind, action: userArgs[1] as 'install' | 'remove' | 'list', args: userArgs.slice(2) },
+      },
+    }
+  }
+
+  // Check for login subcommand: ra login <provider>
+  if (userArgs[0] === 'login') {
+    const provider = userArgs[1] ?? 'codex'
+    return {
+      config: {},
+      meta: {
+        help: false,
+        version: false,
+        showContext: false,
+        showConfig: false,
+        runImmediately: false,
+        listMemories: false,
+        files: [],
+        subCommand: { kind: 'login', action: provider, args: userArgs.slice(2) },
       },
     }
   }

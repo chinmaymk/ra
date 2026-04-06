@@ -64,6 +64,8 @@ PROVIDER OPTIONS
   --help, -h                          Print this help message
 
 LOGIN
+  ra login codex                     Sign in with ChatGPT subscription (OAuth)
+  ra login codex --device-code       Sign in via device code (headless/SSH)
   ra login claude                    Sign in via Claude Code (OAuth)
 
 SKILL MANAGEMENT

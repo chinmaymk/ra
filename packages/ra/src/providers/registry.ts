@@ -5,6 +5,7 @@ import { GoogleProvider, type GoogleProviderOptions } from './google'
 import { OllamaProvider, type OllamaProviderOptions } from './ollama'
 import { BedrockProvider, type BedrockProviderOptions } from './bedrock'
 import { AzureProvider, type AzureProviderOptions } from './azure'
+import { CodexProvider, type CodexProviderOptions } from './openai-codex'
 import { AnthropicAgentsSdkProvider, type AnthropicAgentsSdkProviderOptions } from './anthropic-agents-sdk'
 
 type ProviderOptionsMap = {
@@ -15,6 +16,7 @@ type ProviderOptionsMap = {
   ollama: OllamaProviderOptions
   bedrock: BedrockProviderOptions
   azure: AzureProviderOptions
+  codex: CodexProviderOptions
   'anthropic-agents-sdk': AnthropicAgentsSdkProviderOptions
 }
 
@@ -37,6 +39,7 @@ const constructors = {
   ollama: OllamaProvider,
   bedrock: BedrockProvider,
   azure: AzureProvider,
+  codex: CodexProvider,
   'anthropic-agents-sdk': AnthropicAgentsSdkProvider,
 } as const
 
