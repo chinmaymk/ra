@@ -88,6 +88,7 @@ export class Repl {
       }
       this.lastInterruptTime = now
       tui.printInterrupt('Press Ctrl+C again to exit, or type a message.')
+      tui.printPromptLine()
       rl.prompt()
     })
 
@@ -96,7 +97,7 @@ export class Repl {
     rl.on('line', async (line: string) => {
       const trimmed = line.trim()
 
-      if (!trimmed || processing) { if (!processing) rl.prompt(); return }
+      if (!trimmed || processing) { if (!processing) { tui.printPromptLine(); rl.prompt() } return }
       processing = true
 
       inflight = (async () => {
@@ -112,11 +113,13 @@ export class Repl {
           await this.processInput(trimmed)
         }
         processing = false
+        tui.printPromptLine()
         rl.prompt()
       })()
     })
 
     rl.on('close', () => tui.printInterrupt('Goodbye!'))
+    tui.printPromptLine()
     rl.prompt()
     await new Promise<void>(resolve => rl.once('close', async () => { await inflight; resolve() }))
   }

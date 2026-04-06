@@ -87,7 +87,7 @@ export function stopSpinner(silent = false): void {
 }
 
 export function closeAssistantBox(): void {
-  process.stdout.write('\n\n')
+  process.stdout.write('\n')
 }
 
 // ANSI-specific off codes (don't reset ALL styles, just the specific one)
@@ -210,7 +210,7 @@ export class StreamBuffer {
     if (ch === '`') {
       if (this.pendingStar) { this.pendingStar = false; return '*`' }
       this.inInlineCode = !this.inInlineCode
-      return this.inInlineCode ? ansi.cyan : ansiOff.fg
+      return this.inInlineCode ? ansi.bold : ansiOff.bold
     }
 
     // Bold toggle (**)
@@ -483,9 +483,10 @@ export function printUserMessage(msg: string): void {
   const cols = process.stdout.columns || 80
   const line = `${ansi.dim}${'─'.repeat(cols)}${ansi.reset}`
   const truncated = msg.length > cols ? msg.slice(0, cols - 1) + '…' : msg
-  // Move up to overwrite the readline prompt line and redraw with framing
+  // The top ─── line is already on screen from printPromptLine().
+  // Move up to overwrite the "> " prompt line, redraw with bold, add bottom line.
   process.stdout.write('\x1b[A\r\x1b[J')
-  process.stdout.write(`${line}\n${ansi.bold}${truncated}${ansi.reset}\n${line}\n\n`)
+  process.stdout.write(`${ansi.bold}${truncated}${ansi.reset}\n${line}\n`)
 }
 
 // ---------------------------------------------------------------------------
@@ -506,6 +507,12 @@ export function printError(msg: string): void {
 
 export function printInterrupt(msg: string): void {
   process.stdout.write(`\n${ansi.yellow}${msg}${ansi.reset}\n`)
+}
+
+/** Print the separator line above the prompt input area. */
+export function printPromptLine(): void {
+  const cols = process.stdout.columns || 80
+  process.stdout.write(`${ansi.dim}${'─'.repeat(cols)}${ansi.reset}\n`)
 }
 
 // Styled prompt for readline

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'bun:test'
 import {
   ansi, printHeader, printResumeHeader, startSpinner, stopSpinner,
   closeAssistantBox, printToolCall, printToolResult, printStatus,
-  printCommandResponse, printError, printUserMessage, collapseThinking, createStreamState,
+  printCommandResponse, printError, printUserMessage, printPromptLine, collapseThinking, createStreamState,
   handleStreamChunk, clearPendingTools, StreamBuffer,
 } from '../../src/interfaces/tui'
 import { captureStdout } from '../fixtures'
@@ -74,9 +74,9 @@ describe('spinner', () => {
 })
 
 describe('closeAssistantBox', () => {
-  it('outputs two newlines', () => {
+  it('outputs a newline', () => {
     const output = captureStdout(() => closeAssistantBox())
-    expect(output).toBe('\n\n')
+    expect(output).toBe('\n')
   })
 })
 
@@ -297,8 +297,17 @@ describe('printToolResult', () => {
   })
 })
 
+describe('printPromptLine', () => {
+  it('outputs a dim separator line', () => {
+    const output = captureStdout(() => printPromptLine())
+    expect(output).toContain('─')
+    expect(output).toContain(ansi.dim)
+    expect(output).toEndWith('\n')
+  })
+})
+
 describe('printUserMessage', () => {
-  it('outputs user message with separator lines', () => {
+  it('outputs user message with bottom separator line', () => {
     const output = captureStdout(() => printUserMessage('hello world'))
     expect(output).toContain('─')
     expect(output).toContain('hello world')
@@ -497,7 +506,7 @@ describe('StreamBuffer markdown mode', () => {
   it('renders inline code with backticks', () => {
     const b = new StreamBuffer(80, true)
     const out = b.write('use `foo()` here\n')
-    expect(out).toContain(ansi.cyan)
+    expect(out).toContain(ansi.bold)
     expect(out).toContain('foo()')
     expect(out).not.toContain('`')
   })
