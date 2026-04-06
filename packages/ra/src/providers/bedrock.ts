@@ -28,7 +28,7 @@ export class BedrockProvider implements IProvider {
   constructor(options: BedrockProviderOptions) {
     this.client = new BedrockRuntimeClient({
       region: options.region ?? 'us-east-1',
-      ...(options.apiKey && { token: { token: options.apiKey } }),
+      ...(options.apiKey && { token: { token: options.apiKey }, authSchemePreference: ['httpBearerAuth'] }),
       ...(options.baseURL && { endpoint: options.baseURL }),
       ...(options.accessKeyId && options.secretAccessKey && {
         credentials: {
