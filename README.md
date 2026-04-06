@@ -13,6 +13,7 @@
   <a href="#middleware">Middleware</a> &middot;
   <a href="#tools">Tools</a> &middot;
   <a href="#recipes">Recipes</a> &middot;
+  <a href="#roadmap">Roadmap</a> &middot;
   <a href="#docs">Docs</a>
 </p>
 
@@ -154,6 +155,26 @@ ra --inspector
 <p align="center">
   <img src="docs/site/public/inspector-overview.png" alt="ra inspector dashboard" width="800">
 </p>
+
+## Roadmap
+
+- [x] Core agent loop with streaming
+- [x] Multi-provider support (Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, LiteLLM)
+- [x] Middleware hooks at every step of the loop
+- [x] Built-in tools (Read, Write, Edit, Bash, Glob, Grep, WebFetch, Agent)
+- [x] Custom tools (TypeScript, shell, any scripting language)
+- [x] Regex-based permission system
+- [x] Skills and on-demand skill loading
+- [x] Token budgets and duration limits
+- [x] Adaptive thinking
+- [x] Session memory
+- [x] Multiple interfaces (REPL, CLI, HTTP, MCP, Cron)
+- [x] Built-in inspector / observability
+- [x] Recipes system
+- [ ] Multi-agent orchestration improvements
+- [ ] Agent-to-agent communication protocol
+- [ ] Smarter context management and compaction
+- [ ] Plugin marketplace
 
 ## Docs
 
