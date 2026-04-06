@@ -1,0 +1,67 @@
+# Example bench.yaml — copy to your working directory and customize.
+#
+# This file tells the auto-improve orchestrator what to benchmark,
+# what it can tune, and how to evaluate results.
+
+# -------------------------------------------------------------------
+# Benchmark execution
+# -------------------------------------------------------------------
+
+# Full benchmark command. Use $CONFIG to reference the config under test.
+run: ra --config $CONFIG --cli "solve the task" < tasks.jsonl
+
+# Fast subset for smoke-testing proposals before a full run (optional).
+# Should test ~10% of cases and return the same score format.
+run_subset: ra --config $CONFIG --cli "solve the task" < tasks_subset.jsonl
+
+# How to extract the top-line score from stdout/stderr
+score:
+  pattern: "accuracy:\\s*([\\d.]+)"
+  direction: higher   # "higher" or "lower"
+
+# Per-case detailed results (optional, enables failure-level diagnosis)
+results:
+  file: results.json
+
+# -------------------------------------------------------------------
+# Variance control
+# -------------------------------------------------------------------
+
+# Number of benchmark runs per evaluation (default: 1).
+# Higher values give more reliable scores but cost more.
+# Use runs > 1 for noisy benchmarks; the orchestrator computes mean ± stddev
+# and only trusts improvements that exceed 2x the standard deviation.
+runs: 3
+
+# -------------------------------------------------------------------
+# Stopping conditions
+# -------------------------------------------------------------------
+
+# Stop when this score is reached (optional). Omit to run indefinitely.
+target_score: 90.0
+
+# -------------------------------------------------------------------
+# Degrees of freedom — what the agent is allowed to tune
+# -------------------------------------------------------------------
+
+# The ra config being optimized.
+# Ensure hotReload: true (the default) so config/prompt/tool/middleware
+# changes take effect automatically on the next benchmark run.
+config: ./agent-under-test.config.yaml
+
+# Source code directories that can be modified (tool implementations,
+# middleware, providers, etc). Optional — omit to restrict to config-only.
+code:
+  - src/tools/
+  - src/middleware/
+
+# System prompt file, if extracted separately from the config.
+# Optional — if omitted, the agent modifies systemPrompt inline in the config.
+prompt: ./system-prompt.md
+
+# Skill directories the agent can modify
+skills:
+  - ./skills/
+
+# Pre-benchmark validation (optional)
+validate: bun tsc && bun test
