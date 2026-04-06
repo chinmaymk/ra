@@ -6,6 +6,7 @@ import { OllamaProvider, type OllamaProviderOptions } from './ollama'
 import { BedrockProvider, type BedrockProviderOptions } from './bedrock'
 import { AzureProvider, type AzureProviderOptions } from './azure'
 import { CodexProvider, type CodexProviderOptions } from './openai-codex'
+import { AnthropicAgentsSdkProvider, type AnthropicAgentsSdkProviderOptions } from './anthropic-agents-sdk'
 
 type ProviderOptionsMap = {
   anthropic: AnthropicProviderOptions
@@ -16,6 +17,7 @@ type ProviderOptionsMap = {
   bedrock: BedrockProviderOptions
   azure: AzureProviderOptions
   codex: CodexProviderOptions
+  'anthropic-agents-sdk': AnthropicAgentsSdkProviderOptions
 }
 
 export type ProviderConfig = {
@@ -38,6 +40,7 @@ const constructors = {
   bedrock: BedrockProvider,
   azure: AzureProvider,
   codex: CodexProvider,
+  'anthropic-agents-sdk': AnthropicAgentsSdkProvider,
 } as const
 
 export function createProvider(config: ProviderConfig): IProvider {

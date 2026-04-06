@@ -12,6 +12,7 @@
   <a href="#install">Install</a> &middot;
   <a href="#the-loop">The Loop</a> &middot;
   <a href="#middleware">Middleware</a> &middot;
+  <a href="#custom-tools">Custom Tools</a> &middot;
   <a href="#observability">Observability</a> &middot;
   <a href="#configuration">Configuration</a> &middot;
   <a href="#recipes">Recipes</a>
@@ -23,15 +24,20 @@
 
 ---
 
-Agents run loops you can't see.
+**Build your agent with ra.**
 
-ra makes the loop explicit — and lets you control every step.
+Most agents work great — until you need to change something. ra gives you the same power with full control. Every part is yours to configure, extend, or replace — and every run comes with full observability built in.
 
-It runs tasks end-to-end like other agents, but unlike them, you can see, constrain, and reproduce everything it does. Not a framework. Not prompt chains. Just the loop, with control and visibility around it.
+A coding agent, a code reviewer, a research agent, a multi-agent orchestrator — these aren't separate codebases. They're different configs:
 
 ```bash
 ra "Fix the failing tests and open a PR"
+ra --config recipes/code-review-agent  "Review the last 3 PRs"
+ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache compression"
+ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
+
+One tool, any agent.
 
 ## Install
 
@@ -62,7 +68,7 @@ agent:
 
 ## Middleware
 
-Intercept any step in the loop. Full context at every step — read it, mutate it, stop it.
+This is where ra becomes truly yours. Intercept any step in the loop — read the full context, mutate it, or stop it entirely.
 
 ```ts
 // middleware/audit.ts — log every tool call
@@ -94,11 +100,41 @@ agent:
 
 Available hooks: `beforeLoopBegin`, `beforeModelCall`, `onStreamChunk`, `afterModelResponse`, `beforeToolExecution`, `afterToolExecution`, `afterLoopIteration`, `afterLoopComplete`, `onError`.
 
+## Custom Tools
+
+Need your agent to deploy, query an internal API, or run a health check? Export a tool:
+
+```ts
+// tools/deploy.ts
+export default {
+  name: 'Deploy',
+  description: 'Deploy a branch to staging',
+  parameters: {
+    branch: { type: 'string', description: 'Git branch to deploy' },
+    dryRun: { type: 'boolean', description: 'Preview only', optional: true },
+  },
+  async execute(input) {
+    const { branch, dryRun } = input as { branch: string; dryRun?: boolean }
+    // your logic here
+    return `Deployed ${branch} to staging`
+  },
+}
+```
+
+Register in config, and the model picks them up automatically:
+
+```yaml
+agent:
+  tools:
+    custom:
+      - ./tools/deploy.ts
+```
+
+Works with shell scripts and any scripting language too — [see the docs](https://chinmaymk.github.io/ra/tools/custom).
+
 ## Observability
 
-Every model call, tool execution, and decision is captured automatically.
-
-`ra --inspector` shows the full run: iterations, tokens, tools, traces, message history.
+Every model call, tool execution, and decision is captured automatically — including your custom tools. `ra --inspector` opens a web dashboard showing the full run: iterations, token spend, tool calls, traces, and the complete message history.
 
 ```bash
 ra --inspector        # web dashboard
@@ -108,7 +144,7 @@ ra --show-context     # discovered context files
 
 ## Configuration
 
-Config lives in your repo. No hidden prompts, no default system prompt. One engineer defines behavior — everyone else runs the same agent.
+Config lives in your repo — no hidden prompts, no default system prompt. One engineer defines the agent's behavior, commits it, and everyone on the team runs the exact same agent.
 
 ```yaml
 # ra.config.yml
@@ -138,22 +174,28 @@ Layered overrides: `defaults → config file → env vars → CLI flags`. YAML, 
 
 ## Recipes
 
-Complete agent configurations to fork and commit to your repo.
+Each recipe is a complete agent — not a library, not a template, just a config file and optional middleware you commit to your repo.
 
-- **[Coding Agent](recipes/coding-agent/)** — file editing, shell, adaptive thinking, context compaction
-- **[Code Review Agent](recipes/code-review-agent/)** — GitHub MCP, style guide, diff scripts, token budget middleware
-- **[Auto-Research Agent](recipes/karpathy-autoresearch/)** — autonomous ML research: run experiments, evaluate, iterate
-- **[Multi-Agent Orchestrator](recipes/multi-agent/)** — persistent specialist agents as independent processes
+| Recipe | What it does | Model | Key difference from vanilla ra |
+|--------|-------------|-------|-------------------------------|
+| **[Coding Agent](recipes/coding-agent/)** | Edits files, runs tests, ships code | Opus | Memory, high thinking, 200 iterations |
+| **[Code Review Agent](recipes/code-review-agent/)** | Reviews PRs against your style guide | Sonnet | Token budget middleware, custom skills |
+| **[Auto-Research Agent](recipes/karpathy-autoresearch/)** | Runs experiments, evaluates, iterates | Sonnet | 500 iterations, 15-min tool timeout |
+| **[Multi-Agent Orchestrator](recipes/multi-agent/)** | Spawns and coordinates specialist agents | Sonnet | Concurrency 4, orchestrator skill |
+
+Same binary. Same loop. Different behavior — defined entirely in config:
 
 ```bash
-ra --config recipes/coding-agent/ra.config.yaml "Fix the failing test"
+ra --config recipes/coding-agent "Fix the failing test"
 ```
 
-## More
+## Extend It
 
-[**Tools**](https://chinmaymk.github.io/ra/tools/) — filesystem, shell, web fetch, and a parallel sub-agent spawner. Each independently configurable or disabled.
+ra is designed to be built on. Pick what you need:
 
-[**Skills**](https://chinmaymk.github.io/ra/skills/) — reusable instruction bundles (`code-review`, `architect`, `debugger`, and more). Install from GitHub or npm.
+[**Tools**](https://chinmaymk.github.io/ra/tools/) — filesystem, shell, web fetch, and a parallel sub-agent spawner. Enable, disable, or configure each one independently.
+
+[**Skills**](https://chinmaymk.github.io/ra/skills/) — reusable instruction bundles (`code-review`, `architect`, `debugger`, and more). Install from GitHub or npm, or write your own.
 
 [**MCP**](https://chinmaymk.github.io/ra/modes/mcp/) — expose skills as tools for Cursor, Claude Desktop, or other agents; connect to external MCP servers.
 

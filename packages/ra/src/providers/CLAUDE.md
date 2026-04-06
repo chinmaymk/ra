@@ -16,6 +16,7 @@ LLM provider adapters. Each maps ra's unified types to a specific SDK.
 | `ollama.ts` | Ollama (local models) |
 | `bedrock.ts` | AWS Bedrock |
 | `azure.ts` | Azure OpenAI |
+| `anthropic-agents-sdk.ts` | Anthropic Agent SDK — fresh subprocess per turn, XML-tagged conversation history, `maxTurns=1` (subscription-based, no API key) |
 | `utils.ts` | `accumulateUsage()` — merges `TokenUsage` objects |
 
 ## Provider Implementation Pattern

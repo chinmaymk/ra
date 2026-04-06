@@ -14,8 +14,9 @@ import { fileToContentPart } from '../utils/files'
 import type { SessionStorage } from '../storage/sessions'
 import type { Skill, SkillIndex } from '../skills/types'
 import { loadSkill, buildActiveSkillXml, readSkillReference } from '../skills/loader'
-import { buildThreadMessages, createSessionLoop, type BaseLoopOptions } from './messages'
+import { buildThreadMessages, buildLoopOptions, createSessionLoop, type BaseLoopOptions } from './messages'
 import type { MemoryStore } from '../memory/store'
+import type { AppContext } from '../bootstrap'
 import { runSkillScriptByName } from '../skills/runner'
 import { extractContextFilePath } from '../context'
 import * as tui from './tui'
@@ -24,6 +25,8 @@ export interface ReplOptions extends BaseLoopOptions {
   storage: SessionStorage
   resumed?: boolean
   memoryStore?: MemoryStore
+  /** AppContext reference for hot-reloading config between loops. */
+  appContext?: AppContext
 }
 
 const DOUBLE_PRESS_TIMEOUT_MS = 1000
@@ -116,8 +119,24 @@ export class Repl {
     await new Promise<void>(resolve => rl.once('close', async () => { await inflight; resolve() }))
   }
 
+  /** Return current loop options, refreshing from AppContext if available. */
+  private async currentOptions(): Promise<BaseLoopOptions> {
+    const ctx = this.options.appContext
+    if (!ctx) return this.options
+    const reloaded = await ctx.refreshIfNeeded()
+    if (reloaded) {
+      // Rebuild options from fresh AppContext state
+      const fresh = buildLoopOptions(ctx)
+      Object.assign(this.options, fresh)
+    }
+    return this.options
+  }
+
   async processInput(input: string): Promise<void> {
     if (!this.sessionId) this.sessionId = await this.newSession()
+
+    // Check for config changes before each loop
+    await this.currentOptions()
 
     const text = this.pendingSkill
       ? `${buildActiveSkillXml(this.pendingSkill)}\n\n${input}`
@@ -164,7 +183,8 @@ export class Repl {
       ],
       afterToolExecution: [
         async (ctx: ToolResultContext) => {
-          tui.printToolResult(ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()))
+          const resultStr = typeof ctx.result.content === 'string' ? ctx.result.content : ''
+          tui.printToolResult(ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()), resultStr)
           tui.startSpinner()
         },
       ],

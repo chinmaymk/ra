@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { createProvider, buildProviderConfig, AzureProvider } from '@chinmaymk/ra'
+import { createProvider, buildProviderConfig, AzureProvider, AnthropicAgentsSdkProvider } from '@chinmaymk/ra'
 
 describe('createProvider', () => {
   it('creates AzureProvider for azure', () => {
@@ -11,5 +11,12 @@ describe('createProvider', () => {
     const provider = createProvider(config)
     expect(provider).toBeInstanceOf(AzureProvider)
     expect(provider.name).toBe('azure')
+  })
+
+  it('creates AnthropicAgentsSdkProvider for anthropic-agents-sdk', () => {
+    const config = buildProviderConfig('anthropic-agents-sdk', {})
+    const provider = createProvider(config)
+    expect(provider).toBeInstanceOf(AnthropicAgentsSdkProvider)
+    expect(provider.name).toBe('anthropic-agents-sdk')
   })
 })

@@ -21,6 +21,7 @@ export const defaultConfig: RaConfig = {
       bedrock: { region: '${AWS_REGION:-us-east-1}' },
       azure: { endpoint: '${AZURE_OPENAI_ENDPOINT:-}', deployment: '${AZURE_OPENAI_DEPLOYMENT:-}', apiKey: '${AZURE_OPENAI_API_KEY:-}' },
       codex: { accessToken: '${CODEX_ACCESS_TOKEN:-}' },
+      'anthropic-agents-sdk': {},
     },
     mcpServers: [],
     mcpLazySchemas: true,
@@ -47,6 +48,7 @@ export const defaultConfig: RaConfig = {
     parallelToolCalls: true,
     maxTokenBudget: 0,
     maxDuration: 0,
+    hotReload: true,
     tools: {
       builtin: true,
       overrides: {},

@@ -62,7 +62,7 @@ const AGENT_KEYS = new Set([
   'provider', 'model', 'thinking', 'systemPrompt',
   'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
   'tools', 'skillDirs', 'permissions',
-  'middleware', 'context', 'compaction', 'memory',
+  'middleware', 'context', 'compaction', 'memory', 'hotReload',
 ])
 
 // Keys that belong under `app` when found at the top level (legacy flat config)
@@ -294,7 +294,21 @@ function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
 
 // ── Main config loader ──────────────────────────────────────────────
 
+export interface LoadConfigResult {
+  config: RaConfig
+  /** Absolute path to the config file that was loaded, if any. */
+  filePath: string | undefined
+  /** Absolute path to the system prompt file, if systemPrompt was loaded from a file. */
+  systemPromptPath: string | undefined
+}
+
+/** Load config, returning just the RaConfig (backward-compatible). */
 export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logger): Promise<RaConfig> {
+  return (await loadConfigWithPath(options, logger)).config
+}
+
+/** Load config, returning both the resolved config and the file path it was loaded from. */
+export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger?: Logger): Promise<LoadConfigResult> {
   const log = logger ?? new NoopLogger()
   const cwd = options.cwd ?? process.cwd()
   const env = (options.env ?? process.env) as Record<string, string | undefined>
@@ -393,15 +407,17 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
   delete config.agent.recipe
 
   // Only try loading systemPrompt as a file if it looks like a path
+  let systemPromptPath: string | undefined
   if (config.agent.systemPrompt && looksLikePath(config.agent.systemPrompt, ['.txt', '.md'])) {
     const resolved = resolvePath(config.agent.systemPrompt, configDir)
     const f = Bun.file(resolved)
     if (await f.exists()) {
+      systemPromptPath = resolved
       config.agent.systemPrompt = await f.text()
       log.debug('system prompt loaded from file', { path: resolved })
     }
   }
 
   log.debug('config resolved', { provider: config.agent.provider, model: config.agent.model, interface: config.app.interface })
-  return config
+  return { config, filePath: configFilePath, systemPromptPath }
 }

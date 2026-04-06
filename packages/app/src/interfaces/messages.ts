@@ -12,6 +12,7 @@ import {
 } from '@chinmaymk/ra'
 import type { SkillIndex } from '../skills/types'
 import type { SessionStorage } from '../storage/sessions'
+import type { AppContext } from '../bootstrap'
 import { createSessionMiddleware } from '../agent/session'
 import { buildAvailableSkillsXml } from '../skills/loader'
 
@@ -37,6 +38,32 @@ export interface BaseLoopOptions {
   tracesEnabled?: boolean
   storage?: SessionStorage
   sessionId?: string
+}
+
+/** Build BaseLoopOptions from an AppContext — reads current (possibly reloaded) state. */
+export function buildLoopOptions(ctx: AppContext): BaseLoopOptions {
+  const { config, provider, tools, middleware, skillIndex, contextMessages, logger } = ctx
+  const { agent, app } = config
+  return {
+    model: agent.model,
+    provider,
+    tools,
+    systemPrompt: agent.systemPrompt,
+    skillIndex,
+    middleware,
+    maxIterations: agent.maxIterations,
+    maxRetries: agent.maxRetries,
+    toolTimeout: agent.toolTimeout,
+    maxToolResponseSize: agent.tools.maxResponseSize,
+    thinking: agent.thinking,
+    thinkingBudgetCap: agent.thinkingBudgetCap,
+    compaction: agent.compaction,
+    contextMessages,
+    logger,
+    logsEnabled: app.logsEnabled,
+    logLevel: app.logLevel,
+    tracesEnabled: app.tracesEnabled,
+  }
 }
 
 /**

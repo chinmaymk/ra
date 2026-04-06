@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { AgentLoop, serializeContent, errorMessage, type IMessage } from '@chinmaymk/ra'
-import { loadConfig } from './config'
+import { loadConfigWithPath } from './config'
 import type { RaConfig } from './config/types'
 import { bootstrap, type AppContext } from './bootstrap'
 import { parseArgs } from './interfaces/parse-args'
@@ -219,6 +219,7 @@ async function launchHttp(app: AppContext, signals: { remove: () => void }): Pro
     logsEnabled: app.config.app.logsEnabled,
     logLevel: app.config.app.logLevel,
     tracesEnabled: app.config.app.tracesEnabled,
+    appContext: app,
   })
   await httpServer.start()
   console.error('HTTP server listening on port', httpServer.port)
@@ -259,6 +260,7 @@ async function launchRepl(app: AppContext): Promise<void> {
     logsEnabled: app.config.app.logsEnabled,
     logLevel: app.config.app.logLevel,
     tracesEnabled: app.config.app.tracesEnabled,
+    appContext: app,
   })
   await repl.start()
   try { if (stopMcpHttp) await stopMcpHttp() } catch { /* best-effort */ }
@@ -332,13 +334,14 @@ async function main(): Promise<void> {
     parsedApp.interface = 'cli' as const
   }
 
-  const config = await loadConfig({
+  const loadOptions = {
     cwd: process.cwd(),
     configPath: parsed.meta.configPath,
     cliArgs: parsed.config,
     env: process.env as Record<string, string | undefined>,
     recipeName: parsed.meta.recipeName,
-  })
+  }
+  const { config, filePath: configFilePath, systemPromptPath } = await loadConfigWithPath(loadOptions)
 
   if (parsed.meta.showConfig || parsed.meta.showContext) {
     const { discoverContextFiles, buildContextMessages } = await import('./context')
@@ -356,7 +359,7 @@ async function main(): Promise<void> {
   }
 
   const isInspector = config.app.interface === 'inspector'
-  const app = await bootstrap(config, { resume: parsed.meta.resume, skipSession: isInspector })
+  const app = await bootstrap(config, { resume: parsed.meta.resume, skipSession: isInspector, configFilePath, systemPromptPath, loadOptions })
 
   const signals = onSignals(app.shutdown)
   if (!isInspector) await handleStandaloneCommands(parsed, app)

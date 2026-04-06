@@ -10,6 +10,7 @@ import type {
   BedrockProviderOptions,
   AzureProviderOptions,
   CodexProviderOptions,
+  AnthropicAgentsSdkProviderOptions,
 } from '@chinmaymk/ra'
 
 export type { ProviderName } from '@chinmaymk/ra'
@@ -79,6 +80,7 @@ export interface AppConfig {
     bedrock: BedrockProviderOptions
     azure: AzureProviderOptions
     codex: CodexProviderOptions
+    'anthropic-agents-sdk': AnthropicAgentsSdkProviderOptions
   }
   /** External MCP servers to connect to. */
   mcpServers: McpServerEntry[]
@@ -112,6 +114,8 @@ export interface AgentConfig {
   maxTokenBudget: number
   /** Max wall-clock duration in milliseconds before the loop stops. 0 = unlimited. */
   maxDuration: number
+  /** Hot-reload config and referenced files (system prompt, tools, middleware) between loops. Default true. */
+  hotReload: boolean
   tools: ToolsConfig
   skillDirs: string[]
   permissions: PermissionsConfig
