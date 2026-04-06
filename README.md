@@ -33,7 +33,7 @@ ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache co
 ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
 
-No arbitrary iteration caps — the agent runs until the job is done. You set the budget, ra enforces it. Token limits and duration caps trigger a clean shutdown, not a crash. Adaptive thinking scales reasoning effort automatically — high for planning, low for execution — so you're not burning tokens on boilerplate.
+Set a budget and walk away — ra runs until the job is done or the budget runs out, whichever comes first.
 
 ```yaml
 agent:
