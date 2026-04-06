@@ -132,18 +132,20 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(result).toContain('<tool_result id="tc_1" error="true">')
     })
 
-    it('appends opening assistant tag when conversation ends with tool result', () => {
+    it('adds history preamble and continuation instruction when ending with tool result', () => {
       const result = provider.formatConversation([
         { role: 'user', content: 'read it' },
         { role: 'assistant', content: 'Sure.', toolCalls: [{ id: 'tc_1', name: 'Read', arguments: '{}' }] },
         { role: 'tool', content: 'contents', toolCallId: 'tc_1' },
       ])
-      expect(result).toEndWith('\n\n<assistant>\n')
+      expect(result).toStartWith('The following is your previous conversation history')
+      expect(result).toContain('<tool_result id="tc_1">')
+      expect(result).toEndWith('Do not output XML tags.')
     })
 
-    it('does not append assistant tag when conversation ends with user message', () => {
+    it('does not add preamble when conversation ends with user message', () => {
       const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
-      expect(result).not.toContain('<assistant>')
+      expect(result).not.toContain('previous conversation history')
     })
   })
 

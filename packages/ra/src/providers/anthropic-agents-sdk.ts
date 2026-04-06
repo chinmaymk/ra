@@ -174,11 +174,11 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       }
     }
     const formatted = parts.join('\n\n')
-    // When conversation ends with tool results, add an opening assistant tag
-    // so the model continues as the assistant instead of echoing the XML history
     const lastMsg = messages[messages.length - 1]
+    // For multi-turn conversations with tool results, add a preamble so the
+    // model treats the XML as prior history rather than echoing the tags.
     if (lastMsg?.role === 'tool') {
-      return formatted + '\n\n<assistant>\n'
+      return HISTORY_PREAMBLE + formatted + '\n\nContinue the conversation based on the tool results above. Do not output XML tags.'
     }
     return formatted
   }
@@ -325,6 +325,9 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     }
   }
 }
+
+/** Preamble added before XML-serialized history on tool-result turns to prevent the model from echoing XML tags. */
+const HISTORY_PREAMBLE = 'The following is your previous conversation history including tool calls you made and their results. Use this context to continue the conversation.\n\n'
 
 const MCP_SERVER_NAME = 'ra-tools'
 const MCP_PREFIX = `mcp__${MCP_SERVER_NAME}__`
