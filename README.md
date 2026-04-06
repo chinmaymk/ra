@@ -171,8 +171,14 @@ ra --inspector
 - [x] Multiple interfaces (REPL, CLI, HTTP, MCP, Cron)
 - [x] Built-in inspector / observability
 - [x] Recipes system
+- [x] Anthropic and Codex subscription support
 - [ ] Multi-agent orchestration via config
 - [ ] Smarter compaction
+- [ ] Cost tracking per provider
+- [ ] Provider auto-fallback on errors
+- [ ] Tool execution sandboxing
+- [ ] Conversation branching and replay
+- [ ] Structured output validation
 
 ## Docs
 
