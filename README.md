@@ -29,8 +29,9 @@ One config file is the difference between a coding agent, a code reviewer, a res
 
 ```bash
 ra "Fix the failing tests and open a PR"
-ra --config recipes/code-review-agent  "Review the last 3 PRs"
-ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache compression"
+git diff | ra "Review this diff for security issues"
+cat error.log | ra "Explain what went wrong"
+ra --config recipes/code-review-agent "Review the last 3 PRs"
 ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
 
@@ -174,11 +175,6 @@ ra --inspector
 - [x] Anthropic and Codex subscription support
 - [ ] Multi-agent orchestration via config
 - [ ] Smarter compaction
-- [ ] Cost tracking per provider
-- [ ] Provider auto-fallback on errors
-- [ ] Tool execution sandboxing
-- [ ] Conversation branching and replay
-- [ ] Structured output validation
 
 ## Docs
 
