@@ -1,10 +1,12 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test'
 
 const mockClientSend = mock()
+let lastClientConfig: Record<string, unknown> = {}
 
 mock.module('@aws-sdk/client-bedrock-runtime', () => ({
   BedrockRuntimeClient: class MockBedrockRuntimeClient {
     send = mockClientSend
+    constructor(config: Record<string, unknown>) { lastClientConfig = config }
   },
   ConverseCommand: class ConverseCommand { constructor(public input: any) {} },
   ConverseStreamCommand: class ConverseStreamCommand { constructor(public input: any) {} },
@@ -350,5 +352,65 @@ describe('BedrockProvider - stream()', () => {
       chunks.push(chunk)
     }
     expect(chunks).toHaveLength(0)
+  })
+})
+
+describe('BedrockProvider - credential wiring', () => {
+  it('uses default credential chain when no credentials provided', () => {
+    new BedrockProvider({})
+    expect(lastClientConfig.credentials).toBeUndefined()
+    expect(lastClientConfig.token).toBeUndefined()
+    expect(lastClientConfig.authSchemePreference).toBeUndefined()
+  })
+
+  it('does not pass credentials when accessKeyId/secretAccessKey are empty strings', () => {
+    new BedrockProvider({ accessKeyId: '', secretAccessKey: '' })
+    expect(lastClientConfig.credentials).toBeUndefined()
+  })
+
+  it('passes explicit credentials when accessKeyId and secretAccessKey are set', () => {
+    new BedrockProvider({ accessKeyId: 'AKID', secretAccessKey: 'SECRET' })
+    expect(lastClientConfig.credentials).toEqual({ accessKeyId: 'AKID', secretAccessKey: 'SECRET' })
+  })
+
+  it('includes sessionToken in credentials when provided', () => {
+    new BedrockProvider({ accessKeyId: 'AKID', secretAccessKey: 'SECRET', sessionToken: 'TOK' })
+    expect(lastClientConfig.credentials).toEqual({ accessKeyId: 'AKID', secretAccessKey: 'SECRET', sessionToken: 'TOK' })
+  })
+
+  it('omits sessionToken from credentials when it is empty string', () => {
+    new BedrockProvider({ accessKeyId: 'AKID', secretAccessKey: 'SECRET', sessionToken: '' })
+    expect(lastClientConfig.credentials).toEqual({ accessKeyId: 'AKID', secretAccessKey: 'SECRET' })
+  })
+
+  it('passes bearer token with httpBearerAuth preference when apiKey is set', () => {
+    new BedrockProvider({ apiKey: 'my-bearer-token' })
+    expect(lastClientConfig.token).toEqual({ token: 'my-bearer-token' })
+    expect(lastClientConfig.authSchemePreference).toEqual(['httpBearerAuth'])
+    expect(lastClientConfig.credentials).toBeUndefined()
+  })
+
+  it('does not pass token when apiKey is empty string', () => {
+    new BedrockProvider({ apiKey: '' })
+    expect(lastClientConfig.token).toBeUndefined()
+    expect(lastClientConfig.authSchemePreference).toBeUndefined()
+  })
+
+  it('prefers explicit credentials over apiKey when both are set', () => {
+    new BedrockProvider({ apiKey: 'bearer', accessKeyId: 'AKID', secretAccessKey: 'SECRET' })
+    expect(lastClientConfig.credentials).toEqual({ accessKeyId: 'AKID', secretAccessKey: 'SECRET' })
+    expect(lastClientConfig.token).toBeUndefined()
+    expect(lastClientConfig.authSchemePreference).toBeUndefined()
+  })
+
+  it('passes region and endpoint correctly', () => {
+    new BedrockProvider({ region: 'eu-west-1', baseURL: 'https://vpce.example.com' })
+    expect(lastClientConfig.region).toBe('eu-west-1')
+    expect(lastClientConfig.endpoint).toBe('https://vpce.example.com')
+  })
+
+  it('defaults region to us-east-1', () => {
+    new BedrockProvider({})
+    expect(lastClientConfig.region).toBe('us-east-1')
   })
 })
