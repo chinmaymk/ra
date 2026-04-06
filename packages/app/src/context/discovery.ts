@@ -127,8 +127,9 @@ export function createDiscoveryMiddleware(
           idx = i + 1
       }
       messages.splice(idx, 0, ...msgs)
-    } catch {
+    } catch (err) {
       // Context discovery is best-effort — never crash the agent loop
+      ctx.logger.debug('dynamic context discovery failed', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 }

@@ -67,7 +67,19 @@ export class McpClient {
       logger.error('MCP connection failed, cleaning up', { error: err instanceof Error ? err.message : String(err) })
       // Clean up already-connected clients to avoid leaked child processes
       await this.disconnect()
-      throw err
+
+      const msg = err instanceof Error ? err.message : String(err)
+      const failedServer = configs.find(() => true)?.name ?? 'unknown'
+      if (msg.includes('ENOENT') || msg.includes('not found')) {
+        throw new Error(`MCP server "${failedServer}" failed to start: command not found. Check that the command is installed and available on your PATH.`)
+      }
+      if (msg.includes('ECONNREFUSED') || msg.includes('ENOTFOUND')) {
+        throw new Error(`MCP server "${failedServer}" is not reachable. Check the URL and ensure the server is running.`)
+      }
+      if (msg.includes('EACCES') || msg.includes('permission')) {
+        throw new Error(`MCP server "${failedServer}" failed to start: permission denied. Check file permissions for the command.`)
+      }
+      throw new Error(`MCP server "${failedServer}" connection failed: ${msg}`)
     }
   }
 

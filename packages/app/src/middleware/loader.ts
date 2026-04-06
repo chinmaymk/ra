@@ -19,9 +19,18 @@ async function loadOne<T>(entry: string, hook: string, cwd: string, logger: Logg
   }
   if (looksLikePath(entry)) {
     const resolved = resolvePath(entry, cwd)
-    const mod = await importFresh(resolved)
+    let mod: Record<string, unknown>
+    try {
+      mod = await importFresh(resolved)
+    } catch (err) {
+      const detail = errorMessage(err)
+      if (detail.includes('Cannot find module') || detail.includes('ENOENT') || detail.includes('not found')) {
+        throw new Error(`Middleware file not found: "${resolved}". Check the path in your config under middleware.${hook}.`)
+      }
+      throw new Error(`Failed to import middleware file "${resolved}" for hook "${hook}": ${detail}`)
+    }
     if (typeof mod.default !== 'function') {
-      throw new Error(`Middleware file "${resolved}" must export a default function`)
+      throw new Error(`Middleware file "${resolved}" must export a default function, but got ${typeof mod.default}. See docs for middleware format.`)
     }
     return mod.default as Middleware<T>
   }
@@ -31,10 +40,10 @@ async function loadOne<T>(entry: string, hook: string, cwd: string, logger: Logg
     const js = await transpiler.transform(`(${entry})`)
     fn = (0, eval)(js)
   } catch (err) {
-    throw new Error(`Failed to parse inline middleware expression: ${errorMessage(err)}\n  Expression: ${entry}`)
+    throw new Error(`Failed to parse inline middleware expression for hook "${hook}": ${errorMessage(err)}\n  Expression: ${entry}`)
   }
   if (typeof fn !== 'function') {
-    throw new Error(`Inline middleware expression must evaluate to a function. Got: ${typeof fn}`)
+    throw new Error(`Inline middleware expression for hook "${hook}" must evaluate to a function, but got ${typeof fn}.\n  Expression: ${entry}`)
   }
   return fn as Middleware<T>
 }

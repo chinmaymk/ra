@@ -104,14 +104,26 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     }
 
     const prompt = this.formatConversation(filtered)
-    const session = query({
-      prompt,
-      options: {
-        ...options,
-        abortController,
-        ...(mcpServer && { mcpServers: { [MCP_SERVER_NAME]: mcpServer } }),
-      },
-    })
+    let session: AsyncIterable<SDKMessage>
+    try {
+      session = query({
+        prompt,
+        options: {
+          ...options,
+          abortController,
+          ...(mcpServer && { mcpServers: { [MCP_SERVER_NAME]: mcpServer } }),
+        },
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('ENOENT') || msg.includes('not found') || msg.includes('claude')) {
+        throw new Error(
+          'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
+          'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
+        )
+      }
+      throw err
+    }
 
     yield* withDoneGuard(this.parseSession(session))
   }
@@ -243,7 +255,16 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         const isExpected =
           message.includes('maximum number of turns') ||
           message.includes('max_turns')
-        if (!isExpected) throw err
+        if (!isExpected) {
+          // Provide a better error when the Claude CLI subprocess fails
+          if (message.includes('ENOENT') || message.includes('not found') || message.includes('spawn')) {
+            throw new Error(
+              'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
+              'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
+            )
+          }
+          throw err
+        }
       } else {
         throw err
       }
