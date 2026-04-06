@@ -26,7 +26,7 @@
 
 Most agent frameworks lock you in. ra doesn't — every decision the agent makes flows through hooks you control, tools you define, and configs you commit. No hidden prompts, no black-box loops, no vendor lock-in.
 
-A coding agent, a code reviewer, a research agent, a multi-agent orchestrator — these aren't separate codebases. They're different configs:
+One config file is the difference between a coding agent, a code reviewer, a research loop, and a multi-agent orchestrator:
 
 ```bash
 ra "Fix the failing tests and open a PR"
@@ -34,8 +34,6 @@ ra --config recipes/code-review-agent  "Review the last 3 PRs"
 ra --config recipes/karpathy-autoresearch "Survey recent advances in KV-cache compression"
 ra --config recipes/multi-agent "Refactor the auth module, test it, and update the docs"
 ```
-
-Same binary. Any agent. Defined entirely in config.
 
 ## Install
 
@@ -127,18 +125,18 @@ Works with shell scripts and any scripting language too — [see the docs](https
 
 ## Skills
 
-Reusable instruction bundles that shape agent behavior. `/code-review`, `/architect`, `/debugger`, `/deep-research` — install from GitHub or npm, or write your own.
+Skills are reusable instruction bundles — `/code-review`, `/architect`, `/debugger`, `/deep-research`. What makes them powerful in ra is that they compose with everything else: a skill can trigger middleware, use custom tools, and respect the same permissions and observability as the rest of the agent.
 
 ```yaml
 agent:
   skillDirs: [./skills]
 ```
 
-Each skill is a Markdown file with optional scripts and reference docs. The agent picks them up automatically — no code changes needed.
+Each skill is a Markdown file with optional scripts and reference docs. Install from GitHub, npm, or write your own — the agent picks them up automatically.
 
 ## Recipes
 
-Each recipe is a complete agent — a config file and optional middleware you commit to your repo.
+Each recipe is a complete agent — config, middleware, tools, and skills — committed to your repo with the same observability and control as everything else.
 
 | Recipe | What it does | Model | Key difference |
 |--------|-------------|-------|----------------|
@@ -190,13 +188,15 @@ ra isn't just a CLI. Pick the interface that fits your workflow:
 
 ## Observability
 
-Every model call, tool execution, and decision is captured automatically. Structured JSONL logs, trace spans, and a built-in web inspector.
+Every model call, tool execution, and decision is captured automatically — structured JSONL logs, trace spans, and a built-in web inspector that shows the full picture: iterations, token spend, tool calls, and the complete message history.
 
 ```bash
-ra --inspector        # web dashboard
-ra --show-config      # resolved config as JSON
-ra --show-context     # discovered context files
+ra --inspector
 ```
+
+<p align="center">
+  <img src="docs/site/public/inspector-overview.png" alt="ra inspector dashboard" width="800">
+</p>
 
 ## Docs
 
