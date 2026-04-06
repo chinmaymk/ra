@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import OpenAI from 'openai'
 import { OpenAIResponsesProvider } from './openai-responses'
-import type { ChatRequest } from './types'
+import type { ChatRequest, ChatResponse, StreamChunk } from './types'
+import { ProviderError } from '../utils/errors'
 
 const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex'
+const CODEX_DEFAULT_MODEL = 'gpt-5.4'
 
 export interface CodexProviderOptions {
   accessToken: string
@@ -21,6 +23,27 @@ function extractAccountId(token: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+/**
+ * Custom fetch wrapper that rewrites Codex error responses into the standard
+ * OpenAI `{"error":{"message":"..."}}` format. The Codex backend returns
+ * FastAPI-style `{"detail":"..."}` which the SDK can't parse, resulting in
+ * the unhelpful "400 status code (no body)" message.
+ */
+function codexFetch(input: string | URL | globalThis.Request, init?: RequestInit): Promise<Response> {
+  return fetch(input, init).then(async (res) => {
+    if (res.ok) return res
+    const body = await res.text()
+    let rewritten = body
+    try {
+      const parsed = JSON.parse(body) as { detail?: string }
+      if (parsed.detail) {
+        rewritten = JSON.stringify({ error: { message: parsed.detail, type: 'invalid_request_error' } })
+      }
+    } catch { /* use body as-is */ }
+    return new Response(rewritten, { status: res.status, statusText: res.statusText, headers: res.headers })
+  })
 }
 
 export class CodexProvider extends OpenAIResponsesProvider {
@@ -46,10 +69,13 @@ export class CodexProvider extends OpenAIResponsesProvider {
       apiKey: options.accessToken,
       baseURL,
       defaultHeaders: headers,
+      fetch: codexFetch,
     })
   }
 
   override buildParams(request: ChatRequest) {
+    // Default to the Codex-optimized model when none is specified
+    if (!request.model) request.model = CODEX_DEFAULT_MODEL
     const params = super.buildParams(request)
     const raw = params as Record<string, unknown>
     // Codex backend requires `instructions` — provide a default if absent
