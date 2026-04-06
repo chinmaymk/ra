@@ -517,16 +517,19 @@ export interface TuiStreamState {
   pendingToolNames: string[]
   /** Active tool entries for in-place ◆ → ✔ updates. */
   activeTools: ActiveToolEntry[]
+  /** Enable incremental markdown rendering for text output. */
+  markdown: boolean
 }
 
 /** Create a new TUI streaming state for a single agent loop run. */
-export function createStreamState(): TuiStreamState {
+export function createStreamState(options?: { markdown?: boolean }): TuiStreamState {
   return {
     boxOpened: false, thinkingOpened: false, thinkingCollapsed: false,
     thinkingLines: 0, thinkingStartTime: 0,
     streamBuf: null, thinkingBuf: null, toolStartTimes: new Map(),
     pendingToolNames: [],
     activeTools: [],
+    markdown: options?.markdown ?? false,
   }
 }
 
@@ -567,7 +570,7 @@ export function handleStreamChunk(state: TuiStreamState, chunkType: string, delt
       }
       state.boxOpened = true
       const contentWidth = (process.stdout.columns || 80) - RESPONSE_PREFIX_LEN
-      state.streamBuf = new StreamBuffer(contentWidth, true)
+      state.streamBuf = new StreamBuffer(contentWidth, state.markdown)
     }
     if (delta && state.streamBuf) process.stdout.write(state.streamBuf.write(delta))
   } else if (chunkType === 'tool_call_start' && toolName) {

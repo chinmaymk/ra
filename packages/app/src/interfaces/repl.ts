@@ -157,7 +157,7 @@ export class Repl {
     })
     initialMessages.push(userMessage)
 
-    const tuiState = tui.createStreamState()
+    const tuiState = tui.createStreamState({ markdown: true })
     tui.startSpinner()
 
     const tuiHooks: Partial<MiddlewareConfig> = {
