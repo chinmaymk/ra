@@ -17,7 +17,6 @@ import {
   setSecret,
   getSecret,
   removeSecret,
-  listProfiles,
   getProfileSecrets,
   maskSecret,
 } from './store'
@@ -47,6 +46,14 @@ function parseSecretArgs(args: string[]): ParsedSecretArgs {
     }
   }
   return { profile, showAll, positionals }
+}
+
+/** Print one profile's secrets, masked. */
+function printProfile(name: string, entries: Record<string, string>): void {
+  console.log(`[${name}]`)
+  for (const k of Object.keys(entries).sort()) {
+    console.log(`  ${k} = ${maskSecret(entries[k]!)}`)
+  }
 }
 
 function usage(): never {
@@ -111,37 +118,29 @@ export function runSecretsCommand(action: string, args: string[]): void {
           console.log(`No secrets stored. (${getSecretsPath()})`)
           return
         }
-        for (const p of profiles) {
-          console.log(`[${p}]`)
-          for (const [k, v] of Object.entries(all[p]!)) {
-            console.log(`  ${k} = ${maskSecret(v)}`)
-          }
-        }
+        for (const p of profiles) printProfile(p, all[p]!)
         return
       }
 
       const entries = getProfileSecrets(profile)
-      const keys = Object.keys(entries).sort()
-      if (keys.length === 0) {
+      if (Object.keys(entries).length === 0) {
         console.log(`No secrets in profile "${profile}". (${getSecretsPath()})`)
         return
       }
-      console.log(`[${profile}]`)
-      for (const k of keys) {
-        console.log(`  ${k} = ${maskSecret(entries[k]!)}`)
-      }
+      printProfile(profile, entries)
       return
     }
 
     case 'profiles': {
-      const profiles = listProfiles()
+      // Single load — derive both the profile list and per-profile counts.
+      const all = loadSecretsSync()
+      const profiles = Object.keys(all).sort()
       if (profiles.length === 0) {
         console.log(`No profiles. (${getSecretsPath()})`)
         return
       }
-      const all = loadSecretsSync()
       for (const p of profiles) {
-        const count = Object.keys(all[p] ?? {}).length
+        const count = Object.keys(all[p]!).length
         console.log(`  ${p}  (${count} secret${count === 1 ? '' : 's'})`)
       }
       return

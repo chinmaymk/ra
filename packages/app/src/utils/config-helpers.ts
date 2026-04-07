@@ -1,3 +1,8 @@
+/** Type guard for plain (non-array, non-null) objects. */
+export function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v)
+}
+
 /** Set a deeply nested value at a dot-path without clobbering sibling keys. */
 export function setPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
   let cur = obj

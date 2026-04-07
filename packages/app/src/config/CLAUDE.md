@@ -1,32 +1,41 @@
 # src/config/
 
-Layered configuration system: CLI flags > config file > defaults.
+Layered configuration system. Each layer overrides the previous:
+
+```
+--cli-flags > ra.config.{yml,json,toml} > recipe > standard env vars + secrets > defaults
+```
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `types.ts` | `RaConfig`, `AppConfig`, `AgentConfig` interfaces — all configuration fields with types |
-| `defaults.ts` | `defaultConfig` object — sensible defaults for every field, with `${VAR:-default}` references for provider credentials |
-| `index.ts` | `loadConfig()` — merges all layers, resolves paths, interpolates `${VAR}` references |
+| `defaults.ts` | `defaultConfig` object — plain TS, no `${VAR}` magic. Empty-string credential placeholders are filled by the env layer |
+| `index.ts` | `loadConfig()` — merges all layers, resolves paths, validates the result |
 
-## Config Hierarchy
+## Provider Credentials & Secrets
 
-Each layer overrides the previous:
-```
---cli-flags > ra.config.{yml,json,toml} > defaults
-```
+Provider credentials (and connection options like `OLLAMA_HOST`, `AZURE_OPENAI_ENDPOINT`)
+flow through three sources, in priority order:
 
-## Environment Variable Interpolation
+1. **Real `process.env`** — `ANTHROPIC_API_KEY=sk-... ra ...` always wins
+2. **Secrets store** — `~/.ra/secrets.json` (mode 0600), profile-aware:
+   ```
+   ra secrets set OPENAI_API_KEY sk-...           # default profile
+   ra secrets set OPENAI_API_KEY sk-... --profile work
+   ```
+   Profile selection: `--profile <name>` > `RA_PROFILE` > `"default"`.
+3. **Defaults** — empty placeholders that satisfy the SDK type signatures
 
-Config files and defaults support Docker Compose–style `${VAR}` interpolation:
-- `${VAR}` — required, errors if not set
-- `${VAR:-default}` — use default if unset or empty
-- `${VAR-default}` — use default if unset (empty string is kept)
+The mapping between standard env var names (`ANTHROPIC_API_KEY`,
+`OPENAI_BASE_URL`, `AWS_REGION`, ...) and nested config paths lives in
+`interfaces/parse-args.ts` (`STANDARD_ENV` + `buildStandardEnvLayer`).
+Both `parseArgs` and `loadConfig` consume that single mapping.
 
-After interpolation, string values are coerced to match expected types (number, boolean) based on the default config schema.
-
-Provider credentials are resolved from standard env vars by default (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
+There is **no `${VAR}` interpolation in config files anymore.** Write
+literal values; if you need an env var, set it in your shell or store
+it via `ra secrets set`.
 
 ## Config Sections
 
@@ -81,16 +90,17 @@ Everything a recipe defines: brain, tools, skills, permissions.
 
 ## Provider Options
 
-Each provider has its own options block under `app.providers`. The agent selects which one to use via `agent.provider`. Defaults resolve standard env vars:
+Each provider has its own options block under `app.providers`. The agent
+selects which one to use via `agent.provider`. Credentials and connection
+options come from standard env vars / the secrets store; you only need a
+config-file entry if you want to override a non-credential setting:
+
 ```yaml
-app:
-  providers:
-    anthropic: { apiKey: "${ANTHROPIC_API_KEY:-}" }
-    openai: { apiKey: "${OPENAI_API_KEY:-}" }
-    google: { apiKey: "${GOOGLE_API_KEY:-}" }
-    ollama: { host: "${OLLAMA_HOST:-http://localhost:11434}" }
-    bedrock: { region: "${AWS_REGION:-us-east-1}" }
-    azure: { endpoint: "${AZURE_OPENAI_ENDPOINT:-}", deployment: "${AZURE_OPENAI_DEPLOYMENT:-}", apiKey: "${AZURE_OPENAI_API_KEY:-}" }
 agent:
   provider: anthropic
+# Optional — credentials are filled from ANTHROPIC_API_KEY env var or
+# `ra secrets set ANTHROPIC_API_KEY ...`. Override only if you have to:
+app:
+  providers:
+    ollama: { host: "http://my-ollama-host:11434" }
 ```

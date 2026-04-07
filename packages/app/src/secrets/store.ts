@@ -23,7 +23,8 @@
 
 import { homedir } from 'os'
 import { join, dirname } from 'path'
-import { mkdirSync, readFileSync, writeFileSync, chmodSync, existsSync } from 'fs'
+import { mkdirSync, readFileSync, writeFileSync, chmodSync } from 'fs'
+import { isPlainObject } from '../utils/config-helpers'
 
 export const DEFAULT_PROFILE = 'default'
 
@@ -38,31 +39,38 @@ export function getSecretsPath(): string {
   return process.env.RA_SECRETS_PATH || join(homedir(), '.ra', 'secrets.json')
 }
 
-/** @deprecated use {@link getSecretsPath} — kept for tests that import it directly. */
-export const SECRETS_PATH = join(homedir(), '.ra', 'secrets.json')
-
-/** Synchronously read the secrets file. Returns an empty object if it doesn't exist. */
+/**
+ * Synchronously read the secrets file. Returns an empty object on any
+ * failure (missing file, parse error, wrong shape) — callers don't need
+ * to distinguish "no secrets configured" from "the file is bad" because
+ * both yield the same downstream behaviour.
+ */
 export function loadSecretsSync(path: string = getSecretsPath()): SecretsFile {
-  if (!existsSync(path)) return {}
+  let raw: string
   try {
-    const raw = readFileSync(path, 'utf-8')
-    if (!raw.trim()) return {}
-    const parsed = JSON.parse(raw) as unknown
-    if (!isPlainObject(parsed)) return {}
-    // Validate shape: top-level values must be plain objects of string→string
-    const result: SecretsFile = {}
-    for (const [profile, values] of Object.entries(parsed)) {
-      if (!isPlainObject(values)) continue
-      const clean: Record<string, string> = {}
-      for (const [k, v] of Object.entries(values)) {
-        if (typeof v === 'string') clean[k] = v
-      }
-      result[profile] = clean
-    }
-    return result
+    raw = readFileSync(path, 'utf-8')
+  } catch {
+    return {} // ENOENT or unreadable
+  }
+  if (!raw.trim()) return {}
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
   } catch {
     return {}
   }
+  if (!isPlainObject(parsed)) return {}
+  // Validate shape: top-level values must be plain objects of string→string.
+  const result: SecretsFile = {}
+  for (const [profile, values] of Object.entries(parsed)) {
+    if (!isPlainObject(values)) continue
+    const clean: Record<string, string> = {}
+    for (const [k, v] of Object.entries(values)) {
+      if (typeof v === 'string') clean[k] = v
+    }
+    result[profile] = clean
+  }
+  return result
 }
 
 /** Atomically write the secrets file with mode 0600. */
@@ -135,8 +143,4 @@ export function buildMergedEnv(
 export function maskSecret(value: string): string {
   if (value.length <= 8) return '••••••••'
   return `${value.slice(0, 3)}…${value.slice(-4)}`
-}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return v !== null && typeof v === 'object' && !Array.isArray(v)
 }

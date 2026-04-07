@@ -2,8 +2,9 @@ import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath, homeDir, configHandle } from '../utils/paths'
-import { buildStandardEnvLayer } from '../interfaces/parse-args'
+import { isPlainObject } from '../utils/config-helpers'
 import { buildMergedEnv } from '../secrets/store'
+import { buildStandardEnvLayer, PROVIDERS, INTERFACE_FLAGS } from './schema'
 import { defaultConfig } from './defaults'
 import { CONFIG_FILES } from '../registry/helpers'
 import { NoopLogger } from '@chinmaymk/ra'
@@ -12,10 +13,6 @@ import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './t
 
 export { defaultConfig } from './defaults'
 export type { RaConfig, LoadConfigOptions, McpServerEntry, RaMcpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return v !== null && typeof v === 'object' && !Array.isArray(v)
-}
 
 function deepMerge(
   target: Record<string, unknown>,
@@ -81,143 +78,20 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
   return {}
 }
 
-// Keys that belong under `agent` when found at the top level (legacy flat config)
-const AGENT_KEYS = new Set([
-  'provider', 'model', 'thinking', 'systemPrompt',
-  'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
-  'tools', 'skillDirs', 'permissions',
-  'middleware', 'context', 'compaction', 'memory', 'hotReload',
-])
-
-// Keys that belong under `app` when found at the top level (legacy flat config)
-const APP_KEYS = new Set([
-  'interface', 'dataDir', 'http', 'inspector', 'storage',
-  'mcpServers', 'mcpLazySchemas', 'raMcpServer', 'providers',
-  'logsEnabled', 'logLevel', 'tracesEnabled',
-])
-
-/** Move a value from `src[srcKey]` to `dst[dstKey]` if dst doesn't already have it. */
-function migrateKey(src: Record<string, unknown>, srcKey: string, dst: Record<string, unknown>, dstKey: string, check: (v: unknown) => boolean = () => true): void {
-  if (src[srcKey] !== undefined && check(src[srcKey]) && dst[dstKey] === undefined) {
-    dst[dstKey] = src[srcKey]
-    delete src[srcKey]
-  }
-}
-
 /**
- * Normalize MCP config from legacy shapes into the canonical layout:
- *   `app.mcpServers`, `app.mcpLazySchemas`, `app.raMcpServer`
- *
- * Legacy paths handled:
- *   - `app.mcp.{client|servers}` → `app.mcpServers`
- *   - `app.mcp.server`           → `app.raMcpServer`
- *   - `app.mcp.lazySchemas`      → `app.mcpLazySchemas`
- *   - `app.mcpServer`            → `app.raMcpServer`
- *   - `agent.mcp.{servers|client}`→ `app.mcpServers`
- *   - `agent.mcp.lazySchemas`    → `app.mcpLazySchemas`
- */
-function normalizeMcpConfig(raw: Record<string, unknown>): void {
-  if (!isPlainObject(raw.app)) raw.app = {}
-  const app = raw.app as Record<string, unknown>
-
-  // Legacy: app.mcp: { client|servers, server, lazySchemas }
-  if (isPlainObject(app.mcp)) {
-    const mcp = app.mcp as Record<string, unknown>
-    if (app.mcpServers === undefined) app.mcpServers = mcp.client ?? mcp.servers
-    migrateKey(mcp, 'lazySchemas', app, 'mcpLazySchemas')
-    migrateKey(mcp, 'server', app, 'raMcpServer', isPlainObject)
-    delete app.mcp
-  }
-
-  // Legacy: app.mcpServer → app.raMcpServer
-  migrateKey(app, 'mcpServer', app, 'raMcpServer', isPlainObject)
-
-  // Legacy: agent.mcp.{servers|client} → app.mcpServers
-  const agent = raw.agent as Record<string, unknown> | undefined
-  if (isPlainObject(agent) && isPlainObject(agent.mcp)) {
-    const agentMcp = agent.mcp as Record<string, unknown>
-    if (app.mcpServers === undefined) app.mcpServers = agentMcp.servers ?? agentMcp.client
-    migrateKey(agentMcp, 'lazySchemas', app, 'mcpLazySchemas')
-    delete agent.mcp
-  }
-}
-
-/** Migrate misplaced keys from `app` to `agent` (backward compat). */
-function normalizeAppToAgentKeys(raw: Record<string, unknown>): void {
-  if (!isPlainObject(raw.app)) return
-  const app = raw.app as Record<string, unknown>
-  if (!isPlainObject(raw.agent)) raw.agent = {}
-  const agent = raw.agent as Record<string, unknown>
-
-  migrateKey(app, 'skillDirs', agent, 'skillDirs')
-  if (isPlainObject(app.permissions)) migrateKey(app, 'permissions', agent, 'permissions')
-  delete app.skills // dead key
-}
-
-/**
- * Migrate legacy flat config keys into their `app`/`agent` sections.
- * Before the app/agent split, all keys lived at the top level.
- * This shim lets old configs (e.g. `provider: anthropic`) keep working.
- */
-function normalizeFlatConfig(raw: Record<string, unknown>): void {
-  for (const key of Object.keys(raw)) {
-    if (AGENT_KEYS.has(key)) {
-      if (!isPlainObject(raw.agent)) raw.agent = {}
-      const agent = raw.agent as Record<string, unknown>
-      if (!(key in agent)) {
-        agent[key] = raw[key]
-      } else if (isPlainObject(raw[key]) && isPlainObject(agent[key])) {
-        agent[key] = deepMerge(raw[key] as Record<string, unknown>, agent[key] as Record<string, unknown>)
-      }
-      delete raw[key]
-    } else if (APP_KEYS.has(key)) {
-      if (!isPlainObject(raw.app)) raw.app = {}
-      const app = raw.app as Record<string, unknown>
-      if (!(key in app)) {
-        app[key] = raw[key]
-      } else if (isPlainObject(raw[key]) && isPlainObject(app[key])) {
-        app[key] = deepMerge(raw[key] as Record<string, unknown>, app[key] as Record<string, unknown>)
-      }
-      delete raw[key]
-    }
-  }
-}
-
-/**
- * Normalize the `tools` config section. Supports three shapes:
- *   1. `builtinTools: true/false` (legacy boolean flag)
- *   2. Flat YAML: `tools: { builtin: true, Read: { rootDir: "." }, WebFetch: { enabled: false } }`
- *   3. Canonical: `tools: { builtin: true, overrides: { ... } }`
- * Converts everything into the canonical `{ builtin, overrides }` form.
- *
- * Handles both flat config (legacy) and nested agent.tools config.
+ * Normalize the `tools` config section into the canonical
+ * `{ builtin, overrides, custom, maxResponseSize? }` form. Users can write
+ * `tools: { Read: { rootDir: "." }, WebFetch: { enabled: false } }` and it
+ * gets folded into `overrides`. Anything already canonical passes through
+ * untouched.
  */
 function normalizeToolsConfig(raw: Record<string, unknown>): void {
-  // Check for nested agent.tools first
   const agent = raw.agent as Record<string, unknown> | undefined
-  if (isPlainObject(agent)) {
-    normalizeToolsSection(agent)
-  }
-
-  // Also handle flat layout (legacy / intermediate merge state)
-  normalizeToolsSection(raw)
-}
-
-function normalizeToolsSection(obj: Record<string, unknown>): void {
-  // Legacy: builtinTools boolean → tools.builtin
-  if ('builtinTools' in obj) {
-    if (!('tools' in obj)) {
-      obj.tools = { builtin: !!obj.builtinTools, overrides: {} }
-    }
-    delete obj.builtinTools
-  }
-
-  if (!isPlainObject(obj.tools)) return
-  const t = obj.tools
-  // Already canonical form
+  if (!isPlainObject(agent) || !isPlainObject(agent.tools)) return
+  const t = agent.tools
+  // Already canonical form.
   if (isPlainObject(t.overrides)) return
 
-  // Flat form: extract builtin, treat other keys as per-tool overrides
   const builtin = t.builtin !== undefined ? !!t.builtin : true
   const maxResponseSize = typeof t.maxResponseSize === 'number' ? t.maxResponseSize : undefined
   const custom = Array.isArray(t.custom) ? t.custom as string[] : []
@@ -227,7 +101,7 @@ function normalizeToolsSection(obj: Record<string, unknown>): void {
     if (val === false) overrides[key] = { enabled: false }
     else if (isPlainObject(val)) overrides[key] = val as ToolSettings
   }
-  obj.tools = { builtin, overrides, custom, ...(maxResponseSize !== undefined && { maxResponseSize }) }
+  agent.tools = { builtin, overrides, custom, ...(maxResponseSize !== undefined && { maxResponseSize }) }
 }
 
 // ── Recipe resolution helpers ───────────────────────────────────────
@@ -358,13 +232,10 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
   const fileConfig = rawFileConfig as Record<string, unknown>
   const cliArgs = (options.cliArgs ?? {}) as Record<string, unknown>
 
-  const normalizeLayer = (layer: Record<string, unknown>) => {
-    normalizeFlatConfig(layer)
-    normalizeMcpConfig(layer)
-    normalizeAppToAgentKeys(layer)
-    normalizeToolsConfig(layer)
-  }
-  for (const layer of [fileConfig, cliArgs]) normalizeLayer(layer)
+  // Only one normalizer left: tools config supports a flat form so users can
+  // write `tools: { Read: { ... } }` instead of `tools: { overrides: { ... } }`.
+  normalizeToolsConfig(fileConfig)
+  normalizeToolsConfig(cliArgs)
 
   // ── Recipe resolution ────────────────────────────────────────────
   // Recipe source: --recipe flag takes priority, then agent.recipe in config file
@@ -386,12 +257,7 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
       throw new Error(`Recipe "${recipeName}" contains an "app" stanza. Recipes may only define "agent" configuration.`)
     }
 
-    normalizeLayer(recipeConfig)
-
-    // normalizeMcpConfig may create an empty `app` object — remove it
-    if (isPlainObject(recipeConfig.app) && Object.keys(recipeConfig.app as Record<string, unknown>).length === 0) {
-      delete recipeConfig.app
-    }
+    normalizeToolsConfig(recipeConfig)
 
     // Pre-resolve recipe paths against its directory
     const recipeAgent = (recipeConfig.agent ?? recipeConfig) as Record<string, unknown>
@@ -400,7 +266,6 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
     // Save array fields before deepMerge destroys them
     recipeArrays = extractRecipeArrays(recipeConfig)
 
-    // Wrap in agent key if the recipe was a flat config
     recipeLayer = isPlainObject(recipeConfig.agent) ? recipeConfig : { agent: recipeConfig }
 
     // Strip recipe key from file config
@@ -451,13 +316,12 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
   return { config, filePath: configFilePath, systemPromptPath }
 }
 
-const VALID_PROVIDERS = new Set<string>([
-  'anthropic', 'openai', 'openai-completions', 'google', 'ollama', 'bedrock', 'azure', 'codex', 'anthropic-agents-sdk',
-])
-
-const VALID_INTERFACES = new Set<string>([
-  'cli', 'repl', 'http', 'mcp', 'mcp-stdio', 'inspector', 'cron',
-])
+// Provider/interface enum lists are the single source of truth in
+// parse-args.ts (where yargs `.choices()` consumes them). Imported here
+// so file/recipe-supplied values get validated against the same set
+// without duplicating the list.
+const VALID_PROVIDERS: ReadonlySet<string> = new Set(PROVIDERS)
+const VALID_INTERFACES: ReadonlySet<string> = new Set(INTERFACE_FLAGS)
 
 function validateConfig(config: RaConfig): void {
   const errors: string[] = []
