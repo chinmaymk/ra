@@ -1,6 +1,6 @@
 agent:
-  provider: ${PROVIDER:-anthropic}
-  model: ${MODEL:-claude-sonnet-4-6}
+  provider: anthropic
+  model: claude-sonnet-4-6
   skillDirs:
     - ./skills
   middleware:

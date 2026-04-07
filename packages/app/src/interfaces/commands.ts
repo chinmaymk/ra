@@ -74,6 +74,11 @@ async function runLoginCommand(cmd: SubCommand): Promise<void> {
 /** Handle `ra skill|recipe install|remove|list` subcommands. Exits the process. */
 export async function runSubCommand(cmd: SubCommand): Promise<void> {
   if (cmd.kind === 'login') return runLoginCommand(cmd)
+  if (cmd.kind === 'secrets') {
+    const { runSecretsCommand } = await import('../secrets/commands')
+    runSecretsCommand(cmd.action, cmd.args)
+    process.exit(0)
+  }
 
   const { kind, action, args } = cmd
   const ops = await loadRegistryOps(kind)

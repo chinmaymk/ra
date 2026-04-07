@@ -1,10 +1,12 @@
 import yargs from 'yargs'
 import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
+import { buildMergedEnv, DEFAULT_PROFILE } from '../secrets/store'
 import type { RaConfig } from '../config/types'
 
 export type SubCommand =
   | { kind: 'skill' | 'recipe'; action: 'install' | 'remove' | 'list'; args: string[] }
   | { kind: 'login'; action: string; args: string[] }
+  | { kind: 'secrets'; action: string; args: string[] }
 
 export interface ParsedArgsMeta {
   help: boolean
@@ -60,6 +62,73 @@ const FLAG_RULES: Record<string, CoercionRule> = {
   'storage-max-sessions':        { type: 'int',    path: ['app', 'storage', 'maxSessions'] },
   'storage-ttl-days':            { type: 'int',    path: ['app', 'storage', 'ttlDays'] },
   'skill-dir':                   { type: 'string', path: ['agent', 'skillDirs'] },
+  // ── credentials (hidden from --help; resolved from env or secrets store) ──
+  'anthropic-api-key':           { type: 'string', path: ['app', 'providers', 'anthropic', 'apiKey'] },
+  'openai-api-key':              { type: 'string', path: ['app', 'providers', 'openai', 'apiKey'] },
+  'google-api-key':              { type: 'string', path: ['app', 'providers', 'google', 'apiKey'] },
+  'azure-api-key':               { type: 'string', path: ['app', 'providers', 'azure', 'apiKey'] },
+  'aws-access-key-id':           { type: 'string', path: ['app', 'providers', 'bedrock', 'accessKeyId'] },
+  'aws-secret-access-key':       { type: 'string', path: ['app', 'providers', 'bedrock', 'secretAccessKey'] },
+  'aws-session-token':           { type: 'string', path: ['app', 'providers', 'bedrock', 'sessionToken'] },
+  'aws-region':                  { type: 'string', path: ['app', 'providers', 'bedrock', 'region'] },
+  'bedrock-api-key':             { type: 'string', path: ['app', 'providers', 'bedrock', 'apiKey'] },
+  'codex-access-token':          { type: 'string', path: ['app', 'providers', 'codex', 'accessToken'] },
+}
+
+/**
+ * Maps each yargs flag (where applicable) to the canonical, ecosystem-standard
+ * environment variable that supplies its default. These are filled in AFTER
+ * `checkScopedFlags` has run so that having e.g. `OPENAI_BASE_URL` set in your
+ * shell does not trip the `--openai-base-url is only valid with --provider
+ * openai` check when running `ra --provider anthropic`.
+ *
+ * Standard names match what each vendor's official SDK reads on its own,
+ * so users with existing env setups don't have to learn `RA_*` aliases.
+ */
+export const STANDARD_ENV: Readonly<Record<string, string>> = {
+  // Provider credentials
+  'anthropic-api-key':     'ANTHROPIC_API_KEY',
+  'openai-api-key':        'OPENAI_API_KEY',
+  'google-api-key':        'GOOGLE_API_KEY',
+  'azure-api-key':         'AZURE_OPENAI_API_KEY',
+  'aws-access-key-id':     'AWS_ACCESS_KEY_ID',
+  'aws-secret-access-key': 'AWS_SECRET_ACCESS_KEY',
+  'aws-session-token':     'AWS_SESSION_TOKEN',
+  'aws-region':            'AWS_REGION',
+  'bedrock-api-key':       'AWS_BEDROCK_API_KEY',
+  'codex-access-token':    'CODEX_ACCESS_TOKEN',
+  // Connection options
+  'anthropic-base-url':    'ANTHROPIC_BASE_URL',
+  'openai-base-url':       'OPENAI_BASE_URL',
+  'google-base-url':       'GOOGLE_BASE_URL',
+  'ollama-host':           'OLLAMA_HOST',
+  'azure-endpoint':        'AZURE_OPENAI_ENDPOINT',
+  'azure-deployment':      'AZURE_OPENAI_DEPLOYMENT',
+}
+
+/**
+ * Build a nested config layer populated only from standard environment
+ * variables (and the secrets store via {@link buildMergedEnv}). Used by
+ * `loadConfig` so it works correctly when called directly without going
+ * through `parseArgs`. Single source of truth: this and parse-args's
+ * post-yargs env fill both consult `STANDARD_ENV` + `FLAG_RULES`.
+ */
+export function buildStandardEnvLayer(env: Record<string, string | undefined>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [flag, envName] of Object.entries(STANDARD_ENV)) {
+    const v = env[envName]
+    if (!v || v.length === 0) continue
+    const rule = FLAG_RULES[flag]
+    if (!rule) continue
+    setPath(result, rule.path, v)
+    // Mirror the dual-mapping that parse-args does for openai providers.
+    if (flag === 'openai-api-key') {
+      setPath(result, ['app', 'providers', 'openai-completions', 'apiKey'], v)
+    } else if (flag === 'openai-base-url') {
+      setPath(result, ['app', 'providers', 'openai-completions', 'baseURL'], v)
+    }
+  }
+  return result
 }
 
 const EMPTY_META = (): ParsedArgsMeta => ({
@@ -105,7 +174,41 @@ function parseSubcommand(userArgs: string[]): ParsedArgs | null {
     }
   }
 
+  if (userArgs[0] === 'secrets') {
+    const action = userArgs[1] ?? 'list'
+    return {
+      config: {},
+      meta: {
+        ...EMPTY_META(),
+        subCommand: { kind: 'secrets', action, args: userArgs.slice(2) },
+      },
+    }
+  }
+
   return null
+}
+
+/**
+ * Extract `--profile <name>` and `--profile=<name>` from the args list.
+ * Falls back to `RA_PROFILE`, then to `DEFAULT_PROFILE`. We strip it
+ * before yargs sees it because the resolved profile must be known at
+ * parser-construction time (it picks which secrets are loaded).
+ */
+function extractProfile(args: string[]): { rest: string[]; profile: string } {
+  let profile = process.env.RA_PROFILE || DEFAULT_PROFILE
+  const rest: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!
+    if (a === '--profile' && args[i + 1] !== undefined) {
+      profile = args[i + 1]!
+      i++
+    } else if (a.startsWith('--profile=')) {
+      profile = a.slice('--profile='.length)
+    } else {
+      rest.push(a)
+    }
+  }
+  return { rest, profile }
 }
 
 /**
@@ -266,6 +369,28 @@ function buildYargs(args: string[]) {
     .option('bedrock-base-url',              { type: 'string' })
     .option('azure-endpoint',                { type: 'string' })
     .option('azure-deployment',              { type: 'string' })
+    // Hidden credential flags. These exist purely so that standard env
+    // vars and the secrets store can flow into the same nested config
+    // paths as everything else. Marked `hidden: true` so they don't
+    // appear in --help (we don't want users putting raw API keys into
+    // shell history). They are still accepted on the CLI if explicitly
+    // passed; strict mode requires them to be declared somewhere.
+    .option('anthropic-api-key',             { type: 'string', hidden: true })
+    .option('openai-api-key',                { type: 'string', hidden: true })
+    .option('google-api-key',                { type: 'string', hidden: true })
+    .option('azure-api-key',                 { type: 'string', hidden: true })
+    .option('aws-access-key-id',             { type: 'string', hidden: true })
+    .option('aws-secret-access-key',         { type: 'string', hidden: true })
+    .option('aws-session-token',             { type: 'string', hidden: true })
+    .option('aws-region',                    { type: 'string', hidden: true })
+    .option('bedrock-api-key',               { type: 'string', hidden: true })
+    .option('codex-access-token',            { type: 'string', hidden: true })
+    // Acknowledge `RA_SECRETS_PATH` and `RA_PROFILE` so yargs `.env('RA')`
+    // doesn't reject them under strict mode. Both are read directly:
+    //   - secrets path via `getSecretsPath()` in secrets/store.ts
+    //   - profile via `extractProfile()` above (pre-stripped from args)
+    .option('secrets-path',                  { type: 'string', hidden: true })
+    .option('profile',                       { type: 'string', hidden: true })
     .check(checkScopedFlags)
     .fail((msg, err) => {
       // yargs calls .fail() for parse errors, strict-mode unknown flags,
@@ -318,9 +443,26 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const sub = parseSubcommand(userArgs)
   if (sub) return sub
 
-  const { rest, resume } = extractResume(userArgs)
+  const { rest: afterResume, resume } = extractResume(userArgs)
+  const { rest: afterProfile, profile } = extractProfile(afterResume)
 
-  const values = buildYargs(rest).parseSync() as Record<string, unknown>
+  // Build the lookup env that will fill in standard-env defaults below.
+  // Real `process.env` always wins over the secrets file so a one-shot
+  // `OPENAI_API_KEY=foo ra ...` invocation works exactly as expected.
+  const lookupEnv = buildMergedEnv(profile)
+
+  const values = buildYargs(afterProfile).parseSync() as Record<string, unknown>
+
+  // Fill missing values from STANDARD_ENV. This runs AFTER yargs (and
+  // therefore AFTER `checkScopedFlags`), so an unrelated env var like
+  // `OPENAI_BASE_URL` doesn't trip the scoped check when the user runs
+  // `--provider anthropic`. Empty strings are treated as unset.
+  for (const [flag, envName] of Object.entries(STANDARD_ENV)) {
+    if (values[flag] !== undefined) continue
+    const fromEnv = lookupEnv[envName]
+    if (fromEnv && fromEnv.length > 0) values[flag] = fromEnv
+  }
+
   // The default command `$0 [prompt..]` puts positional tokens into `prompt`.
   // Fall back to `_` for safety (e.g. if no positionals were given).
   const positionals = (
@@ -348,9 +490,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
   }
 
-  // --openai-base-url applies to both openai and openai-completions providers
+  // --openai-base-url and --openai-api-key apply to both openai and
+  // openai-completions providers (they share credentials).
   if (typeof values['openai-base-url'] === 'string') {
     setPath(r, ['app', 'providers', 'openai-completions', 'baseURL'], values['openai-base-url'])
+  }
+  if (typeof values['openai-api-key'] === 'string') {
+    setPath(r, ['app', 'providers', 'openai-completions', 'apiKey'], values['openai-api-key'])
   }
 
   // --memories, --list-memories, and --forget all imply --memory

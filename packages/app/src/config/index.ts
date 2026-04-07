@@ -2,7 +2,8 @@ import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath, homeDir, configHandle } from '../utils/paths'
-import { interpolateEnvVars, coerceTypes } from '../utils/config-helpers'
+import { buildStandardEnvLayer } from '../interfaces/parse-args'
+import { buildMergedEnv } from '../secrets/store'
 import { defaultConfig } from './defaults'
 import { CONFIG_FILES } from '../registry/helpers'
 import { NoopLogger } from '@chinmaymk/ra'
@@ -334,7 +335,14 @@ export async function loadConfig(options: LoadConfigOptions = {}, logger?: Logge
 export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger?: Logger): Promise<LoadConfigResult> {
   const log = logger ?? new NoopLogger()
   const cwd = options.cwd ?? process.cwd()
-  const env = (options.env ?? process.env) as Record<string, string | undefined>
+  // Resolve env from explicit options, falling back to process.env. The
+  // secrets store is consulted via `buildMergedEnv`, so callers that pass
+  // their own env (typically tests) get isolation from the host shell while
+  // still benefitting from any secrets stored under the active profile.
+  const explicitEnv = options.env as Record<string, string | undefined> | undefined
+  const env = explicitEnv
+    ? { ...buildMergedEnv(process.env.RA_PROFILE || 'default'), ...explicitEnv }
+    : buildMergedEnv(process.env.RA_PROFILE || 'default')
 
   const { config: rawFileConfig, filePath: configFilePath } = await loadConfigFile(cwd, options.configPath)
   const configDir = configFilePath ? dirname(configFilePath) : cwd
@@ -345,8 +353,9 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
     log.debug('no config file found', { cwd, searchedFiles: CONFIG_FILES })
   }
 
-  const rawDefaults = JSON.parse(JSON.stringify(defaultConfig))
-  const fileConfig = interpolateEnvVars(rawFileConfig, env) as Record<string, unknown>
+  const defaults = JSON.parse(JSON.stringify(defaultConfig)) as Record<string, unknown>
+  const envLayer = buildStandardEnvLayer(env)
+  const fileConfig = rawFileConfig as Record<string, unknown>
   const cliArgs = (options.cliArgs ?? {}) as Record<string, unknown>
 
   const normalizeLayer = (layer: Record<string, unknown>) => {
@@ -357,13 +366,10 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
   }
   for (const layer of [fileConfig, cliArgs]) normalizeLayer(layer)
 
-  // Coerce after normalization so schema paths match (e.g. "50" → 50)
-  const coercedFileConfig = coerceTypes(fileConfig, rawDefaults) as Record<string, unknown>
-
   // ── Recipe resolution ────────────────────────────────────────────
   // Recipe source: --recipe flag takes priority, then agent.recipe in config file
   const recipeName = options.recipeName
-    ?? (isPlainObject(coercedFileConfig.agent) ? (coercedFileConfig.agent as Record<string, unknown>).recipe as string | undefined : undefined)
+    ?? (isPlainObject(fileConfig.agent) ? (fileConfig.agent as Record<string, unknown>).recipe as string | undefined : undefined)
 
   let recipeArrays: RecipeArrays | undefined
   let recipeLayer: Record<string, unknown> | undefined
@@ -372,8 +378,7 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
     if (!resolved) {
       throw new Error(`Recipe not found: "${recipeName}". Install it with: ra recipe install <source>`)
     }
-    const recipeRaw = await parseFile(resolved.configPath)
-    const recipeConfig = interpolateEnvVars(recipeRaw, env) as Record<string, unknown>
+    const recipeConfig = await parseFile(resolved.configPath) as Record<string, unknown>
 
     // Recipes must only define agent configuration — reject app stanza
     // Check before normalizeLayer which may create an empty `app` object
@@ -399,18 +404,17 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
     recipeLayer = isPlainObject(recipeConfig.agent) ? recipeConfig : { agent: recipeConfig }
 
     // Strip recipe key from file config
-    if (isPlainObject(coercedFileConfig.agent)) {
-      delete (coercedFileConfig.agent as Record<string, unknown>).recipe
+    if (isPlainObject(fileConfig.agent)) {
+      delete (fileConfig.agent as Record<string, unknown>).recipe
     }
 
     log.info('recipe loaded', { recipe: recipeName, path: resolved.configPath })
   }
 
-  // defaults < recipe < file < CLI
-  const defaults = interpolateEnvVars(rawDefaults, env) as Record<string, unknown>
+  // defaults < env (standard env vars + secrets) < recipe < file < CLI
   const layers = recipeLayer
-    ? [recipeLayer, coercedFileConfig, cliArgs]
-    : [coercedFileConfig, cliArgs]
+    ? [envLayer, recipeLayer, fileConfig, cliArgs]
+    : [envLayer, fileConfig, cliArgs]
   const merged = layers.reduce((acc, layer) => deepMerge(acc, layer), defaults)
 
   const config = merged as unknown as RaConfig

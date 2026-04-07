@@ -199,6 +199,184 @@ describe('parseArgs', () => {
     })
   })
 
+  describe('standard env vars + secrets store integration', () => {
+    const tmpDir = `/tmp/ra-parse-args-test-${process.pid}`
+    const secretsPath = `${tmpDir}/secrets.json`
+    const captured: Record<string, string | undefined> = {}
+
+    function snapshot(key: string): void {
+      if (!(key in captured)) captured[key] = process.env[key]
+    }
+
+    beforeEach(() => {
+      // Strip every env var that the parser might pick up. Tests must
+      // start from a clean slate.
+      const KEYS = [
+        'RA_PROFILE', 'RA_SECRETS_PATH',
+        'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_API_KEY', 'AZURE_OPENAI_API_KEY',
+        'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_REGION',
+        'AWS_BEDROCK_API_KEY', 'CODEX_ACCESS_TOKEN',
+        'ANTHROPIC_BASE_URL', 'OPENAI_BASE_URL', 'GOOGLE_BASE_URL', 'OLLAMA_HOST',
+        'AZURE_OPENAI_ENDPOINT', 'AZURE_OPENAI_DEPLOYMENT',
+      ]
+      for (const k of KEYS) {
+        snapshot(k)
+        delete process.env[k]
+      }
+      // Point the secrets store at a tmp file unique to this test process.
+      process.env.RA_SECRETS_PATH = secretsPath
+      try { require('fs').rmSync(tmpDir, { recursive: true, force: true }) } catch { /* */ }
+    })
+
+    afterEach(() => {
+      for (const [k, v] of Object.entries(captured)) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+      for (const k of Object.keys(captured)) delete captured[k]
+      try { require('fs').rmSync(tmpDir, { recursive: true, force: true }) } catch { /* */ }
+    })
+
+    describe('standard env vars → config', () => {
+      it('ANTHROPIC_API_KEY lands in app.providers.anthropic.apiKey', () => {
+        process.env.ANTHROPIC_API_KEY = 'sk-ant-xyz'
+        expect(parseArgs(dev()).config.app?.providers?.anthropic.apiKey).toBe('sk-ant-xyz')
+      })
+
+      it('OPENAI_API_KEY fills both openai and openai-completions', () => {
+        process.env.OPENAI_API_KEY = 'sk-foo'
+        const r = parseArgs(dev())
+        expect(r.config.app?.providers?.openai.apiKey).toBe('sk-foo')
+        expect((r.config.app?.providers as any)?.['openai-completions']?.apiKey).toBe('sk-foo')
+      })
+
+      it('OPENAI_BASE_URL fills both openai and openai-completions', () => {
+        process.env.OPENAI_BASE_URL = 'https://proxy/'
+        const r = parseArgs(dev())
+        expect(r.config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+        expect((r.config.app?.providers as any)?.['openai-completions']?.baseURL).toBe('https://proxy/')
+      })
+
+      it('OLLAMA_HOST → app.providers.ollama.host', () => {
+        process.env.OLLAMA_HOST = 'http://ollama.local:11434'
+        expect(parseArgs(dev()).config.app?.providers?.ollama.host).toBe('http://ollama.local:11434')
+      })
+
+      it('AWS_REGION + AWS_ACCESS_KEY_ID → bedrock provider', () => {
+        process.env.AWS_REGION = 'us-west-2'
+        process.env.AWS_ACCESS_KEY_ID = 'AKIA...'
+        const r = parseArgs(dev())
+        expect(r.config.app?.providers?.bedrock?.region).toBe('us-west-2')
+        expect(r.config.app?.providers?.bedrock?.accessKeyId).toBe('AKIA...')
+      })
+
+      it('AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_DEPLOYMENT → azure provider', () => {
+        process.env.AZURE_OPENAI_ENDPOINT = 'https://my.openai.azure.com/'
+        process.env.AZURE_OPENAI_DEPLOYMENT = 'gpt-4o'
+        const r = parseArgs(dev())
+        expect(r.config.app?.providers?.azure?.endpoint).toBe('https://my.openai.azure.com/')
+        expect(r.config.app?.providers?.azure?.deployment).toBe('gpt-4o')
+      })
+
+      it('empty env value is treated as unset', () => {
+        process.env.ANTHROPIC_API_KEY = ''
+        expect(parseArgs(dev()).config.app?.providers?.anthropic?.apiKey).toBeUndefined()
+      })
+
+      it('OPENAI_BASE_URL in env does NOT trigger scoped check with --provider anthropic', () => {
+        process.env.OPENAI_BASE_URL = 'https://proxy/'
+        // Would have errored if env-defaults ran before checkScopedFlags.
+        expect(() => parseArgs(dev('--provider', 'anthropic'))).not.toThrow()
+      })
+
+      it('CLI flag still wins over env var', () => {
+        process.env.OPENAI_API_KEY = 'sk-from-env'
+        const r = parseArgs(dev('--openai-api-key', 'sk-from-cli'))
+        expect(r.config.app?.providers?.openai.apiKey).toBe('sk-from-cli')
+      })
+    })
+
+    describe('secrets store + profiles', () => {
+      it('default profile fills missing API keys', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-stored')
+        expect(parseArgs(dev()).config.app?.providers?.openai.apiKey).toBe('sk-stored')
+      })
+
+      it('--profile selects a different secret set', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-default', 'default')
+        setSecret('OPENAI_API_KEY', 'sk-work',    'work')
+        expect(parseArgs(dev('--profile', 'work')).config.app?.providers?.openai.apiKey).toBe('sk-work')
+      })
+
+      it('RA_PROFILE env var selects the profile', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-work', 'work')
+        process.env.RA_PROFILE = 'work'
+        expect(parseArgs(dev()).config.app?.providers?.openai.apiKey).toBe('sk-work')
+      })
+
+      it('--profile beats RA_PROFILE', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('K', 'sk-work',  'work')
+        setSecret('K', 'sk-staging', 'staging')
+        // Use OPENAI_API_KEY as a known mapped flag
+        setSecret('OPENAI_API_KEY', 'sk-work',    'work')
+        setSecret('OPENAI_API_KEY', 'sk-staging', 'staging')
+        process.env.RA_PROFILE = 'staging'
+        expect(parseArgs(dev('--profile', 'work')).config.app?.providers?.openai.apiKey).toBe('sk-work')
+      })
+
+      it('process.env wins over secrets file', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-stored')
+        process.env.OPENAI_API_KEY = 'sk-real-env'
+        expect(parseArgs(dev()).config.app?.providers?.openai.apiKey).toBe('sk-real-env')
+      })
+
+      it('--profile is stripped before yargs sees it', () => {
+        // Strict mode would reject --profile if it leaked through
+        expect(() => parseArgs(dev('--profile', 'work', 'hello'))).not.toThrow()
+        expect(parseArgs(dev('--profile', 'work', 'hello')).meta.prompt).toBe('hello')
+      })
+
+      it('--profile=name form is supported', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-work', 'work')
+        expect(parseArgs(dev('--profile=work')).config.app?.providers?.openai.apiKey).toBe('sk-work')
+      })
+
+      it('non-existent profile yields no fill (no error)', () => {
+        const r = parseArgs(dev('--profile', 'nope'))
+        expect(r.config.app?.providers?.openai?.apiKey).toBeUndefined()
+      })
+    })
+
+    describe('secrets subcommand routing', () => {
+      it('ra secrets list → secrets subcommand', () => {
+        const r = parseArgs(dev('secrets', 'list'))
+        expect(r.meta.subCommand).toEqual({ kind: 'secrets', action: 'list', args: [] })
+      })
+
+      it('ra secrets set NAME value', () => {
+        const r = parseArgs(dev('secrets', 'set', 'OPENAI_API_KEY', 'sk-foo'))
+        expect(r.meta.subCommand).toEqual({ kind: 'secrets', action: 'set', args: ['OPENAI_API_KEY', 'sk-foo'] })
+      })
+
+      it('ra secrets get NAME --profile work passes flags through', () => {
+        const r = parseArgs(dev('secrets', 'get', 'OPENAI_API_KEY', '--profile', 'work'))
+        expect(r.meta.subCommand).toEqual({ kind: 'secrets', action: 'get', args: ['OPENAI_API_KEY', '--profile', 'work'] })
+      })
+
+      it('ra secrets (no action) defaults to list', () => {
+        const r = parseArgs(dev('secrets'))
+        expect(r.meta.subCommand?.kind).toBe('secrets')
+        expect(r.meta.subCommand?.action).toBe('list')
+      })
+    })
+  })
+
   describe('RA_* environment variables', () => {
     const originalEnv: Record<string, string | undefined> = {}
 
