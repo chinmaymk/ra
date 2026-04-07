@@ -1,4 +1,4 @@
-import { parseArgs as utilParseArgs } from 'util'
+import yargs from 'yargs'
 import { setPath, applyRule, type CoercionRule } from '../utils/config-helpers'
 import type { RaConfig } from '../config/types'
 
@@ -62,131 +62,172 @@ const FLAG_RULES: Record<string, CoercionRule> = {
   'skill-dir':                   { type: 'string', path: ['agent', 'skillDirs'] },
 }
 
-export function parseArgs(argv: string[]): ParsedArgs {
+const EMPTY_META = (): ParsedArgsMeta => ({
+  help: false,
+  version: false,
+  showContext: false,
+  showConfig: false,
+  runImmediately: false,
+  listMemories: false,
+  files: [],
+})
+
+/** Detect whether argv begins with `<runtime> <script>` (dev mode) vs a compiled binary. */
+function stripArgvPrefix(argv: string[]): string[] {
   const isScriptPath = argv[1] !== undefined && (
     /\.(ts|js|mjs|cjs)$/.test(argv[1]) || argv[1].startsWith('/$bunfs/')
   )
-  const userArgs = argv.slice(isScriptPath ? 2 : 1)
+  return argv.slice(isScriptPath ? 2 : 1)
+}
 
-  // Check for subcommands: ra skill|recipe install|remove|list [args...]
+/** Detect skill/recipe/login subcommands. Returns null if not a subcommand. */
+function parseSubcommand(userArgs: string[]): ParsedArgs | null {
   const SUB_KINDS = ['skill', 'recipe'] as const
   const kind = userArgs[0] as typeof SUB_KINDS[number]
   if (SUB_KINDS.includes(kind) && userArgs[1] && ['install', 'remove', 'list'].includes(userArgs[1])) {
     return {
       config: {},
       meta: {
-        help: false,
-        version: false,
-        showContext: false,
-        showConfig: false,
-        runImmediately: false,
-        listMemories: false,
-        files: [],
+        ...EMPTY_META(),
         subCommand: { kind, action: userArgs[1] as 'install' | 'remove' | 'list', args: userArgs.slice(2) },
       },
     }
   }
 
-  // Check for login subcommand: ra login <provider>
   if (userArgs[0] === 'login') {
     const provider = userArgs[1] ?? 'codex'
     return {
       config: {},
       meta: {
-        help: false,
-        version: false,
-        showContext: false,
-        showConfig: false,
-        runImmediately: false,
-        listMemories: false,
-        files: [],
+        ...EMPTY_META(),
         subCommand: { kind: 'login', action: provider, args: userArgs.slice(2) },
       },
     }
   }
 
-  // Extract --resume manually: supports `--resume` (latest) and `--resume=<id>`.
-  // Node's parseArgs doesn't support optional string values, so we handle it here.
-  let resumeValue: string | true | undefined
-  const filteredArgs: string[] = []
-  for (const arg of userArgs) {
+  return null
+}
+
+/**
+ * Extract `--resume` and `--resume=<id>` from the args list.
+ * `--resume` is special: it accepts an OPTIONAL value, which yargs cannot
+ * express natively (it would either always consume the next token, or never).
+ * We strip it before handing the rest to yargs, then merge the result back.
+ */
+function extractResume(args: string[]): { rest: string[]; resume: string | true | undefined } {
+  let resume: string | true | undefined
+  const rest: string[] = []
+  for (const arg of args) {
     if (arg === '--resume') {
-      resumeValue = true
+      resume = true
     } else if (arg.startsWith('--resume=')) {
-      resumeValue = arg.slice('--resume='.length)
+      resume = arg.slice('--resume='.length)
     } else {
-      filteredArgs.push(arg)
+      rest.push(arg)
     }
   }
+  return { rest, resume }
+}
 
-  const { values, positionals } = utilParseArgs({
-    args: filteredArgs,
-    options: {
-      // Meta (not mapped to RaConfig)
-      exec:                          { type: 'string' },
-      config:                        { type: 'string' },
-      file:                          { type: 'string', multiple: true },
-      help:                          { type: 'boolean', short: 'h' },
-      version:                       { type: 'boolean', short: 'v' },
-      'show-context':                { type: 'boolean' },
-      'show-config':              { type: 'boolean' },
-      // Interface selection → config.interface
-      http:                          { type: 'boolean' },
-      cli:                           { type: 'boolean' },
-      repl:                          { type: 'boolean' },
-      mcp:                           { type: 'boolean' },
-      'mcp-stdio':                   { type: 'boolean' },
-      inspector:                     { type: 'boolean' },
-      cron:                            { type: 'boolean' },
-      'run-immediately':                 { type: 'boolean' },
-      // Top-level config
-      provider:                      { type: 'string' },
-      model:                         { type: 'string' },
-      'system-prompt':               { type: 'string' },
-      'max-iterations':              { type: 'string' },
-      'thinking':                    { type: 'string' },
-      'thinking-budget-cap':         { type: 'string' },
-      'tool-timeout':                { type: 'string' },
-      'max-tool-response-size':      { type: 'string' },
-      'tools-builtin':               { type: 'boolean' },
-      // HTTP server
-      'http-port':                   { type: 'string' },
-      'http-token':                  { type: 'string' },
-      // Inspector
-      'inspector-port':              { type: 'string' },
-      // MCP server
-      'mcp-server-enabled':          { type: 'boolean' },
-      'mcp-server-port':             { type: 'string' },
-      'mcp-server-tool-name':        { type: 'string' },
-      'mcp-server-tool-description': { type: 'string' },
-      // Memory
-      'memory':                      { type: 'boolean' },
-      'list-memories':               { type: 'boolean' },
-      'memories':                    { type: 'string' },
-      'forget':                      { type: 'string' },
-      // Data directory & storage
-      'data-dir':                    { type: 'string' },
-      'storage-max-sessions':        { type: 'string' },
-      'storage-ttl-days':            { type: 'string' },
-      // Skills & recipes
-      'skill-dir':                   { type: 'string', multiple: true },
-      'recipe':                      { type: 'string' },
-      // Provider connection options (non-sensitive)
-      'anthropic-base-url':          { type: 'string' },
-      'openai-base-url':             { type: 'string' },
-      'google-base-url':             { type: 'string' },
-      'ollama-host':                 { type: 'string' },
-      'bedrock-base-url':            { type: 'string' },
-      'azure-endpoint':              { type: 'string' },
-      'azure-deployment':            { type: 'string' },
-    },
-    strict: false,
-    allowPositionals: true,
-  })
+/**
+ * Build a yargs parser with all known options. We declare numeric flags as
+ * strings so that invalid input can be silently ignored downstream by
+ * `safeParseInt` (matches the historical behaviour the test suite encodes).
+ */
+function buildYargs(args: string[]) {
+  return yargs(args)
+    .help(false)
+    .version(false)
+    .exitProcess(false)
+    .parserConfiguration({
+      'camel-case-expansion': false,    // keep --skill-dir, don't also create skillDir
+      'strip-aliased': true,            // drop alias keys (h, v) from the result
+      'boolean-negation': false,        // disable --no-foo magic
+      'parse-numbers': false,           // FLAG_RULES handles int coercion
+      'parse-positional-numbers': false,// keep positionals as raw strings
+      'greedy-arrays': false,           // --skill-dir /a /b assigns only /a
+    })
+    // Meta flags
+    .option('exec',                          { type: 'string' })
+    .option('config',                        { type: 'string' })
+    .option('file',                          { type: 'string', array: true })
+    .option('help',                          { type: 'boolean', alias: 'h', default: false })
+    .option('version',                       { type: 'boolean', alias: 'v', default: false })
+    .option('show-context',                  { type: 'boolean', default: false })
+    .option('show-config',                   { type: 'boolean', default: false })
+    // Interface selection
+    .option('http',                          { type: 'boolean' })
+    .option('cli',                           { type: 'boolean' })
+    .option('repl',                          { type: 'boolean' })
+    .option('mcp',                           { type: 'boolean' })
+    .option('mcp-stdio',                     { type: 'boolean' })
+    .option('inspector',                     { type: 'boolean' })
+    .option('cron',                          { type: 'boolean' })
+    .option('run-immediately',               { type: 'boolean', default: false })
+    // Agent config (numerics declared as strings; coerced via FLAG_RULES)
+    .option('provider',                      { type: 'string' })
+    .option('model',                         { type: 'string' })
+    .option('system-prompt',                 { type: 'string' })
+    .option('max-iterations',                { type: 'string' })
+    .option('thinking',                      { type: 'string' })
+    .option('thinking-budget-cap',           { type: 'string' })
+    .option('tool-timeout',                  { type: 'string' })
+    .option('max-tool-response-size',        { type: 'string' })
+    .option('tools-builtin',                 { type: 'boolean' })
+    // HTTP server
+    .option('http-port',                     { type: 'string' })
+    .option('http-token',                    { type: 'string' })
+    // Inspector
+    .option('inspector-port',                { type: 'string' })
+    // MCP server
+    .option('mcp-server-enabled',            { type: 'boolean' })
+    .option('mcp-server-port',               { type: 'string' })
+    .option('mcp-server-tool-name',          { type: 'string' })
+    .option('mcp-server-tool-description',   { type: 'string' })
+    // Memory
+    .option('memory',                        { type: 'boolean' })
+    .option('list-memories',                 { type: 'boolean', default: false })
+    .option('memories',                      { type: 'string' })
+    .option('forget',                        { type: 'string' })
+    // Data & storage
+    .option('data-dir',                      { type: 'string' })
+    .option('storage-max-sessions',          { type: 'string' })
+    .option('storage-ttl-days',              { type: 'string' })
+    // Skills & recipes
+    .option('skill-dir',                     { type: 'string', array: true })
+    .option('recipe',                        { type: 'string' })
+    // Provider connection options
+    .option('anthropic-base-url',            { type: 'string' })
+    .option('openai-base-url',               { type: 'string' })
+    .option('google-base-url',               { type: 'string' })
+    .option('ollama-host',                   { type: 'string' })
+    .option('bedrock-base-url',              { type: 'string' })
+    .option('azure-endpoint',                { type: 'string' })
+    .option('azure-deployment',              { type: 'string' })
+    .fail((msg, err) => {
+      // Swallow yargs errors silently — historically the parser used
+      // `strict: false` and never errored on unknown flags. Surfacing
+      // these would change behaviour for callers like `ra login` that
+      // pass through provider-specific flags.
+      if (err) throw err
+      void msg
+    })
+}
+
+export function parseArgs(argv: string[]): ParsedArgs {
+  const userArgs = stripArgvPrefix(argv)
+
+  const sub = parseSubcommand(userArgs)
+  if (sub) return sub
+
+  const { rest, resume } = extractResume(userArgs)
+
+  const values = buildYargs(rest).parseSync() as Record<string, unknown>
+  const positionals = ((values._ as unknown[]) ?? []).map(p => String(p))
 
   const r: Record<string, unknown> = {}
 
-  // Interface selection (first match wins, order matters: mcp-stdio before mcp)
+  // Interface selection — first match wins. Order matters: mcp-stdio before mcp.
   const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'cron', 'repl', 'cli'] as const
   for (const flag of interfaceFlags) {
     if (values[flag]) { setPath(r, ['app', 'interface'], flag); break }
@@ -195,34 +236,42 @@ export function parseArgs(argv: string[]): ParsedArgs {
   // Apply declarative flag rules
   for (const [flag, rule] of Object.entries(FLAG_RULES)) {
     const val = values[flag]
-    if (val !== undefined) applyRule(r, rule, val as string | boolean)
+    if (val === undefined) continue
+    if (Array.isArray(val)) {
+      // Array-typed flags (e.g. --skill-dir) write the whole array at once.
+      setPath(r, rule.path, val)
+    } else {
+      applyRule(r, rule, val as string | boolean)
+    }
   }
 
   // --openai-base-url applies to both openai and openai-completions providers
-  if (values['openai-base-url']) {
-    setPath(r, ['app', 'providers', 'openai-completions', 'baseURL'], values['openai-base-url'] as string)
+  if (typeof values['openai-base-url'] === 'string') {
+    setPath(r, ['app', 'providers', 'openai-completions', 'baseURL'], values['openai-base-url'])
   }
 
-  // Memory — --memories, --list-memories, and --forget imply --memory
-  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) setPath(r, ['agent', 'memory', 'enabled'], true)
+  // --memories, --list-memories, and --forget all imply --memory
+  if (values['memory'] || values['list-memories'] || values['memories'] || values['forget']) {
+    setPath(r, ['agent', 'memory', 'enabled'], true)
+  }
 
   return {
     config: r as Partial<RaConfig>,
     meta: {
-      help:         (values.help as boolean | undefined) ?? false,
-      version:      (values.version as boolean | undefined) ?? false,
-      showContext:   (values['show-context'] as boolean | undefined) ?? false,
-      showConfig:  (values['show-config'] as boolean | undefined) ?? false,
-      runImmediately: (values['run-immediately'] as boolean | undefined) ?? false,
-      listMemories:  (values['list-memories'] as boolean | undefined) ?? false,
-      memories:      values.memories as string | undefined,
-      forget:        values.forget as string | undefined,
-      files:      (values.file as string[] | undefined) ?? [],
-      prompt:     positionals.join(' ') || undefined,
-      resume:     resumeValue,
-      configPath: values.config as string | undefined,
-      exec:       values.exec as string | undefined,
-      recipeName: values.recipe as string | undefined,
+      help:           Boolean(values.help),
+      version:        Boolean(values.version),
+      showContext:    Boolean(values['show-context']),
+      showConfig:     Boolean(values['show-config']),
+      runImmediately: Boolean(values['run-immediately']),
+      listMemories:   Boolean(values['list-memories']),
+      memories:       values.memories as string | undefined,
+      forget:         values.forget as string | undefined,
+      files:          (values.file as string[] | undefined) ?? [],
+      prompt:         positionals.length > 0 ? positionals.join(' ') : undefined,
+      resume,
+      configPath:     values.config as string | undefined,
+      exec:           values.exec as string | undefined,
+      recipeName:     values.recipe as string | undefined,
     },
   }
 }
