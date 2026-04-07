@@ -18,7 +18,7 @@ export const defaultConfig: RaConfig = {
       'openai-completions': { apiKey: '${OPENAI_API_KEY:-}' },
       google: { apiKey: '${GOOGLE_API_KEY:-}' },
       ollama: { host: '${OLLAMA_HOST:-http://localhost:11434}' },
-      bedrock: { region: '${AWS_REGION:-us-east-1}', accessKeyId: '${AWS_ACCESS_KEY_ID:-}', secretAccessKey: '${AWS_SECRET_ACCESS_KEY:-}', sessionToken: '${AWS_SESSION_TOKEN:-}' },
+      bedrock: { region: '${AWS_REGION:-us-east-1}', apiKey: '${AWS_BEDROCK_API_KEY:-}', accessKeyId: '${AWS_ACCESS_KEY_ID:-}', secretAccessKey: '${AWS_SECRET_ACCESS_KEY:-}', sessionToken: '${AWS_SESSION_TOKEN:-}' },
       azure: { endpoint: '${AZURE_OPENAI_ENDPOINT:-}', deployment: '${AZURE_OPENAI_DEPLOYMENT:-}', apiKey: '${AZURE_OPENAI_API_KEY:-}' },
       codex: { accessToken: '${CODEX_ACCESS_TOKEN:-}' },
       'anthropic-agents-sdk': {},
