@@ -176,6 +176,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'openai-base-url':             { type: 'string' },
       'google-base-url':             { type: 'string' },
       'ollama-host':                 { type: 'string' },
+      'bedrock-base-url':            { type: 'string' },
       'azure-endpoint':              { type: 'string' },
       'azure-deployment':            { type: 'string' },
     },

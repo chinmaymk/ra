@@ -127,6 +127,9 @@ describe('parseArgs', () => {
     it('--ollama-host', () => {
       expect(parseArgs(dev('--ollama-host', 'http://localhost:11434')).config.app?.providers?.ollama.host).toBe('http://localhost:11434')
     })
+    it('--bedrock-base-url', () => {
+      expect(parseArgs(dev('--bedrock-base-url', 'https://gateway.example.com')).config.app?.providers?.bedrock.baseURL).toBe('https://gateway.example.com')
+    })
   })
 
   describe('skills flags', () => {

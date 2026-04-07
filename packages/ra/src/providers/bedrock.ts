@@ -8,6 +8,7 @@ import {
   type ToolInputSchema,
   type ConverseStreamOutput,
 } from '@aws-sdk/client-bedrock-runtime'
+import { HttpResponse, type HttpRequest, type HttpHandlerOptions } from '@smithy/protocol-http'
 import { extractSystemMessages, mergeConsecutive, parseToolArguments, serializeContent, THINKING_BUDGETS, resolveThinkingBudget, DEFAULT_MAX_TOKENS, withDoneGuard } from './utils'
 import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, ContentPart, TokenUsage } from './types'
 
@@ -27,9 +28,19 @@ export class BedrockProvider implements IProvider {
 
   constructor(options: BedrockProviderOptions) {
     const hasExplicitCredentials = !!(options.accessKeyId && options.secretAccessKey)
+    const endpoint = normalizeEndpoint(options.baseURL)
     this.client = new BedrockRuntimeClient({
       region: options.region ?? 'us-east-1',
-      ...(options.baseURL && { endpoint: options.baseURL }),
+      ...(endpoint && {
+        endpoint,
+        // Bedrock defaults to NodeHttp2Handler, which (a) hangs against HTTP/1.1-only
+        // gateways and (b) bypasses runtime DNS resolution used by mesh proxies like
+        // Tailscale Aperture. @smithy/fetch-http-handler also fails under Bun because
+        // it sets `duplex: "half"` and other request options Bun's fetch rejects.
+        // Use a minimal fetch-based handler that buffers any streaming body and
+        // calls the runtime's native fetch() with only the options Bun handles.
+        requestHandler: new FetchRequestHandler(),
+      }),
       ...(hasExplicitCredentials && {
         credentials: {
           accessKeyId: options.accessKeyId!,
@@ -175,4 +186,95 @@ export class BedrockProvider implements IProvider {
     }
     return { role: 'assistant', content: textContent, ...(toolCalls.length && { toolCalls }) }
   }
+}
+
+/** Ensure the endpoint URL has a protocol so the AWS SDK can parse it. */
+function normalizeEndpoint(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`
+}
+
+/**
+ * Minimal request handler that calls the runtime's native fetch() with only the
+ * options that Bun's fetch is happy with. Avoids `duplex: "half"`, `keepalive`,
+ * and other knobs that the standard handlers set unconditionally.
+ *
+ * Streaming request bodies are not supported (Bedrock requests are JSON, so this
+ * is fine). Streaming responses are passed through as a Web ReadableStream, which
+ * the AWS SDK's eventstream parser handles.
+ */
+class FetchRequestHandler {
+  async handle(request: HttpRequest, options?: HttpHandlerOptions): Promise<{ response: HttpResponse }> {
+    const query = request.query
+      ? Object.entries(request.query)
+          .flatMap(([k, v]) => v == null ? [] : Array.isArray(v) ? v.map(x => `${encodeURIComponent(k)}=${encodeURIComponent(x)}`) : [`${encodeURIComponent(k)}=${encodeURIComponent(v)}`])
+          .join('&')
+      : ''
+    const url = `${request.protocol}//${request.hostname}${request.port ? `:${request.port}` : ''}${request.path}${query ? `?${query}` : ''}`
+
+    const body = request.body == null || request.method === 'GET' || request.method === 'HEAD'
+      ? undefined
+      : await bufferBody(request.body)
+
+    const response = await fetch(url, {
+      method: request.method,
+      headers: request.headers as Record<string, string>,
+      body,
+      signal: options?.abortSignal as AbortSignal | undefined,
+    })
+
+    const headers: Record<string, string> = {}
+    response.headers.forEach((value, key) => { headers[key] = value })
+
+    return {
+      response: new HttpResponse({
+        statusCode: response.status,
+        reason: response.statusText,
+        headers,
+        body: response.body ?? undefined,
+      }),
+    }
+  }
+
+  destroy(): void {}
+
+  updateHttpClientConfig(): void {}
+
+  httpHandlerConfigs(): Record<string, unknown> { return {} }
+}
+
+/** Read any request body shape (string, Buffer, Uint8Array, ReadableStream, async iterable) into a Uint8Array. */
+async function bufferBody(body: unknown): Promise<Uint8Array | string | undefined> {
+  if (body == null) return undefined
+  if (typeof body === 'string') return body
+  if (body instanceof Uint8Array) return body
+  if (body instanceof ArrayBuffer) return new Uint8Array(body)
+  if (typeof (body as { getReader?: unknown }).getReader === 'function') {
+    const reader = (body as ReadableStream<Uint8Array>).getReader()
+    const chunks: Uint8Array[] = []
+    let total = 0
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (value) { chunks.push(value); total += value.byteLength }
+    }
+    const out = new Uint8Array(total)
+    let off = 0
+    for (const c of chunks) { out.set(c, off); off += c.byteLength }
+    return out
+  }
+  if (typeof (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator] === 'function') {
+    const chunks: Uint8Array[] = []
+    let total = 0
+    for await (const chunk of body as AsyncIterable<Uint8Array>) {
+      const buf = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk as ArrayBuffer)
+      chunks.push(buf); total += buf.byteLength
+    }
+    const out = new Uint8Array(total)
+    let off = 0
+    for (const c of chunks) { out.set(c, off); off += c.byteLength }
+    return out
+  }
+  // Fallback — let fetch attempt to serialize it
+  return body as Uint8Array
 }
