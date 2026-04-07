@@ -316,68 +316,38 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
   return { config, filePath: configFilePath, systemPromptPath }
 }
 
-// Provider/interface enum lists are the single source of truth in
-// parse-args.ts (where yargs `.choices()` consumes them). Imported here
-// so file/recipe-supplied values get validated against the same set
-// without duplicating the list.
-const VALID_PROVIDERS: ReadonlySet<string> = new Set(PROVIDERS)
-const VALID_INTERFACES: ReadonlySet<string> = new Set(INTERFACE_FLAGS)
-
+/**
+ * Validate the merged config. Yargs `.choices()` already enforces enums on
+ * CLI flags; this exists to catch the same mistakes when they come from a
+ * config file or recipe (which yargs never sees). Numeric range checks and
+ * structural MCP-server checks are unique to this layer.
+ */
 function validateConfig(config: RaConfig): void {
+  const { agent, app } = config
   const errors: string[] = []
+  const provs = PROVIDERS as readonly string[]
+  const ifaces = INTERFACE_FLAGS as readonly string[]
 
-  // Provider
-  if (!config.agent.provider) {
-    errors.push('agent.provider is required (e.g. "anthropic", "openai", "google")')
-  } else if (!VALID_PROVIDERS.has(config.agent.provider)) {
-    errors.push(`agent.provider "${config.agent.provider}" is not a valid provider. Valid options: ${[...VALID_PROVIDERS].join(', ')}`)
-  }
+  if (!agent.provider) errors.push('agent.provider is required (e.g. "anthropic", "openai", "google")')
+  else if (!provs.includes(agent.provider)) errors.push(`agent.provider "${agent.provider}" is not a valid provider. Valid options: ${provs.join(', ')}`)
+  if (!agent.model) errors.push('agent.model is required (e.g. "claude-sonnet-4-6", "gpt-4o")')
+  if (app.interface && !ifaces.includes(app.interface)) errors.push(`app.interface "${app.interface}" is not valid. Valid options: ${ifaces.join(', ')}`)
 
-  // Model
-  if (!config.agent.model) {
-    errors.push('agent.model is required (e.g. "claude-sonnet-4-6", "gpt-4o")')
-  }
+  if (typeof agent.maxIterations === 'number' && agent.maxIterations < 0) errors.push('agent.maxIterations must be 0 (unlimited) or a positive number')
+  if (typeof agent.maxRetries    === 'number' && agent.maxRetries    < 0) errors.push('agent.maxRetries must be 0 or a positive number')
+  if (typeof agent.toolTimeout   === 'number' && agent.toolTimeout   < 0) errors.push('agent.toolTimeout must be 0 (unlimited) or a positive number of milliseconds')
 
-  // Interface
-  if (config.app.interface && !VALID_INTERFACES.has(config.app.interface)) {
-    errors.push(`app.interface "${config.app.interface}" is not valid. Valid options: ${[...VALID_INTERFACES].join(', ')}`)
-  }
+  const t = agent.compaction?.threshold
+  if (typeof t === 'number' && (t <= 0 || t > 1)) errors.push('agent.compaction.threshold must be between 0 and 1 (e.g. 0.9 = 90% of context window)')
+  if (typeof app.http?.port === 'number' && (app.http.port < 0 || app.http.port > 65535)) errors.push('app.http.port must be between 0 and 65535')
 
-  // Numeric ranges
-  if (typeof config.agent.maxIterations === 'number' && config.agent.maxIterations < 0) {
-    errors.push('agent.maxIterations must be 0 (unlimited) or a positive number')
-  }
-  if (typeof config.agent.maxRetries === 'number' && config.agent.maxRetries < 0) {
-    errors.push('agent.maxRetries must be 0 or a positive number')
-  }
-  if (typeof config.agent.toolTimeout === 'number' && config.agent.toolTimeout < 0) {
-    errors.push('agent.toolTimeout must be 0 (unlimited) or a positive number of milliseconds')
-  }
+  app.mcpServers?.forEach((entry, i) => {
+    if (!entry) return
+    if (!entry.name)      errors.push(`app.mcpServers[${i}].name is required`)
+    if (!entry.transport) errors.push(`app.mcpServers[${i}].transport is required ("stdio" or "sse")`)
+    if (entry.transport === 'stdio' && !entry.command) errors.push(`app.mcpServers[${i}].command is required for stdio transport`)
+    if (entry.transport === 'sse'   && !entry.url)     errors.push(`app.mcpServers[${i}].url is required for sse transport`)
+  })
 
-  // Compaction threshold
-  const threshold = config.agent.compaction?.threshold
-  if (typeof threshold === 'number' && (threshold <= 0 || threshold > 1)) {
-    errors.push('agent.compaction.threshold must be between 0 and 1 (e.g. 0.9 = 90% of context window)')
-  }
-
-  // HTTP port
-  if (typeof config.app.http?.port === 'number' && (config.app.http.port < 0 || config.app.http.port > 65535)) {
-    errors.push('app.http.port must be between 0 and 65535')
-  }
-
-  // MCP servers
-  if (Array.isArray(config.app.mcpServers)) {
-    for (let i = 0; i < config.app.mcpServers.length; i++) {
-      const entry = config.app.mcpServers[i]
-      if (!entry) continue
-      if (!entry.name) errors.push(`app.mcpServers[${i}].name is required`)
-      if (!entry.transport) errors.push(`app.mcpServers[${i}].transport is required ("stdio" or "sse")`)
-      if (entry.transport === 'stdio' && !entry.command) errors.push(`app.mcpServers[${i}].command is required for stdio transport`)
-      if (entry.transport === 'sse' && !entry.url) errors.push(`app.mcpServers[${i}].url is required for sse transport`)
-    }
-  }
-
-  if (errors.length > 0) {
-    throw new ConfigError(`Invalid configuration:\n  ${errors.join('\n  ')}`)
-  }
+  if (errors.length > 0) throw new ConfigError(`Invalid configuration:\n  ${errors.join('\n  ')}`)
 }
