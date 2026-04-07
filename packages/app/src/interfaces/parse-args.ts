@@ -204,14 +204,53 @@ function buildYargs(args: string[]) {
     .option('bedrock-base-url',              { type: 'string' })
     .option('azure-endpoint',                { type: 'string' })
     .option('azure-deployment',              { type: 'string' })
+    .check(checkProviderFlagCompatibility)
     .fail((msg, err) => {
-      // Swallow yargs errors silently — historically the parser used
-      // `strict: false` and never errored on unknown flags. Surfacing
-      // these would change behaviour for callers like `ra login` that
-      // pass through provider-specific flags.
+      // yargs invokes .fail() for both internal parse errors and check()
+      // throws. We rethrow real errors (so .check() validation surfaces)
+      // but swallow bare messages, matching the historical lenient
+      // behaviour of `util.parseArgs({ strict: false })`.
       if (err) throw err
       void msg
     })
+}
+
+/**
+ * Provider-scoped flags: each entry maps a CLI flag to the set of provider
+ * names it is meaningful for. Used by `checkProviderFlagCompatibility` below.
+ */
+const PROVIDER_SCOPED_FLAGS: Record<string, readonly string[]> = {
+  'anthropic-base-url': ['anthropic'],
+  'openai-base-url':    ['openai', 'openai-completions'],
+  'google-base-url':    ['google'],
+  'ollama-host':        ['ollama'],
+  'bedrock-base-url':   ['bedrock'],
+  'azure-endpoint':     ['azure'],
+  'azure-deployment':   ['azure'],
+}
+
+/**
+ * yargs `.check()` validator: when both `--provider` and a provider-scoped
+ * flag (e.g. `--openai-base-url`) are passed on the CLI, ensure they agree.
+ *
+ * If `--provider` is omitted on the CLI we accept the flag without error,
+ * because the active provider may still be supplied by the config file or
+ * a recipe layer that this parser cannot see.
+ */
+function checkProviderFlagCompatibility(argv: Record<string, unknown>): true {
+  const provider = argv.provider as string | undefined
+  if (provider === undefined) return true
+
+  for (const [flag, allowed] of Object.entries(PROVIDER_SCOPED_FLAGS)) {
+    if (argv[flag] === undefined) continue
+    if (!allowed.includes(provider)) {
+      const list = allowed.map(p => `"${p}"`).join(' or ')
+      throw new Error(
+        `--${flag} is only valid with --provider ${list} (got --provider "${provider}")`,
+      )
+    }
+  }
+  return true
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {

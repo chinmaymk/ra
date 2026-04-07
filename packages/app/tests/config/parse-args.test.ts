@@ -196,6 +196,53 @@ describe('parseArgs', () => {
     })
   })
 
+  describe('provider/base-url compatibility checks', () => {
+    it('--openai-base-url is allowed with --provider openai', () => {
+      const r = parseArgs(dev('--provider', 'openai', '--openai-base-url', 'https://proxy/'))
+      expect(r.config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+    })
+
+    it('--openai-base-url is allowed with --provider openai-completions', () => {
+      const r = parseArgs(dev('--provider', 'openai-completions', '--openai-base-url', 'https://proxy/'))
+      expect(r.config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+    })
+
+    it('--openai-base-url errors when --provider is anthropic', () => {
+      expect(() => parseArgs(dev('--provider', 'anthropic', '--openai-base-url', 'https://proxy/')))
+        .toThrow(/--openai-base-url is only valid with --provider/)
+    })
+
+    it('--openai-base-url is allowed without --provider (config may set it)', () => {
+      const r = parseArgs(dev('--openai-base-url', 'https://proxy/'))
+      expect(r.config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+    })
+
+    it('--anthropic-base-url errors when --provider is openai', () => {
+      expect(() => parseArgs(dev('--provider', 'openai', '--anthropic-base-url', 'https://proxy/')))
+        .toThrow(/--anthropic-base-url is only valid with --provider/)
+    })
+
+    it('--ollama-host errors when --provider is openai', () => {
+      expect(() => parseArgs(dev('--provider', 'openai', '--ollama-host', 'http://localhost:11434')))
+        .toThrow(/--ollama-host is only valid with --provider/)
+    })
+
+    it('--bedrock-base-url errors when --provider is google', () => {
+      expect(() => parseArgs(dev('--provider', 'google', '--bedrock-base-url', 'https://gw/')))
+        .toThrow(/--bedrock-base-url is only valid with --provider/)
+    })
+
+    it('--azure-endpoint errors when --provider is openai', () => {
+      expect(() => parseArgs(dev('--provider', 'openai', '--azure-endpoint', 'https://r.azure.com/')))
+        .toThrow(/--azure-endpoint is only valid with --provider/)
+    })
+
+    it('--azure-deployment is allowed with --provider azure', () => {
+      const r = parseArgs(dev('--provider', 'azure', '--azure-deployment', 'gpt4o', '--azure-endpoint', 'https://r/'))
+      expect(r.config.app?.providers?.azure?.deployment).toBe('gpt4o')
+    })
+  })
+
   describe('Azure provider flags', () => {
     it('--azure-endpoint sets providers.azure.endpoint', () => {
       const r = parseArgs(dev('--azure-endpoint', 'https://myresource.openai.azure.com/'))
