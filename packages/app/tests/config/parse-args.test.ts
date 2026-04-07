@@ -38,8 +38,11 @@ describe('parseArgs', () => {
     it('runImmediately defaults to false', () => expect(parseArgs(dev('--cron')).meta.runImmediately).toBe(false))
     it('--cli sets cli',   () => expect(parseArgs(dev('--cli', 'x')).config.app?.interface).toBe('cli'))
     it('--mcp sets mcp',   () => expect(parseArgs(dev('--mcp')).config.app?.interface).toBe('mcp'))
-    it('mcp takes precedence over http when both given', () => {
-      expect(parseArgs(dev('--mcp', '--http')).config.app?.interface).toBe('mcp')
+    it('errors when two interface flags are given (yargs .conflicts)', () => {
+      expect(() => parseArgs(dev('--mcp', '--http'))).toThrow(/mutually exclusive|Arguments .* conflict/i)
+    })
+    it('errors on --cli + --repl', () => {
+      expect(() => parseArgs(dev('--cli', '--repl'))).toThrow(/mutually exclusive/i)
     })
     it('no flag leaves interface undefined', () => {
       expect(parseArgs(dev('--model', 'x')).config.app?.interface).toBeUndefined()
@@ -193,6 +196,63 @@ describe('parseArgs', () => {
     })
     it('no positionals → undefined prompt', () => {
       expect(parseArgs(dev('--provider', 'openai')).meta.prompt).toBeUndefined()
+    })
+  })
+
+  describe('yargs strict + choices enforcement', () => {
+    it('errors on unknown flag (--providr typo)', () => {
+      expect(() => parseArgs(dev('--providr', 'openai'))).toThrow(/Unknown argument/i)
+    })
+
+    it('errors on invalid --provider value', () => {
+      expect(() => parseArgs(dev('--provider', 'gpt'))).toThrow(/Invalid values|Choices/i)
+    })
+
+    it('errors on invalid --thinking value', () => {
+      expect(() => parseArgs(dev('--thinking', 'extreme'))).toThrow(/Invalid values|Choices/i)
+    })
+
+    it('accepts every valid --provider choice', () => {
+      const all = ['anthropic', 'openai', 'openai-completions', 'google', 'ollama', 'bedrock', 'azure', 'codex', 'anthropic-agents-sdk'] as const
+      for (const p of all) {
+        expect(parseArgs(dev('--provider', p)).config.agent?.provider).toBe(p)
+      }
+    })
+  })
+
+  describe('interface-scoped flag checks', () => {
+    it('--http-port errors with --cli', () => {
+      expect(() => parseArgs(dev('--cli', '--http-port', '4000', 'hi')))
+        .toThrow(/--http-port is only valid with --http/)
+    })
+
+    it('--http-port allowed with --http', () => {
+      const r = parseArgs(dev('--http', '--http-port', '4000'))
+      expect(r.config.app?.http?.port).toBe(4000)
+    })
+
+    it('--http-port allowed without any interface flag (config may set it)', () => {
+      const r = parseArgs(dev('--http-port', '4000'))
+      expect(r.config.app?.http?.port).toBe(4000)
+    })
+
+    it('--http-token errors with --repl', () => {
+      expect(() => parseArgs(dev('--repl', '--http-token', 'secret')))
+        .toThrow(/--http-token is only valid with --http/)
+    })
+
+    it('--inspector-port errors with --http', () => {
+      expect(() => parseArgs(dev('--http', '--inspector-port', '5000')))
+        .toThrow(/--inspector-port is only valid with --inspector/)
+    })
+
+    it('--run-immediately errors with --repl', () => {
+      expect(() => parseArgs(dev('--repl', '--run-immediately')))
+        .toThrow(/--run-immediately is only valid with --cron/)
+    })
+
+    it('--run-immediately allowed with --cron', () => {
+      expect(parseArgs(dev('--cron', '--run-immediately')).meta.runImmediately).toBe(true)
     })
   })
 

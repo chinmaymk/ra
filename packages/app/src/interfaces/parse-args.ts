@@ -129,16 +129,67 @@ function extractResume(args: string[]): { rest: string[]; resume: string | true 
   return { rest, resume }
 }
 
+// ── Schema constants ────────────────────────────────────────────────────
+
+const PROVIDERS = [
+  'anthropic', 'openai', 'openai-completions', 'google',
+  'ollama', 'bedrock', 'azure', 'codex', 'anthropic-agents-sdk',
+] as const
+type Provider = typeof PROVIDERS[number]
+
+const INTERFACE_FLAGS = ['mcp-stdio', 'mcp', 'http', 'inspector', 'cron', 'repl', 'cli'] as const
+type InterfaceFlag = typeof INTERFACE_FLAGS[number]
+
+const THINKING_LEVELS = ['low', 'medium', 'high'] as const
+
 /**
- * Build a yargs parser with all known options. We declare numeric flags as
- * strings so that invalid input can be silently ignored downstream by
- * `safeParseInt` (matches the historical behaviour the test suite encodes).
+ * Flags that are only meaningful when --provider is one of these values.
+ * Validated only when --provider is explicitly given on the CLI; otherwise
+ * the flag passes through (a config file or recipe may set the provider).
+ */
+const PROVIDER_SCOPED: Readonly<Record<string, readonly Provider[]>> = {
+  'anthropic-base-url': ['anthropic'],
+  'openai-base-url':    ['openai', 'openai-completions'],
+  'google-base-url':    ['google'],
+  'ollama-host':        ['ollama'],
+  'bedrock-base-url':   ['bedrock'],
+  'azure-endpoint':     ['azure'],
+  'azure-deployment':   ['azure'],
+}
+
+/**
+ * Flags that are only meaningful when one of the listed interface flags is
+ * active. Validated only when an interface flag is explicitly given on the
+ * CLI; otherwise the flag passes through (config may set the interface).
+ */
+const INTERFACE_SCOPED: Readonly<Record<string, readonly InterfaceFlag[]>> = {
+  'http-port':        ['http'],
+  'http-token':       ['http'],
+  'inspector-port':   ['inspector'],
+  'run-immediately':  ['cron'],
+}
+
+// ── Parser ──────────────────────────────────────────────────────────────
+
+/**
+ * Build a yargs parser with all known options. Numeric flags are declared
+ * as strings so `safeParseInt` can silently drop invalid input via
+ * FLAG_RULES (matches the historical lenient int coercion).
  */
 function buildYargs(args: string[]) {
+  // Each interface flag conflicts with every other interface flag.
+  const interfaceConflicts = Object.fromEntries(
+    INTERFACE_FLAGS.map(f => [f, INTERFACE_FLAGS.filter(x => x !== f)]),
+  )
+
   return yargs(args)
     .help(false)
     .version(false)
     .exitProcess(false)
+    .strict()
+    // Declare a default command that accepts any number of positional
+    // prompt tokens, so strict mode doesn't reject the prompt itself.
+    .command('$0 [prompt..]', false, y => y.positional('prompt', { type: 'string', array: true }), () => {})
     .parserConfiguration({
       'camel-case-expansion': false,    // keep --skill-dir, don't also create skillDir
       'strip-aliased': true,            // drop alias keys (h, v) from the result
@@ -151,11 +202,11 @@ function buildYargs(args: string[]) {
     .option('exec',                          { type: 'string' })
     .option('config',                        { type: 'string' })
     .option('file',                          { type: 'string', array: true })
-    .option('help',                          { type: 'boolean', alias: 'h', default: false })
-    .option('version',                       { type: 'boolean', alias: 'v', default: false })
-    .option('show-context',                  { type: 'boolean', default: false })
-    .option('show-config',                   { type: 'boolean', default: false })
-    // Interface selection
+    .option('help',                          { type: 'boolean', alias: 'h' })
+    .option('version',                       { type: 'boolean', alias: 'v' })
+    .option('show-context',                  { type: 'boolean' })
+    .option('show-config',                   { type: 'boolean' })
+    // Interface selection (mutually exclusive — see .conflicts() below)
     .option('http',                          { type: 'boolean' })
     .option('cli',                           { type: 'boolean' })
     .option('repl',                          { type: 'boolean' })
@@ -163,13 +214,14 @@ function buildYargs(args: string[]) {
     .option('mcp-stdio',                     { type: 'boolean' })
     .option('inspector',                     { type: 'boolean' })
     .option('cron',                          { type: 'boolean' })
-    .option('run-immediately',               { type: 'boolean', default: false })
+    .option('run-immediately',               { type: 'boolean' })
+    .conflicts(interfaceConflicts)
     // Agent config (numerics declared as strings; coerced via FLAG_RULES)
-    .option('provider',                      { type: 'string' })
+    .option('provider',                      { type: 'string', choices: PROVIDERS })
     .option('model',                         { type: 'string' })
     .option('system-prompt',                 { type: 'string' })
     .option('max-iterations',                { type: 'string' })
-    .option('thinking',                      { type: 'string' })
+    .option('thinking',                      { type: 'string', choices: THINKING_LEVELS })
     .option('thinking-budget-cap',           { type: 'string' })
     .option('tool-timeout',                  { type: 'string' })
     .option('max-tool-response-size',        { type: 'string' })
@@ -179,14 +231,14 @@ function buildYargs(args: string[]) {
     .option('http-token',                    { type: 'string' })
     // Inspector
     .option('inspector-port',                { type: 'string' })
-    // MCP server
+    // MCP server (independent of interface — can run alongside any interface)
     .option('mcp-server-enabled',            { type: 'boolean' })
     .option('mcp-server-port',               { type: 'string' })
     .option('mcp-server-tool-name',          { type: 'string' })
     .option('mcp-server-tool-description',   { type: 'string' })
     // Memory
     .option('memory',                        { type: 'boolean' })
-    .option('list-memories',                 { type: 'boolean', default: false })
+    .option('list-memories',                 { type: 'boolean' })
     .option('memories',                      { type: 'string' })
     .option('forget',                        { type: 'string' })
     // Data & storage
@@ -196,7 +248,7 @@ function buildYargs(args: string[]) {
     // Skills & recipes
     .option('skill-dir',                     { type: 'string', array: true })
     .option('recipe',                        { type: 'string' })
-    // Provider connection options
+    // Provider connection options (validated by checkScopedFlags)
     .option('anthropic-base-url',            { type: 'string' })
     .option('openai-base-url',               { type: 'string' })
     .option('google-base-url',               { type: 'string' })
@@ -204,53 +256,50 @@ function buildYargs(args: string[]) {
     .option('bedrock-base-url',              { type: 'string' })
     .option('azure-endpoint',                { type: 'string' })
     .option('azure-deployment',              { type: 'string' })
-    .check(checkProviderFlagCompatibility)
+    .check(checkScopedFlags)
     .fail((msg, err) => {
-      // yargs invokes .fail() for both internal parse errors and check()
-      // throws. We rethrow real errors (so .check() validation surfaces)
-      // but swallow bare messages, matching the historical lenient
-      // behaviour of `util.parseArgs({ strict: false })`.
-      if (err) throw err
-      void msg
+      // yargs calls .fail() for parse errors, strict-mode unknown flags,
+      // .conflicts() / .implies() / .check() violations, and invalid
+      // .choices(). Surface them all as thrown Errors so callers see a
+      // single, consistent failure mode.
+      throw err ?? new Error(msg)
     })
 }
 
 /**
- * Provider-scoped flags: each entry maps a CLI flag to the set of provider
- * names it is meaningful for. Used by `checkProviderFlagCompatibility` below.
- */
-const PROVIDER_SCOPED_FLAGS: Record<string, readonly string[]> = {
-  'anthropic-base-url': ['anthropic'],
-  'openai-base-url':    ['openai', 'openai-completions'],
-  'google-base-url':    ['google'],
-  'ollama-host':        ['ollama'],
-  'bedrock-base-url':   ['bedrock'],
-  'azure-endpoint':     ['azure'],
-  'azure-deployment':   ['azure'],
-}
-
-/**
- * yargs `.check()` validator: when both `--provider` and a provider-scoped
- * flag (e.g. `--openai-base-url`) are passed on the CLI, ensure they agree.
+ * Single declarative validator for both provider- and interface-scoped flags.
  *
- * If `--provider` is omitted on the CLI we accept the flag without error,
- * because the active provider may still be supplied by the config file or
- * a recipe layer that this parser cannot see.
+ * The rule for both groups is the same: if the "context" flag (--provider or
+ * an interface flag) is omitted on the CLI, accept the scoped flag silently
+ * — config files and recipes may still supply the missing context. If the
+ * context flag IS given, the scoped flag must agree with it.
  */
-function checkProviderFlagCompatibility(argv: Record<string, unknown>): true {
-  const provider = argv.provider as string | undefined
-  if (provider === undefined) return true
-
-  for (const [flag, allowed] of Object.entries(PROVIDER_SCOPED_FLAGS)) {
-    if (argv[flag] === undefined) continue
+function checkScopedFlags(argv: Record<string, unknown>): true {
+  const provider = argv.provider as Provider | undefined
+  for (const [flag, allowed] of Object.entries(PROVIDER_SCOPED)) {
+    if (argv[flag] === undefined || provider === undefined) continue
     if (!allowed.includes(provider)) {
-      const list = allowed.map(p => `"${p}"`).join(' or ')
       throw new Error(
-        `--${flag} is only valid with --provider ${list} (got --provider "${provider}")`,
+        `--${flag} is only valid with --provider ${quoteList(allowed)} (got --provider "${provider}")`,
       )
     }
   }
+
+  const activeInterface = INTERFACE_FLAGS.find(f => argv[f])
+  for (const [flag, allowed] of Object.entries(INTERFACE_SCOPED)) {
+    if (argv[flag] === undefined || activeInterface === undefined) continue
+    if (!allowed.includes(activeInterface as InterfaceFlag)) {
+      throw new Error(
+        `--${flag} is only valid with ${allowed.map(i => `--${i}`).join(' or ')} (got --${activeInterface})`,
+      )
+    }
+  }
+
   return true
+}
+
+function quoteList(items: readonly string[]): string {
+  return items.map(p => `"${p}"`).join(' or ')
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -262,15 +311,20 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const { rest, resume } = extractResume(userArgs)
 
   const values = buildYargs(rest).parseSync() as Record<string, unknown>
-  const positionals = ((values._ as unknown[]) ?? []).map(p => String(p))
+  // The default command `$0 [prompt..]` puts positional tokens into `prompt`.
+  // Fall back to `_` for safety (e.g. if no positionals were given).
+  const positionals = (
+    (values.prompt as unknown[] | undefined)
+    ?? (values._ as unknown[] | undefined)
+    ?? []
+  ).map(p => String(p))
 
   const r: Record<string, unknown> = {}
 
-  // Interface selection — first match wins. Order matters: mcp-stdio before mcp.
-  const interfaceFlags = ['mcp-stdio', 'mcp', 'http', 'inspector', 'cron', 'repl', 'cli'] as const
-  for (const flag of interfaceFlags) {
-    if (values[flag]) { setPath(r, ['app', 'interface'], flag); break }
-  }
+  // Interface selection. Mutual exclusion is enforced by yargs .conflicts(),
+  // so at most one of these will be true.
+  const activeInterface = INTERFACE_FLAGS.find(f => values[f])
+  if (activeInterface) setPath(r, ['app', 'interface'], activeInterface)
 
   // Apply declarative flag rules
   for (const [flag, rule] of Object.entries(FLAG_RULES)) {
