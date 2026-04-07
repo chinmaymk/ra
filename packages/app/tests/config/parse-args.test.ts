@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { parseArgs } from '../../src/interfaces/parse-args'
 
 function dev(...args: string[]): string[] {
@@ -196,6 +196,70 @@ describe('parseArgs', () => {
     })
     it('no positionals → undefined prompt', () => {
       expect(parseArgs(dev('--provider', 'openai')).meta.prompt).toBeUndefined()
+    })
+  })
+
+  describe('RA_* environment variables', () => {
+    const originalEnv: Record<string, string | undefined> = {}
+
+    function setEnv(key: string, value: string): void {
+      originalEnv[key] = process.env[key]
+      process.env[key] = value
+    }
+
+    beforeEach(() => {
+      // Capture & strip any pre-existing RA_* vars so the host environment
+      // can't bleed into these tests.
+      for (const key of Object.keys(process.env)) {
+        if (key.startsWith('RA_')) {
+          originalEnv[key] = process.env[key]
+          delete process.env[key]
+        }
+      }
+    })
+
+    afterEach(() => {
+      for (const [key, value] of Object.entries(originalEnv)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+      for (const key of Object.keys(originalEnv)) delete originalEnv[key]
+    })
+
+    it('RA_PROVIDER sets provider', () => {
+      setEnv('RA_PROVIDER', 'openai')
+      expect(parseArgs(dev()).config.agent?.provider).toBe('openai')
+    })
+
+    it('RA_HTTP_PORT maps to --http-port', () => {
+      setEnv('RA_HTTP_PORT', '4000')
+      expect(parseArgs(dev('--http')).config.app?.http?.port).toBe(4000)
+    })
+
+    it('RA_OPENAI_BASE_URL maps to --openai-base-url', () => {
+      setEnv('RA_OPENAI_BASE_URL', 'https://proxy/')
+      expect(parseArgs(dev()).config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+    })
+
+    it('CLI flag overrides RA_* env var', () => {
+      setEnv('RA_PROVIDER', 'anthropic')
+      expect(parseArgs(dev('--provider', 'openai')).config.agent?.provider).toBe('openai')
+    })
+
+    it('RA_PROVIDER goes through .choices() validation', () => {
+      setEnv('RA_PROVIDER', 'gpt')
+      expect(() => parseArgs(dev())).toThrow(/Invalid values|Choices/i)
+    })
+
+    it('RA_PROVIDER goes through scoped-flag validation', () => {
+      setEnv('RA_PROVIDER', 'anthropic')
+      expect(() => parseArgs(dev('--openai-base-url', 'https://x')))
+        .toThrow(/--openai-base-url is only valid with --provider/)
+    })
+
+    it('RA_HTTP boolean enables --http interface', () => {
+      setEnv('RA_HTTP', 'true')
+      expect(parseArgs(dev()).config.app?.interface).toBe('http')
     })
   })
 

@@ -187,11 +187,21 @@ function buildYargs(args: string[]) {
     .version(false)
     .exitProcess(false)
     .strict()
+    // Bind every declared option to a matching `RA_*` environment variable.
+    // yargs lowercases and converts `_` → `-`, so e.g.
+    //   RA_PROVIDER=openai             ↔ --provider openai
+    //   RA_HTTP_PORT=4000              ↔ --http-port 4000
+    //   RA_OPENAI_BASE_URL=https://x   ↔ --openai-base-url https://x
+    // CLI flags still take precedence; env values flow through .choices(),
+    // .conflicts(), and checkScopedFlags identically.
+    .env('RA')
     // Declare a default command that accepts any number of positional
     // prompt tokens, so strict mode doesn't reject the prompt itself.
     .command('$0 [prompt..]', false, y => y.positional('prompt', { type: 'string', array: true }), () => {})
     .parserConfiguration({
-      'camel-case-expansion': false,    // keep --skill-dir, don't also create skillDir
+      // camel-case-expansion stays ON so .env('RA') can resolve
+      // RA_HTTP_PORT → httpPort → http-port. We compensate for the
+      // dual keys by always reading dashed names from argv below.
       'strip-aliased': true,            // drop alias keys (h, v) from the result
       'boolean-negation': false,        // disable --no-foo magic
       'parse-numbers': false,           // FLAG_RULES handles int coercion

@@ -98,7 +98,14 @@ RECIPE MANAGEMENT
       recipe: owner/recipe-name              Reference in ra.config.yaml
 
 ENV VARS
-  Config files and defaults support Docker Compose–style interpolation:
+  Every CLI flag has a matching \`RA_*\` environment variable. The flag
+  name is uppercased and dashes become underscores:
+    --provider openai           ↔ RA_PROVIDER=openai
+    --http-port 4000            ↔ RA_HTTP_PORT=4000
+    --openai-base-url https://x ↔ RA_OPENAI_BASE_URL=https://x
+  CLI flags take precedence over env vars when both are set.
+
+  Config files and defaults also support Docker Compose–style interpolation:
     \${VAR}              required — errors if unset
     \${VAR:-default}     use default if unset or empty
     \${VAR-default}      use default if unset
