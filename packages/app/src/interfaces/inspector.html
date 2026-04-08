@@ -181,26 +181,45 @@
   .token-legend .leg-output::before { background: var(--accent2); opacity: 0.7; }
   .token-legend .leg-thinking::before { background: var(--purple); opacity: 0.7; }
 
-  /* Timeline */
-  .tl-event { display: grid; grid-template-columns: 120px 90px 1fr; gap: 10px; padding: 10px 14px; border-left: 3px solid var(--border); margin-left: 8px; font-size: 12px; }
-  .tl-event:hover { background: var(--bg2); }
-  .tl-event.tl-model_call { border-left-color: var(--accent); }
-  .tl-event.tl-tool { border-left-color: var(--orange); }
-  .tl-event.tl-iteration { border-left-color: var(--accent2); }
-  .tl-event.tl-loop { border-left-color: var(--purple); }
-  .tl-event.tl-log_error { border-left-color: var(--red); background: rgba(248,81,73,0.05); }
-  .tl-event.tl-log_warn { border-left-color: var(--orange); background: rgba(210,153,34,0.05); }
-  .tl-ts { color: var(--text2); font-size: 11px; }
-  .tl-type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
-  .tl-type.tl-t-model_call { color: var(--accent); }
-  .tl-type.tl-t-tool { color: var(--orange); }
-  .tl-type.tl-t-iteration { color: var(--accent2); }
-  .tl-type.tl-t-loop { color: var(--purple); }
-  .tl-type.tl-t-log_error { color: var(--red); }
-  .tl-type.tl-t-log_warn { color: var(--orange); }
-  .tl-label { color: var(--text); }
-  .tl-detail { color: var(--text2); font-size: 11px; margin-top: 2px; }
-  .tl-dur { color: var(--text2); font-size: 10px; }
+  /* Timeline (Chrome DevTools-style flame chart) */
+  .timeline-container { display: flex; flex-direction: column; gap: 12px; }
+  .timeline-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); font-size: 11px; color: var(--text2); }
+  .timeline-toolbar button { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-family: var(--font); font-size: 12px; padding: 4px 12px; min-width: 28px; }
+  .timeline-toolbar button:hover { background: var(--bg3); border-color: var(--accent); }
+  .timeline-toolbar .tl-zoom-label { color: var(--accent); font-weight: 600; min-width: 56px; }
+  .timeline-toolbar .tl-hint { margin-left: auto; color: var(--text2); font-size: 10px; }
+  .timeline-toolbar .tl-range { color: var(--text2); }
+  .timeline-canvas-wrap { position: relative; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .timeline-canvas { display: block; width: 100%; cursor: grab; user-select: none; }
+  .timeline-canvas.dragging { cursor: grabbing; }
+  .timeline-tooltip { position: absolute; pointer-events: none; background: var(--bg); border: 1px solid var(--accent); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: var(--text); white-space: nowrap; z-index: 20; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none; }
+  .timeline-tooltip .tt-name { color: var(--accent); font-weight: 600; }
+  .timeline-tooltip .tt-meta { color: var(--text2); margin-top: 2px; font-size: 10px; }
+  .timeline-details { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; min-height: 120px; }
+  .timeline-details .td-empty { color: var(--text2); text-align: center; padding: 24px; font-size: 12px; }
+  .timeline-details .td-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .timeline-details .td-title { color: var(--accent); font-weight: 600; font-size: 13px; }
+  .timeline-details .td-dur { color: var(--orange); font-size: 11px; }
+  .timeline-details .td-status { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 600; }
+  .timeline-details .td-status.ok { background: #1a2e1a; color: var(--accent2); }
+  .timeline-details .td-status.error { background: #2e1a1a; color: var(--red); }
+  .timeline-details .td-section { margin-top: 14px; }
+  .timeline-details .td-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2); margin-bottom: 8px; font-weight: 600; }
+  .timeline-details .td-attr { display: flex; gap: 12px; padding: 4px 0; font-size: 12px; }
+  .timeline-details .td-attr-key { color: var(--purple); min-width: 160px; }
+  .timeline-details .td-attr-val { color: var(--text); word-break: break-all; flex: 1; }
+  .timeline-details .td-log { display: grid; grid-template-columns: 80px 50px 1fr; gap: 10px; padding: 4px 0; font-size: 11px; align-items: start; }
+  .timeline-details .td-log-ts { color: var(--text2); }
+  .timeline-details .td-log-level { font-weight: 700; text-transform: uppercase; font-size: 10px; }
+  .timeline-details .td-log-level.debug { color: var(--text2); }
+  .timeline-details .td-log-level.info { color: var(--accent); }
+  .timeline-details .td-log-level.warn { color: var(--orange); }
+  .timeline-details .td-log-level.error { color: var(--red); }
+  .timeline-details .td-log-msg { color: var(--text); word-break: break-word; }
+  .timeline-details .td-log-data { color: var(--text2); font-size: 10px; margin-top: 2px; }
+  .timeline-details .td-message { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-top: 8px; font-size: 12px; }
+  .timeline-details .td-message .role { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 6px; color: var(--accent2); }
+  .timeline-details .td-message .content { white-space: pre-wrap; word-break: break-word; color: var(--text); max-height: 240px; overflow-y: auto; line-height: 1.6; }
 
   /* Thinking blocks */
   .thinking-toggle { cursor: pointer; user-select: none; }
@@ -296,6 +315,7 @@
       tab.classList.add('active');
       currentView = tab.dataset.view;
       updateLayout();
+      if (currentView !== 'sessions') disposeTimeline();
 
       if (currentView === 'sessions') {
         if (currentSession) loadSessionDetail(currentSession, currentSessionView);
@@ -444,6 +464,7 @@
 
   // ── Load session detail ──
   async function loadSessionDetail(id, view) {
+    if (view !== 'timeline') disposeTimeline();
     if (!autoRefreshInterval) mainContent.innerHTML = '<div class="loading">Loading…</div>';
     const apiView = view === 'overview' ? 'stats' : view;
     const ns = currentNamespace;
@@ -458,7 +479,8 @@
     else if (view === 'messages') renderMessages(data);
     else if (view === 'logs') renderLogs(data);
     else if (view === 'traces') renderTraces(data);
-    mainContent.innerHTML = sessionBannerHtml(id) + mainContent.innerHTML;
+    // Insert the banner without re-parsing existing DOM (preserves canvas + listeners)
+    mainContent.insertAdjacentHTML('afterbegin', sessionBannerHtml(id));
   }
 
   // ── Load handle-scoped views ──
@@ -550,22 +572,586 @@
     mainContent.innerHTML = html;
   }
 
-  // ── Render Timeline ──
-  function renderTimeline(events) {
-    if (!events || !events.length) {
+  // ── Render Timeline (Chrome DevTools-style flame chart) ──
+  let timelineState = null;
+
+  function renderTimeline(data) {
+    if (!data || !data.spans || !data.spans.length) {
       mainContent.innerHTML = '<div class="empty">No timeline events. Enable observability to see the timeline.</div>';
       return;
     }
-    mainContent.innerHTML = events.map(function(ev) {
-      var ts = ev.ts ? new Date(ev.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:3}) : '';
-      var dur = ev.durationMs != null ? fmtDuration(ev.durationMs) : '';
-      return '<div class="tl-event tl-' + esc(ev.type) + '">' +
-        '<span class="tl-ts">' + esc(ts) + (dur ? ' <span class="tl-dur">(' + esc(dur) + ')</span>' : '') + '</span>' +
-        '<span class="tl-type tl-t-' + esc(ev.type) + '">' + esc(ev.type.replace('log_','').replace('_',' ')) + '</span>' +
-        '<span><span class="tl-label">' + esc(ev.label) + '</span>' +
-        (ev.detail ? '<div class="tl-detail">' + esc(ev.detail) + '</div>' : '') +
-        '</span></div>';
-    }).join('');
+
+    mainContent.innerHTML =
+      '<div class="timeline-container">' +
+        '<div class="timeline-toolbar">' +
+          '<button id="tl-zoom-out" title="Zoom out (or scroll down)">−</button>' +
+          '<button id="tl-zoom-in" title="Zoom in (or scroll up)">+</button>' +
+          '<button id="tl-zoom-fit" title="Fit all events">Fit</button>' +
+          '<span class="tl-zoom-label" id="tl-zoom-label">100%</span>' +
+          '<span class="tl-range" id="tl-range"></span>' +
+          '<span class="tl-hint">Scroll: zoom · Drag: pan · Click: inspect</span>' +
+        '</div>' +
+        '<div class="timeline-canvas-wrap" id="tl-canvas-wrap">' +
+          '<canvas id="tl-canvas" class="timeline-canvas"></canvas>' +
+          '<div class="timeline-tooltip" id="tl-tooltip"></div>' +
+        '</div>' +
+        '<div class="timeline-details" id="tl-details">' +
+          '<div class="td-empty">Click an event on the timeline to see its details, related logs, and messages.</div>' +
+        '</div>' +
+      '</div>';
+
+    initTimelineView(data);
+  }
+
+  function disposeTimeline() {
+    if (timelineState && timelineState.cleanup) {
+      try { timelineState.cleanup(); } catch (e) { /* ignore */ }
+    }
+    timelineState = null;
+  }
+
+  function initTimelineView(data) {
+    // Preserve view range across re-renders of the same session (for auto-refresh)
+    const prev = timelineState;
+    const sameSession = prev && prev.sessionId === currentSession;
+    disposeTimeline();
+    const canvas = document.getElementById('tl-canvas');
+    const wrap = document.getElementById('tl-canvas-wrap');
+    const tooltip = document.getElementById('tl-tooltip');
+    const zoomLabel = document.getElementById('tl-zoom-label');
+    const rangeLabel = document.getElementById('tl-range');
+    const ctx = canvas.getContext('2d');
+
+    const ROW_HEIGHT = 22;
+    const RULER_HEIGHT = 24;
+    const LOG_TRACK_HEIGHT = 28;
+    const LEFT_PAD = 8;
+    const RIGHT_PAD = 8;
+    const FONT = '11px ' + getCss('--font');
+
+    const totalSpan = Math.max(1, data.endMs - data.startMs);
+    const maxDepth = data.spans.reduce((m, s) => Math.max(m, s.depth || 0), 0);
+    const tracksHeight = (maxDepth + 1) * ROW_HEIGHT;
+
+    const localState = {
+      sessionId: currentSession,
+      data,
+      viewStart: sameSession ? prev.viewStart : data.startMs,
+      viewEnd: sameSession ? prev.viewEnd : data.endMs,
+      hitMap: [],
+      selectedSpanId: sameSession ? prev.selectedSpanId : null,
+      messages: sameSession ? prev.messages : null,
+      cleanup: null,
+    };
+    timelineState = localState;
+
+    // Pre-fetch messages for the details panel correlation
+    fetchSessionMessages().then(msgs => { if (timelineState === localState) localState.messages = msgs; });
+
+    function getCss(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || 'monospace';
+    }
+
+    function colorForSpan(name, status) {
+      if (status === 'error') return { fill: 'rgba(248,81,73,0.7)', border: '#f85149', text: '#fff' };
+      if (name === 'agent.loop') return { fill: 'rgba(188,140,255,0.55)', border: '#bc8cff', text: '#fff' };
+      if (name === 'agent.iteration') return { fill: 'rgba(63,185,80,0.55)', border: '#3fb950', text: '#fff' };
+      if (name === 'agent.model_call') return { fill: 'rgba(88,166,255,0.65)', border: '#58a6ff', text: '#fff' };
+      if (name === 'agent.tool_execution') return { fill: 'rgba(210,153,34,0.65)', border: '#d29922', text: '#fff' };
+      return { fill: 'rgba(139,148,158,0.45)', border: '#8b949e', text: '#fff' };
+    }
+
+    function colorForLog(level) {
+      if (level === 'error') return '#f85149';
+      if (level === 'warn') return '#d29922';
+      if (level === 'info') return '#58a6ff';
+      return '#8b949e';
+    }
+
+    function resizeCanvas() {
+      const cssWidth = wrap.clientWidth;
+      const cssHeight = RULER_HEIGHT + tracksHeight + LOG_TRACK_HEIGHT + 8;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(cssWidth * dpr);
+      canvas.height = Math.floor(cssHeight * dpr);
+      canvas.style.width = cssWidth + 'px';
+      canvas.style.height = cssHeight + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }
+
+    function plotWidth() { return canvas.clientWidth - LEFT_PAD - RIGHT_PAD; }
+
+    function timeToX(t) {
+      const span = Math.max(1, timelineState.viewEnd - timelineState.viewStart);
+      return LEFT_PAD + ((t - timelineState.viewStart) / span) * plotWidth();
+    }
+
+    function xToTime(x) {
+      const span = Math.max(1, timelineState.viewEnd - timelineState.viewStart);
+      return timelineState.viewStart + ((x - LEFT_PAD) / plotWidth()) * span;
+    }
+
+    function fmtTime(ms) {
+      if (ms < 1000) return ms.toFixed(0) + 'ms';
+      if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
+      const m = Math.floor(ms / 60000);
+      const s = ((ms % 60000) / 1000).toFixed(1);
+      return m + 'm ' + s + 's';
+    }
+
+    function drawRuler() {
+      const w = canvas.clientWidth;
+      ctx.fillStyle = '#161b22';
+      ctx.fillRect(0, 0, w, RULER_HEIGHT);
+      ctx.strokeStyle = '#30363d';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, RULER_HEIGHT - 0.5);
+      ctx.lineTo(w, RULER_HEIGHT - 0.5);
+      ctx.stroke();
+
+      const visibleSpan = timelineState.viewEnd - timelineState.viewStart;
+      const niceStep = niceTickStep(visibleSpan, plotWidth() / 80);
+      const relViewStart = timelineState.viewStart - data.startMs;
+      const relViewEnd = timelineState.viewEnd - data.startMs;
+      const startRelTick = Math.ceil(relViewStart / niceStep) * niceStep;
+
+      ctx.fillStyle = '#8b949e';
+      ctx.font = '10px ' + getCss('--font');
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+
+      for (let rel = startRelTick; rel <= relViewEnd; rel += niceStep) {
+        const x = timeToX(rel + data.startMs);
+        if (x < LEFT_PAD || x > canvas.clientWidth - RIGHT_PAD) continue;
+        ctx.strokeStyle = '#21262d';
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, RULER_HEIGHT);
+        ctx.lineTo(x + 0.5, RULER_HEIGHT + tracksHeight);
+        ctx.stroke();
+        ctx.strokeStyle = '#30363d';
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, RULER_HEIGHT - 6);
+        ctx.lineTo(x + 0.5, RULER_HEIGHT);
+        ctx.stroke();
+        ctx.fillText(fmtTime(rel), x + 4, RULER_HEIGHT / 2);
+      }
+    }
+
+    function niceTickStep(span, targetCount) {
+      const rough = span / Math.max(1, targetCount);
+      const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+      const norm = rough / pow;
+      let nice;
+      if (norm < 1.5) nice = 1;
+      else if (norm < 3) nice = 2;
+      else if (norm < 7) nice = 5;
+      else nice = 10;
+      return Math.max(1, nice * pow);
+    }
+
+    function drawSpans() {
+      const hitMap = [];
+      ctx.font = FONT;
+      ctx.textBaseline = 'middle';
+      const wPx = canvas.clientWidth;
+
+      for (const span of data.spans) {
+        if (span.endMs < timelineState.viewStart || span.startMs > timelineState.viewEnd) continue;
+        const x1 = Math.max(LEFT_PAD, timeToX(span.startMs));
+        const x2 = Math.min(wPx - RIGHT_PAD, timeToX(span.endMs));
+        const w = Math.max(1, x2 - x1);
+        const y = RULER_HEIGHT + (span.depth || 0) * ROW_HEIGHT + 1;
+        const h = ROW_HEIGHT - 2;
+        const c = colorForSpan(span.name, span.status);
+
+        ctx.fillStyle = c.fill;
+        ctx.fillRect(x1, y, w, h);
+        if (timelineState.selectedSpanId === span.spanId) {
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+        } else {
+          ctx.strokeStyle = c.border;
+          ctx.lineWidth = 1;
+        }
+        ctx.strokeRect(x1 + 0.5, y + 0.5, w - 1, h - 1);
+
+        if (w > 32) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x1 + 4, y, w - 8, h);
+          ctx.clip();
+          ctx.fillStyle = c.text;
+          ctx.fillText(spanLabel(span), x1 + 6, y + h / 2);
+          ctx.restore();
+        }
+
+        hitMap.push({ x: x1, y, w, h, span });
+      }
+      timelineState.hitMap = hitMap;
+    }
+
+    function spanLabel(span) {
+      const dur = fmtTime(span.durationMs || 0);
+      if (span.name === 'agent.loop') return 'loop · ' + dur;
+      if (span.name === 'agent.iteration') {
+        const it = span.attributes.iteration;
+        return 'iteration ' + (it != null ? it : '?') + ' · ' + dur;
+      }
+      if (span.name === 'agent.model_call') {
+        const m = span.attributes.model || 'model';
+        return m + ' · ' + dur;
+      }
+      if (span.name === 'agent.tool_execution') {
+        const t = span.attributes.tool || 'tool';
+        return t + ' · ' + dur;
+      }
+      return span.name + ' · ' + dur;
+    }
+
+    function drawLogTrack() {
+      const wPx = canvas.clientWidth;
+      const yTop = RULER_HEIGHT + tracksHeight + 4;
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(0, yTop, wPx, LOG_TRACK_HEIGHT);
+      ctx.strokeStyle = '#30363d';
+      ctx.beginPath();
+      ctx.moveTo(0, yTop + 0.5);
+      ctx.lineTo(wPx, yTop + 0.5);
+      ctx.stroke();
+
+      ctx.fillStyle = '#8b949e';
+      ctx.font = '9px ' + getCss('--font');
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('LOGS', 4, yTop + 4);
+
+      const cy = yTop + LOG_TRACK_HEIGHT / 2 + 4;
+      for (const log of data.logs) {
+        if (log.ts < timelineState.viewStart || log.ts > timelineState.viewEnd) continue;
+        const x = timeToX(log.ts);
+        ctx.fillStyle = colorForLog(log.level);
+        ctx.beginPath();
+        ctx.arc(x, cy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function draw() {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(0, 0, w, h);
+      drawRuler();
+      drawSpans();
+      drawLogTrack();
+      updateLabels();
+    }
+
+    function updateLabels() {
+      const visible = timelineState.viewEnd - timelineState.viewStart;
+      const zoomPct = totalSpan > 0 ? Math.round((totalSpan / Math.max(1, visible)) * 100) : 100;
+      zoomLabel.textContent = zoomPct + '%';
+      rangeLabel.textContent = fmtTime(visible) + ' visible · ' + fmtTime(totalSpan) + ' total';
+    }
+
+    function clampView() {
+      const minSpan = 1;
+      let s = timelineState.viewStart;
+      let e = timelineState.viewEnd;
+      if (e - s < minSpan) e = s + minSpan;
+      if (s < data.startMs) { e += data.startMs - s; s = data.startMs; }
+      if (e > data.endMs) { s -= e - data.endMs; e = data.endMs; }
+      if (s < data.startMs) s = data.startMs;
+      if (e > data.endMs) e = data.endMs;
+      timelineState.viewStart = s;
+      timelineState.viewEnd = e;
+    }
+
+    function zoomAt(centerX, factor) {
+      const t = xToTime(centerX);
+      const newSpan = Math.max(1, (timelineState.viewEnd - timelineState.viewStart) * factor);
+      const ratio = (t - timelineState.viewStart) / (timelineState.viewEnd - timelineState.viewStart);
+      timelineState.viewStart = t - ratio * newSpan;
+      timelineState.viewEnd = t + (1 - ratio) * newSpan;
+      clampView();
+      draw();
+    }
+
+    canvas.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        const span = timelineState.viewEnd - timelineState.viewStart;
+        const dx = (e.deltaX || e.deltaY) / canvas.clientWidth;
+        timelineState.viewStart += span * dx;
+        timelineState.viewEnd += span * dx;
+        clampView();
+        draw();
+      } else {
+        const factor = e.deltaY < 0 ? 0.85 : 1.18;
+        zoomAt(x, factor);
+      }
+    }, { passive: false });
+
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartView = null;
+    let didDrag = false;
+
+    canvas.addEventListener('mousedown', function(e) {
+      isDragging = true;
+      didDrag = false;
+      dragStartX = e.clientX;
+      dragStartView = { start: timelineState.viewStart, end: timelineState.viewEnd };
+      canvas.classList.add('dragging');
+    });
+
+    const onWindowMove = function(e) {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartX;
+      if (Math.abs(dx) > 2) didDrag = true;
+      const span = dragStartView.end - dragStartView.start;
+      const offset = -(dx / plotWidth()) * span;
+      timelineState.viewStart = dragStartView.start + offset;
+      timelineState.viewEnd = dragStartView.end + offset;
+      clampView();
+      draw();
+    };
+    const onWindowUp = function() {
+      isDragging = false;
+      canvas.classList.remove('dragging');
+    };
+    window.addEventListener('mousemove', onWindowMove);
+    window.addEventListener('mouseup', onWindowUp);
+
+    canvas.addEventListener('mousemove', function(e) {
+      if (isDragging) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const hit = findHit(mx, my);
+      if (hit) {
+        tooltip.style.display = 'block';
+        tooltip.innerHTML =
+          '<div class="tt-name">' + esc(spanTooltipName(hit.span)) + '</div>' +
+          '<div class="tt-meta">' + fmtTime(hit.span.durationMs || 0) + ' · ' + esc(hit.span.status) + '</div>';
+        const tx = Math.min(mx + 12, canvas.clientWidth - tooltip.offsetWidth - 8);
+        const ty = Math.max(4, my - tooltip.offsetHeight - 8);
+        tooltip.style.left = tx + 'px';
+        tooltip.style.top = ty + 'px';
+        canvas.style.cursor = 'pointer';
+      } else {
+        tooltip.style.display = 'none';
+        canvas.style.cursor = 'grab';
+      }
+    });
+
+    canvas.addEventListener('mouseleave', function() {
+      tooltip.style.display = 'none';
+    });
+
+    canvas.addEventListener('click', function(e) {
+      if (didDrag) { didDrag = false; return; }
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const hit = findHit(mx, my);
+      if (hit) {
+        timelineState.selectedSpanId = hit.span.spanId;
+        showSpanDetails(hit.span);
+        draw();
+      } else if (my > RULER_HEIGHT + tracksHeight) {
+        // Clicked log strip — show what's at this time
+        showTimeDetails(xToTime(mx));
+      }
+    });
+
+    function findHit(mx, my) {
+      for (let i = timelineState.hitMap.length - 1; i >= 0; i--) {
+        const h = timelineState.hitMap[i];
+        if (mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) return h;
+      }
+      return null;
+    }
+
+    function spanTooltipName(span) {
+      if (span.name === 'agent.iteration') return 'Iteration ' + (span.attributes.iteration ?? '?');
+      if (span.name === 'agent.model_call') return 'Model: ' + (span.attributes.model || '?');
+      if (span.name === 'agent.tool_execution') return 'Tool: ' + (span.attributes.tool || '?');
+      if (span.name === 'agent.loop') return 'Agent loop';
+      return span.name;
+    }
+
+    document.getElementById('tl-zoom-in').addEventListener('click', function() {
+      zoomAt(canvas.clientWidth / 2, 0.6);
+    });
+    document.getElementById('tl-zoom-out').addEventListener('click', function() {
+      zoomAt(canvas.clientWidth / 2, 1.6);
+    });
+    document.getElementById('tl-zoom-fit').addEventListener('click', function() {
+      timelineState.viewStart = data.startMs;
+      timelineState.viewEnd = data.endMs;
+      draw();
+    });
+
+    const ro = new ResizeObserver(resizeCanvas);
+    ro.observe(wrap);
+    resizeCanvas();
+
+    localState.cleanup = function() {
+      window.removeEventListener('mousemove', onWindowMove);
+      window.removeEventListener('mouseup', onWindowUp);
+      ro.disconnect();
+    };
+  }
+
+  async function fetchSessionMessages() {
+    if (!currentSession) return [];
+    const ns = currentNamespace;
+    const url = ns
+      ? '/api/sessions/' + encodeURIComponent(ns) + '/' + currentSession + '/messages'
+      : '/api/sessions/' + currentSession + '/messages';
+    const result = await apiFetch(url);
+    if (result.error) return [];
+    return result.data || [];
+  }
+
+  function showSpanDetails(span) {
+    const details = document.getElementById('tl-details');
+    if (!details) return;
+    const data = timelineState.data;
+    const startRel = span.startMs - data.startMs;
+    const endRel = span.endMs - data.startMs;
+
+    let html = '<div class="td-header">' +
+      '<span class="td-title">' + esc(span.name) + '</span>' +
+      '<span class="td-dur">' + fmtTimelineDuration(span.durationMs || 0) + '</span>' +
+      '<span class="td-status ' + esc(span.status) + '">' + esc(span.status) + '</span>' +
+      '<span style="color:var(--text2);font-size:11px">' + fmtTimelineDuration(startRel) + ' → ' + fmtTimelineDuration(endRel) + '</span>' +
+      '</div>';
+
+    // Attributes
+    const attrEntries = Object.entries(span.attributes || {});
+    if (attrEntries.length) {
+      html += '<div class="td-section"><div class="td-section-title">Attributes</div>' +
+        attrEntries.map(function(kv) {
+          return '<div class="td-attr"><span class="td-attr-key">' + esc(kv[0]) + '</span>' +
+            '<span class="td-attr-val">' + esc(typeof kv[1] === 'string' ? kv[1] : JSON.stringify(kv[1])) + '</span></div>';
+        }).join('') + '</div>';
+    }
+
+    // Logs in time range
+    const logsInRange = data.logs.filter(function(l) { return l.ts >= span.startMs && l.ts <= span.endMs; });
+    if (logsInRange.length) {
+      html += '<div class="td-section"><div class="td-section-title">Logs (' + logsInRange.length + ')</div>' +
+        logsInRange.slice(0, 100).map(function(log) {
+          const rel = log.ts - data.startMs;
+          const dataStr = Object.keys(log.data).length
+            ? '<div class="td-log-data">' + esc(Object.keys(log.data).map(function(k) { return k + '=' + JSON.stringify(log.data[k]); }).join(' ')) + '</div>'
+            : '';
+          return '<div class="td-log">' +
+            '<span class="td-log-ts">+' + fmtTimelineDuration(rel) + '</span>' +
+            '<span class="td-log-level ' + esc(log.level) + '">' + esc(log.level) + '</span>' +
+            '<span><span class="td-log-msg">' + esc(log.message) + '</span>' + dataStr + '</span></div>';
+        }).join('') +
+        (logsInRange.length > 100 ? '<div style="color:var(--text2);font-size:10px;margin-top:6px">… and ' + (logsInRange.length - 100) + ' more</div>' : '') +
+        '</div>';
+    }
+
+    // Related messages
+    const related = findRelatedMessages(span);
+    if (related.length) {
+      html += '<div class="td-section"><div class="td-section-title">Related Messages</div>' +
+        related.map(renderTimelineMessage).join('') + '</div>';
+    }
+
+    details.innerHTML = html;
+  }
+
+  function showTimeDetails(timeMs) {
+    const details = document.getElementById('tl-details');
+    if (!details) return;
+    const data = timelineState.data;
+    const rel = timeMs - data.startMs;
+    const halfWindow = (data.endMs - data.startMs) * 0.01;
+    const nearby = data.logs.filter(function(l) { return Math.abs(l.ts - timeMs) <= halfWindow; });
+
+    let html = '<div class="td-header">' +
+      '<span class="td-title">At ' + fmtTimelineDuration(rel) + '</span>' +
+      '<span style="color:var(--text2);font-size:11px">±' + fmtTimelineDuration(halfWindow) + '</span>' +
+      '</div>';
+
+    if (!nearby.length) {
+      html += '<div class="td-empty">No logs in this time range. Click a span bar to inspect events.</div>';
+    } else {
+      html += '<div class="td-section"><div class="td-section-title">Logs near this time</div>' +
+        nearby.map(function(log) {
+          const lr = log.ts - data.startMs;
+          const dataStr = Object.keys(log.data).length
+            ? '<div class="td-log-data">' + esc(Object.keys(log.data).map(function(k) { return k + '=' + JSON.stringify(log.data[k]); }).join(' ')) + '</div>'
+            : '';
+          return '<div class="td-log">' +
+            '<span class="td-log-ts">+' + fmtTimelineDuration(lr) + '</span>' +
+            '<span class="td-log-level ' + esc(log.level) + '">' + esc(log.level) + '</span>' +
+            '<span><span class="td-log-msg">' + esc(log.message) + '</span>' + dataStr + '</span></div>';
+        }).join('') + '</div>';
+    }
+
+    details.innerHTML = html;
+  }
+
+  function findRelatedMessages(span) {
+    const msgs = (timelineState && timelineState.messages) || [];
+    if (!msgs.length) return [];
+    if (span.name === 'agent.tool_execution') {
+      const tcid = span.attributes.toolCallId;
+      if (!tcid) return [];
+      const out = [];
+      for (const m of msgs) {
+        if (m.role === 'tool' && m.toolCallId === tcid) out.push(m);
+        if (m.toolCalls && m.toolCalls.some(function(tc) { return tc.id === tcid; })) out.push(m);
+      }
+      return out;
+    }
+    if (span.name === 'agent.model_call') {
+      // Match by iteration index — count assistant messages and pick the Nth
+      const it = span.attributes.iteration;
+      if (it == null) return [];
+      const assistants = msgs.filter(function(m) { return m.role === 'assistant'; });
+      const target = assistants[it - 1] || assistants[it];
+      return target ? [target] : [];
+    }
+    return [];
+  }
+
+  function renderTimelineMessage(m) {
+    let content = '';
+    if (typeof m.content === 'string') {
+      content = esc(m.content);
+    } else if (Array.isArray(m.content)) {
+      content = m.content.map(function(b) {
+        if (typeof b === 'string') return esc(b);
+        if (b.type === 'text') return esc(b.text || '');
+        if (b.type === 'thinking') return '[thinking] ' + esc(b.thinking || '');
+        if (b.type === 'tool_use') return '[tool_use: ' + esc(b.name || '') + ']\n' + esc(JSON.stringify(b.input, null, 2));
+        if (b.type === 'tool_result') return '[tool_result] ' + esc(typeof b.content === 'string' ? b.content : JSON.stringify(b.content));
+        return esc(JSON.stringify(b));
+      }).join('\n');
+    } else if (m.content != null) {
+      content = esc(JSON.stringify(m.content, null, 2));
+    }
+    return '<div class="td-message"><div class="role">' + esc(m.role || '') + '</div>' +
+      '<div class="content">' + content + '</div></div>';
+  }
+
+  function fmtTimelineDuration(ms) {
+    if (ms == null) return '-';
+    if (Math.abs(ms) < 1000) return ms.toFixed(0) + 'ms';
+    if (Math.abs(ms) < 60000) return (ms / 1000).toFixed(2) + 's';
+    return (ms / 60000).toFixed(2) + 'm';
   }
 
   // ── Render Messages ──
