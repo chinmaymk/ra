@@ -121,58 +121,100 @@ interface LogEntry {
   [key: string]: unknown
 }
 
-function buildTimeline(traces: TraceSpan[], logs: LogEntry[]) {
-  const events: Array<{ ts: string; type: string; label: string; detail?: string; status?: string; durationMs?: number }> = []
+interface TimelineSpan {
+  spanId: string
+  parentSpanId?: string
+  name: string
+  startMs: number
+  endMs: number
+  durationMs: number
+  status: string
+  attributes: Record<string, unknown>
+  depth: number
+}
 
-  // From traces — start events for key spans
+interface TimelineLog {
+  ts: number
+  level: string
+  message: string
+  data: Record<string, unknown>
+}
+
+interface TimelineData {
+  startMs: number
+  endMs: number
+  spans: TimelineSpan[]
+  logs: TimelineLog[]
+}
+
+function buildTimeline(traces: TraceSpan[], logs: LogEntry[]): TimelineData {
+  const byId = new Map<string, TraceSpan>()
+  for (const t of traces) if (t.spanId) byId.set(t.spanId, t)
+
+  const depthOf = (span: TraceSpan): number => {
+    let d = 0
+    let cur: TraceSpan | undefined = span
+    const seen = new Set<string>()
+    while (cur?.parentSpanId && !seen.has(cur.parentSpanId)) {
+      seen.add(cur.parentSpanId)
+      const parent = byId.get(cur.parentSpanId)
+      if (!parent) break
+      d++
+      cur = parent
+    }
+    return d
+  }
+
+  let minTs = Infinity
+  let maxTs = -Infinity
+  const spans: TimelineSpan[] = []
+
   for (const span of traces) {
-    if (!span.timestamp) continue
-    const name = span.name || ''
-    if (name === 'agent.loop') {
-      events.push({ ts: span.timestamp, type: 'loop', label: 'Loop started', status: span.status, durationMs: span.durationMs })
-    } else if (name === 'agent.iteration') {
-      const it = (span.attributes?.iteration as number) ?? '?'
-      events.push({ ts: span.timestamp, type: 'iteration', label: 'Iteration ' + it, status: span.status, durationMs: span.durationMs })
-    } else if (name === 'agent.model_call') {
-      const a = span.attributes || {}
-      const model = (a.model as string) || ''
-      const inTok = numAttr(a, 'inputTokens')
-      const outTok = numAttr(a, 'outputTokens')
-      const cacheRead = numAttr(a, 'cacheReadTokens')
-      const cachePct = cacheHitPercent(inTok, cacheRead || undefined)
-      const cacheDetail = cachePct ? ' (' + cachePct + '% cached)' : ''
-      events.push({
-        ts: span.timestamp, type: 'model_call', label: 'Model call' + (model ? ' (' + model + ')' : ''),
-        detail: inTok + ' in / ' + outTok + ' out tokens' + cacheDetail,
-        status: span.status, durationMs: span.durationMs,
-      })
-    } else if (name === 'agent.tool_execution') {
-      const tool = (span.attributes?.tool as string) || '?'
-      const err = span.status === 'error' ? (span.attributes?.error as string) : undefined
-      events.push({
-        ts: span.timestamp, type: 'tool', label: 'Tool: ' + tool,
-        detail: err || undefined,
-        status: span.status, durationMs: span.durationMs,
-      })
-    }
+    if (!span.timestamp || !span.spanId) continue
+    const startMs = new Date(span.timestamp).getTime()
+    if (isNaN(startMs)) continue
+    const durationMs = span.durationMs || 0
+    const endMs = startMs + durationMs
+    if (startMs < minTs) minTs = startMs
+    if (endMs > maxTs) maxTs = endMs
+    spans.push({
+      spanId: span.spanId,
+      parentSpanId: span.parentSpanId,
+      name: span.name || '',
+      startMs,
+      endMs,
+      durationMs,
+      status: span.status || 'ok',
+      attributes: span.attributes || {},
+      depth: depthOf(span),
+    })
   }
 
-  // From logs — warn and error entries
+  const tlLogs: TimelineLog[] = []
   for (const log of logs) {
-    const level = (log.level || '').toLowerCase()
-    if (level === 'error' || level === 'warn') {
-      events.push({
-        ts: log.timestamp || '',
-        type: 'log_' + level,
-        label: '[' + level.toUpperCase() + '] ' + (log.message || ''),
-        detail: Object.keys(log).filter(k => !['timestamp', 'level', 'message', 'sessionId'].includes(k))
-          .map(k => k + '=' + JSON.stringify(log[k])).join(' ') || undefined,
-      })
+    if (!log.timestamp) continue
+    const ts = new Date(log.timestamp).getTime()
+    if (isNaN(ts)) continue
+    if (ts < minTs) minTs = ts
+    if (ts > maxTs) maxTs = ts
+    const data: Record<string, unknown> = {}
+    for (const k of Object.keys(log)) {
+      if (!['timestamp', 'level', 'message', 'sessionId'].includes(k)) data[k] = log[k]
     }
+    tlLogs.push({
+      ts,
+      level: (log.level || 'info').toLowerCase(),
+      message: log.message || '',
+      data,
+    })
   }
 
-  events.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''))
-  return events
+  spans.sort((a, b) => a.startMs - b.startMs)
+  tlLogs.sort((a, b) => a.ts - b.ts)
+
+  if (minTs === Infinity) { minTs = 0; maxTs = 0 }
+
+  return { startMs: minTs, endMs: maxTs, spans, logs: tlLogs }
 }
 
 // ── Session view helper ───────────────────────────────────────────────
