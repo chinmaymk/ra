@@ -1,5 +1,5 @@
 import { query, createSdkMcpServer, tool as sdkTool } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKMessage, SDKPartialAssistantMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKMessage, SDKPartialAssistantMessage, SDKUserMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import { z } from 'zod/v4'
 import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
@@ -108,7 +108,12 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     let session: AsyncIterable<SDKMessage>
     try {
       session = query({
-        prompt,
+        // Yield a single user message via an async generator: this puts the
+        // SDK in streaming-input mode, which triggers its automatic cache
+        // breakpoint placement on the last user content block. Combined with
+        // the append-only `formatConversation` output, every turn after the
+        // first hits Anthropic's prefix cache on the full prior history.
+        prompt: promptIterable(prompt),
         options: {
           ...options,
           abortController,
@@ -149,6 +154,14 @@ export class AnthropicAgentsSdkProvider implements IProvider {
    * For multi-turn conversations (after tool execution), the history is
    * serialized as XML-tagged messages so the model can clearly follow
    * the conversation thread.
+   *
+   * Cache stability: the output is an **append-only** byte sequence. A stable
+   * `<conversation_history>` opening anchor is emitted once, then each turn
+   * appends its XML block. No closing tag is emitted — that would shift
+   * position as the conversation grows and invalidate Anthropic's prefix
+   * cache on every subsequent turn. The SDK places its auto cache_control
+   * breakpoint at the end of the user message content, so each successive
+   * stream() call sees the previous turn's full content as a cacheable prefix.
    */
   formatConversation(messages: IMessage[]): string {
     if (messages.length === 0) return ''
@@ -173,10 +186,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
           break
       }
     }
-    const formatted = parts.join('\n\n')
-    // Wrap in a conversation_history tag so the model knows where history
-    // starts and ends, and keeps a stable prefix for prompt caching.
-    return `<conversation_history>\n${formatted}\n</conversation_history>`
+    return `<conversation_history>\n${parts.join('\n\n')}`
   }
 
   // ── MCP tool schemas ────────────────────────────────────────────────
@@ -328,6 +338,21 @@ const MCP_PREFIX = `mcp__${MCP_SERVER_NAME}__`
 /** Strip the SDK's `mcp__ra-tools__` prefix from tool names so they match ra's registry. */
 function stripMcpPrefix(name: string): string {
   return name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name
+}
+
+/**
+ * Wrap the formatted prompt in an async generator so `query()` runs in
+ * streaming-input mode. The single yielded user message is all the SDK needs
+ * — it will apply its automatic cache_control breakpoint on the final content
+ * block, which (given the append-only prompt) turns every subsequent turn
+ * into a cache read of the prior conversation.
+ */
+async function* promptIterable(text: string): AsyncGenerator<SDKUserMessage> {
+  yield {
+    type: 'user',
+    message: { role: 'user', content: text },
+    parent_tool_use_id: null,
+  }
 }
 
 function jsonSchemaToZodShape(schema: Record<string, unknown>): Record<string, z.ZodType> {

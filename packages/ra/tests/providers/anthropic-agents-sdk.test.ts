@@ -104,10 +104,10 @@ describe('AnthropicAgentsSdkProvider', () => {
   describe('formatConversation', () => {
     const provider = new AnthropicAgentsSdkProvider()
 
-    it('wraps output in conversation_history tag', () => {
+    it('opens with a stable conversation_history anchor and no closing tag', () => {
       const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
       expect(result).toStartWith('<conversation_history>')
-      expect(result).toEndWith('</conversation_history>')
+      expect(result).not.toContain('</conversation_history>')
       expect(result).toContain('<user>\nhello\n</user>')
     })
 
@@ -134,15 +134,17 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(result).toContain('<tool_result id="tc_1" error="true">')
     })
 
-    it('wraps tool-result conversations in conversation_history tag', () => {
-      const result = provider.formatConversation([
+    it('is append-only: each new turn is a byte-prefix of the next', () => {
+      // Anthropic prompt caching is keyed on exact prefix bytes. The earlier
+      // turn's output must be a true prefix of the later turn's output so the
+      // SDK's auto cache_control breakpoint keeps hitting.
+      const turn1 = provider.formatConversation([{ role: 'user', content: 'read it' }])
+      const turn2 = provider.formatConversation([
         { role: 'user', content: 'read it' },
         { role: 'assistant', content: 'Sure.', toolCalls: [{ id: 'tc_1', name: 'Read', arguments: '{}' }] },
         { role: 'tool', content: 'contents', toolCallId: 'tc_1' },
       ])
-      expect(result).toStartWith('<conversation_history>')
-      expect(result).toEndWith('</conversation_history>')
-      expect(result).toContain('<tool_result id="tc_1">')
+      expect(turn2.startsWith(turn1)).toBe(true)
     })
   })
 
@@ -165,13 +167,23 @@ describe('AnthropicAgentsSdkProvider', () => {
   // ── stream() ──────────────────────────────────────────────────────
 
   describe('stream()', () => {
-    it('passes prompt as XML-wrapped string', async () => {
+    it('passes prompt as an async iterable of user messages (streaming-input mode)', async () => {
       mockQueryWith(resultMsg())
       await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
       const { prompt } = mockQuery.mock.calls[0]![0]
-      expect(typeof prompt).toBe('string')
-      expect(prompt).toStartWith('<conversation_history>')
-      expect(prompt).toContain('<user>\nhi\n</user>')
+      expect(prompt).not.toBeTypeOf('string')
+      expect(prompt[Symbol.asyncIterator]).toBeDefined()
+
+      const yielded: unknown[] = []
+      for await (const m of prompt as AsyncIterable<unknown>) yielded.push(m)
+      expect(yielded).toHaveLength(1)
+      const msg = yielded[0] as { type: string; message: { role: string; content: string }; parent_tool_use_id: null }
+      expect(msg.type).toBe('user')
+      expect(msg.message.role).toBe('user')
+      expect(msg.parent_tool_use_id).toBeNull()
+      expect(msg.message.content).toStartWith('<conversation_history>')
+      expect(msg.message.content).toContain('<user>\nhi\n</user>')
+      expect(msg.message.content).not.toContain('</conversation_history>')
     })
 
     it('yields text chunks', async () => {
