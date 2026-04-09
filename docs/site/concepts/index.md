@@ -7,16 +7,27 @@ Most agent frameworks make a deal with you: trade control for convenience. ra re
 ```bash
 ra "What is the capital of France?"
 ra --provider openai --model gpt-4.1 "Explain this error"
-ra --skill code-review --file diff.patch "Review this diff"
+git diff | ra "Review this diff for security issues"
 cat server.log | ra "Find the root cause of these errors"
 ra   # interactive REPL
 ```
 
 ## The config is the agent
 
-Drop a `ra.config.yml` in a repo and that directory becomes a project-specific assistant. Set env vars for a different persona. Pass `--skill` to inject a role at runtime. Run `--mcp-stdio` to expose it as a tool for Cursor or Claude Desktop. Same binary, different agent — every time.
+Most tools treat configuration as garnish. ra treats it as the whole meal. Drop a `ra.config.yml` into a repo and that directory now has a project-specific assistant — its own model, its own tools, its own personality, its own permissions. The binary is the runtime; the config is the brain.
 
-One engineer defines the agent, commits it, and everyone runs the exact same thing. No drift, no "works on my machine," no hidden state.
+```yaml
+# ra.config.yml
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  thinking: adaptive
+  skillDirs: [./skills]
+  middleware:
+    - ./middleware/audit-log.ts
+```
+
+Commit it next to your code. One engineer defines the agent; everyone on the team runs the exact same thing — same prompts, same tools, same guardrails. No drift, no "works on my machine," no mystery state baked into someone's shell history. The agent lives in version control, just like everything else that matters.
 
 ## What's in the box
 
@@ -52,7 +63,7 @@ Structured JSONL logs and trace spans per session. The built-in [Inspector](/mod
 ### Triage a flaky test
 
 ```bash
-ra --skill debugger --file test-output.log "Why is this test failing?"
+cat test-output.log | ra "Why is this test failing? Find the root cause."
 ```
 
 Reads the logs, explains the root cause, and exits. Pipe the output to Slack or a PR comment.
@@ -105,7 +116,7 @@ POST a message, get SSE chunks back. No framework — just `Bun.serve()` under t
 ### Give your editor a specialist
 
 ```bash
-ra --mcp-stdio --skill code-review
+ra --mcp-stdio --config recipes/code-review-agent
 ```
 
 Now Cursor or Claude Desktop has a dedicated code reviewer that uses your project's style guide, your skills, your system prompt.
