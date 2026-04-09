@@ -236,7 +236,7 @@ ra ships with several built-in recipes:
 
 Recipes are just configs. Copy one, modify it, commit your version — same way you'd fork a starter template.
 
-## How people use it
+## Use cases
 
 ### Triage a flaky test
 
