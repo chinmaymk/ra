@@ -14,7 +14,11 @@ ra   # interactive REPL
 
 ## The config is the agent
 
-Most tools treat configuration as garnish. ra treats it as the whole meal. Drop a `ra.config.yml` into a repo and that directory now has a project-specific assistant — its own model, its own tools, its own personality, its own permissions. The binary is the runtime; the config is the brain.
+Most agent frameworks ship with opinions. ra ships blank.
+
+No default system prompt. No default tools. No assumptions about what your agent should do or how it should think. The binary is a runtime waiting for instructions — and `ra.config.yml` is where the instructions live.
+
+That file isn't *configuration*. It's the agent itself. Model, tools, prompt, permissions, middleware, memory, skills — all of it. Change a line and you have a different agent. Drop the file into a new repo and you have a different agent there too.
 
 ```yaml
 # ra.config.yml
@@ -25,9 +29,20 @@ agent:
   skillDirs: [./skills]
   middleware:
     - ./middleware/audit-log.ts
+permissions:
+  rules:
+    - tool: Bash
+      command:
+        deny: ["--force", "--no-verify"]
 ```
 
-Commit it next to your code. One engineer defines the agent; everyone on the team runs the exact same thing — same prompts, same tools, same guardrails. No drift, no "works on my machine," no mystery state baked into someone's shell history. The agent lives in version control, just like everything else that matters.
+Same binary, three repos, three completely different agents:
+
+- `~/work/api` — cautious senior engineer, reads before writing, can't run `--force`
+- `~/work/blog` — terse release-notes generator, no shell, no internet
+- `~/work/oncall` — log triager that reads `*.log`, posts findings to Slack, then stops
+
+Pull the repo, run `ra`, get the exact agent the team agreed on. No global state. No dotfiles to copy. Nothing baked into your shell history. The agent lives in git, like everything else that matters.
 
 ## What's in the box
 
