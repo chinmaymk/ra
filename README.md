@@ -97,15 +97,15 @@ permissions:
 
 Each recipe is a complete agent — config, middleware, tools, and skills — committed to your repo with the same observability and control as everything else.
 
-| Recipe | What it does | Model | Key difference |
-|--------|-------------|-------|----------------|
-| **[Coding Agent](recipes/coding-agent/)** | Edits files, runs tests, ships code | Opus | Memory, high thinking, read-before-write discipline |
-| **[Code Review Agent](recipes/code-review-agent/)** | Reviews PRs against your style guide | Sonnet | Token budget middleware, severity tiers |
-| **[Auto-Research](recipes/karpathy-autoresearch/)** | Runs experiments, evaluates, iterates | Sonnet | 500 iterations, 15-min tool timeouts |
-| **[Multi-Agent](recipes/multi-agent/)** | Spawns and coordinates specialist agents | Sonnet | Concurrency 4, orchestrator skill |
-| **[oh-my-ra](recipes/oh-my-ra/)** | Batteries-included: coding + research + debugging + delivery | Sonnet | 16 skills, 8 middleware, 2 custom tools |
-| **[Auto-Improve](recipes/auto-improve/)** | Hyperparameter and prompt optimization | Sonnet | Parallel axis exploration, checkpoint recovery |
-| **[ra-claude-code](recipes/ra-claude-code/)** | Coding agent inspired by Claude Code | Opus | 10 on-demand skills, session memory |
+| Recipe | What it does | Key difference |
+|--------|-------------|----------------|
+| **[Coding Agent](recipes/coding-agent/)** | Edits files, runs tests, ships code | Memory, high thinking, read-before-write discipline |
+| **[Code Review Agent](recipes/code-review-agent/)** | Reviews PRs against your style guide | Token budget middleware, severity tiers |
+| **[Auto-Research](recipes/karpathy-autoresearch/)** | Runs experiments, evaluates, iterates | 500 iterations, 15-min tool timeouts |
+| **[Multi-Agent](recipes/multi-agent/)** | Spawns and coordinates specialist agents | Concurrency 4, orchestrator skill |
+| **[oh-my-ra](recipes/oh-my-ra/)** | Batteries-included: coding + research + debugging + delivery | 16 skills, 8 middleware, 2 custom tools |
+| **[Auto-Improve](recipes/auto-improve/)** | Hyperparameter and prompt optimization | Parallel axis exploration, checkpoint recovery |
+| **[ra-claude-code](recipes/ra-claude-code/)** | Coding agent inspired by Claude Code | 10 on-demand skills, session memory |
 
 ```bash
 ra --config recipes/oh-my-ra "Refactor the auth module and write tests"

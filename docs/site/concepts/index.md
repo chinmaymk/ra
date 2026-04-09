@@ -1,24 +1,8 @@
 # What is ra?
 
-ra — your agent, your rules. Nothing hidden behind abstractions you can't reach.
+**ra is an agent runtime that gets out of your way.** No hidden system prompts. No tools you can't disable. No middleware step you can't intercept. Every decision the agent makes flows through hooks you control and lives in a config file you commit alongside your code.
 
-It doesn't ship with a system prompt. Every part of the loop is exposed via config and can be extended by writing scripts or plain TypeScript. [Middleware hooks](/middleware/) let you intercept every step — model calls, tool execution, streaming, all of it.
-
-It talks to Anthropic, OpenAI, Google, Ollama, Bedrock, and Azure. Switch providers with ease.
-
-It comes with [built-in tools](/tools/) for filesystem, shell, network, and user interaction. Connect to MCP servers for additional tools. Persistent [sessions](/core/sessions) via JSONL. An FTS5 [memory](/configuration/#agent-memory) backed by SQLite.
-
-It speaks [MCP](/modes/mcp) both ways — use external MCP servers, or expose ra itself as an MCP server so you can use it from Cursor, Claude Desktop, or anything else that speaks the protocol.
-
-It gives you real control over [context](/core/context-control). Deterministic discovery for common formats (CLAUDE.md, AGENTS.md, README.md), pattern resolution, prompt caching, compaction, token tracking. A [skill system](/skills/) that can pull skills from GitHub repos or npm packages.
-
-Extended thinking for models that support it — watch the model reason in real time.
-
-It runs as a [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), or [MCP server](/modes/mcp). No runtime dependencies.
-
-Structured logs and traces per session, so you can actually see what your agent is doing.
-
-All of this is [configurable](/configuration/) via a layered config system — env vars, config files (JSON, YAML, TOML), or CLI flags. Each layer overrides the last.
+Most agent frameworks make a deal with you: trade control for convenience. ra refuses the trade. The whole loop — model call, tool dispatch, streaming chunks, errors — is reachable, inspectable, and replaceable.
 
 ```bash
 ra "What is the capital of France?"
@@ -32,27 +16,40 @@ ra   # interactive REPL
 
 Drop a `ra.config.yml` in a repo and that directory becomes a project-specific assistant. Set env vars for a different persona. Pass `--skill` to inject a role at runtime. Run `--mcp-stdio` to expose it as a tool for Cursor or Claude Desktop. Same binary, different agent — every time.
 
+One engineer defines the agent, commits it, and everyone runs the exact same thing. No drift, no "works on my machine," no hidden state.
+
 ## What's in the box
 
-| Feature | Description |
-|---------|-------------|
-| [The Agent Loop](/core/agent-loop) | Model → tools → repeat, with streaming, middleware hooks at every step, and configurable iteration limits |
-| [Context Control](/core/context-control) | Smart compaction, token tracking, prompt caching, extended thinking, context discovery, pattern resolution |
-| [CLI](/modes/cli) | One-shot prompts, piping, chaining, scriptable |
-| [REPL](/modes/repl) | Interactive sessions with history, slash commands, file attachments |
-| [HTTP API](/modes/http) | Sync and streaming chat, session management |
-| [MCP](/modes/mcp) | Client (pull tools from MCP servers) and server (expose ra as a tool) |
-| [Built-in Tools](/tools/) | Filesystem, shell, network, and user interaction tools |
-| [Skills](/skills/) | Reusable instruction bundles — roles, behaviors, scripts, and reference docs |
-| [Middleware](/middleware/) | Hooks at every loop stage — intercept, modify, or stop the loop |
-| [Sessions](/core/sessions) | Persist conversations as JSONL, resume from any interface, auto-prune |
-| [File Attachments](/core/file-attachments) | Images, PDFs, text files — auto-detected and sent in the right format |
-| [Memory](/configuration/#agent-memory) | Persistent SQLite memory with FTS — save, search, forget across conversations |
-| [Configuration](/configuration/) | Layered: CLI > env > file. The config is the agent |
+ra is small at the core and wide at the edges. Here's the whole surface:
 
-## Use cases
+**The loop**
+- [Agent loop](/core/agent-loop) — model → tools → repeat, with streaming, configurable iteration limits, and middleware hooks at every step
+- [Context control](/core/context-control) — smart compaction, token tracking, prompt caching, extended thinking, and deterministic discovery for `CLAUDE.md` / `AGENTS.md` / `README.md`
+- [Sessions](/core/sessions) — JSONL persistence, resume from any interface, auto-prune
+- [Memory](/configuration/#agent-memory) — SQLite + FTS5, save and search across conversations
 
-### CI caught a flaky test
+**Models, your choice**
+Talk to Anthropic, OpenAI, Google, Ollama, Bedrock, Azure, OpenRouter, or LiteLLM. Bring your own API key, or use your existing [Anthropic](https://console.anthropic.com/) or [OpenAI / Codex](https://platform.openai.com/) subscription. Switch with `--provider`.
+
+**Extension points**
+- [Built-in tools](/tools/) for filesystem, shell, network, and user interaction
+- [Custom tools](/tools/custom) — TypeScript, shell, or any scripting language
+- [Skills](/skills/) — reusable instruction bundles, pulled from GitHub repos or npm packages
+- [Middleware](/middleware/) — intercept, modify, or stop the loop at every stage
+- [MCP](/modes/mcp) both ways — pull tools from external servers, or expose ra itself as one
+
+**Interfaces**
+Same agent, different shape: [CLI](/modes/cli), [REPL](/modes/repl), [HTTP server](/modes/http), [MCP server](/modes/mcp), and [scheduled cron jobs](/modes/cron). Zero runtime dependencies.
+
+**Observability you can actually read**
+Structured JSONL logs and trace spans per session. The built-in [Inspector](/modes/inspector) renders the full picture — iterations, token spend, tool calls, complete message history — in your browser.
+
+**Configuration that layers cleanly**
+[Layered config](/configuration/): CLI flags > env vars > config file > defaults. YAML, JSON, or TOML. No magic, no hidden defaults.
+
+## In practice
+
+### Triage a flaky test
 
 ```bash
 ra --skill debugger --file test-output.log "Why is this test failing?"
@@ -60,7 +57,7 @@ ra --skill debugger --file test-output.log "Why is this test failing?"
 
 Reads the logs, explains the root cause, and exits. Pipe the output to Slack or a PR comment.
 
-### You're building a feature
+### Design a feature with context
 
 ```bash
 ra
@@ -70,7 +67,7 @@ ra
 
 Attach files, ask follow-ups, keep context. Resume the session tomorrow with `/resume`.
 
-### Research a topic
+### Research a topic end-to-end
 
 ```bash
 ra "Survey the current state of WebTransport support across browsers and CDNs. \
@@ -79,7 +76,7 @@ ra "Survey the current state of WebTransport support across browsers and CDNs. \
 
 Fetches pages, reads specs, compares options, and writes a structured report you can share with your team.
 
-### Analyze a dataset
+### Slice a dataset
 
 ```bash
 ra --file survey-results.csv "Find the three strongest correlations, \
@@ -95,9 +92,9 @@ ra "Write a changelog for v3.0 based on commits since the v2.9 tag. \
     Group by feature, fix, and breaking change."
 ```
 
-Walks git history, categorizes commits, and produces a polished changelog — works for release notes, migration guides, or any structured writing grounded in your repo.
+Walks git history, categorizes commits, and produces a polished changelog — works for migration guides or any structured writing grounded in your repo.
 
-### Your product needs AI
+### Add AI to your product
 
 ```bash
 ra --http --http-port 3000
@@ -105,7 +102,7 @@ ra --http --http-port 3000
 
 POST a message, get SSE chunks back. No framework — just `Bun.serve()` under the hood.
 
-### Your editor needs a specialist
+### Give your editor a specialist
 
 ```bash
 ra --mcp-stdio --skill code-review
