@@ -12,6 +12,7 @@ LLM provider adapters. Each maps ra's unified types to a specific SDK.
 | `openai.ts` | Barrel re-export — `OpenAIProvider` (Responses API, default) + `OpenAICompletionsProvider` |
 | `openai-responses.ts` | OpenAI Responses API (`POST /responses`) — default for `openai` provider |
 | `openai-completions.ts` | OpenAI Chat Completions API (`POST /chat/completions`) — legacy, available as `openai-completions` |
+| `openai-codex.ts` | ChatGPT Codex backend — subscription-based (access token, no API key) |
 | `google.ts` | Google (Gemini) |
 | `ollama.ts` | Ollama (local models) |
 | `bedrock.ts` | AWS Bedrock |

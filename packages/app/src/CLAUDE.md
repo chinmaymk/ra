@@ -7,11 +7,11 @@ All source code. Entry point is `index.ts` which parses CLI args, loads config, 
 ```
 index.ts (CLI entry)
   → config/ (load and merge config)
-  → providers/registry.ts (create provider from config)
-  → agent/tool-registry.ts (register built-in + MCP tools)
+  → createProvider from @chinmaymk/ra (provider from config)
+  → registry/ + tools/ (register built-in + MCP tools)
   → skills/loader.ts (load skills from directories)
   → middleware/loader.ts (load middleware from config)
-  → agent/loop.ts (create AgentLoop with all the above)
+  → AgentLoop from @chinmaymk/ra (run the loop)
   → interfaces/{cli,repl,http}.ts or mcp/server.ts (run the loop)
 ```
 

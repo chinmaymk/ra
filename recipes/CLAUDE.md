@@ -9,6 +9,6 @@ recipes/<name>/
   README.md
 ```
 
-**Existing:** `coding-agent/`, `code-review-agent/`
+**Existing:** `coding-agent/`, `code-review-agent/`, `auto-improve/`, `karpathy-autoresearch/`, `multi-agent/`, `oh-my-ra/`, `ra-claude-code/`
 
 Test with: `bun run ra --config recipes/<name>/ra.config.yaml`
