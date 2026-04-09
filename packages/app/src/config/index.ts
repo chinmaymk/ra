@@ -2,7 +2,7 @@ import { join, dirname, isAbsolute } from 'path'
 import yaml from 'js-yaml'
 import { parse as parseToml } from 'smol-toml'
 import { resolvePath, looksLikePath, homeDir, configHandle } from '../utils/paths'
-import { isPlainObject } from '../utils/config-helpers'
+import { isPlainObject, interpolateEnvVars, coerceTypes } from '../utils/config-helpers'
 import { buildMergedEnv } from '../secrets/store'
 import { buildStandardEnvLayer, PROVIDERS, INTERFACE_FLAGS } from './schema'
 import { defaultConfig } from './defaults'
@@ -229,7 +229,11 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
 
   const defaults = JSON.parse(JSON.stringify(defaultConfig)) as Record<string, unknown>
   const envLayer = buildStandardEnvLayer(env)
-  const fileConfig = rawFileConfig as Record<string, unknown>
+  // Interpolate ${VAR} references in file values, then coerce string leaves
+  // (like `port: ${PORT}` → "3000" → 3000) against the defaults schema.
+  // Defaults and CLI args stay untouched — they're already properly typed.
+  const interpolatedFile = interpolateEnvVars(rawFileConfig, env)
+  const fileConfig = coerceTypes(interpolatedFile, defaults) as Record<string, unknown>
   const cliArgs = (options.cliArgs ?? {}) as Record<string, unknown>
 
   // Only one normalizer left: tools config supports a flat form so users can
@@ -249,10 +253,13 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
     if (!resolved) {
       throw new Error(`Recipe not found: "${recipeName}". Install it with: ra recipe install <source>`)
     }
-    const recipeConfig = await parseFile(resolved.configPath) as Record<string, unknown>
+    const rawRecipeConfig = await parseFile(resolved.configPath)
+    const recipeConfig = coerceTypes(
+      interpolateEnvVars(rawRecipeConfig, env),
+      defaults,
+    ) as Record<string, unknown>
 
-    // Recipes must only define agent configuration — reject app stanza
-    // Check before normalizeLayer which may create an empty `app` object
+    // Recipes must only define agent configuration — reject app stanza.
     if (recipeConfig.app !== undefined) {
       throw new Error(`Recipe "${recipeName}" contains an "app" stanza. Recipes may only define "agent" configuration.`)
     }

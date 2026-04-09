@@ -127,6 +127,21 @@ ENV VARS
     AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
     AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_API_KEY
 
+  Config files support Docker Compose–style \${VAR} interpolation on
+  any value. Numeric and boolean fields are automatically coerced
+  from their interpolated string form:
+    \${VAR}              required — errors if unset
+    \${VAR:-default}     use default if unset or empty
+    \${VAR-default}      use default if unset (empty string is kept)
+
+  Example ra.config.yaml:
+    agent:
+      model: \${MODEL:-claude-sonnet-4-6}
+      maxIterations: \${MAX_ITERS:-50}
+    app:
+      http:
+        port: \${PORT:-3000}
+
   Precedence: CLI flag > process.env > ~/.ra/secrets.json > config file > defaults
   See SECRETS below for the on-disk store.
 

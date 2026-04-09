@@ -278,6 +278,119 @@ describe('tools config', () => {
   })
 })
 
+describe('env var interpolation in config files', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = join(tmpdir(), `ra-interp-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    mkdirSync(tmp, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('resolves ${VAR} in YAML values', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${MODEL}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { MODEL: 'gpt-4o' } })
+    expect(c.agent.model).toBe('gpt-4o')
+  })
+
+  it('${VAR:-default} falls back when unset', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${MODEL:-claude-sonnet-4-6}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.model).toBe('claude-sonnet-4-6')
+  })
+
+  it('${VAR:-default} uses env value when set', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${MODEL:-claude-sonnet-4-6}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { MODEL: 'gpt-4o' } })
+    expect(c.agent.model).toBe('gpt-4o')
+  })
+
+  it('throws when a required ${VAR} is unset', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${REQUIRED_MODEL}"',
+    ].join('\n'))
+    await expect(loadConfig({ cwd: tmp, env: {} }))
+      .rejects.toThrow(/REQUIRED_MODEL/)
+  })
+
+  it('${VAR-default} keeps empty string when var is empty', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { systemPrompt: '${EMPTY-fallback}' },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: { EMPTY: '' } })
+    expect(c.agent.systemPrompt).toBe('')
+  })
+
+  it('interpolates multiple variables in one string', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { providers: { azure: { endpoint: 'https://${HOST}:${PORT}/v1' } } },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: { HOST: 'azure.local', PORT: '443' } })
+    expect(c.app.providers.azure.endpoint).toBe('https://azure.local:443/v1')
+  })
+
+  it('resolves variables inside MCP client env blocks', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'app:',
+      '  mcpServers:',
+      '    - name: github',
+      '      transport: stdio',
+      '      command: npx',
+      '      env:',
+      '        GITHUB_TOKEN: "${GH_TOKEN}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { GH_TOKEN: 'ghp_abc123' } })
+    expect(c.app.mcpServers[0]?.env?.GITHUB_TOKEN).toBe('ghp_abc123')
+  })
+
+  it('coerces "${PORT}" → number after interpolation', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { http: { port: '${PORT}' } },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: { PORT: '4000' } })
+    expect(c.app.http.port).toBe(4000)
+    expect(typeof c.app.http.port).toBe('number')
+  })
+
+  it('coerces "${BUILTIN}" → boolean after interpolation', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { tools: { builtin: '${BUILTIN:-true}' } },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.tools.builtin).toBe(true)
+  })
+
+  it('coerces zero correctly', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { maxIterations: '${ITERS}' },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: { ITERS: '0' } })
+    expect(c.agent.maxIterations).toBe(0)
+  })
+
+  it('leaves literal values untouched (no ${})', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('anthropic')
+    expect(c.agent.model).toBe('claude-sonnet-4-6')
+  })
+})
+
 describe('systemPrompt file-path detection', () => {
   let tmp: string
 
