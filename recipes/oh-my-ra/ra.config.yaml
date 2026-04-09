@@ -8,10 +8,9 @@ agent:
     custom:
       - ./tools/project-scan.ts
       - ./tools/dep-check.ts
-    overrides:
-      Agent:
-        maxConcurrency: 4
-        maxDepth: 3
+    Agent:
+      maxConcurrency: 4
+      maxDepth: 3
   skillDirs:
     - ./skills
 

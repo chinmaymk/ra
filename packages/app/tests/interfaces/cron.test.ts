@@ -90,6 +90,7 @@ function makeApp(overrides?: { provider?: IProvider }) {
       interface: 'cron',
       configDir: process.cwd(),
       dataDir: tmpdir('ra-cron-test'),
+      hotReload: true,
       http: { port: 3000, token: '' },
       inspector: { port: 3002 },
       storage: { format: 'jsonl', maxSessions: 100, ttlDays: 30 },
@@ -104,9 +105,11 @@ function makeApp(overrides?: { provider?: IProvider }) {
         codex: { accessToken: '' },
         'anthropic-agents-sdk': {},
       },
-      mcpServers: [],
-      mcpLazySchemas: false,
-      raMcpServer: { enabled: false, port: 3001, tool: { name: 'ra', description: 'test' } },
+      mcp: {
+        servers: [],
+        lazySchemas: false,
+        server: { enabled: false, port: 3001, tool: { name: 'ra', description: 'test' } },
+      },
       logsEnabled: false,
       logLevel: 'error',
       tracesEnabled: false,
@@ -122,8 +125,7 @@ function makeApp(overrides?: { provider?: IProvider }) {
       parallelToolCalls: true,
       maxTokenBudget: 0,
       maxDuration: 0,
-      hotReload: true,
-      tools: { builtin: false, overrides: {} },
+      tools: { builtin: false },
       skillDirs: [],
       permissions: {},
       middleware: {},
@@ -286,7 +288,7 @@ describe('runCron', () => {
         name: 'override-job',
         schedule: '* * * * *',
         prompt: 'check',
-        agent: { model: 'claude-haiku-4-5', maxIterations: 3 },
+        overrides: { model: 'claude-haiku-4-5', maxIterations: 3 },
       }]
 
       await runOnce(app, jobs)

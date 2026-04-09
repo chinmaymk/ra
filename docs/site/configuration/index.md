@@ -1,12 +1,12 @@
 # Configuration Reference
 
-ra uses a layered config system: **CLI > config file > defaults**. Each layer overrides the one to its right.
+ra uses a layered config system: **CLI > config file > recipe > defaults**. Each layer overrides the one to its right.
 
 ```
-CLI flags > config file > defaults
+CLI flags > config file > recipe > defaults
 ```
 
-Commit a `ra.config.yml` for a team or project baseline. Use `${VAR}` interpolation for secrets and per-environment settings. Use CLI flags for one-off overrides.
+Commit a `ra.config.yml` for a team or project baseline. Use `${VAR}` interpolation for secrets and per-environment settings. Use CLI flags for one-off overrides. Use recipes to compose a pre-built agent.
 
 ## Config file
 
@@ -24,6 +24,7 @@ Full example:
 # ra.config.yml
 app:
   dataDir: .ra              # root for all runtime data
+  hotReload: true           # reload config & referenced files between loops
 
   providers:
     anthropic:
@@ -33,13 +34,21 @@ app:
     maxSessions: 100
     ttlDays: 30
 
-  mcpServers:
-    - name: github
-      transport: stdio
-      command: npx
-      args: ["-y", "@modelcontextprotocol/server-github"]
-      env:
-        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
+  mcp:
+    servers:
+      - name: github
+        transport: stdio
+        command: npx
+        args: ["-y", "@modelcontextprotocol/server-github"]
+        env:
+          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN:-}"
+    lazySchemas: true
+    server:                 # ra as an MCP server (disabled by default)
+      enabled: false
+      port: 3001
+      tool:
+        name: ra
+        description: Ra AI agent
 
 agent:
   provider: ${PROVIDER:-anthropic}     # env override with default
@@ -51,7 +60,6 @@ agent:
   parallelToolCalls: true       # run tool calls concurrently (default)
   maxTokenBudget: 0             # 0 = unlimited, or set e.g. 200000
   maxDuration: 0                # 0 = unlimited, or set e.g. 300000 (5 min)
-  hotReload: true               # reload config & referenced files between loops
 
   skillDirs:
     - ./skills
@@ -68,10 +76,14 @@ agent:
       - "AGENTS.md"
 
   tools:
-    builtin: true
-    # Per-tool overrides (optional)
-    # Agent:
-    #   maxConcurrency: 2
+    builtin: true                 # master switch
+    custom:                        # custom tool files
+      - ./tools/deploy.ts
+    maxResponseSize: 25000         # max chars per tool response
+    # Per-tool settings sit directly under `tools`:
+    Read: { rootDir: "./src" }
+    WebFetch: { enabled: false }
+    Agent: { maxConcurrency: 2 }
 
   middleware:
     beforeModelCall:
@@ -98,22 +110,21 @@ agent:
 | `agent.maxIterations` | `--max-iterations` | `0` (unlimited) | Max agent loop iterations (0 = unlimited) |
 | `agent.thinking` | `--thinking` | `off` | Thinking mode: `off`, `low`, `medium`, `high`, `adaptive` |
 | `agent.thinkingBudgetCap` | `--thinking-budget-cap` | — | Max thinking budget tokens (caps the level-based default) |
-| `agent.toolTimeout` | — | `120000` | Per-tool and middleware timeout (ms) |
+| `agent.toolTimeout` | `--tool-timeout` | `120000` | Per-tool and middleware timeout (ms) |
 | `agent.parallelToolCalls` | — | `true` | Execute tool calls in parallel when the model returns multiple |
-| `agent.maxTokenBudget` | `--max-token-budget` | `0` | Max total tokens (input + output) before the loop stops. 0 = unlimited |
-| `agent.maxDuration` | `--max-duration` | `0` | Max wall-clock duration (ms) before the loop stops. 0 = unlimited |
-| `agent.hotReload` | — | `true` | [Hot-reload](/core/hot-reload) config and referenced files between loops |
+| `agent.maxTokenBudget` | — | `0` | Max total tokens (input + output) before the loop stops. 0 = unlimited |
+| `agent.maxDuration` | — | `0` | Max wall-clock duration (ms) before the loop stops. 0 = unlimited |
 | `agent.tools.builtin` | `--tools-builtin` | `true` | Enable/disable [built-in tools](/tools/) |
 
 ### Agent — Permissions
 
 Regex-based rules controlling what tools can do. See the [Permissions guide](/permissions/) for full details and examples.
 
-| Field | CLI flag | Default | Description |
-|-------|----------|---------|-------------|
-| `agent.permissions.no_rules_rules` | — | `false` | Disable all permission checks |
-| `agent.permissions.default_action` | — | `allow` | Action when no rule matches: `allow` or `deny` |
-| `agent.permissions.rules` | — | `[]` | Array of per-tool regex rules |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `agent.permissions.disabled` | `false` | Skip all permission checks |
+| `agent.permissions.defaultAction` | `allow` | Action when no rule matches: `allow` or `deny` |
+| `agent.permissions.rules` | `[]` | Array of per-tool regex rules |
 
 ```yaml
 agent:
@@ -136,48 +147,47 @@ agent:
 
 ### Agent — Compaction
 
-| Field | CLI flag | Default | Description |
-|-------|----------|---------|-------------|
-| `agent.compaction.enabled` | — | `true` | Enable automatic context compaction |
-| `agent.compaction.threshold` | — | `0.90` | Trigger at this fraction of context window |
-| `agent.compaction.strategy` | — | `'truncate'` | `'truncate'` drops old messages (free, cache-friendly); `'summarize'` calls a model with metadata enrichment |
-| `agent.compaction.model` | — | provider default | Model for summarization (only used with `strategy: 'summarize'`) |
-| `agent.compaction.prompt` | — | built-in | Custom summarization prompt. When set, bypasses metadata enrichment and uses the LLM response as-is |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `agent.compaction.enabled` | `true` | Enable automatic context compaction |
+| `agent.compaction.threshold` | `0.90` | Trigger at this fraction of context window |
+| `agent.compaction.strategy` | `'truncate'` | `'truncate'` drops old messages (free, cache-friendly); `'summarize'` calls a model with metadata enrichment |
+| `agent.compaction.model` | provider default | Model for summarization (only used with `strategy: 'summarize'`) |
+| `agent.compaction.prompt` | built-in | Custom summarization prompt |
 
 ### Agent — Context
 
-| Field | CLI flag | Default | Description |
-|-------|----------|---------|-------------|
-| `agent.context.enabled` | — | `true` | Enable context file discovery |
-| `agent.context.patterns` | — | `['CLAUDE.md', 'AGENTS.md', '.cursorrules', '.windsurfrules', '.github/copilot-instructions.md']` | Glob patterns for context files |
-| `agent.context.resolvers` | — | built-in | Pattern resolvers for `@file` and `url:` |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `agent.context.enabled` | `true` | Enable context file discovery |
+| `agent.context.patterns` | `['CLAUDE.md', 'AGENTS.md', '.cursorrules', '.windsurfrules', '.github/copilot-instructions.md']` | Glob patterns for context files |
+| `agent.context.resolvers` | built-in | Pattern resolvers for `@file` and `url:` |
 
 ### Agent — Tools
 
-The `agent.tools` section controls which built-in tools are registered and their per-tool settings. See [Built-in Tools](/tools/#configuring-tools) for full details.
+Per-tool settings sit directly under `tools`, next to the reserved keys `builtin`, `custom`, and `maxResponseSize`. See [Built-in Tools](/tools/#configuring-tools) for the full list.
 
 ```yaml
 agent:
   tools:
-    builtin: true            # master switch (default: true)
-    custom:                   # load tools from files
+    builtin: true                  # master switch (default: true)
+    maxResponseSize: 25000          # max chars per tool response
+    custom:                          # load tools from files
       - "./tools/deploy.ts"
       - "./tools/db-query.ts"
       - "./tools/health-check.sh"  # shell scripts auto-detected
-    Read:
-      rootDir: "./src"        # constrain reads to this directory
-    Write:
-      rootDir: "./src"
-    WebFetch:
-      enabled: false          # disable a specific tool
-    Agent:
-      maxConcurrency: 2       # limit parallel subagent tasks
+    # Per-tool settings — keyed by tool name
+    Read: { rootDir: "./src" }      # constrain reads to this directory
+    Write: { rootDir: "./src" }
+    WebFetch: { enabled: false }    # disable a specific tool
+    Agent: { maxConcurrency: 2 }    # limit parallel subagent tasks
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `agent.tools.builtin` | boolean | `true` | Master switch: register all built-in tools unless individually disabled |
 | `agent.tools.custom` | string[] | `[]` | File paths to [custom tool](/tools/custom) files (JS/TS/shell scripts) |
+| `agent.tools.maxResponseSize` | number | `25000` | Max characters per tool response |
 | `agent.tools.<ToolName>.enabled` | boolean | `true` | Enable or disable a specific tool |
 | `agent.tools.<ToolName>.rootDir` | string | — | Restrict filesystem tools to this directory |
 | `agent.tools.<ToolName>.maxConcurrency` | number | `4` | Max parallel tasks (Agent tool) |
@@ -186,24 +196,25 @@ agent:
 
 The `Agent` tool forks parallel copies of the agent. Forks inherit the parent's model, system prompt, tools, thinking level, and `maxIterations`. Concurrency can be set via `agent.tools.Agent.maxConcurrency` (see above) or the top-level `agent.maxConcurrency` as a fallback.
 
+| Field | Default | Description |
+|-------|---------|-------------|
+| `agent.maxConcurrency` | `4` | Fallback max parallel subagent tasks |
+
+### App — Data directory and hot reload
+
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
-| `agent.maxConcurrency` | — | `4` | Fallback max parallel subagent tasks (overridden by `agent.tools.Agent.maxConcurrency`) |
-
-### App — Data directory
-
-| Field | CLI flag | Default | Description |
-|-------|----------|---------|-------------|
-| `app.dataDir` | `--data-dir` | `.ra` | Root directory for all runtime data (sessions, memory, etc.) |
+| `app.dataDir` | `--data-dir` | `~/.ra/<handle>` | Root directory for all runtime data (sessions, memory, etc.) |
+| `app.hotReload` | — | `true` | [Hot-reload](/core/hot-reload) config and referenced files between loops |
 
 All runtime data is organized under `dataDir`: sessions in `{dataDir}/sessions/`, memory in `{dataDir}/memory.db`.
 
 ### App — Storage
 
-| Field | CLI flag | Default | Description |
-|-------|----------|---------|-------------|
-| `app.storage.maxSessions` | `--storage-max-sessions` | `100` | Max sessions before auto-pruning |
-| `app.storage.ttlDays` | `--storage-ttl-days` | `30` | Auto-expire sessions older than this |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `app.storage.maxSessions` | `100` | Max sessions before auto-pruning |
+| `app.storage.ttlDays` | `30` | Auto-expire sessions older than this |
 
 ### Agent — Memory
 
@@ -222,25 +233,37 @@ All runtime data is organized under `dataDir`: sessions in `{dataDir}/sessions/`
 | `app.logLevel` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
 | `app.tracesEnabled` | `true` | Enable session traces |
 
-### App — MCP Client
+### App — MCP
+
+All MCP configuration (both client and server) lives under `app.mcp`.
+
+```yaml
+app:
+  mcp:
+    servers:                       # external servers to connect to
+      - name: github
+        transport: stdio
+        command: npx
+        args: ["-y", "@modelcontextprotocol/server-github"]
+    lazySchemas: true               # register MCP tools with minimal schemas
+    server:                         # ra as an MCP server (disabled by default)
+      enabled: false
+      port: 3001
+      tool:
+        name: ra
+        description: Ra AI agent
+```
 
 | Field | CLI flag | Default | Description |
 |-------|----------|---------|-------------|
-| `app.mcpServers` | — | `[]` | External MCP servers to connect to |
-| `app.mcpLazySchemas` | — | `true` | Lazy schema loading — register MCP tools with minimal schemas. First call returns full schema; model retries with correct params. |
+| `app.mcp.servers` | — | `[]` | External MCP servers to connect to |
+| `app.mcp.lazySchemas` | — | `true` | Lazy schema loading — register MCP tools with minimal schemas |
+| `app.mcp.server.enabled` | `--mcp-server-enabled` | `false` | Enable ra's MCP server endpoint |
+| `app.mcp.server.port` | `--mcp-server-port` | `3001` | MCP server port |
+| `app.mcp.server.tool.name` | `--mcp-server-tool-name` | `ra` | Tool name exposed to MCP clients |
+| `app.mcp.server.tool.description` | `--mcp-server-tool-description` | `Ra AI agent` | Tool description exposed to MCP clients |
 
-See [MCP](/modes/mcp#lazy-schema-loading) for details.
-
-### App — MCP Server (ra as MCP tool)
-
-| Field | CLI flag | Default | Description |
-|-------|----------|---------|-------------|
-| `app.raMcpServer.enabled` | `--mcp-server-enabled` | `false` | Enable ra's MCP server endpoint |
-| `app.raMcpServer.port` | `--mcp-server-port` | `3001` | MCP server port |
-| `app.raMcpServer.tool.name` | `--mcp-server-tool-name` | `ra` | Tool name exposed to MCP clients |
-| `app.raMcpServer.tool.description` | `--mcp-server-tool-description` | `Ra AI agent` | Tool description exposed to MCP clients |
-
-See [MCP](/modes/mcp#ra-as-mcp-server) for details.
+See [MCP](/modes/mcp) for full details.
 
 ### App — HTTP
 
@@ -262,7 +285,9 @@ cron:
   - name: health-check
     schedule: "*/30 * * * *"
     prompt: "Check API health"
-    agent:
+    # Compose per-job: load a recipe as base and/or inline overrides.
+    recipe: ./recipes/reporter      # optional: base agent config
+    overrides:                       # optional: merged on top
       model: claude-haiku-4-5-20251001
       maxIterations: 5
 ```
@@ -272,7 +297,8 @@ cron:
 | `cron[].name` | yes | Human-readable job name (used in logs and traces) |
 | `cron[].schedule` | yes | Standard cron expression |
 | `cron[].prompt` | yes | Prompt sent to the agent on each run |
-| `cron[].agent` | no | Per-job agent overrides (object) or path to a recipe YAML file (string) |
+| `cron[].recipe` | no | Recipe path or installed name used as base agent config |
+| `cron[].overrides` | no | Inline `Partial<AgentConfig>` merged on top of the base |
 
 See [Cron](/modes/cron) for details.
 
@@ -288,6 +314,7 @@ See [Cron](/modes/cron) for details.
 | — | `--exec` | — | Run a script file |
 | — | `--show-config` | — | Show resolved configuration and exit |
 | — | `--config` | — | Path to config file |
+| — | `--recipe` | — | Load a recipe as the base agent config |
 
 ## Environment variable interpolation
 
@@ -337,10 +364,12 @@ ra --provider openai \
    --system-prompt "Be concise" \
    --max-iterations 10 \
    --thinking high \
-   --skill code-review \
+   --skill-dir ./my-skills \
    --file context.md \
    "Review this code"
 ```
+
+ra only exposes CLI flags for the most-used fields. Everything else lives in the config file.
 
 ## Provider credentials
 
@@ -357,13 +386,33 @@ Provider API keys are resolved from standard environment variables by default. N
 
 ## Inspect
 
-Use `--show-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, config file, and CLI flags. Sensitive values (tokens, API keys) are redacted.
+Use `--show-config` to print the fully resolved configuration as JSON and exit. Useful for debugging config layering — shows the final result after merging defaults, recipe, config file, and CLI flags. Sensitive values (tokens, API keys) are redacted.
 
 ```bash
 ra --show-config
 ra --show-config --provider openai --model gpt-4.1
 ra --show-context   # print discovered context files
 ```
+
+## Migrating from older configs
+
+The loader no longer silently migrates legacy shapes. If you see a
+`ConfigError` with a migration hint at startup, update your config to the
+current shape:
+
+| Legacy | Now |
+|--------|-----|
+| `agent.tools.overrides.X` | `agent.tools.X` (flat, alongside `builtin`/`custom`/`maxResponseSize`) |
+| `agent.permissions.no_rules_rules` | `agent.permissions.disabled` |
+| `agent.permissions.default_action` | `agent.permissions.defaultAction` |
+| `agent.hotReload` | `app.hotReload` |
+| `app.mcpServers` | `app.mcp.servers` |
+| `app.mcpLazySchemas` | `app.mcp.lazySchemas` |
+| `app.raMcpServer` / `app.mcpServer` | `app.mcp.server` |
+| `agent.mcp.*` | `app.mcp.*` |
+| `agent.builtinTools` | `agent.tools.builtin` |
+| top-level flat keys (`provider:`, `model:`, etc) | under `agent:` / `app:` |
+| `cron[].agent: string \| object` | `cron[].recipe` + `cron[].overrides` |
 
 ## See also
 

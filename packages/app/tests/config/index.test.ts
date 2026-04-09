@@ -250,17 +250,16 @@ describe('tools config', () => {
     expect(config.agent.tools.builtin).toBe(true)
   })
 
-  it('loads legacy builtinTools boolean as tools.builtin', async () => {
+  it('rejects legacy builtinTools boolean with a migration error', async () => {
     const dir = join(tmpdir(), `ra-tools-compat-${Date.now()}`)
     mkdirSync(dir, { recursive: true })
     try {
       writeFileSync(join(dir, 'ra.config.json'), JSON.stringify({ agent: { builtinTools: false } }))
-      const config = await loadConfig({ cwd: dir, env: {} })
-      expect(config.agent.tools.builtin).toBe(false)
+      await expect(loadConfig({ cwd: dir, env: {} })).rejects.toThrow('builtinTools')
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
-  it('loads flat tools config with per-tool overrides', async () => {
+  it('loads flat per-tool settings directly under tools', async () => {
     const dir = join(tmpdir(), `ra-tools-flat-${Date.now()}`)
     mkdirSync(dir, { recursive: true })
     try {
@@ -277,9 +276,9 @@ describe('tools config', () => {
       ].join('\n'))
       const config = await loadConfig({ cwd: dir, env: {} })
       expect(config.agent.tools.builtin).toBe(true)
-      expect(config.agent.tools.overrides.Read).toEqual({ rootDir: './src' })
-      expect(config.agent.tools.overrides.WebFetch).toEqual({ enabled: false })
-      expect(config.agent.tools.overrides.Agent).toEqual({ maxConcurrency: 2 })
+      expect((config.agent.tools as any).Read).toEqual({ rootDir: './src' })
+      expect((config.agent.tools as any).WebFetch).toEqual({ enabled: false })
+      expect((config.agent.tools as any).Agent).toEqual({ maxConcurrency: 2 })
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
@@ -292,7 +291,18 @@ describe('tools config', () => {
       }))
       const config = await loadConfig({ cwd: dir, env: {} })
       expect(config.agent.tools.builtin).toBe(true)
-      expect(config.agent.tools.overrides.DeleteFile?.enabled).toBe(false)
+      expect((config.agent.tools as any).DeleteFile?.enabled).toBe(false)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('rejects legacy tools.overrides shape with a migration error', async () => {
+    const dir = join(tmpdir(), `ra-tools-overrides-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      writeFileSync(join(dir, 'ra.config.json'), JSON.stringify({
+        agent: { tools: { builtin: true, overrides: { Read: { rootDir: './src' } } } },
+      }))
+      await expect(loadConfig({ cwd: dir, env: {} })).rejects.toThrow('tools.overrides')
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
@@ -531,11 +541,11 @@ describe('env var interpolation in config files', () => {
     expect(c.agent.model).toBe('gpt-4o')
   })
 
-  it('resolves variables in MCP client env blocks', async () => {
+  it('resolves variables in MCP server env blocks', async () => {
     writeFileSync(join(tmp, 'ra.config.yaml'), [
       'app:',
       '  mcp:',
-      '    client:',
+      '    servers:',
       '      - name: github',
       '        transport: stdio',
       '        command: npx',
@@ -544,7 +554,7 @@ describe('env var interpolation in config files', () => {
       '          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"',
     ].join('\n'))
     const c = await loadConfig({ cwd: tmp, env: { GITHUB_TOKEN: 'ghp_abc123' } })
-    expect(c.app.mcpServers[0]?.env?.GITHUB_PERSONAL_ACCESS_TOKEN).toBe('ghp_abc123')
+    expect(c.app.mcp.servers[0]?.env?.GITHUB_PERSONAL_ACCESS_TOKEN).toBe('ghp_abc123')
   })
 
   it('throws when a required variable is missing', async () => {
@@ -597,63 +607,50 @@ describe('MCP config', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
-  it('defaults mcpServers to empty array and mcpLazySchemas to true', async () => {
+  it('defaults mcp.servers to [] and mcp.lazySchemas to true', async () => {
     const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.mcpServers).toEqual([])
-    expect(c.app.mcpLazySchemas).toBe(true)
+    expect(c.app.mcp.servers).toEqual([])
+    expect(c.app.mcp.lazySchemas).toBe(true)
+    expect(c.app.mcp.server.enabled).toBe(false)
   })
 
-  it('loads canonical app.mcpServers config', async () => {
+  it('loads canonical app.mcp config', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       app: {
-        mcpServers: [{ name: 'test', transport: 'stdio', command: 'echo' }],
-        mcpLazySchemas: false,
-      },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.mcpServers).toEqual([{ name: 'test', transport: 'stdio', command: 'echo' }])
-    expect(c.app.mcpLazySchemas).toBe(false)
-  })
-
-  it('migrates legacy agent.mcp.servers to app.mcpServers', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      agent: {
         mcp: {
-          servers: [{ name: 'legacy', transport: 'stdio', command: 'echo' }],
+          servers: [{ name: 'test', transport: 'stdio', command: 'echo' }],
           lazySchemas: false,
+          server: { enabled: true, port: 4000, tool: { name: 'bot', description: 'A bot' } },
         },
       },
     }))
     const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.mcpServers).toEqual([{ name: 'legacy', transport: 'stdio', command: 'echo' }])
-    expect(c.app.mcpLazySchemas).toBe(false)
+    expect(c.app.mcp.servers).toEqual([{ name: 'test', transport: 'stdio', command: 'echo' }])
+    expect(c.app.mcp.lazySchemas).toBe(false)
+    expect(c.app.mcp.server.enabled).toBe(true)
+    expect(c.app.mcp.server.port).toBe(4000)
+    expect(c.app.mcp.server.tool.name).toBe('bot')
   })
 
-  it('migrates legacy app.mcp.client to app.mcpServers', async () => {
+  it('rejects legacy app.mcpServers with a migration error', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { mcpServers: [{ name: 'legacy', transport: 'stdio', command: 'echo' }] },
+    }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('app.mcp.servers')
+  })
+
+  it('rejects legacy app.raMcpServer with a migration error', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { raMcpServer: { enabled: true, port: 4000, tool: { name: 'bot', description: 'A bot' } } },
+    }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('app.mcp.server')
+  })
+
+  it('rejects legacy app.mcp.client with a migration error', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       app: { mcp: { client: [{ name: 'old', transport: 'sse', url: 'http://localhost' }] } },
     }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.mcpServers).toEqual([{ name: 'old', transport: 'sse', url: 'http://localhost' }])
-  })
-
-  it('migrates legacy app.mcpServer to app.raMcpServer', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      app: { mcpServer: { enabled: true, port: 4000, tool: { name: 'bot', description: 'A bot' } } },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.raMcpServer.enabled).toBe(true)
-    expect(c.app.raMcpServer.port).toBe(4000)
-    expect(c.app.raMcpServer.tool.name).toBe('bot')
-  })
-
-  it('canonical app.mcpServers takes priority over legacy agent.mcp.servers', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      app: { mcpServers: [{ name: 'canonical', transport: 'stdio', command: 'a' }] },
-      agent: { mcp: { servers: [{ name: 'legacy', transport: 'stdio', command: 'b' }] } },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.mcpServers).toEqual([{ name: 'canonical', transport: 'stdio', command: 'a' }])
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('app.mcp.servers')
   })
 })
 
@@ -756,7 +753,7 @@ describe('recipe resolution', () => {
   })
 })
 
-describe('legacy flat config migration', () => {
+describe('legacy flat config rejection', () => {
   let tmp: string
 
   beforeEach(() => {
@@ -768,61 +765,29 @@ describe('legacy flat config migration', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
-  it('coerces interpolated values in flat keys after migration', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      maxIterations: '${ITERS:-25}',
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.maxIterations).toBe(25)
-    expect(typeof c.agent.maxIterations).toBe('number')
-  })
-
-  it('migrates flat provider, model, and interface keys', async () => {
+  it('rejects top-level flat provider/model/interface with a migration error', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       provider: 'openai',
       model: 'gpt-4o',
       interface: 'cli',
-      maxIterations: 100,
     }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('openai')
-    expect(c.agent.model).toBe('gpt-4o')
-    expect(c.app.interface).toBe('cli')
-    expect(c.agent.maxIterations).toBe(100)
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('Top-level')
   })
 
-  it('nested agent section takes priority over flat keys', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'provider: google',
-      'agent:',
-      '  provider: openai',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('openai')
-  })
-
-  it('migrates flat agent keys: skillDirs, permissions', async () => {
+  it('rejects top-level flat skillDirs/storage with a migration error', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       skillDirs: ['/custom/skills'],
-      logsEnabled: false,
-      storage: { format: 'jsonl', maxSessions: 10, ttlDays: 5 },
     }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.skillDirs).toEqual(['/custom/skills'])
-    expect(c.app.logsEnabled).toBe(false)
-    expect(c.app.storage.maxSessions).toBe(10)
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('Top-level')
   })
 
-  it('migrates flat providers into app.providers', async () => {
+  it('rejects top-level flat providers with a migration error', async () => {
     writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'provider: anthropic',
       'providers:',
       '  anthropic:',
       '    apiKey: "sk-ant-flat-key"',
     ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('anthropic')
-    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-flat-key')
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('Top-level')
   })
 
   it('app.providers in YAML works directly', async () => {
@@ -836,6 +801,28 @@ describe('legacy flat config migration', () => {
     ].join('\n'))
     const c = await loadConfig({ cwd: tmp, env: {} })
     expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-direct')
+  })
+
+  it('rejects agent.hotReload with a migration error', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { hotReload: false },
+    }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('hotReload')
+  })
+
+  it('accepts app.hotReload', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { hotReload: false },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.app.hotReload).toBe(false)
+  })
+
+  it('rejects permissions.no_rules_rules with a migration error', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { permissions: { no_rules_rules: true } },
+    }))
+    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow('no_rules_rules')
   })
 })
 

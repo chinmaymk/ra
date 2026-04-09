@@ -5,6 +5,7 @@ export const defaultConfig: RaConfig = {
     interface: 'repl',
     configDir: process.cwd(),
     dataDir: '',
+    hotReload: true,
     http: { port: 3000, token: '' },
     inspector: { port: 3002 },
     storage: {
@@ -23,14 +24,16 @@ export const defaultConfig: RaConfig = {
       codex: { accessToken: '${CODEX_ACCESS_TOKEN:-}' },
       'anthropic-agents-sdk': {},
     },
-    mcpServers: [],
-    mcpLazySchemas: true,
-    raMcpServer: {
-      enabled: false,
-      port: 3001,
-      tool: {
-        name: 'ra',
-        description: 'Ra AI agent',
+    mcp: {
+      servers: [],
+      lazySchemas: true,
+      server: {
+        enabled: false,
+        port: 3001,
+        tool: {
+          name: 'ra',
+          description: 'Ra AI agent',
+        },
       },
     },
     logsEnabled: true,
@@ -48,10 +51,8 @@ export const defaultConfig: RaConfig = {
     parallelToolCalls: true,
     maxTokenBudget: 0,
     maxDuration: 0,
-    hotReload: true,
     tools: {
       builtin: true,
-      overrides: {},
       custom: [],
       maxResponseSize: 25000,
     },

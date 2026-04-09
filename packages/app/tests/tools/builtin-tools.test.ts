@@ -272,11 +272,12 @@ describe('registerBuiltinTools', () => {
     expect(names).toContain(process.platform === 'win32' ? 'PowerShell' : 'Bash')
   })
 
-  it('disables individual tools via overrides', () => {
+  it('disables individual tools via per-tool settings', () => {
     const registry = new ToolRegistry()
     registerBuiltinTools(registry, {
       builtin: true,
-      overrides: { WebFetch: { enabled: false }, DeleteFile: { enabled: false } },
+      WebFetch: { enabled: false },
+      DeleteFile: { enabled: false },
     })
     const names = registry.all().map(t => t.name)
     expect(names).not.toContain('WebFetch')
@@ -288,7 +289,7 @@ describe('registerBuiltinTools', () => {
 
   it('registers no tools when builtin is false', () => {
     const registry = new ToolRegistry()
-    registerBuiltinTools(registry, { builtin: false, overrides: {} })
+    registerBuiltinTools(registry, { builtin: false })
     expect(registry.all()).toHaveLength(0)
   })
 
@@ -296,7 +297,7 @@ describe('registerBuiltinTools', () => {
     const registry = new ToolRegistry()
     registerBuiltinTools(registry, {
       builtin: true,
-      overrides: { Read: { rootDir: TMP } },
+      Read: { rootDir: TMP },
     })
     const read = registry.get('Read')!
     // Reading within rootDir should work

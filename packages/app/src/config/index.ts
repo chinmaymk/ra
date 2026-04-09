@@ -7,10 +7,15 @@ import { defaultConfig } from './defaults'
 import { CONFIG_FILES } from '../registry/helpers'
 import { NoopLogger } from '@chinmaymk/ra'
 import type { Logger } from '@chinmaymk/ra'
-import type { RaConfig, LoadConfigOptions, ToolsConfig, ToolSettings } from './types'
+import type { RaConfig, LoadConfigOptions } from './types'
 
 export { defaultConfig } from './defaults'
-export type { RaConfig, LoadConfigOptions, McpServerEntry, RaMcpServerConfig, PermissionsConfig, PermissionRule, PermissionFieldRule, ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob } from './types'
+export { toolOption, allToolOptions } from './types'
+export type {
+  RaConfig, LoadConfigOptions, McpServerEntry, McpConfig, RaMcpServerConfig,
+  PermissionsConfig, PermissionRule, PermissionFieldRule,
+  ToolsConfig, ToolSettings, AppConfig, AgentConfig, CronJob,
+} from './types'
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -80,153 +85,80 @@ async function parseFile(path: string): Promise<Partial<RaConfig>> {
   return {}
 }
 
-// Keys that belong under `agent` when found at the top level (legacy flat config)
-const AGENT_KEYS = new Set([
-  'provider', 'model', 'thinking', 'systemPrompt',
-  'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
-  'tools', 'skillDirs', 'permissions',
-  'middleware', 'context', 'compaction', 'memory', 'hotReload',
-])
-
-// Keys that belong under `app` when found at the top level (legacy flat config)
-const APP_KEYS = new Set([
-  'interface', 'dataDir', 'http', 'inspector', 'storage',
-  'mcpServers', 'mcpLazySchemas', 'raMcpServer', 'providers',
-  'logsEnabled', 'logLevel', 'tracesEnabled',
-])
-
-/** Move a value from `src[srcKey]` to `dst[dstKey]` if dst doesn't already have it. */
-function migrateKey(src: Record<string, unknown>, srcKey: string, dst: Record<string, unknown>, dstKey: string, check: (v: unknown) => boolean = () => true): void {
-  if (src[srcKey] !== undefined && check(src[srcKey]) && dst[dstKey] === undefined) {
-    dst[dstKey] = src[srcKey]
-    delete src[srcKey]
-  }
-}
-
 /**
- * Normalize MCP config from legacy shapes into the canonical layout:
- *   `app.mcpServers`, `app.mcpLazySchemas`, `app.raMcpServer`
- *
- * Legacy paths handled:
- *   - `app.mcp.{client|servers}` → `app.mcpServers`
- *   - `app.mcp.server`           → `app.raMcpServer`
- *   - `app.mcp.lazySchemas`      → `app.mcpLazySchemas`
- *   - `app.mcpServer`            → `app.raMcpServer`
- *   - `agent.mcp.{servers|client}`→ `app.mcpServers`
- *   - `agent.mcp.lazySchemas`    → `app.mcpLazySchemas`
+ * Detect config shapes from older ra releases and throw a clear migration
+ * error. We no longer silently migrate — the number of paths made the loader
+ * confusing and the canonical shape is now simple enough that users should
+ * just use it directly.
  */
-function normalizeMcpConfig(raw: Record<string, unknown>): void {
-  if (!isPlainObject(raw.app)) raw.app = {}
-  const app = raw.app as Record<string, unknown>
+function rejectLegacyShapes(raw: Record<string, unknown>): void {
+  const errors: string[] = []
 
-  // Legacy: app.mcp: { client|servers, server, lazySchemas }
-  if (isPlainObject(app.mcp)) {
-    const mcp = app.mcp as Record<string, unknown>
-    if (app.mcpServers === undefined) app.mcpServers = mcp.client ?? mcp.servers
-    migrateKey(mcp, 'lazySchemas', app, 'mcpLazySchemas')
-    migrateKey(mcp, 'server', app, 'raMcpServer', isPlainObject)
-    delete app.mcp
-  }
-
-  // Legacy: app.mcpServer → app.raMcpServer
-  migrateKey(app, 'mcpServer', app, 'raMcpServer', isPlainObject)
-
-  // Legacy: agent.mcp.{servers|client} → app.mcpServers
-  const agent = raw.agent as Record<string, unknown> | undefined
-  if (isPlainObject(agent) && isPlainObject(agent.mcp)) {
-    const agentMcp = agent.mcp as Record<string, unknown>
-    if (app.mcpServers === undefined) app.mcpServers = agentMcp.servers ?? agentMcp.client
-    migrateKey(agentMcp, 'lazySchemas', app, 'mcpLazySchemas')
-    delete agent.mcp
-  }
-}
-
-/** Migrate misplaced keys from `app` to `agent` (backward compat). */
-function normalizeAppToAgentKeys(raw: Record<string, unknown>): void {
-  if (!isPlainObject(raw.app)) return
-  const app = raw.app as Record<string, unknown>
-  if (!isPlainObject(raw.agent)) raw.agent = {}
-  const agent = raw.agent as Record<string, unknown>
-
-  migrateKey(app, 'skillDirs', agent, 'skillDirs')
-  if (isPlainObject(app.permissions)) migrateKey(app, 'permissions', agent, 'permissions')
-  delete app.skills // dead key
-}
-
-/**
- * Migrate legacy flat config keys into their `app`/`agent` sections.
- * Before the app/agent split, all keys lived at the top level.
- * This shim lets old configs (e.g. `provider: anthropic`) keep working.
- */
-function normalizeFlatConfig(raw: Record<string, unknown>): void {
-  for (const key of Object.keys(raw)) {
-    if (AGENT_KEYS.has(key)) {
-      if (!isPlainObject(raw.agent)) raw.agent = {}
-      const agent = raw.agent as Record<string, unknown>
-      if (!(key in agent)) {
-        agent[key] = raw[key]
-      } else if (isPlainObject(raw[key]) && isPlainObject(agent[key])) {
-        agent[key] = deepMerge(raw[key] as Record<string, unknown>, agent[key] as Record<string, unknown>)
-      }
-      delete raw[key]
-    } else if (APP_KEYS.has(key)) {
-      if (!isPlainObject(raw.app)) raw.app = {}
-      const app = raw.app as Record<string, unknown>
-      if (!(key in app)) {
-        app[key] = raw[key]
-      } else if (isPlainObject(raw[key]) && isPlainObject(app[key])) {
-        app[key] = deepMerge(raw[key] as Record<string, unknown>, app[key] as Record<string, unknown>)
-      }
-      delete raw[key]
+  // Top-level flat keys (before the app/agent split)
+  for (const key of ['provider', 'model', 'systemPrompt', 'maxIterations', 'thinking', 'tools', 'skillDirs', 'permissions', 'middleware', 'context', 'compaction', 'memory', 'mcpServers', 'interface', 'http', 'storage', 'providers', 'logsEnabled']) {
+    if (key in raw) {
+      errors.push(`Top-level "${key}" is no longer supported — move it under "app:" or "agent:" (e.g. agent.${key}).`)
+      break // one is enough to illustrate the point
     }
   }
-}
 
-/**
- * Normalize the `tools` config section. Supports three shapes:
- *   1. `builtinTools: true/false` (legacy boolean flag)
- *   2. Flat YAML: `tools: { builtin: true, Read: { rootDir: "." }, WebFetch: { enabled: false } }`
- *   3. Canonical: `tools: { builtin: true, overrides: { ... } }`
- * Converts everything into the canonical `{ builtin, overrides }` form.
- *
- * Handles both flat config (legacy) and nested agent.tools config.
- */
-function normalizeToolsConfig(raw: Record<string, unknown>): void {
-  // Check for nested agent.tools first
-  const agent = raw.agent as Record<string, unknown> | undefined
+  const app = raw.app
+  if (isPlainObject(app)) {
+    // Legacy MCP at the app level
+    if ('mcpServers' in app) errors.push('"app.mcpServers" is now "app.mcp.servers".')
+    if ('mcpLazySchemas' in app) errors.push('"app.mcpLazySchemas" is now "app.mcp.lazySchemas".')
+    if ('raMcpServer' in app) errors.push('"app.raMcpServer" is now "app.mcp.server".')
+    if ('mcpServer' in app) errors.push('"app.mcpServer" is now "app.mcp.server".')
+    if (isPlainObject(app.mcp) && ('client' in app.mcp || 'lazySchemas' in app.mcp)) {
+      // Only flag the old `client` key; `lazySchemas` and `server` under `app.mcp` ARE the canonical shape
+      if ('client' in app.mcp) errors.push('"app.mcp.client" is now "app.mcp.servers".')
+    }
+    if ('skillDirs' in app) errors.push('"app.skillDirs" belongs under "agent.skillDirs".')
+    if ('permissions' in app) errors.push('"app.permissions" belongs under "agent.permissions".')
+  }
+
+  const agent = raw.agent
   if (isPlainObject(agent)) {
-    normalizeToolsSection(agent)
-  }
-
-  // Also handle flat layout (legacy / intermediate merge state)
-  normalizeToolsSection(raw)
-}
-
-function normalizeToolsSection(obj: Record<string, unknown>): void {
-  // Legacy: builtinTools boolean → tools.builtin
-  if ('builtinTools' in obj) {
-    if (!('tools' in obj)) {
-      obj.tools = { builtin: !!obj.builtinTools, overrides: {} }
+    if ('builtinTools' in agent) errors.push('"agent.builtinTools" is now "agent.tools.builtin".')
+    if ('hotReload' in agent) errors.push('"agent.hotReload" is now "app.hotReload".')
+    if (isPlainObject(agent.tools)) {
+      const tools = agent.tools
+      if ('overrides' in tools) {
+        errors.push(
+          '"agent.tools.overrides" has been flattened — per-tool settings now sit directly under "agent.tools", e.g.\n' +
+          '      agent:\n' +
+          '        tools:\n' +
+          '          builtin: true\n' +
+          '          Read: { rootDir: "./src" }\n' +
+          '          WebFetch: { enabled: false }'
+        )
+      }
     }
-    delete obj.builtinTools
+    if (isPlainObject(agent.mcp)) errors.push('"agent.mcp" is now "app.mcp".')
+    if (isPlainObject(agent.permissions)) {
+      const p = agent.permissions
+      if ('no_rules_rules' in p) errors.push('"agent.permissions.no_rules_rules" is now "agent.permissions.disabled".')
+      if ('default_action' in p) errors.push('"agent.permissions.default_action" is now "agent.permissions.defaultAction".')
+    }
   }
 
-  if (!isPlainObject(obj.tools)) return
-  const t = obj.tools
-  // Already canonical form
-  if (isPlainObject(t.overrides)) return
-
-  // Flat form: extract builtin, treat other keys as per-tool overrides
-  const builtin = t.builtin !== undefined ? !!t.builtin : true
-  const maxResponseSize = typeof t.maxResponseSize === 'number' ? t.maxResponseSize : undefined
-  const custom = Array.isArray(t.custom) ? t.custom as string[] : []
-  const overrides: Record<string, ToolSettings> = {}
-  for (const [key, val] of Object.entries(t)) {
-    if (key === 'builtin' || key === 'overrides' || key === 'maxResponseSize' || key === 'custom') continue
-    if (val === false) overrides[key] = { enabled: false }
-    else if (isPlainObject(val)) overrides[key] = val as ToolSettings
+  // Legacy cron: cron[].agent: string | Partial<AgentConfig>
+  if (Array.isArray(raw.cron)) {
+    for (let i = 0; i < raw.cron.length; i++) {
+      const job = raw.cron[i]
+      if (isPlainObject(job) && 'agent' in job) {
+        errors.push(`"cron[${i}].agent" is now "cron[${i}].recipe" (string path) or "cron[${i}].overrides" (inline Partial<AgentConfig>).`)
+        break
+      }
+    }
   }
-  obj.tools = { builtin, overrides, custom, ...(maxResponseSize !== undefined && { maxResponseSize }) }
+
+  if (errors.length > 0) {
+    throw new ConfigError(
+      'Your config uses keys from an older ra release. Update to the current shape:\n  ' +
+      errors.join('\n  '),
+    )
+  }
 }
 
 // ── Recipe resolution helpers ───────────────────────────────────────
@@ -283,19 +215,34 @@ interface RecipeArrays {
   customTools: string[]
 }
 
-/** Extract array fields from a recipe config (they'd be lost by deepMerge). */
+/**
+ * Extract array fields from a recipe config so they can be prepended after
+ * the deep-merge. We also delete them from the recipe layer to avoid double
+ * inclusion (deepMerge would otherwise carry them through, and then
+ * prependRecipeArrays would add them a second time).
+ */
 function extractRecipeArrays(config: Record<string, unknown>): RecipeArrays {
   const result: RecipeArrays = { skillDirs: [], middleware: {}, customTools: [] }
-  const agent = (config.agent ?? config) as Record<string, unknown>
-  if (Array.isArray(agent.skillDirs)) result.skillDirs = agent.skillDirs as string[]
+  const agent = (config.agent ?? {}) as Record<string, unknown>
+  if (Array.isArray(agent.skillDirs)) {
+    result.skillDirs = agent.skillDirs as string[]
+    delete agent.skillDirs
+  }
   if (isPlainObject(agent.middleware)) {
-    for (const [hook, entries] of Object.entries(agent.middleware as Record<string, unknown>)) {
-      if (Array.isArray(entries)) result.middleware[hook] = entries as string[]
+    const mw = agent.middleware as Record<string, unknown>
+    for (const [hook, entries] of Object.entries(mw)) {
+      if (Array.isArray(entries)) {
+        result.middleware[hook] = entries as string[]
+        delete mw[hook]
+      }
     }
   }
   if (isPlainObject(agent.tools)) {
     const tools = agent.tools as Record<string, unknown>
-    if (Array.isArray(tools.custom)) result.customTools = tools.custom as string[]
+    if (Array.isArray(tools.custom)) {
+      result.customTools = tools.custom as string[]
+      delete tools.custom
+    }
   }
   return result
 }
@@ -349,15 +296,11 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
   const fileConfig = interpolateEnvVars(rawFileConfig, env) as Record<string, unknown>
   const cliArgs = (options.cliArgs ?? {}) as Record<string, unknown>
 
-  const normalizeLayer = (layer: Record<string, unknown>) => {
-    normalizeFlatConfig(layer)
-    normalizeMcpConfig(layer)
-    normalizeAppToAgentKeys(layer)
-    normalizeToolsConfig(layer)
-  }
-  for (const layer of [fileConfig, cliArgs]) normalizeLayer(layer)
+  // Reject legacy shapes with clear migration errors (before merge/coerce)
+  rejectLegacyShapes(fileConfig)
+  rejectLegacyShapes(cliArgs)
 
-  // Coerce after normalization so schema paths match (e.g. "50" → 50)
+  // Coerce interpolated strings against the default schema (e.g. "50" → 50)
   const coercedFileConfig = coerceTypes(fileConfig, rawDefaults) as Record<string, unknown>
 
   // ── Recipe resolution ────────────────────────────────────────────
@@ -376,29 +319,22 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
     const recipeConfig = interpolateEnvVars(recipeRaw, env) as Record<string, unknown>
 
     // Recipes must only define agent configuration — reject app stanza
-    // Check before normalizeLayer which may create an empty `app` object
     if (recipeConfig.app !== undefined) {
       throw new Error(`Recipe "${recipeName}" contains an "app" stanza. Recipes may only define "agent" configuration.`)
     }
 
-    normalizeLayer(recipeConfig)
-
-    // normalizeMcpConfig may create an empty `app` object — remove it
-    if (isPlainObject(recipeConfig.app) && Object.keys(recipeConfig.app as Record<string, unknown>).length === 0) {
-      delete recipeConfig.app
-    }
+    rejectLegacyShapes(recipeConfig)
 
     // Pre-resolve recipe paths against its directory
-    const recipeAgent = (recipeConfig.agent ?? recipeConfig) as Record<string, unknown>
+    const recipeAgent = (recipeConfig.agent ?? {}) as Record<string, unknown>
     preResolveRecipePaths(recipeAgent, resolved.recipeDir)
 
     // Save array fields before deepMerge destroys them
     recipeArrays = extractRecipeArrays(recipeConfig)
 
-    // Wrap in agent key if the recipe was a flat config
-    recipeLayer = isPlainObject(recipeConfig.agent) ? recipeConfig : { agent: recipeConfig }
+    recipeLayer = recipeConfig
 
-    // Strip recipe key from file config
+    // Strip recipe key from file config so it doesn't leak into final output
     if (isPlainObject(coercedFileConfig.agent)) {
       delete (coercedFileConfig.agent as Record<string, unknown>).recipe
     }
@@ -498,14 +434,14 @@ function validateConfig(config: RaConfig): void {
   }
 
   // MCP servers
-  if (Array.isArray(config.app.mcpServers)) {
-    for (let i = 0; i < config.app.mcpServers.length; i++) {
-      const entry = config.app.mcpServers[i]
+  if (Array.isArray(config.app.mcp?.servers)) {
+    for (let i = 0; i < config.app.mcp.servers.length; i++) {
+      const entry = config.app.mcp.servers[i]
       if (!entry) continue
-      if (!entry.name) errors.push(`app.mcpServers[${i}].name is required`)
-      if (!entry.transport) errors.push(`app.mcpServers[${i}].transport is required ("stdio" or "sse")`)
-      if (entry.transport === 'stdio' && !entry.command) errors.push(`app.mcpServers[${i}].command is required for stdio transport`)
-      if (entry.transport === 'sse' && !entry.url) errors.push(`app.mcpServers[${i}].url is required for sse transport`)
+      if (!entry.name) errors.push(`app.mcp.servers[${i}].name is required`)
+      if (!entry.transport) errors.push(`app.mcp.servers[${i}].transport is required ("stdio" or "sse")`)
+      if (entry.transport === 'stdio' && !entry.command) errors.push(`app.mcp.servers[${i}].command is required for stdio transport`)
+      if (entry.transport === 'sse' && !entry.url) errors.push(`app.mcp.servers[${i}].url is required for sse transport`)
     }
   }
 

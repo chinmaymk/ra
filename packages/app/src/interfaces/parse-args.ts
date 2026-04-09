@@ -29,7 +29,11 @@ export interface ParsedArgs {
   meta: ParsedArgsMeta
 }
 
-// Maps CLI flag names to config paths with type coercion
+/**
+ * Maps CLI flag names to config paths with type coercion. This is the full
+ * set of flags ra accepts — one-off overrides for the most-used config
+ * fields. Everything else belongs in the config file.
+ */
 const FLAG_RULES: Record<string, CoercionRule> = {
   // ── agent section ────────────────────────────────────────────────────
   provider:                      { type: 'string', path: ['agent', 'provider'] },
@@ -41,25 +45,21 @@ const FLAG_RULES: Record<string, CoercionRule> = {
   'tool-timeout':                { type: 'int',    path: ['agent', 'toolTimeout'] },
   'max-tool-response-size':      { type: 'int',    path: ['agent', 'tools', 'maxResponseSize'] },
   'tools-builtin':               { type: 'bool',   path: ['agent', 'tools', 'builtin'], value: true },
+  'skill-dir':                   { type: 'string', path: ['agent', 'skillDirs'] },
   // ── app section ──────────────────────────────────────────────────────
+  'data-dir':                    { type: 'string', path: ['app', 'dataDir'] },
+  'http-port':                   { type: 'int',    path: ['app', 'http', 'port'] },
+  'http-token':                  { type: 'string', path: ['app', 'http', 'token'] },
+  'inspector-port':              { type: 'int',    path: ['app', 'inspector', 'port'] },
+  'mcp-server-enabled':          { type: 'bool',   path: ['app', 'mcp', 'server', 'enabled'], value: true },
+  'mcp-server-port':             { type: 'int',    path: ['app', 'mcp', 'server', 'port'] },
+  'mcp-server-tool-name':        { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'name'] },
+  'mcp-server-tool-description': { type: 'string', path: ['app', 'mcp', 'server', 'tool', 'description'] },
+  // ── provider connection options (non-sensitive; useful for proxies/self-hosted) ──
   'anthropic-base-url':          { type: 'string', path: ['app', 'providers', 'anthropic', 'baseURL'] },
   'openai-base-url':             { type: 'string', path: ['app', 'providers', 'openai', 'baseURL'] },
   'google-base-url':             { type: 'string', path: ['app', 'providers', 'google', 'baseURL'] },
   'ollama-host':                 { type: 'string', path: ['app', 'providers', 'ollama', 'host'] },
-  'bedrock-base-url':            { type: 'string', path: ['app', 'providers', 'bedrock', 'baseURL'] },
-  'azure-endpoint':              { type: 'string', path: ['app', 'providers', 'azure', 'endpoint'] },
-  'azure-deployment':            { type: 'string', path: ['app', 'providers', 'azure', 'deployment'] },
-  'http-port':                   { type: 'int',    path: ['app', 'http', 'port'] },
-  'http-token':                  { type: 'string', path: ['app', 'http', 'token'] },
-  'inspector-port':              { type: 'int',    path: ['app', 'inspector', 'port'] },
-  'mcp-server-enabled':          { type: 'bool',   path: ['app', 'raMcpServer', 'enabled'], value: true },
-  'mcp-server-port':             { type: 'int',    path: ['app', 'raMcpServer', 'port'] },
-  'mcp-server-tool-name':        { type: 'string', path: ['app', 'raMcpServer', 'tool', 'name'] },
-  'mcp-server-tool-description': { type: 'string', path: ['app', 'raMcpServer', 'tool', 'description'] },
-  'data-dir':                    { type: 'string', path: ['app', 'dataDir'] },
-  'storage-max-sessions':        { type: 'int',    path: ['app', 'storage', 'maxSessions'] },
-  'storage-ttl-days':            { type: 'int',    path: ['app', 'storage', 'ttlDays'] },
-  'skill-dir':                   { type: 'string', path: ['agent', 'skillDirs'] },
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -129,17 +129,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
       help:                          { type: 'boolean', short: 'h' },
       version:                       { type: 'boolean', short: 'v' },
       'show-context':                { type: 'boolean' },
-      'show-config':              { type: 'boolean' },
-      // Interface selection → config.interface
+      'show-config':                 { type: 'boolean' },
+      recipe:                        { type: 'string' },
+      // Interface selection → app.interface
       http:                          { type: 'boolean' },
       cli:                           { type: 'boolean' },
       repl:                          { type: 'boolean' },
       mcp:                           { type: 'boolean' },
       'mcp-stdio':                   { type: 'boolean' },
       inspector:                     { type: 'boolean' },
-      cron:                            { type: 'boolean' },
-      'run-immediately':                 { type: 'boolean' },
-      // Top-level config
+      cron:                          { type: 'boolean' },
+      'run-immediately':             { type: 'boolean' },
+      // Agent config
       provider:                      { type: 'string' },
       model:                         { type: 'string' },
       'system-prompt':               { type: 'string' },
@@ -149,12 +150,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'tool-timeout':                { type: 'string' },
       'max-tool-response-size':      { type: 'string' },
       'tools-builtin':               { type: 'boolean' },
-      // HTTP server
+      'skill-dir':                   { type: 'string', multiple: true },
+      // App — data dir & HTTP
+      'data-dir':                    { type: 'string' },
       'http-port':                   { type: 'string' },
       'http-token':                  { type: 'string' },
-      // Inspector
       'inspector-port':              { type: 'string' },
-      // MCP server
+      // App — MCP server (ra as MCP)
       'mcp-server-enabled':          { type: 'boolean' },
       'mcp-server-port':             { type: 'string' },
       'mcp-server-tool-name':        { type: 'string' },
@@ -164,21 +166,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
       'list-memories':               { type: 'boolean' },
       'memories':                    { type: 'string' },
       'forget':                      { type: 'string' },
-      // Data directory & storage
-      'data-dir':                    { type: 'string' },
-      'storage-max-sessions':        { type: 'string' },
-      'storage-ttl-days':            { type: 'string' },
-      // Skills & recipes
-      'skill-dir':                   { type: 'string', multiple: true },
-      'recipe':                      { type: 'string' },
       // Provider connection options (non-sensitive)
       'anthropic-base-url':          { type: 'string' },
       'openai-base-url':             { type: 'string' },
       'google-base-url':             { type: 'string' },
       'ollama-host':                 { type: 'string' },
-      'bedrock-base-url':            { type: 'string' },
-      'azure-endpoint':              { type: 'string' },
-      'azure-deployment':            { type: 'string' },
     },
     strict: false,
     allowPositionals: true,
@@ -198,7 +190,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (val !== undefined) applyRule(r, rule, val as string | boolean)
   }
 
-  // --openai-base-url applies to both openai and openai-completions providers
+  // --openai-base-url also applies to openai-completions provider
   if (values['openai-base-url']) {
     setPath(r, ['app', 'providers', 'openai-completions', 'baseURL'], values['openai-base-url'] as string)
   }

@@ -17,6 +17,7 @@ import {
 } from '@chinmaymk/ra'
 import { createPermissionsMiddleware } from './agent/permissions'
 import type { RaConfig, LoadConfigOptions } from './config/types'
+import { toolOption, allToolOptions } from './config/types'
 import { ConfigManager } from './config/manager'
 import { discoverContextFiles, buildContextMessages, findGitRoot, createDiscoveryMiddleware, createSkillResolver } from './context'
 import { createResolverMiddleware } from './context/resolve-middleware'
@@ -67,7 +68,7 @@ async function refreshAppContext(ctx: AppContext, configManager: ConfigManager):
   // ── Tools (always rebuild — referenced tool files may have changed) ─
   {
     const newTools = new ToolRegistry()
-    if (agent.tools.builtin || Object.keys(agent.tools.overrides).length > 0) {
+    if (agent.tools.builtin || Object.keys(allToolOptions(agent.tools)).length > 0) {
       registerBuiltinTools(newTools, agent.tools)
     }
     if (agent.tools.custom?.length) {
@@ -89,7 +90,7 @@ async function refreshAppContext(ctx: AppContext, configManager: ConfigManager):
       if (!newTools.get(tool.name)) newTools.register(tool)
     }
     // Re-register subagent tool
-    const agentSettings = agent.tools.overrides.Agent ?? {}
+    const agentSettings = toolOption(agent.tools, 'Agent')
     if (agentSettings.enabled !== false && agent.tools.builtin) {
       newTools.register(subagentTool({
         provider: ctx.provider,
@@ -120,7 +121,7 @@ async function refreshAppContext(ctx: AppContext, configManager: ConfigManager):
       mw.beforeModelCall = append(mw.beforeModelCall, discoveryMw)
     }
 
-    if (agent.permissions.rules?.length && !agent.permissions.no_rules_rules) {
+    if (agent.permissions.rules?.length && !agent.permissions.disabled) {
       const permMw = createPermissionsMiddleware(agent.permissions)
       mw.beforeToolExecution = prepend(mw.beforeToolExecution, permMw)
     }
@@ -337,7 +338,7 @@ export async function bootstrap(
 
   // ── Tools ──────────────────────────────────────────────────────────
   const tools = new ToolRegistry()
-  if (agent.tools.builtin || Object.keys(agent.tools.overrides).length > 0) {
+  if (agent.tools.builtin || Object.keys(allToolOptions(agent.tools)).length > 0) {
     registerBuiltinTools(tools, agent.tools)
   }
 
@@ -381,9 +382,9 @@ export async function bootstrap(
   }
 
   // ── Scratchpad ───────────────────────────────────────────────────
-  // Enabled by default when builtin tools are on; disable via tools.overrides.scratchpad.enabled: false
+  // Enabled by default when builtin tools are on; disable via tools.scratchpad.enabled: false
   const scratchpadEnabled =
-    agent.tools.overrides.scratchpad?.enabled !== false &&
+    toolOption(agent.tools, 'scratchpad').enabled !== false &&
     agent.tools.builtin
   let scratchpadStore: ScratchpadStore | undefined
   if (scratchpadEnabled) {
@@ -419,35 +420,35 @@ export async function bootstrap(
 
   // ── MCP clients ────────────────────────────────────────────────────
   const mcpClient = new McpClient()
-  if (app.mcpServers?.length) {
-    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: app.mcpServers.length })
-    logger.info('connecting to MCP servers', { serverCount: app.mcpServers.length, servers: app.mcpServers.map(c => c.name) })
+  if (app.mcp.servers?.length) {
+    const mcpSpan = tracer.startSpan('mcp.connect', { serverCount: app.mcp.servers.length })
+    logger.info('connecting to MCP servers', { serverCount: app.mcp.servers.length, servers: app.mcp.servers.map(c => c.name) })
     const knownToolNames = new Set(tools.all().map(t => t.name))
-    await mcpClient.connect(app.mcpServers, tools, { lazySchemas: app.mcpLazySchemas, logger })
+    await mcpClient.connect(app.mcp.servers, tools, { lazySchemas: app.mcp.lazySchemas, logger })
     const mcpTools = tools.all().filter(t => !knownToolNames.has(t.name))
     const mcpToolTokens = estimateTokens(mcpTools)
     logger.info('MCP servers connected', {
       totalTools: tools.all().length,
       mcpToolCount: mcpTools.length,
-      lazySchemas: app.mcpLazySchemas,
+      lazySchemas: app.mcp.lazySchemas,
       estimatedMcpToolTokens: mcpToolTokens,
     })
     tracer.endSpan(mcpSpan, 'ok', {
       mcpToolCount: mcpTools.length,
       estimatedTokens: mcpToolTokens,
-      lazySchemas: app.mcpLazySchemas,
+      lazySchemas: app.mcp.lazySchemas,
     })
   }
 
   // ── Permissions middleware ─────────────────────────────────────────
-  if (agent.permissions.rules?.length && !agent.permissions.no_rules_rules) {
+  if (agent.permissions.rules?.length && !agent.permissions.disabled) {
     const permMw = createPermissionsMiddleware(agent.permissions)
     middleware.beforeToolExecution = prepend(middleware.beforeToolExecution, permMw)
     logger.info('permissions middleware loaded', { ruleCount: agent.permissions.rules.length })
   }
 
   // ── Subagent tool (registered last — child registry built lazily) ──
-  const agentSettings = agent.tools.overrides.Agent ?? {}
+  const agentSettings = toolOption(agent.tools, 'Agent')
   const agentEnabled = agentSettings.enabled !== false && agent.tools.builtin
   if (agentEnabled) {
     const agentMaxConcurrency = (agentSettings.maxConcurrency as number | undefined) ?? agent.maxConcurrency
@@ -510,7 +511,7 @@ export async function bootstrap(
 
   // ── Config hot-reload ──────────────────────────────────────────────
   let refreshIfNeeded: () => Promise<boolean>
-  if (agent.hotReload) {
+  if (app.hotReload) {
     const configManager = new ConfigManager(config, opts.configFilePath, opts.loadOptions ?? {})
     await configManager.init(opts.systemPromptPath)
     refreshIfNeeded = async () => refreshAppContext(ctx, configManager)

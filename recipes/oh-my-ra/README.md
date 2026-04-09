@@ -103,10 +103,9 @@ Subagent parallelism is configured in `ra.config.yaml`:
 
 ```yaml
 tools:
-  overrides:
-    Agent:
-      maxConcurrency: 4  # max parallel subagents
-      maxDepth: 3         # max nesting depth
+  Agent:
+    maxConcurrency: 4  # max parallel subagents
+    maxDepth: 3         # max nesting depth
 ```
 
 ### Compaction

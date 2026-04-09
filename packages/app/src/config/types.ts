@@ -29,9 +29,9 @@ export interface PermissionRule {
 
 export interface PermissionsConfig {
   /** When true, all tools are allowed without checking rules. Default: false. */
-  no_rules_rules?: boolean
+  disabled?: boolean
   /** Default action when no rule matches a tool: 'allow' or 'deny'. Default: 'allow'. */
-  default_action?: 'allow' | 'deny'
+  defaultAction?: 'allow' | 'deny'
   /** Permission rules per tool. */
   rules?: PermissionRule[]
 }
@@ -44,16 +44,38 @@ export interface ToolSettings {
   [key: string]: unknown
 }
 
-/** Tools configuration section. Replaces the old `builtinTools` boolean. */
+/**
+ * Tools configuration section. Per-tool settings sit directly under this object,
+ * alongside the reserved keys `builtin`, `custom`, and `maxResponseSize`:
+ *
+ *   tools:
+ *     builtin: true
+ *     custom: [./tools/deploy.ts]
+ *     maxResponseSize: 25000
+ *     Read: { rootDir: "./src" }
+ *     WebFetch: { enabled: false }
+ *     Agent: { maxConcurrency: 2 }
+ */
 export interface ToolsConfig {
-  /** Master switch: when true, all builtin tools are registered unless individually disabled. Default: true. */
+  /** Master switch: when true, all built-in tools are registered unless individually disabled. Default: true. */
   builtin: boolean
-  /** Per-tool overrides keyed by tool name (e.g. Read, Write, Bash, Agent). */
-  overrides: Record<string, ToolSettings>
-  /** File paths to custom tool files (JS/TS). Each file must default-export an ITool object or a factory function returning one. */
+  /** File paths to custom tool files (JS/TS/shell scripts). */
   custom?: string[]
-  /** Max characters for a single tool response. Responses exceeding this are truncated with a notice. Default 25000. */
+  /** Max characters for a single tool response. Responses exceeding this are truncated. Default 25000. */
   maxResponseSize?: number
+  /** Per-tool overrides keyed by tool name (Read, Bash, Agent, WebFetch, etc.). */
+  [toolName: string]: ToolSettings | boolean | string[] | number | undefined
+}
+
+/** MCP configuration — client (connect to servers) and server (expose ra). */
+export interface McpConfig {
+  /** External MCP servers to connect to. */
+  servers: McpServerEntry[]
+  /** When true, MCP tools are registered with minimal schemas. First call returns the full schema;
+   *  the model retries with correct params. Saves tokens. Default: true. */
+  lazySchemas: boolean
+  /** Ra's own MCP server endpoint (exposes ra as an MCP tool). */
+  server: RaMcpServerConfig
 }
 
 /** Application-level settings — how the app runs, infrastructure, observability. */
@@ -61,8 +83,10 @@ export interface AppConfig {
   interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector' | 'cron'
   /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
   configDir: string
-  /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `.ra`. */
+  /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `~/.ra/<handle>`. */
   dataDir: string
+  /** Hot-reload config and referenced files (system prompt, tools, middleware) between loops. Default true. */
+  hotReload: boolean
   http: { port: number; token: string }
   inspector: { port: number }
   storage: {
@@ -82,13 +106,8 @@ export interface AppConfig {
     codex: CodexProviderOptions
     'anthropic-agents-sdk': AnthropicAgentsSdkProviderOptions
   }
-  /** External MCP servers to connect to. */
-  mcpServers: McpServerEntry[]
-  /** When true, MCP tools are registered with server-prefixed names and minimal schemas.
-   *  First call returns full schema; model retries with correct params. Saves tokens. */
-  mcpLazySchemas: boolean
-  /** Ra's own MCP server endpoint configuration. */
-  raMcpServer: RaMcpServerConfig
+  /** MCP client + server config (external servers to connect to, and ra's own server endpoint). */
+  mcp: McpConfig
   logsEnabled: boolean
   logLevel: LogLevel
   tracesEnabled: boolean
@@ -114,8 +133,6 @@ export interface AgentConfig {
   maxTokenBudget: number
   /** Max wall-clock duration in milliseconds before the loop stops. 0 = unlimited. */
   maxDuration: number
-  /** Hot-reload config and referenced files (system prompt, tools, middleware) between loops. Default true. */
-  hotReload: boolean
   tools: ToolsConfig
   skillDirs: string[]
   permissions: PermissionsConfig
@@ -139,16 +156,23 @@ export interface AgentConfig {
   }
 }
 
-/** A single cron job definition. */
+/**
+ * A single cron job definition. A job runs `prompt` against the agent on the
+ * given `schedule`. To customize the agent per job, use either `recipe`
+ * (load a recipe YAML as base) or `overrides` (inline Partial<AgentConfig>
+ * merged on top of the base agent config), or both.
+ */
 export interface CronJob {
   /** Human-readable name for this job (used in logs). */
   name: string
   /** Cron expression (e.g. "0 9 * * 1-5"). */
   schedule: string
-  /** Agent config: path to a recipe YAML file, or partial AgentConfig to merge with base. */
-  agent?: string | Partial<AgentConfig>
   /** Prompt to send to the agent on each run. */
   prompt: string
+  /** Optional recipe (path or installed name) to use as base agent config for this job. */
+  recipe?: string
+  /** Inline agent config overrides merged on top of the base config. */
+  overrides?: Partial<AgentConfig>
 }
 
 export interface RaConfig {
@@ -184,4 +208,26 @@ export interface LoadConfigOptions {
   env?: Record<string, string | undefined>
   /** Recipe name (from --recipe flag) to load as base agent config. */
   recipeName?: string
+}
+
+// ── Helpers for reading the ToolsConfig index-signature shape ────────────
+
+const TOOL_RESERVED_KEYS = new Set(['builtin', 'custom', 'maxResponseSize'])
+
+/** Return per-tool settings for a given tool name. Empty object if none. */
+export function toolOption(tools: ToolsConfig, name: string): ToolSettings {
+  const v = (tools as Record<string, unknown>)[name]
+  return (v && typeof v === 'object' && !Array.isArray(v)) ? v as ToolSettings : {}
+}
+
+/** Return a map of all per-tool settings keyed by tool name. */
+export function allToolOptions(tools: ToolsConfig): Record<string, ToolSettings> {
+  const result: Record<string, ToolSettings> = {}
+  for (const [k, v] of Object.entries(tools)) {
+    if (TOOL_RESERVED_KEYS.has(k)) continue
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      result[k] = v as ToolSettings
+    }
+  }
+  return result
 }

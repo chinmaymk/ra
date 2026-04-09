@@ -1,5 +1,6 @@
 import type { ToolRegistry, ITool } from '@chinmaymk/ra'
 import type { ToolsConfig } from '../config/types'
+import { toolOption } from '../config/types'
 import { readFileTool } from './read-file'
 import { writeFileTool } from './write-file'
 import { updateFileTool } from './update-file'
@@ -18,12 +19,12 @@ export { subagentTool, type SubagentToolOptions } from './subagent'
 
 /** Conditionally register a tool if enabled in config. */
 function maybeRegister(registry: ToolRegistry, tool: ITool, config: ToolsConfig): void {
-  if (config.overrides[tool.name]?.enabled === false || !config.builtin) return
+  if (toolOption(config, tool.name).enabled === false || !config.builtin) return
   registry.register(tool)
 }
 
 export function registerBuiltinTools(registry: ToolRegistry, config?: ToolsConfig): void {
-  const cfg: ToolsConfig = config ?? { builtin: true, overrides: {} }
+  const cfg: ToolsConfig = config ?? { builtin: true }
 
   // Filesystem — each factory accepts optional rootDir constraint
   const fsTools: Array<[string, (opts: { rootDir?: string }) => ITool]> = [
@@ -34,7 +35,7 @@ export function registerBuiltinTools(registry: ToolRegistry, config?: ToolsConfi
   ]
 
   for (const [name, factory] of fsTools) {
-    const rootDir = cfg.overrides[name]?.rootDir as string | undefined
+    const rootDir = toolOption(cfg, name).rootDir as string | undefined
     maybeRegister(registry, factory(rootDir ? { rootDir } : {}), cfg)
   }
 

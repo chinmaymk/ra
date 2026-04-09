@@ -79,41 +79,30 @@ describe('parseArgs', () => {
 
   describe('MCP server flags', () => {
     it('--mcp-server-enabled', () => {
-      expect(parseArgs(dev('--mcp-server-enabled')).config.app?.raMcpServer?.enabled).toBe(true)
+      expect(parseArgs(dev('--mcp-server-enabled')).config.app?.mcp?.server?.enabled).toBe(true)
     })
     it('--mcp-server-port', () => {
-      expect(parseArgs(dev('--mcp-server-port', '4001')).config.app?.raMcpServer?.port).toBe(4001)
+      expect(parseArgs(dev('--mcp-server-port', '4001')).config.app?.mcp?.server?.port).toBe(4001)
     })
     it('--mcp-stdio sets mcp-stdio', () => {
       expect(parseArgs(dev('--mcp-stdio')).config.app?.interface).toBe('mcp-stdio')
     })
     it('--mcp-server-tool-name', () => {
-      expect(parseArgs(dev('--mcp-server-tool-name', 'mybot')).config.app?.raMcpServer?.tool.name).toBe('mybot')
+      expect(parseArgs(dev('--mcp-server-tool-name', 'mybot')).config.app?.mcp?.server?.tool.name).toBe('mybot')
     })
     it('--mcp-server-tool-description', () => {
-      expect(parseArgs(dev('--mcp-server-tool-description', 'A bot')).config.app?.raMcpServer?.tool.description).toBe('A bot')
+      expect(parseArgs(dev('--mcp-server-tool-description', 'A bot')).config.app?.mcp?.server?.tool.description).toBe('A bot')
     })
     it('individual MCP flags do not clobber siblings', () => {
       const r = parseArgs(dev('--mcp-server-port', '5000'))
-      expect(r.config.app?.raMcpServer?.port).toBe(5000)
-      expect(r.config.app?.raMcpServer?.enabled).toBeUndefined()
+      expect(r.config.app?.mcp?.server?.port).toBe(5000)
+      expect(r.config.app?.mcp?.server?.enabled).toBeUndefined()
     })
   })
 
-  describe('data-dir and storage flags', () => {
+  describe('data-dir flag', () => {
     it('--data-dir', () => {
       expect(parseArgs(dev('--data-dir', '/tmp/data')).config.app?.dataDir).toBe('/tmp/data')
-    })
-    it('--storage-max-sessions', () => {
-      expect(parseArgs(dev('--storage-max-sessions', '50')).config.app?.storage?.maxSessions).toBe(50)
-    })
-    it('--storage-ttl-days', () => {
-      expect(parseArgs(dev('--storage-ttl-days', '7')).config.app?.storage?.ttlDays).toBe(7)
-    })
-    it('individual storage flags do not clobber siblings', () => {
-      const r = parseArgs(dev('--storage-max-sessions', '50'))
-      expect(r.config.app?.storage?.maxSessions).toBe(50)
-      expect(r.config.app?.storage?.ttlDays).toBeUndefined()
     })
   })
 
@@ -126,9 +115,6 @@ describe('parseArgs', () => {
     })
     it('--ollama-host', () => {
       expect(parseArgs(dev('--ollama-host', 'http://localhost:11434')).config.app?.providers?.ollama.host).toBe('http://localhost:11434')
-    })
-    it('--bedrock-base-url', () => {
-      expect(parseArgs(dev('--bedrock-base-url', 'https://gateway.example.com')).config.app?.providers?.bedrock.baseURL).toBe('https://gateway.example.com')
     })
   })
 
@@ -193,18 +179,6 @@ describe('parseArgs', () => {
     })
     it('no positionals → undefined prompt', () => {
       expect(parseArgs(dev('--provider', 'openai')).meta.prompt).toBeUndefined()
-    })
-  })
-
-  describe('Azure provider flags', () => {
-    it('--azure-endpoint sets providers.azure.endpoint', () => {
-      const r = parseArgs(dev('--azure-endpoint', 'https://myresource.openai.azure.com/'))
-      expect((r.config as any).app?.providers?.azure?.endpoint).toBe('https://myresource.openai.azure.com/')
-    })
-
-    it('--azure-deployment sets providers.azure.deployment', () => {
-      const r = parseArgs(dev('--azure-deployment', 'my-gpt4o'))
-      expect((r.config as any).app?.providers?.azure?.deployment).toBe('my-gpt4o')
     })
   })
 
@@ -301,11 +275,6 @@ describe('parseArgs', () => {
       expect(r.config.app?.http?.port).toBeUndefined()
     })
 
-    it('ignores non-numeric --storage-max-sessions', () => {
-      const r = parseArgs(dev('--storage-max-sessions', 'xyz'))
-      expect(r.config.app?.storage?.maxSessions).toBeUndefined()
-    })
-
     it('all MCP server fields together', () => {
       const r = parseArgs(dev(
         '--mcp-server-enabled',
@@ -313,10 +282,10 @@ describe('parseArgs', () => {
         '--mcp-server-tool-name', 'ra',
         '--mcp-server-tool-description', 'My agent',
       ))
-      expect(r.config.app?.raMcpServer?.enabled).toBe(true)
-      expect(r.config.app?.raMcpServer?.port).toBe(5000)
-      expect(r.config.app?.raMcpServer?.tool.name).toBe('ra')
-      expect(r.config.app?.raMcpServer?.tool.description).toBe('My agent')
+      expect(r.config.app?.mcp?.server?.enabled).toBe(true)
+      expect(r.config.app?.mcp?.server?.port).toBe(5000)
+      expect(r.config.app?.mcp?.server?.tool.name).toBe('ra')
+      expect(r.config.app?.mcp?.server?.tool.description).toBe('My agent')
     })
   })
 })

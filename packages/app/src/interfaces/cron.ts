@@ -1,8 +1,10 @@
 /**
  * Cron interface — runs agent jobs on a cron schedule.
  *
- * Each job has a name, schedule (cron expression), prompt, and optional
- * agent override (a recipe path or partial agent config merged with base).
+ * Each job has a name, schedule (cron expression), prompt, and two optional
+ * composition knobs:
+ *   - `recipe`: path or installed name of a recipe used as the base agent
+ *   - `overrides`: inline Partial<AgentConfig> merged on top of that base
  *
  * Observability:
  *   - App-level tracer: `cron.scheduler` span wraps the full lifecycle,
@@ -38,25 +40,41 @@ interface ScheduledJob {
   agentConfig: Partial<AgentConfig> | undefined
 }
 
-/** Resolve a cron job's agent override into a partial AgentConfig. */
+/**
+ * Resolve a cron job's agent composition (recipe + overrides) into a single
+ * Partial<AgentConfig>. Recipe is loaded as the base, then `overrides` are
+ * merged on top.
+ */
 async function resolveJobAgent(
   job: CronJob,
   configDir: string,
 ): Promise<Partial<AgentConfig> | undefined> {
-  if (!job.agent) return undefined
+  if (!job.recipe && !job.overrides) return undefined
 
-  // String → load as recipe YAML file
-  if (typeof job.agent === 'string') {
+  let base: Partial<AgentConfig> = {}
+  if (job.recipe) {
     const { join, isAbsolute } = await import('path')
-    const path = isAbsolute(job.agent) ? job.agent : join(configDir, job.agent)
+    const { resolveRecipePath } = await import('../recipes/registry')
+    let path: string | null = null
+    if (isAbsolute(job.recipe) || job.recipe.startsWith('./') || job.recipe.startsWith('../')) {
+      path = isAbsolute(job.recipe) ? job.recipe : join(configDir, job.recipe)
+    } else {
+      path = await resolveRecipePath(job.recipe)
+    }
+    if (!path) {
+      throw new Error(`Cron job "${job.name}": recipe "${job.recipe}" not found. Install it with: ra recipe install <source>`)
+    }
     const yaml = await import('js-yaml')
     const content = await Bun.file(path).text()
     const parsed = yaml.load(content) as Record<string, unknown>
-    return (parsed.agent ?? parsed) as Partial<AgentConfig>
+    if (parsed.app !== undefined) {
+      throw new Error(`Cron job "${job.name}": recipe "${job.recipe}" contains an "app" stanza. Recipes may only define "agent" configuration.`)
+    }
+    base = (parsed.agent ?? {}) as Partial<AgentConfig>
   }
 
-  // Object → use directly as partial agent config
-  return job.agent
+  if (!job.overrides) return base
+  return { ...base, ...job.overrides }
 }
 
 /** Compute next run date from a cron expression. */

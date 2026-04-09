@@ -3,18 +3,17 @@ agent:
   model: claude-sonnet-4-6
   systemPrompt: Read /auto-improve and begin.
   permissions:
-    no_rules_rules: true
+    disabled: true
   maxIterations: 500
   thinking: high
   toolTimeout: 600000
   tools:
     builtin: true
-    overrides:
-      Agent:
-        maxConcurrency: 4
-        maxDepth: 2
-      WebFetch:
-        enabled: false
+    Agent:
+      maxConcurrency: 4
+      maxDepth: 2
+    WebFetch:
+      enabled: false
   skillDirs:
     - ./skills
   middleware:

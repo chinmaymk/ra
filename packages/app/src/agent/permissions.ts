@@ -27,9 +27,9 @@ function checkField(tool: string, field: string, value: string, rule: CompiledFi
 
 /** Create a beforeToolExecution middleware that enforces permission rules. */
 export function createPermissionsMiddleware(config: PermissionsConfig): Middleware<ToolExecutionContext> {
-  if (config.no_rules_rules || !config.rules?.length) return async () => {}
+  if (config.disabled || !config.rules?.length) return async () => {}
 
-  const defaultAction = config.default_action ?? 'allow'
+  const defaultAction = config.defaultAction ?? 'allow'
 
   // Index rules by tool name and pre-compile field regexes
   const rulesByTool = new Map<string, Array<{ tool: string; fields: Map<string, CompiledFieldRule> }>>()

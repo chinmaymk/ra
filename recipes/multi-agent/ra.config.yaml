@@ -9,10 +9,9 @@ agent:
   thinking: medium
   tools:
     builtin: true
-    overrides:
-      Agent:
-        maxConcurrency: 4
-        maxDepth: 2
+    Agent:
+      maxConcurrency: 4
+      maxDepth: 2
   compaction:
     enabled: true
     threshold: 0.8

@@ -49,7 +49,6 @@ describe('recipe configs', () => {
     it(`${name}: has valid tools config`, async () => {
       const config = await loadConfig({ cwd: dir, env: {} })
       expect(typeof config.agent.tools.builtin).toBe('boolean')
-      expect(config.agent.tools.overrides).toBeDefined()
     })
 
     it(`${name}: maxIterations is a positive number`, async () => {

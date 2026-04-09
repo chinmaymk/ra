@@ -36,5 +36,5 @@ The system prompt tells the agent to `Read /autoresearch and begin` — the cont
 | `toolTimeout` | `900000` | 15 min timeout for training runs |
 | `WebFetch` | disabled | No internet needed, keeps agent focused |
 | `Agent` | disabled | No subagents needed |
-| `permissions` | `no_rules_rules` | Agent needs unrestricted shell access for training |
+| `permissions` | `disabled: true` | Agent needs unrestricted shell access for training |
 | `compaction` | enabled | Essential for long-running sessions |

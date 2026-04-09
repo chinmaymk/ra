@@ -19,8 +19,8 @@ function makeCtx(toolName: string, args: Record<string, unknown>): ToolExecution
 }
 
 describe('permissions middleware', () => {
-  it('allows everything when no_rules_rules is true', async () => {
-    const mw = createPermissionsMiddleware({ no_rules_rules: true, rules: [{ tool: 'execute_bash', command: { deny: ['.*'] } }] })
+  it('allows everything when disabled is true', async () => {
+    const mw = createPermissionsMiddleware({ disabled: true, rules: [{ tool: 'execute_bash', command: { deny: ['.*'] } }] })
     const ctx = makeCtx('execute_bash', { command: 'rm -rf /' })
     await mw(ctx)
     expect(ctx.denied).toBeUndefined()
@@ -125,15 +125,15 @@ describe('permissions middleware', () => {
     expect(ctx.denied).toContain('Permission denied')
   })
 
-  it('respects default_action allow', async () => {
-    const mw = createPermissionsMiddleware({ default_action: 'allow', rules: [{ tool: 'execute_bash', command: { deny: ['--force'] } }] })
+  it('respects defaultAction allow', async () => {
+    const mw = createPermissionsMiddleware({ defaultAction: 'allow', rules: [{ tool: 'execute_bash', command: { deny: ['--force'] } }] })
     const ctx = makeCtx('write_file', { path: 'anything', content: 'anything' })
     await mw(ctx)
     expect(ctx.denied).toBeUndefined()
   })
 
-  it('respects default_action deny', async () => {
-    const mw = createPermissionsMiddleware({ default_action: 'deny', rules: [{ tool: 'execute_bash', command: { deny: ['--force'] } }] })
+  it('respects defaultAction deny', async () => {
+    const mw = createPermissionsMiddleware({ defaultAction: 'deny', rules: [{ tool: 'execute_bash', command: { deny: ['--force'] } }] })
     const ctx = makeCtx('write_file', { path: 'anything', content: 'anything' })
     await mw(ctx)
     expect(ctx.denied).toContain("no rules configured for tool 'write_file'")

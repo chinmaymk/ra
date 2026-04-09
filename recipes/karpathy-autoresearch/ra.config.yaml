@@ -3,16 +3,15 @@ agent:
   model: claude-sonnet-4-6
   systemPrompt: Read /autoresearch and begin.
   permissions:
-    no_rules_rules: true
+    disabled: true
   maxIterations: 500
   toolTimeout: 900000
   tools:
     builtin: true
-    overrides:
-      Agent:
-        enabled: false
-      WebFetch:
-        enabled: false
+    Agent:
+      enabled: false
+    WebFetch:
+      enabled: false
   compaction:
     enabled: true
     threshold: 0.8
