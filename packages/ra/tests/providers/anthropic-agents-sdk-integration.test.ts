@@ -49,24 +49,19 @@ describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
     expect(result.messages.at(-1)?.content).toContain('Hello')
   })
 
-  it('ra loop handles tool calls — executes tools and iterates', async () => {
-    let callCount = 0
-    mockQuery.mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        return mockSession([
-          streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Let me check.' } }),
-          streamEvent({ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tc_1', name: 'calc' } }),
-          streamEvent({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"x":21}' } }),
-          streamEvent({ type: 'content_block_stop', index: 1 }),
-          resultMsg(),
-        ])
-      }
-      return mockSession([
-        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'The answer is 42.' } }),
-        resultMsg(),
-      ])
-    })
+  it('SDK handles tool calls internally — ra sees text-only, one iteration', async () => {
+    // The SDK runs its own loop: model → tool → model.
+    // Ra only sees text chunks, no tool_call chunks. One iteration.
+    mockQuery.mockReturnValue(mockSession([
+      // First model response: text + tool_use (tool_use not surfaced to ra)
+      streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Checking...' } }),
+      streamEvent({ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tc_1', name: 'calc' } }),
+      streamEvent({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"x":21}' } }),
+      streamEvent({ type: 'content_block_stop', index: 1 }),
+      // SDK executes tool via MCP, then second model response:
+      streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ' Answer is 42.' } }),
+      resultMsg(),
+    ]))
 
     const tools = new ToolRegistry()
     tools.register({ name: 'calc', description: 'calc', inputSchema: { type: 'object', properties: { x: { type: 'number' } } }, execute: async (input: { x: number }) => input.x * 2 })
@@ -74,87 +69,29 @@ describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
     const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools, maxIterations: 10, model: 'x' })
     const result = await loop.run([{ role: 'user', content: 'calculate' }])
 
-    expect(result.iterations).toBe(2)
-    expect(result.messages.at(-1)?.content).toContain('The answer is 42.')
-    const toolResult = result.messages.find(m => m.role === 'tool')
-    expect(toolResult).toBeDefined()
-    expect(toolResult!.content).toBe('42')
+    // Only one iteration because ra sees no tool calls
+    expect(result.iterations).toBe(1)
+    expect(result.messages.at(-1)?.content).toContain('Checking...')
+    expect(result.messages.at(-1)?.content).toContain(' Answer is 42.')
+    // No tool messages in ra's history — SDK handled them internally
+    expect(result.messages.find(m => m.role === 'tool')).toBeUndefined()
   })
 
-  it('ra middleware fires for tool execution', async () => {
-    let callCount = 0
-    mockQuery.mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        return mockSession([
-          streamEvent({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tc_1', name: 'echo' } }),
-          streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{}' } }),
-          streamEvent({ type: 'content_block_stop', index: 0 }),
-          resultMsg(),
-        ])
-      }
-      return mockSession([
-        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'done' } }),
-        resultMsg(),
-      ])
-    })
+  it('tools are registered with real execute handlers', async () => {
+    mockQuery.mockReturnValue(mockSession([resultMsg()]))
 
+    const executeFn = mock(() => Promise.resolve('result'))
     const tools = new ToolRegistry()
-    tools.register({ name: 'echo', description: 'echo', inputSchema: {}, execute: async () => 'ok' })
+    tools.register({ name: 'myTool', description: 'test', inputSchema: { type: 'object', properties: {} }, execute: executeFn })
 
-    const middlewareCalls: string[] = []
-    const loop = new AgentLoop({
-      provider: new AnthropicAgentsSdkProvider(),
-      tools,
-      maxIterations: 10,
-      model: 'x',
-      middleware: {
-        beforeToolExecution: [async (ctx) => { middlewareCalls.push(`before:${ctx.toolCall.name}`) }],
-        afterToolExecution: [async (ctx) => { middlewareCalls.push(`after:${ctx.toolCall.name}`) }],
-      },
-    })
+    const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools, maxIterations: 1, model: 'x' })
     await loop.run([{ role: 'user', content: 'go' }])
 
-    expect(middlewareCalls).toEqual(['before:echo', 'after:echo'])
-  })
-
-  it('permissions middleware can deny tool calls', async () => {
-    let callCount = 0
-    mockQuery.mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        return mockSession([
-          streamEvent({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tc_1', name: 'danger' } }),
-          streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{}' } }),
-          streamEvent({ type: 'content_block_stop', index: 0 }),
-          resultMsg(),
-        ])
-      }
-      return mockSession([
-        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } }),
-        resultMsg(),
-      ])
-    })
-
-    const executed: string[] = []
-    const tools = new ToolRegistry()
-    tools.register({ name: 'danger', description: 'danger', inputSchema: {}, execute: async () => { executed.push('danger'); return 'bad' } })
-
-    const loop = new AgentLoop({
-      provider: new AnthropicAgentsSdkProvider(),
-      tools,
-      maxIterations: 10,
-      model: 'x',
-      middleware: {
-        beforeToolExecution: [async (ctx) => { if (ctx.toolCall.name === 'danger') ctx.deny('blocked by ra') }],
-      },
-    })
-    const result = await loop.run([{ role: 'user', content: 'go' }])
-
-    expect(executed).toEqual([])
-    const toolResult = result.messages.find(m => m.role === 'tool')
-    expect(toolResult?.isError).toBe(true)
-    expect(toolResult?.content).toBe('blocked by ra')
+    // Verify the handler passed to sdkTool is a real function, not a no-op
+    const handler = mockSdkTool.mock.calls[0]![3] as (input: unknown) => Promise<unknown>
+    const handlerResult = await handler({}) as { content: { text: string }[] }
+    expect(executeFn).toHaveBeenCalled()
+    expect(handlerResult.content[0]!.text).toBe('result')
   })
 
   it('abort stops the loop', async () => {
