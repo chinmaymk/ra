@@ -502,7 +502,9 @@
       '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.inputTokens) + '</div><div class="stat-label">Input Tokens</div></div>' +
       '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.outputTokens) + '</div><div class="stat-label">Output Tokens</div></div>' +
       (stats.thinkingTokens ? '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.thinkingTokens) + '</div><div class="stat-label">Thinking Tokens</div></div>' : '') +
-      (stats.cacheHitPercent != null ? '<div class="stat-card green"><div class="stat-value">' + stats.cacheHitPercent + '%</div><div class="stat-label">Cache Hit</div></div>' : '') +
+      (stats.cacheReadTokens || stats.cacheCreationTokens ? '<div class="stat-card green"><div class="stat-value">' + (stats.cacheHitPercent != null ? stats.cacheHitPercent : 0) + '%</div><div class="stat-label">Cache Hit</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.cacheReadTokens) + '</div><div class="stat-label">Cache Read</div></div>' +
+        '<div class="stat-card"><div class="stat-value">' + fmtTokens(stats.cacheCreationTokens) + '</div><div class="stat-label">Cache Write</div></div>' : '') +
       '<div class="stat-card orange"><div class="stat-value">' + stats.totalToolCalls + '</div><div class="stat-label">Tool Calls</div></div>' +
       (stats.totalToolErrors ? '<div class="stat-card error"><div class="stat-value">' + stats.totalToolErrors + '</div><div class="stat-label">Tool Errors</div></div>' : '') +
       '<div class="stat-card"><div class="stat-value">' + stats.totalMessages + '</div><div class="stat-label">Messages</div></div>' +
@@ -526,7 +528,7 @@
             '<div class="iter-segment seg-output" style="width:' + outPct + '%"></div>' +
             '<div class="iter-segment seg-thinking" style="width:' + thinkPct + '%"></div>' +
           '</div>' +
-          '<span class="iter-info">' + fmtDuration(it.durationMs) + ' · ' + fmtTokens(it.inputTokens + it.outputTokens + it.thinkingTokens) + ' tok · ' + it.toolCalls + ' tools</span>' +
+          '<span class="iter-info">' + fmtDuration(it.durationMs) + ' · ' + fmtTokens(it.inputTokens + it.outputTokens + it.thinkingTokens) + ' tok' + (it.cacheReadTokens || it.cacheCreationTokens ? ' · ' + (it.cacheHitPercent != null ? it.cacheHitPercent : 0) + '% cached' : '') + ' · ' + it.toolCalls + ' tools</span>' +
         '</div>';
       }).join('');
       html += '</div>';
