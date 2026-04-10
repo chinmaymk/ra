@@ -11,20 +11,19 @@ export interface AnthropicAgentsSdkProviderOptions {
 }
 
 /**
- * Provider that wraps the Anthropic Agent SDK as a **model interface only**.
+ * Provider that wraps the Anthropic Agent SDK.
  *
- * The SDK handles model calls (using the user's Anthropic subscription),
- * while ra owns everything else: context engineering, tool execution,
- * permissions, middleware, and the agent loop.
+ * The SDK handles model calls (using the user's Anthropic subscription)
+ * AND tool execution (via MCP handlers that bridge to ra's tools).
+ * ra owns context engineering, the outer conversation loop, and middleware.
  *
  * Key design:
- * - Fresh subprocess per turn — `query()` is called each `stream()` invocation
- *   with the full conversation history serialized as XML-tagged text.
- * - Tools registered as MCP schemas with no-op handlers (model sees them)
- * - maxTurns=1 ensures the SDK does exactly one model call and returns
- * - Raw stream events parsed into tool_call_start/delta/end chunks for ra's loop
- * - Tool names stripped of SDK's `mcp__<server>__` prefix to match ra's registry
- * - All SDK context engineering disabled — ra owns context
+ * - Tools registered as MCP tools with **real handlers** that call `tool.execute()`
+ * - The SDK runs its own agentic loop (model → tool → model → …) inside
+ *   a single `query()` call, so one subprocess handles the full turn
+ * - Caching works OOTB: one subprocess = stable system prompt + tools prefix
+ * - Only text/thinking chunks are surfaced to ra; tool calls are resolved
+ *   internally by the SDK, so ra's AgentLoop sees a text-only response
  */
 export class AnthropicAgentsSdkProvider implements IProvider {
   readonly name = 'anthropic-agents-sdk'
@@ -40,19 +39,9 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       chunks.push(chunk)
     }
     const text = chunks.filter(c => c.type === 'text').map(c => c.delta).join('')
-    const toolCalls: IToolCall[] = []
-    const toolArgBuffers = new Map<string, { name: string; args: string }>()
-    for (const c of chunks) {
-      if (c.type === 'tool_call_start') toolArgBuffers.set(c.id, { name: c.name, args: '' })
-      else if (c.type === 'tool_call_delta') { const buf = toolArgBuffers.get(c.id); if (buf) buf.args += c.argsDelta }
-      else if (c.type === 'tool_call_end') {
-        const buf = toolArgBuffers.get(c.id)
-        if (buf) { toolCalls.push({ id: c.id, name: buf.name, arguments: buf.args }); toolArgBuffers.delete(c.id) }
-      }
-    }
     const done = chunks.find(c => c.type === 'done') as { type: 'done'; usage?: TokenUsage } | undefined
     return {
-      message: { role: 'assistant', content: text, ...(toolCalls.length && { toolCalls }) },
+      message: { role: 'assistant', content: text },
       usage: done?.usage,
     }
   }
@@ -82,8 +71,9 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       permissionMode: 'bypassPermissions' as const,
       allowDangerouslySkipPermissions: true,
 
-      // ── Single turn — ra owns the loop ────────────────────────────
-      maxTurns: 1,
+      // ── SDK owns the agentic loop — no maxTurns cap ───────────────
+      // The SDK loops (model → tool → model → …) until the model stops
+      // calling tools. One subprocess = stable prefix = cache hits OOTB.
 
       // ── Thinking / effort ─────────────────────────────────────────
       ...this.mapThinking(request.thinking, request.thinkingBudgetCap),
@@ -95,7 +85,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     const { filtered } = extractSystemMessages(request.messages)
     const options = this.buildOptions(request)
     const mcpServer = request.tools?.length
-      ? this.buildMcpToolSchemas(request.tools)
+      ? this.buildMcpTools(request.tools)
       : undefined
 
     const abortController = new AbortController()
@@ -108,11 +98,6 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     let session: AsyncIterable<SDKMessage>
     try {
       session = query({
-        // Yield a single user message via an async generator: this puts the
-        // SDK in streaming-input mode, which triggers its automatic cache
-        // breakpoint placement on the last user content block. Combined with
-        // the append-only `formatConversation` output, every turn after the
-        // first hits Anthropic's prefix cache on the full prior history.
         prompt: promptIterable(prompt),
         options: {
           ...options,
@@ -151,17 +136,10 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   /**
    * Format ra's conversation history as a text prompt for the SDK.
    *
-   * For multi-turn conversations (after tool execution), the history is
-   * serialized as XML-tagged messages so the model can clearly follow
-   * the conversation thread.
-   *
-   * Cache stability: the output is an **append-only** byte sequence. A stable
-   * `<conversation_history>` opening anchor is emitted once, then each turn
-   * appends its XML block. No closing tag is emitted — that would shift
-   * position as the conversation grows and invalidate Anthropic's prefix
-   * cache on every subsequent turn. The SDK places its auto cache_control
-   * breakpoint at the end of the user message content, so each successive
-   * stream() call sees the previous turn's full content as a cacheable prefix.
+   * Only the user-facing conversation is serialized (user messages and
+   * prior assistant text). Tool calls and results from earlier turns
+   * are omitted because the SDK handled them internally — the model
+   * already saw them during that subprocess's agentic loop.
    */
   formatConversation(messages: IMessage[]): string {
     if (messages.length === 0) return ''
@@ -171,40 +149,43 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         case 'user':
           parts.push(`<user>\n${extractTextContent(msg.content)}\n</user>`)
           break
-        case 'assistant': {
-          let text = extractTextContent(msg.content)
-          if (msg.toolCalls?.length) {
-            for (const tc of msg.toolCalls) {
-              text += `\n<tool_call id="${tc.id}" name="${tc.name}">${tc.arguments}</tool_call>`
-            }
-          }
-          parts.push(`<assistant>\n${text}\n</assistant>`)
+        case 'assistant':
+          parts.push(`<assistant>\n${extractTextContent(msg.content)}\n</assistant>`)
           break
-        }
-        case 'tool':
-          parts.push(`<tool_result id="${msg.toolCallId}"${msg.isError ? ' error="true"' : ''}>\n${extractTextContent(msg.content)}\n</tool_result>`)
-          break
+        // tool results omitted — the SDK resolved them internally
       }
     }
     return `<conversation_history>\n${parts.join('\n\n')}`
   }
 
-  // ── MCP tool schemas ────────────────────────────────────────────────
+  // ── MCP tools with real handlers ───────────────────────────────────
 
   /**
-   * Build an MCP server with tool schemas only (no-op handlers).
+   * Build an MCP server with **real** tool handlers.
    *
-   * The model sees these tools and can call them. With maxTurns=1 the
-   * SDK never executes the handlers — ra's loop handles tool execution.
+   * Each handler calls `tool.execute()`, so the SDK can run its own
+   * agentic loop: model → tool_use → execute via MCP → tool_result →
+   * model → … until the model stops calling tools. This keeps the
+   * subprocess alive for the full turn, giving Anthropic's prompt cache
+   * a stable prefix to hit on every follow-up API call.
    */
-  buildMcpToolSchemas(tools: ITool[]) {
+  buildMcpTools(tools: ITool[]) {
     const mcpTools = tools.map(t => {
       const zodShape = jsonSchemaToZodShape(t.inputSchema)
       return sdkTool(
         t.name,
         t.description,
         zodShape,
-        async () => ({ content: [{ type: 'text' as const, text: '' }] }),
+        async (input: Record<string, unknown>) => {
+          try {
+            const result = await t.execute(input)
+            const text = typeof result === 'string' ? result : JSON.stringify(result)
+            return { content: [{ type: 'text' as const, text }] }
+          } catch (err) {
+            const text = err instanceof Error ? err.message : String(err)
+            return { content: [{ type: 'text' as const, text }], isError: true }
+          }
+        },
       )
     })
     return createSdkMcpServer({ name: MCP_SERVER_NAME, tools: mcpTools })
@@ -215,45 +196,28 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   /**
    * Parse Agent SDK events into ra StreamChunks.
    *
-   * Reads messages from the session until the model turn completes.
-   * Tool calls are emitted as tool_call_start/delta/end so ra's AgentLoop
-   * can execute them. maxTurns=1 ensures the SDK stops after one model call.
-   *
-   * Tool names are stripped of the SDK's `mcp__<server>__` prefix.
+   * The SDK may run multiple agentic turns (model → tool → model → …)
+   * inside one `query()` call. We surface **only text and thinking**
+   * chunks — tool calls are resolved by the SDK internally, so ra's
+   * AgentLoop sees a clean text-only response and terminates after one
+   * iteration.
    */
   private async *parseSession(session: AsyncIterable<SDKMessage>): AsyncIterable<StreamChunk> {
     let usage: TokenUsage | undefined
-    const activeToolCalls = new Map<number, string>()
 
     try {
       for await (const msg of session) {
         if (msg.type === 'stream_event') {
           const event = (msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent
           switch (event.type) {
-            case 'content_block_start':
-              if (event.content_block.type === 'tool_use') {
-                activeToolCalls.set(event.index, event.content_block.id)
-                yield { type: 'tool_call_start', id: event.content_block.id, name: stripMcpPrefix(event.content_block.name) }
-              }
-              break
             case 'content_block_delta':
               if (event.delta.type === 'text_delta') {
                 yield { type: 'text', delta: event.delta.text }
-              } else if (event.delta.type === 'input_json_delta') {
-                const toolCallId = activeToolCalls.get(event.index) ?? ''
-                yield { type: 'tool_call_delta', id: toolCallId, argsDelta: event.delta.partial_json }
               } else if (event.delta.type === 'thinking_delta') {
                 yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
               }
+              // tool_call deltas are handled by the SDK — don't surface them
               break
-            case 'content_block_stop': {
-              const toolCallId = activeToolCalls.get(event.index)
-              if (toolCallId) {
-                yield { type: 'tool_call_end', id: toolCallId }
-                activeToolCalls.delete(event.index)
-              }
-              break
-            }
           }
         } else if (msg.type === 'result') {
           usage = this.extractUsage(msg)
@@ -261,27 +225,17 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         }
       }
     } catch (err) {
-      // Expected SDK error when maxTurns is reached with pending tool calls:
-      // - "Reached maximum number of turns" — SDK's error_max_turns
-      // The tool call chunks have already been yielded; ra will execute them.
       if (err && typeof err === 'object' && 'message' in err) {
         const message = (err as Error).message
-        const isExpected =
-          message.includes('maximum number of turns') ||
-          message.includes('max_turns')
-        if (!isExpected) {
-          // Provide a better error when the Claude CLI subprocess fails
-          if (message.includes('ENOENT') || message.includes('not found') || message.includes('spawn')) {
-            throw new Error(
-              'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
-              'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
-            )
-          }
-          throw err
+        if (message.includes('ENOENT') || message.includes('not found') || message.includes('spawn')) {
+          throw new Error(
+            'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
+            'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
+          )
         }
-      } else {
         throw err
       }
+      throw err
     }
     yield { type: 'done', ...(usage && { usage }) }
   }
@@ -342,10 +296,8 @@ function stripMcpPrefix(name: string): string {
 
 /**
  * Wrap the formatted prompt in an async generator so `query()` runs in
- * streaming-input mode. The single yielded user message is all the SDK needs
- * — it will apply its automatic cache_control breakpoint on the final content
- * block, which (given the append-only prompt) turns every subsequent turn
- * into a cache read of the prior conversation.
+ * streaming-input mode, where the SDK applies automatic cache_control
+ * breakpoints.
  */
 async function* promptIterable(text: string): AsyncGenerator<SDKUserMessage> {
   yield {
