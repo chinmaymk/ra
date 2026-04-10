@@ -273,6 +273,34 @@ describe('AnthropicAgentsSdkProvider', () => {
       expect(done.usage.cacheCreationTokens).toBe(50)
     })
 
+    it('extracts cache details from error_max_turns result (tool-call turns)', async () => {
+      // With maxTurns=1 and a tool_use response, the SDK emits error_max_turns
+      // with full modelUsage. Cache details must survive this path.
+      mockQueryWith(
+        streamEvent({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tc_1', name: 'read' } }),
+        streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{}' } }),
+        streamEvent({ type: 'content_block_stop', index: 0 }),
+        {
+          type: 'result', subtype: 'error_max_turns', is_error: true, num_turns: 1,
+          duration_ms: 100, duration_api_ms: 80, stop_reason: 'end_turn',
+          total_cost_usd: 0.01, session_id: 's', uuid: 'u',
+          errors: ['Reached maximum number of turns (1)'],
+          usage: { input_tokens: 200, output_tokens: 30, cache_read_input_tokens: 800, cache_creation_input_tokens: 0 },
+          modelUsage: {
+            'claude-sonnet-4-6': { inputTokens: 200, outputTokens: 30, cacheReadInputTokens: 800, cacheCreationInputTokens: 0 },
+          },
+          permission_denials: [],
+        },
+      )
+      const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [
+        { role: 'user', content: 'read file' },
+      ] })) as any[]
+      const done = chunks.find((c: any) => c.type === 'done')
+      expect(done.usage).toBeDefined()
+      expect(done.usage.cacheReadTokens).toBe(800)
+      expect(done.usage.inputTokens).toBe(1000) // 200 + 800 + 0
+    })
+
     it('always yields done', async () => {
       mockQueryWith({ type: 'system', subtype: 'init', session_id: 's', uuid: 'u' })
       const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
