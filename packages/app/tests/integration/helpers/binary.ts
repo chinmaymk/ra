@@ -30,14 +30,23 @@ export interface BinaryEnv {
   extra?: Record<string, string>
 }
 
-/** Build CLI args from BinaryEnv */
-function buildArgs(opts: BinaryEnv): string[] {
+/**
+ * Build CLI args from BinaryEnv. If the caller's own args already include
+ * `--provider`, we honour that value (and don't add a duplicate, which
+ * yargs would coerce into an array). The matching mock base URL is still
+ * passed so the test hits the local server instead of the real vendor API.
+ */
+function buildArgs(opts: BinaryEnv, extraArgs: readonly string[] = []): string[] {
   const args: string[] = []
-  if (opts.provider) args.push('--provider', opts.provider)
+  const callerProviderIdx = extraArgs.indexOf('--provider')
+  const callerProvider = callerProviderIdx >= 0 ? extraArgs[callerProviderIdx + 1] : undefined
+  const provider = callerProvider ?? opts.provider ?? 'anthropic'
+
+  if (opts.provider && !callerProvider) args.push('--provider', opts.provider)
   if (opts.storageDir) args.push('--data-dir', opts.storageDir)
-  if (opts.anthropicBaseURL) args.push('--anthropic-base-url', opts.anthropicBaseURL)
-  if (opts.openaiBaseURL) args.push('--openai-base-url', opts.openaiBaseURL)
-  if (opts.googleBaseURL) args.push('--google-base-url', opts.googleBaseURL)
+  if (provider === 'anthropic' && opts.anthropicBaseURL) args.push('--anthropic-base-url', opts.anthropicBaseURL)
+  if (provider === 'openai'    && opts.openaiBaseURL)    args.push('--openai-base-url',    opts.openaiBaseURL)
+  if (provider === 'google'    && opts.googleBaseURL)    args.push('--google-base-url',    opts.googleBaseURL)
   return args
 }
 
@@ -59,7 +68,7 @@ function buildEnv(opts: BinaryEnv): Record<string, string> {
 
 /** Run binary to completion, return stdout/stderr/exitCode */
 export async function runBinary(args: string[], binaryEnv: BinaryEnv): Promise<BinaryRunResult> {
-  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv, args), ...args], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -76,7 +85,7 @@ export async function runBinary(args: string[], binaryEnv: BinaryEnv): Promise<B
 
 /** Run binary with piped stdin */
 export async function runBinaryWithStdin(args: string[], input: string, binaryEnv: BinaryEnv): Promise<BinaryRunResult> {
-  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv, args), ...args], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -101,7 +110,7 @@ export interface InteractiveProcess {
 
 /** Spawn an interactive binary process (for REPL tests) */
 export function spawnBinary(args: string[], binaryEnv: BinaryEnv): InteractiveProcess {
-  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv, args), ...args], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -137,7 +146,7 @@ export function spawnBinary(args: string[], binaryEnv: BinaryEnv): InteractivePr
 
 /** Spawn HTTP server binary with port 0, read actual port from stderr */
 export async function spawnHttpServer(args: string[], binaryEnv: BinaryEnv): Promise<{ proc: InteractiveProcess; port: number }> {
-  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args, '--http-port', '0'], {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv, args), ...args, '--http-port', '0'], {
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',

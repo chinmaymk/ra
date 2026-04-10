@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'bun:test'
-import { interpolateString, interpolateEnvVars, coerceTypes } from '../../src/utils/config-helpers'
+import {
+  interpolateString,
+  interpolateEnvVars,
+  coerceTypes,
+  setPath,
+  safeParseInt,
+  isPlainObject,
+} from '../../src/utils/config-helpers'
 
 describe('interpolateString', () => {
   const env = { HOME: '/home/user', TOKEN: 'secret', EMPTY: '' }
@@ -13,135 +20,139 @@ describe('interpolateString', () => {
   })
 
   it('throws for required ${VAR} when unset', () => {
-    expect(() => interpolateString('${MISSING}', env)).toThrow('Environment variable "MISSING" is required but not set')
+    expect(() => interpolateString('${MISSING}', env)).toThrow(/"MISSING" is required/)
   })
 
   it('${VAR:-default} uses default when unset', () => {
     expect(interpolateString('${MISSING:-fallback}', env)).toBe('fallback')
   })
 
-  it('${VAR:-default} uses default when empty', () => {
+  it('${VAR:-default} uses default when empty string', () => {
     expect(interpolateString('${EMPTY:-fallback}', env)).toBe('fallback')
   })
 
   it('${VAR:-default} uses env value when set and non-empty', () => {
-    expect(interpolateString('${TOKEN:-fallback}', env)).toBe('secret')
+    expect(interpolateString('${HOME:-fallback}', env)).toBe('/home/user')
   })
 
-  it('${VAR-default} uses default when unset', () => {
+  it('${VAR-default} uses default only when unset', () => {
     expect(interpolateString('${MISSING-fallback}', env)).toBe('fallback')
   })
 
-  it('${VAR-default} keeps empty string when set but empty', () => {
+  it('${VAR-default} keeps empty string when var is set to ""', () => {
     expect(interpolateString('${EMPTY-fallback}', env)).toBe('')
   })
 
-  it('${VAR-default} uses env value when set', () => {
-    expect(interpolateString('${TOKEN-fallback}', env)).toBe('secret')
-  })
-
-  it('returns string as-is when no ${} patterns', () => {
-    expect(interpolateString('no variables here', env)).toBe('no variables here')
-  })
-
-  it('handles empty default value ${VAR:-}', () => {
-    expect(interpolateString('${MISSING:-}', env)).toBe('')
-  })
-
-  it('handles default with special characters', () => {
-    expect(interpolateString('${MISSING:-http://localhost:3000}', env)).toBe('http://localhost:3000')
+  it('leaves strings without ${} patterns untouched', () => {
+    expect(interpolateString('no vars here', env)).toBe('no vars here')
   })
 })
 
 describe('interpolateEnvVars', () => {
-  const env = { API_KEY: 'sk-123', HOST: 'localhost', PORT: '8080' }
+  const env = { API_KEY: 'sk-test', PORT: '4000', HOST: 'localhost' }
 
-  it('interpolates string values in nested objects', () => {
-    const input = {
-      app: {
-        providers: {
-          anthropic: { apiKey: '${API_KEY}' },
-        },
-      },
-    }
-    const result = interpolateEnvVars(input, env) as typeof input
-    expect(result.app.providers.anthropic.apiKey).toBe('sk-123')
+  it('walks plain objects recursively', () => {
+    const input = { providers: { anthropic: { apiKey: '${API_KEY}' } } }
+    expect(interpolateEnvVars(input, env)).toEqual({
+      providers: { anthropic: { apiKey: 'sk-test' } },
+    })
   })
 
-  it('interpolates strings inside arrays', () => {
-    const input = { args: ['--host', '${HOST}', '--port', '${PORT}'] }
-    const result = interpolateEnvVars(input, env) as typeof input
-    expect(result.args).toEqual(['--host', 'localhost', '--port', '8080'])
+  it('walks arrays', () => {
+    const input = { hosts: ['${HOST}:${PORT}', 'static'] }
+    expect(interpolateEnvVars(input, env)).toEqual({ hosts: ['localhost:4000', 'static'] })
   })
 
-  it('leaves non-string values unchanged', () => {
-    const input = { port: 3000, enabled: true, items: [1, 2, 3] }
-    const result = interpolateEnvVars(input, env)
-    expect(result).toEqual(input)
+  it('leaves non-string leaves untouched', () => {
+    const input = { port: 3000, enabled: true, name: '${HOST}' }
+    expect(interpolateEnvVars(input, env)).toEqual({ port: 3000, enabled: true, name: 'localhost' })
   })
 
-  it('leaves null and undefined unchanged', () => {
-    expect(interpolateEnvVars(null, env)).toBeNull()
-    expect(interpolateEnvVars(undefined, env)).toBeUndefined()
+  it('passes strings without ${} through without copying the env regex', () => {
+    expect(interpolateEnvVars('literal', env)).toBe('literal')
   })
 
-  it('skips strings without ${} patterns (no overhead)', () => {
-    const input = { key: 'plain-value', nested: { also: 'plain' } }
-    const result = interpolateEnvVars(input, env)
-    expect(result).toEqual(input)
-  })
-
-  it('throws for missing required variables in nested config', () => {
-    const input = { app: { token: '${REQUIRED_VAR}' } }
-    expect(() => interpolateEnvVars(input, env)).toThrow('Environment variable "REQUIRED_VAR" is required but not set')
+  it('throws the variable name when a required var is missing', () => {
+    expect(() => interpolateEnvVars({ k: '${MISSING}' }, env)).toThrow(/MISSING/)
   })
 })
 
 describe('coerceTypes', () => {
-  it('coerces string to number when schema has number', () => {
-    expect(coerceTypes('42', 0)).toBe(42)
-    expect(coerceTypes('-5', 0)).toBe(-5)
-    expect(coerceTypes('3.14', 0)).toBe(3.14)
+  const schema = {
+    app: { http: { port: 0 }, logsEnabled: false },
+    agent: { maxIterations: 0, model: 'default' },
+  }
+
+  it('converts numeric strings to numbers when schema is numeric', () => {
+    const input = { app: { http: { port: '4000' } } }
+    expect(coerceTypes(input, schema)).toEqual({ app: { http: { port: 4000 } } })
   })
 
-  it('leaves non-numeric strings as strings when schema is number', () => {
-    expect(coerceTypes('abc', 0)).toBe('abc')
+  it('converts "true"/"false" to booleans when schema is boolean', () => {
+    expect(coerceTypes({ app: { logsEnabled: 'true' } }, schema)).toEqual({ app: { logsEnabled: true } })
+    expect(coerceTypes({ app: { logsEnabled: 'false' } }, schema)).toEqual({ app: { logsEnabled: false } })
   })
 
-  it('coerces "true"/"false" to boolean when schema has boolean', () => {
-    expect(coerceTypes('true', false)).toBe(true)
-    expect(coerceTypes('false', true)).toBe(false)
+  it('leaves strings untouched when schema is a string', () => {
+    expect(coerceTypes({ agent: { model: 'gpt-4o' } }, schema)).toEqual({ agent: { model: 'gpt-4o' } })
   })
 
-  it('leaves other strings as-is when schema is boolean', () => {
-    expect(coerceTypes('yes', false)).toBe('yes')
+  it('leaves invalid numeric strings untouched', () => {
+    expect(coerceTypes({ app: { http: { port: 'not-a-number' } } }, schema))
+      .toEqual({ app: { http: { port: 'not-a-number' } } })
   })
 
-  it('recurses into objects', () => {
-    const obj = { port: '3000', token: 'secret', nested: { enabled: 'true' } }
-    const schema = { port: 0, token: '', nested: { enabled: false } }
-    const result = coerceTypes(obj, schema)
-    expect(result).toEqual({ port: 3000, token: 'secret', nested: { enabled: true } })
+  it('zero is coerced correctly', () => {
+    expect(coerceTypes({ agent: { maxIterations: '0' } }, schema))
+      .toEqual({ agent: { maxIterations: 0 } })
   })
 
-  it('leaves keys not in schema untouched', () => {
-    const obj = { port: '3000', custom: 'value' }
-    const schema = { port: 0 }
-    const result = coerceTypes(obj, schema) as Record<string, unknown>
-    expect(result.port).toBe(3000)
-    expect(result.custom).toBe('value')
+  it('passes keys not in the schema through untouched', () => {
+    expect(coerceTypes({ custom: { whatever: '42' } }, schema))
+      .toEqual({ custom: { whatever: '42' } })
   })
 
-  it('handles null and undefined gracefully', () => {
-    expect(coerceTypes(null, 0)).toBeNull()
-    expect(coerceTypes(undefined, 0)).toBeUndefined()
-    expect(coerceTypes('42', null)).toBe('42')
-    expect(coerceTypes('42', undefined)).toBe('42')
+  it('handles null and undefined', () => {
+    expect(coerceTypes(null, schema)).toBe(null)
+    expect(coerceTypes(undefined, schema)).toBe(undefined)
+  })
+})
+
+describe('isPlainObject', () => {
+  it('detects plain objects', () => {
+    expect(isPlainObject({})).toBe(true)
+    expect(isPlainObject({ a: 1 })).toBe(true)
+  })
+  it('rejects arrays, null, primitives', () => {
+    expect(isPlainObject([])).toBe(false)
+    expect(isPlainObject(null)).toBe(false)
+    expect(isPlainObject('str')).toBe(false)
+    expect(isPlainObject(42)).toBe(false)
+  })
+})
+
+describe('setPath', () => {
+  it('creates intermediate objects', () => {
+    const obj: Record<string, unknown> = {}
+    setPath(obj, ['a', 'b', 'c'], 1)
+    expect(obj).toEqual({ a: { b: { c: 1 } } })
   })
 
-  it('does not coerce when types already match', () => {
-    expect(coerceTypes(42, 0)).toBe(42)
-    expect(coerceTypes(true, false)).toBe(true)
-    expect(coerceTypes('hello', '')).toBe('hello')
+  it('does not clobber sibling keys', () => {
+    const obj: Record<string, unknown> = { a: { existing: true } }
+    setPath(obj, ['a', 'new'], 2)
+    expect(obj).toEqual({ a: { existing: true, new: 2 } })
+  })
+})
+
+describe('safeParseInt', () => {
+  it('parses valid integers', () => {
+    expect(safeParseInt('42')).toBe(42)
+    expect(safeParseInt('0')).toBe(0)
+    expect(safeParseInt('-5')).toBe(-5)
+  })
+  it('returns undefined for garbage', () => {
+    expect(safeParseInt('abc')).toBeUndefined()
+    expect(safeParseInt('')).toBeUndefined()
   })
 })

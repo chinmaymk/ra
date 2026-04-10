@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { parseArgs } from '../../src/interfaces/parse-args'
 
 function dev(...args: string[]): string[] {
@@ -38,8 +38,11 @@ describe('parseArgs', () => {
     it('runImmediately defaults to false', () => expect(parseArgs(dev('--cron')).meta.runImmediately).toBe(false))
     it('--cli sets cli',   () => expect(parseArgs(dev('--cli', 'x')).config.app?.interface).toBe('cli'))
     it('--mcp sets mcp',   () => expect(parseArgs(dev('--mcp')).config.app?.interface).toBe('mcp'))
-    it('mcp takes precedence over http when both given', () => {
-      expect(parseArgs(dev('--mcp', '--http')).config.app?.interface).toBe('mcp')
+    it('errors when two interface flags are given (yargs .conflicts)', () => {
+      expect(() => parseArgs(dev('--mcp', '--http'))).toThrow(/mutually exclusive|Arguments .* conflict/i)
+    })
+    it('errors on --cli + --repl', () => {
+      expect(() => parseArgs(dev('--cli', '--repl'))).toThrow(/mutually exclusive/i)
     })
     it('no flag leaves interface undefined', () => {
       expect(parseArgs(dev('--model', 'x')).config.app?.interface).toBeUndefined()
@@ -193,6 +196,352 @@ describe('parseArgs', () => {
     })
     it('no positionals → undefined prompt', () => {
       expect(parseArgs(dev('--provider', 'openai')).meta.prompt).toBeUndefined()
+    })
+  })
+
+  describe('standard env vars + secrets store integration', () => {
+    const tmpDir = `/tmp/ra-parse-args-test-${process.pid}`
+    const secretsPath = `${tmpDir}/secrets.json`
+    const captured: Record<string, string | undefined> = {}
+
+    function snapshot(key: string): void {
+      if (!(key in captured)) captured[key] = process.env[key]
+    }
+
+    beforeEach(() => {
+      // Strip every env var that the parser might pick up. Tests must
+      // start from a clean slate.
+      const KEYS = [
+        'RA_PROFILE', 'RA_SECRETS_PATH',
+        'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_API_KEY', 'AZURE_OPENAI_API_KEY',
+        'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_REGION',
+        'AWS_BEDROCK_API_KEY', 'CODEX_ACCESS_TOKEN',
+        'ANTHROPIC_BASE_URL', 'OPENAI_BASE_URL', 'GOOGLE_BASE_URL', 'OLLAMA_HOST',
+        'AZURE_OPENAI_ENDPOINT', 'AZURE_OPENAI_DEPLOYMENT',
+      ]
+      for (const k of KEYS) {
+        snapshot(k)
+        delete process.env[k]
+      }
+      // Point the secrets store at a tmp file unique to this test process.
+      process.env.RA_SECRETS_PATH = secretsPath
+      try { require('fs').rmSync(tmpDir, { recursive: true, force: true }) } catch { /* */ }
+    })
+
+    afterEach(() => {
+      for (const [k, v] of Object.entries(captured)) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+      for (const k of Object.keys(captured)) delete captured[k]
+      try { require('fs').rmSync(tmpDir, { recursive: true, force: true }) } catch { /* */ }
+    })
+
+    describe('standard env vars → config', () => {
+      it('ANTHROPIC_API_KEY lands in app.providers.anthropic.apiKey', () => {
+        process.env.ANTHROPIC_API_KEY = 'sk-ant-xyz'
+        expect(parseArgs(dev()).config.app?.providers?.anthropic.apiKey).toBe('sk-ant-xyz')
+      })
+
+      it('OPENAI_API_KEY fills both openai and openai-completions', () => {
+        process.env.OPENAI_API_KEY = 'sk-foo'
+        const r = parseArgs(dev())
+        expect(r.config.app?.providers?.openai.apiKey).toBe('sk-foo')
+        expect((r.config.app?.providers as any)?.['openai-completions']?.apiKey).toBe('sk-foo')
+      })
+
+      it('OPENAI_BASE_URL fills both openai and openai-completions', () => {
+        process.env.OPENAI_BASE_URL = 'https://proxy/'
+        const r = parseArgs(dev())
+        expect(r.config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+        expect((r.config.app?.providers as any)?.['openai-completions']?.baseURL).toBe('https://proxy/')
+      })
+
+      it('OLLAMA_HOST → app.providers.ollama.host', () => {
+        process.env.OLLAMA_HOST = 'http://ollama.local:11434'
+        expect(parseArgs(dev()).config.app?.providers?.ollama.host).toBe('http://ollama.local:11434')
+      })
+
+      it('AWS_REGION + AWS_ACCESS_KEY_ID → bedrock provider', () => {
+        process.env.AWS_REGION = 'us-west-2'
+        process.env.AWS_ACCESS_KEY_ID = 'AKIA...'
+        const r = parseArgs(dev())
+        expect(r.config.app?.providers?.bedrock?.region).toBe('us-west-2')
+        expect(r.config.app?.providers?.bedrock?.accessKeyId).toBe('AKIA...')
+      })
+
+      it('AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_DEPLOYMENT → azure provider', () => {
+        process.env.AZURE_OPENAI_ENDPOINT = 'https://my.openai.azure.com/'
+        process.env.AZURE_OPENAI_DEPLOYMENT = 'gpt-4o'
+        const r = parseArgs(dev())
+        expect(r.config.app?.providers?.azure?.endpoint).toBe('https://my.openai.azure.com/')
+        expect(r.config.app?.providers?.azure?.deployment).toBe('gpt-4o')
+      })
+
+      it('empty env value is treated as unset', () => {
+        process.env.ANTHROPIC_API_KEY = ''
+        expect(parseArgs(dev()).config.app?.providers?.anthropic?.apiKey).toBeUndefined()
+      })
+
+      it('OPENAI_BASE_URL in env does NOT trigger scoped check with --provider anthropic', () => {
+        process.env.OPENAI_BASE_URL = 'https://proxy/'
+        // Would have errored if env-defaults ran before checkScopedFlags.
+        expect(() => parseArgs(dev('--provider', 'anthropic'))).not.toThrow()
+      })
+
+      it('CLI flag still wins over env var', () => {
+        process.env.OPENAI_API_KEY = 'sk-from-env'
+        const r = parseArgs(dev('--openai-api-key', 'sk-from-cli'))
+        expect(r.config.app?.providers?.openai.apiKey).toBe('sk-from-cli')
+      })
+    })
+
+    describe('secrets store + profiles', () => {
+      it('default profile fills missing API keys', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-stored')
+        expect(parseArgs(dev()).config.app?.providers?.openai.apiKey).toBe('sk-stored')
+      })
+
+      it('--profile selects a different secret set', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-default', 'default')
+        setSecret('OPENAI_API_KEY', 'sk-work',    'work')
+        expect(parseArgs(dev('--profile', 'work')).config.app?.providers?.openai.apiKey).toBe('sk-work')
+      })
+
+      it('RA_PROFILE env var selects the profile', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-work', 'work')
+        process.env.RA_PROFILE = 'work'
+        expect(parseArgs(dev()).config.app?.providers?.openai.apiKey).toBe('sk-work')
+      })
+
+      it('--profile beats RA_PROFILE', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('K', 'sk-work',  'work')
+        setSecret('K', 'sk-staging', 'staging')
+        // Use OPENAI_API_KEY as a known mapped flag
+        setSecret('OPENAI_API_KEY', 'sk-work',    'work')
+        setSecret('OPENAI_API_KEY', 'sk-staging', 'staging')
+        process.env.RA_PROFILE = 'staging'
+        expect(parseArgs(dev('--profile', 'work')).config.app?.providers?.openai.apiKey).toBe('sk-work')
+      })
+
+      it('process.env wins over secrets file', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-stored')
+        process.env.OPENAI_API_KEY = 'sk-real-env'
+        expect(parseArgs(dev()).config.app?.providers?.openai.apiKey).toBe('sk-real-env')
+      })
+
+      it('--profile is stripped before yargs sees it', () => {
+        // Strict mode would reject --profile if it leaked through
+        expect(() => parseArgs(dev('--profile', 'work', 'hello'))).not.toThrow()
+        expect(parseArgs(dev('--profile', 'work', 'hello')).meta.prompt).toBe('hello')
+      })
+
+      it('--profile=name form is supported', () => {
+        const { setSecret } = require('../../src/secrets/store')
+        setSecret('OPENAI_API_KEY', 'sk-work', 'work')
+        expect(parseArgs(dev('--profile=work')).config.app?.providers?.openai.apiKey).toBe('sk-work')
+      })
+
+      it('non-existent profile yields no fill (no error)', () => {
+        const r = parseArgs(dev('--profile', 'nope'))
+        expect(r.config.app?.providers?.openai?.apiKey).toBeUndefined()
+      })
+    })
+
+    describe('secrets subcommand routing', () => {
+      it('ra secrets list → secrets subcommand', () => {
+        const r = parseArgs(dev('secrets', 'list'))
+        expect(r.meta.subCommand).toEqual({ kind: 'secrets', action: 'list', args: [] })
+      })
+
+      it('ra secrets set NAME value', () => {
+        const r = parseArgs(dev('secrets', 'set', 'OPENAI_API_KEY', 'sk-foo'))
+        expect(r.meta.subCommand).toEqual({ kind: 'secrets', action: 'set', args: ['OPENAI_API_KEY', 'sk-foo'] })
+      })
+
+      it('ra secrets get NAME --profile work passes flags through', () => {
+        const r = parseArgs(dev('secrets', 'get', 'OPENAI_API_KEY', '--profile', 'work'))
+        expect(r.meta.subCommand).toEqual({ kind: 'secrets', action: 'get', args: ['OPENAI_API_KEY', '--profile', 'work'] })
+      })
+
+      it('ra secrets (no action) defaults to list', () => {
+        const r = parseArgs(dev('secrets'))
+        expect(r.meta.subCommand?.kind).toBe('secrets')
+        expect(r.meta.subCommand?.action).toBe('list')
+      })
+    })
+  })
+
+  describe('RA_* environment variables', () => {
+    const originalEnv: Record<string, string | undefined> = {}
+
+    function setEnv(key: string, value: string): void {
+      originalEnv[key] = process.env[key]
+      process.env[key] = value
+    }
+
+    beforeEach(() => {
+      // Capture & strip any pre-existing RA_* vars so the host environment
+      // can't bleed into these tests.
+      for (const key of Object.keys(process.env)) {
+        if (key.startsWith('RA_')) {
+          originalEnv[key] = process.env[key]
+          delete process.env[key]
+        }
+      }
+    })
+
+    afterEach(() => {
+      for (const [key, value] of Object.entries(originalEnv)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+      for (const key of Object.keys(originalEnv)) delete originalEnv[key]
+    })
+
+    it('RA_PROVIDER sets provider', () => {
+      setEnv('RA_PROVIDER', 'openai')
+      expect(parseArgs(dev()).config.agent?.provider).toBe('openai')
+    })
+
+    it('RA_HTTP_PORT maps to --http-port', () => {
+      setEnv('RA_HTTP_PORT', '4000')
+      expect(parseArgs(dev('--http')).config.app?.http?.port).toBe(4000)
+    })
+
+    it('RA_OPENAI_BASE_URL maps to --openai-base-url', () => {
+      setEnv('RA_OPENAI_BASE_URL', 'https://proxy/')
+      expect(parseArgs(dev()).config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+    })
+
+    it('CLI flag overrides RA_* env var', () => {
+      setEnv('RA_PROVIDER', 'anthropic')
+      expect(parseArgs(dev('--provider', 'openai')).config.agent?.provider).toBe('openai')
+    })
+
+    it('RA_PROVIDER goes through .choices() validation', () => {
+      setEnv('RA_PROVIDER', 'gpt')
+      expect(() => parseArgs(dev())).toThrow(/Invalid values|Choices/i)
+    })
+
+    it('RA_PROVIDER goes through scoped-flag validation', () => {
+      setEnv('RA_PROVIDER', 'anthropic')
+      expect(() => parseArgs(dev('--openai-base-url', 'https://x')))
+        .toThrow(/--openai-base-url is only valid with --provider/)
+    })
+
+    it('RA_HTTP boolean enables --http interface', () => {
+      setEnv('RA_HTTP', 'true')
+      expect(parseArgs(dev()).config.app?.interface).toBe('http')
+    })
+  })
+
+  describe('yargs strict + choices enforcement', () => {
+    it('errors on unknown flag (--providr typo)', () => {
+      expect(() => parseArgs(dev('--providr', 'openai'))).toThrow(/Unknown argument/i)
+    })
+
+    it('errors on invalid --provider value', () => {
+      expect(() => parseArgs(dev('--provider', 'gpt'))).toThrow(/Invalid values|Choices/i)
+    })
+
+    it('errors on invalid --thinking value', () => {
+      expect(() => parseArgs(dev('--thinking', 'extreme'))).toThrow(/Invalid values|Choices/i)
+    })
+
+    it('accepts every valid --provider choice', () => {
+      const all = ['anthropic', 'openai', 'openai-completions', 'google', 'ollama', 'bedrock', 'azure', 'codex', 'anthropic-agents-sdk'] as const
+      for (const p of all) {
+        expect(parseArgs(dev('--provider', p)).config.agent?.provider).toBe(p)
+      }
+    })
+  })
+
+  describe('interface-scoped flag checks', () => {
+    it('--http-port errors with --cli', () => {
+      expect(() => parseArgs(dev('--cli', '--http-port', '4000', 'hi')))
+        .toThrow(/--http-port is only valid with --http/)
+    })
+
+    it('--http-port allowed with --http', () => {
+      const r = parseArgs(dev('--http', '--http-port', '4000'))
+      expect(r.config.app?.http?.port).toBe(4000)
+    })
+
+    it('--http-port allowed without any interface flag (config may set it)', () => {
+      const r = parseArgs(dev('--http-port', '4000'))
+      expect(r.config.app?.http?.port).toBe(4000)
+    })
+
+    it('--http-token errors with --repl', () => {
+      expect(() => parseArgs(dev('--repl', '--http-token', 'secret')))
+        .toThrow(/--http-token is only valid with --http/)
+    })
+
+    it('--inspector-port errors with --http', () => {
+      expect(() => parseArgs(dev('--http', '--inspector-port', '5000')))
+        .toThrow(/--inspector-port is only valid with --inspector/)
+    })
+
+    it('--run-immediately errors with --repl', () => {
+      expect(() => parseArgs(dev('--repl', '--run-immediately')))
+        .toThrow(/--run-immediately is only valid with --cron/)
+    })
+
+    it('--run-immediately allowed with --cron', () => {
+      expect(parseArgs(dev('--cron', '--run-immediately')).meta.runImmediately).toBe(true)
+    })
+  })
+
+  describe('provider/base-url compatibility checks', () => {
+    it('--openai-base-url is allowed with --provider openai', () => {
+      const r = parseArgs(dev('--provider', 'openai', '--openai-base-url', 'https://proxy/'))
+      expect(r.config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+    })
+
+    it('--openai-base-url is allowed with --provider openai-completions', () => {
+      const r = parseArgs(dev('--provider', 'openai-completions', '--openai-base-url', 'https://proxy/'))
+      expect(r.config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+    })
+
+    it('--openai-base-url errors when --provider is anthropic', () => {
+      expect(() => parseArgs(dev('--provider', 'anthropic', '--openai-base-url', 'https://proxy/')))
+        .toThrow(/--openai-base-url is only valid with --provider/)
+    })
+
+    it('--openai-base-url is allowed without --provider (config may set it)', () => {
+      const r = parseArgs(dev('--openai-base-url', 'https://proxy/'))
+      expect(r.config.app?.providers?.openai.baseURL).toBe('https://proxy/')
+    })
+
+    it('--anthropic-base-url errors when --provider is openai', () => {
+      expect(() => parseArgs(dev('--provider', 'openai', '--anthropic-base-url', 'https://proxy/')))
+        .toThrow(/--anthropic-base-url is only valid with --provider/)
+    })
+
+    it('--ollama-host errors when --provider is openai', () => {
+      expect(() => parseArgs(dev('--provider', 'openai', '--ollama-host', 'http://localhost:11434')))
+        .toThrow(/--ollama-host is only valid with --provider/)
+    })
+
+    it('--bedrock-base-url errors when --provider is google', () => {
+      expect(() => parseArgs(dev('--provider', 'google', '--bedrock-base-url', 'https://gw/')))
+        .toThrow(/--bedrock-base-url is only valid with --provider/)
+    })
+
+    it('--azure-endpoint errors when --provider is openai', () => {
+      expect(() => parseArgs(dev('--provider', 'openai', '--azure-endpoint', 'https://r.azure.com/')))
+        .toThrow(/--azure-endpoint is only valid with --provider/)
+    })
+
+    it('--azure-deployment is allowed with --provider azure', () => {
+      const r = parseArgs(dev('--provider', 'azure', '--azure-deployment', 'gpt4o', '--azure-endpoint', 'https://r/'))
+      expect(r.config.app?.providers?.azure?.deployment).toBe('gpt4o')
     })
   })
 

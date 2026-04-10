@@ -233,31 +233,12 @@ describe('dataDir', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
-  it('${} interpolation works for dataDir in config', async () => {
-    const dir = join(tmpdir(), `ra-datadir-test-${Date.now()}-7`)
-    mkdirSync(dir, { recursive: true })
-    try {
-      writeFileSync(join(dir, 'ra.config.json'), JSON.stringify({ app: { dataDir: '${CUSTOM_DATA_DIR:-mydata}' } }))
-      const c = await loadConfig({ cwd: dir, env: { CUSTOM_DATA_DIR: '/custom/data' } })
-      expect(c.app.dataDir).toBe('/custom/data')
-    } finally { rmSync(dir, { recursive: true, force: true }) }
-  })
 })
 
 describe('tools config', () => {
   it('defaults tools.builtin to true', async () => {
     const config = await loadConfig({ env: {} })
     expect(config.agent.tools.builtin).toBe(true)
-  })
-
-  it('loads legacy builtinTools boolean as tools.builtin', async () => {
-    const dir = join(tmpdir(), `ra-tools-compat-${Date.now()}`)
-    mkdirSync(dir, { recursive: true })
-    try {
-      writeFileSync(join(dir, 'ra.config.json'), JSON.stringify({ agent: { builtinTools: false } }))
-      const config = await loadConfig({ cwd: dir, env: {} })
-      expect(config.agent.tools.builtin).toBe(false)
-    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
   it('loads flat tools config with per-tool overrides', async () => {
@@ -297,11 +278,11 @@ describe('tools config', () => {
   })
 })
 
-describe('type coercion after interpolation', () => {
+describe('env var interpolation in config files', () => {
   let tmp: string
 
   beforeEach(() => {
-    tmp = join(tmpdir(), `ra-coerce-test-${Date.now()}`)
+    tmp = join(tmpdir(), `ra-interp-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     mkdirSync(tmp, { recursive: true })
   })
 
@@ -309,16 +290,73 @@ describe('type coercion after interpolation', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
-  it('coerces string to number for integer fields', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      agent: { maxIterations: '${MAX_ITERS:-99}' },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.maxIterations).toBe(99)
-    expect(typeof c.agent.maxIterations).toBe('number')
+  it('resolves ${VAR} in YAML values', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${MODEL}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { MODEL: 'gpt-4o' } })
+    expect(c.agent.model).toBe('gpt-4o')
   })
 
-  it('coerces string to number when env var provides the value', async () => {
+  it('${VAR:-default} falls back when unset', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${MODEL:-claude-sonnet-4-6}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.model).toBe('claude-sonnet-4-6')
+  })
+
+  it('${VAR:-default} uses env value when set', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${MODEL:-claude-sonnet-4-6}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { MODEL: 'gpt-4o' } })
+    expect(c.agent.model).toBe('gpt-4o')
+  })
+
+  it('throws when a required ${VAR} is unset', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'agent:',
+      '  model: "${REQUIRED_MODEL}"',
+    ].join('\n'))
+    await expect(loadConfig({ cwd: tmp, env: {} }))
+      .rejects.toThrow(/REQUIRED_MODEL/)
+  })
+
+  it('${VAR-default} keeps empty string when var is empty', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { systemPrompt: '${EMPTY-fallback}' },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: { EMPTY: '' } })
+    expect(c.agent.systemPrompt).toBe('')
+  })
+
+  it('interpolates multiple variables in one string', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      app: { providers: { azure: { endpoint: 'https://${HOST}:${PORT}/v1' } } },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: { HOST: 'azure.local', PORT: '443' } })
+    expect(c.app.providers.azure.endpoint).toBe('https://azure.local:443/v1')
+  })
+
+  it('resolves variables inside MCP client env blocks', async () => {
+    writeFileSync(join(tmp, 'ra.config.yaml'), [
+      'app:',
+      '  mcpServers:',
+      '    - name: github',
+      '      transport: stdio',
+      '      command: npx',
+      '      env:',
+      '        GITHUB_TOKEN: "${GH_TOKEN}"',
+    ].join('\n'))
+    const c = await loadConfig({ cwd: tmp, env: { GH_TOKEN: 'ghp_abc123' } })
+    expect(c.app.mcpServers[0]?.env?.GITHUB_TOKEN).toBe('ghp_abc123')
+  })
+
+  it('coerces "${PORT}" → number after interpolation', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       app: { http: { port: '${PORT}' } },
     }))
@@ -327,37 +365,29 @@ describe('type coercion after interpolation', () => {
     expect(typeof c.app.http.port).toBe('number')
   })
 
-  it('coerces string to boolean for boolean fields', async () => {
+  it('coerces "${BUILTIN}" → boolean after interpolation', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       agent: { tools: { builtin: '${BUILTIN:-true}' } },
     }))
     const c = await loadConfig({ cwd: tmp, env: {} })
     expect(c.agent.tools.builtin).toBe(true)
-    expect(typeof c.agent.tools.builtin).toBe('boolean')
   })
 
-  it('coerces "false" string to boolean false', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      app: { logsEnabled: '${LOGS:-false}' },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.logsEnabled).toBe(false)
-  })
-
-  it('numbers from env vars are coerced correctly', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      agent: { maxIterations: '${ITERS}' },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: { ITERS: '5' } })
-    expect(c.agent.maxIterations).toBe(5)
-  })
-
-  it('zero is coerced correctly', async () => {
+  it('coerces zero correctly', async () => {
     writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
       agent: { maxIterations: '${ITERS}' },
     }))
     const c = await loadConfig({ cwd: tmp, env: { ITERS: '0' } })
     expect(c.agent.maxIterations).toBe(0)
+  })
+
+  it('leaves literal values untouched (no ${})', async () => {
+    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
+      agent: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
+    }))
+    const c = await loadConfig({ cwd: tmp, env: {} })
+    expect(c.agent.provider).toBe('anthropic')
+    expect(c.agent.model).toBe('claude-sonnet-4-6')
   })
 })
 
@@ -490,101 +520,6 @@ describe('config edge cases', () => {
   })
 })
 
-describe('env var interpolation in config files', () => {
-  let tmp: string
-
-  beforeEach(() => {
-    tmp = join(tmpdir(), `ra-config-interp-${Date.now()}`)
-    mkdirSync(tmp, { recursive: true })
-  })
-
-  afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
-  })
-
-  it('resolves ${VAR} in config file values', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'app:',
-      '  providers:',
-      '    anthropic:',
-      '      apiKey: "${MY_API_KEY}"',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: { MY_API_KEY: 'sk-test-123' } })
-    expect(c.app.providers.anthropic.apiKey).toBe('sk-test-123')
-  })
-
-  it('resolves ${VAR:-default} with fallback when var is unset', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'agent:',
-      '  model: "${MODEL:-claude-sonnet-4-6}"',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.model).toBe('claude-sonnet-4-6')
-  })
-
-  it('resolves ${VAR:-default} with env value when var is set', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'agent:',
-      '  model: "${MODEL:-claude-sonnet-4-6}"',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: { MODEL: 'gpt-4o' } })
-    expect(c.agent.model).toBe('gpt-4o')
-  })
-
-  it('resolves variables in MCP client env blocks', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'app:',
-      '  mcp:',
-      '    client:',
-      '      - name: github',
-      '        transport: stdio',
-      '        command: npx',
-      '        args: ["-y", "@modelcontextprotocol/server-github"]',
-      '        env:',
-      '          GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: { GITHUB_TOKEN: 'ghp_abc123' } })
-    expect(c.app.mcpServers[0]?.env?.GITHUB_PERSONAL_ACCESS_TOKEN).toBe('ghp_abc123')
-  })
-
-  it('throws when a required variable is missing', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'app:',
-      '  providers:',
-      '    anthropic:',
-      '      apiKey: "${REQUIRED_KEY}"',
-    ].join('\n'))
-    await expect(loadConfig({ cwd: tmp, env: {} })).rejects.toThrow(
-      'Environment variable "REQUIRED_KEY" is required but not set'
-    )
-  })
-
-  it('resolves ${VAR-default} keeping empty string when var is empty', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      agent: { systemPrompt: '${EMPTY_VAR-fallback}' },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: { EMPTY_VAR: '' } })
-    expect(c.agent.systemPrompt).toBe('')
-  })
-
-  it('leaves strings without ${} patterns untouched', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      agent: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('anthropic')
-    expect(c.agent.model).toBe('claude-sonnet-4-6')
-  })
-
-  it('resolves multiple variables in one string', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      app: { providers: { azure: { endpoint: 'https://${AZURE_HOST}:${AZURE_PORT}/v1' } } },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: { AZURE_HOST: 'myresource.openai.azure.com', AZURE_PORT: '443' } })
-    expect(c.app.providers.azure.endpoint).toBe('https://myresource.openai.azure.com:443/v1')
-  })
-})
-
 describe('MCP config', () => {
   let tmp: string
 
@@ -615,46 +550,6 @@ describe('MCP config', () => {
     expect(c.app.mcpLazySchemas).toBe(false)
   })
 
-  it('migrates legacy agent.mcp.servers to app.mcpServers', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      agent: {
-        mcp: {
-          servers: [{ name: 'legacy', transport: 'stdio', command: 'echo' }],
-          lazySchemas: false,
-        },
-      },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.mcpServers).toEqual([{ name: 'legacy', transport: 'stdio', command: 'echo' }])
-    expect(c.app.mcpLazySchemas).toBe(false)
-  })
-
-  it('migrates legacy app.mcp.client to app.mcpServers', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      app: { mcp: { client: [{ name: 'old', transport: 'sse', url: 'http://localhost' }] } },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.mcpServers).toEqual([{ name: 'old', transport: 'sse', url: 'http://localhost' }])
-  })
-
-  it('migrates legacy app.mcpServer to app.raMcpServer', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      app: { mcpServer: { enabled: true, port: 4000, tool: { name: 'bot', description: 'A bot' } } },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.raMcpServer.enabled).toBe(true)
-    expect(c.app.raMcpServer.port).toBe(4000)
-    expect(c.app.raMcpServer.tool.name).toBe('bot')
-  })
-
-  it('canonical app.mcpServers takes priority over legacy agent.mcp.servers', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      app: { mcpServers: [{ name: 'canonical', transport: 'stdio', command: 'a' }] },
-      agent: { mcp: { servers: [{ name: 'legacy', transport: 'stdio', command: 'b' }] } },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.mcpServers).toEqual([{ name: 'canonical', transport: 'stdio', command: 'a' }])
-  })
 })
 
 describe('recipe resolution', () => {
@@ -753,89 +648,6 @@ describe('recipe resolution', () => {
 
     const c = await loadConfig({ cwd: projectDir, env: {}, recipeName: otherRecipe })
     expect(c.agent.provider).toBe('google')  // from CLI recipe, not config file recipe
-  })
-})
-
-describe('legacy flat config migration', () => {
-  let tmp: string
-
-  beforeEach(() => {
-    tmp = join(tmpdir(), `ra-flat-config-test-${Date.now()}`)
-    mkdirSync(tmp, { recursive: true })
-  })
-
-  afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
-  })
-
-  it('coerces interpolated values in flat keys after migration', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      maxIterations: '${ITERS:-25}',
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.maxIterations).toBe(25)
-    expect(typeof c.agent.maxIterations).toBe('number')
-  })
-
-  it('migrates flat provider, model, and interface keys', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      provider: 'openai',
-      model: 'gpt-4o',
-      interface: 'cli',
-      maxIterations: 100,
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('openai')
-    expect(c.agent.model).toBe('gpt-4o')
-    expect(c.app.interface).toBe('cli')
-    expect(c.agent.maxIterations).toBe(100)
-  })
-
-  it('nested agent section takes priority over flat keys', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'provider: google',
-      'agent:',
-      '  provider: openai',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('openai')
-  })
-
-  it('migrates flat agent keys: skillDirs, permissions', async () => {
-    writeFileSync(join(tmp, 'ra.config.json'), JSON.stringify({
-      skillDirs: ['/custom/skills'],
-      logsEnabled: false,
-      storage: { format: 'jsonl', maxSessions: 10, ttlDays: 5 },
-    }))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.skillDirs).toEqual(['/custom/skills'])
-    expect(c.app.logsEnabled).toBe(false)
-    expect(c.app.storage.maxSessions).toBe(10)
-  })
-
-  it('migrates flat providers into app.providers', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'provider: anthropic',
-      'providers:',
-      '  anthropic:',
-      '    apiKey: "sk-ant-flat-key"',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.agent.provider).toBe('anthropic')
-    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-flat-key')
-  })
-
-  it('app.providers in YAML works directly', async () => {
-    writeFileSync(join(tmp, 'ra.config.yaml'), [
-      'app:',
-      '  providers:',
-      '    anthropic:',
-      '      apiKey: "sk-ant-direct"',
-      'agent:',
-      '  provider: anthropic',
-    ].join('\n'))
-    const c = await loadConfig({ cwd: tmp, env: {} })
-    expect(c.app.providers.anthropic.apiKey).toBe('sk-ant-direct')
   })
 })
 

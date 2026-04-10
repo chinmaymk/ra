@@ -1,32 +1,67 @@
 # src/config/
 
-Layered configuration system: CLI flags > config file > defaults.
+Layered configuration system. Each layer overrides the previous:
+
+```
+--cli-flags > ra.config.{yml,json,toml} > recipe > standard env vars + secrets > defaults
+```
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `types.ts` | `RaConfig`, `AppConfig`, `AgentConfig` interfaces — all configuration fields with types |
-| `defaults.ts` | `defaultConfig` object — sensible defaults for every field, with `${VAR:-default}` references for provider credentials |
-| `index.ts` | `loadConfig()` — merges all layers, resolves paths, interpolates `${VAR}` references |
+| `defaults.ts` | `defaultConfig` object — plain literal TypeScript. Credential placeholders are filled at load time by the env layer |
+| `schema.ts` | Single source of truth: `OPTIONS`, `PROVIDERS`, `INTERFACE_FLAGS`, `PROVIDER_SCOPED`, `INTERFACE_SCOPED`, `buildStandardEnvLayer`. Consumed by both `parse-args.ts` and `index.ts` |
+| `index.ts` | `loadConfig()` — merges all layers, resolves paths, validates the result |
 
-## Config Hierarchy
+## Env-Var Interpolation in Config Files
 
-Each layer overrides the previous:
+Config files (`ra.config.{yaml,yml,json,toml}` and recipe configs)
+support Docker Compose–style `${VAR}` interpolation on any value:
+
+```yaml
+agent:
+  provider: ${PROVIDER:-anthropic}
+  model: ${MODEL:-claude-sonnet-4-6}
+  maxIterations: ${MAX_ITERS:-50}
+app:
+  http:
+    port: ${PORT:-3000}
 ```
---cli-flags > ra.config.{yml,json,toml} > defaults
-```
 
-## Environment Variable Interpolation
+Syntax:
+- `${VAR}` — required, throws if unset
+- `${VAR:-default}` — use default if unset **or** empty
+- `${VAR-default}` — use default only if unset (empty string is kept)
 
-Config files and defaults support Docker Compose–style `${VAR}` interpolation:
-- `${VAR}` — required, errors if not set
-- `${VAR:-default}` — use default if unset or empty
-- `${VAR-default}` — use default if unset (empty string is kept)
+Numeric and boolean fields are automatically coerced from their
+interpolated string form (e.g. `port: ${PORT}` → `"3000"` → `3000`)
+via `coerceTypes`, which walks the config in parallel with the
+typed defaults. This pass only runs on **file and recipe values** —
+defaults are plain literal TypeScript and CLI args come through
+yargs's own `RA_*` env-var path.
 
-After interpolation, string values are coerced to match expected types (number, boolean) based on the default config schema.
+## Provider Credentials & Secrets
 
-Provider credentials are resolved from standard env vars by default (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
+Provider credentials (and connection options like `OLLAMA_HOST`,
+`AZURE_OPENAI_ENDPOINT`) flow through four sources, in priority order:
+
+1. **Real `process.env`** — `ANTHROPIC_API_KEY=sk-... ra ...` always wins
+2. **Secrets store** — `~/.ra/secrets.json` (mode 0600), profile-aware:
+   ```
+   ra secrets set OPENAI_API_KEY sk-...           # default profile
+   ra secrets set OPENAI_API_KEY sk-... --profile work
+   ```
+   Profile selection: `--profile <name>` > `RA_PROFILE` > `"default"`
+3. **Interpolated file values** — `${ANTHROPIC_API_KEY}` inside
+   `ra.config.yaml` (the `env` the interpolator sees is the merged
+   process env + active profile secrets)
+4. **Defaults** — empty placeholders that satisfy the SDK type signatures
+
+The mapping between standard env var names and nested config paths
+lives in `config/schema.ts` (`OPTIONS` entries with an `env` field).
+Both `parseArgs` and `loadConfig` consume that single table.
 
 ## Config Sections
 
@@ -81,16 +116,17 @@ Everything a recipe defines: brain, tools, skills, permissions.
 
 ## Provider Options
 
-Each provider has its own options block under `app.providers`. The agent selects which one to use via `agent.provider`. Defaults resolve standard env vars:
+Each provider has its own options block under `app.providers`. The agent
+selects which one to use via `agent.provider`. Credentials and connection
+options come from standard env vars / the secrets store; you only need a
+config-file entry if you want to override a non-credential setting:
+
 ```yaml
-app:
-  providers:
-    anthropic: { apiKey: "${ANTHROPIC_API_KEY:-}" }
-    openai: { apiKey: "${OPENAI_API_KEY:-}" }
-    google: { apiKey: "${GOOGLE_API_KEY:-}" }
-    ollama: { host: "${OLLAMA_HOST:-http://localhost:11434}" }
-    bedrock: { region: "${AWS_REGION:-us-east-1}" }
-    azure: { endpoint: "${AZURE_OPENAI_ENDPOINT:-}", deployment: "${AZURE_OPENAI_DEPLOYMENT:-}", apiKey: "${AZURE_OPENAI_API_KEY:-}" }
 agent:
   provider: anthropic
+# Optional — credentials are filled from ANTHROPIC_API_KEY env var or
+# `ra secrets set ANTHROPIC_API_KEY ...`. Override only if you have to:
+app:
+  providers:
+    ollama: { host: "http://my-ollama-host:11434" }
 ```

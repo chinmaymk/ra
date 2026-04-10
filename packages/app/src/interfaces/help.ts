@@ -63,6 +63,21 @@ PROVIDER OPTIONS
   --version, -v                       Print version and exit
   --help, -h                          Print this help message
 
+SECRETS
+  --profile <name>                    Select a secrets profile (default: "default")
+
+  ra secrets set <NAME> <value>       Store a secret in the active profile
+  ra secrets set <NAME> <value> --profile work
+  ra secrets get <NAME>               Print the value (for piping)
+  ra secrets list                     Show secrets in the active profile (masked)
+  ra secrets list --all               Show secrets across every profile
+  ra secrets remove <NAME>            Remove a secret
+  ra secrets profiles                 List all profile names
+  ra secrets path                     Print the secrets file path
+
+  Storage: ~/.ra/secrets.json (mode 0600). Real env vars always win
+  over stored secrets, so OPENAI_API_KEY=foo ra ... still works.
+
 LOGIN
   ra login codex                     Sign in with ChatGPT subscription (OAuth)
   ra login codex --device-code       Sign in via device code (headless/SSH)
@@ -98,20 +113,37 @@ RECIPE MANAGEMENT
       recipe: owner/recipe-name              Reference in ra.config.yaml
 
 ENV VARS
-  Config files and defaults support Docker Compose–style interpolation:
-    \${VAR}              required — errors if unset
-    \${VAR:-default}     use default if unset or empty
-    \${VAR-default}      use default if unset
+  Every CLI flag has a matching \`RA_*\` environment variable. The flag
+  name is uppercased and dashes become underscores:
+    --provider openai           ↔ RA_PROVIDER=openai
+    --http-port 4000            ↔ RA_HTTP_PORT=4000
+    --openai-base-url https://x ↔ RA_OPENAI_BASE_URL=https://x
+  CLI flags take precedence over env vars when both are set.
 
-  Provider API keys are resolved from standard env vars by default:
+  Provider credentials and connection options are also resolved from
+  ecosystem-standard env vars (the same names each vendor's SDK reads):
     ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY
-    OLLAMA_HOST, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+    ANTHROPIC_BASE_URL, OPENAI_BASE_URL, OLLAMA_HOST
+    AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
     AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_API_KEY
 
-  To override any config field via env, use \${} in ra.config.yml:
+  Config files support Docker Compose–style \${VAR} interpolation on
+  any value. Numeric and boolean fields are automatically coerced
+  from their interpolated string form:
+    \${VAR}              required — errors if unset
+    \${VAR:-default}     use default if unset or empty
+    \${VAR-default}      use default if unset (empty string is kept)
+
+  Example ra.config.yaml:
     agent:
       model: \${MODEL:-claude-sonnet-4-6}
       maxIterations: \${MAX_ITERS:-50}
+    app:
+      http:
+        port: \${PORT:-3000}
+
+  Precedence: CLI flag > process.env > ~/.ra/secrets.json > config file > defaults
+  See SECRETS below for the on-disk store.
 
 STDIN
   When input is piped, ra reads stdin and auto-switches to CLI mode.

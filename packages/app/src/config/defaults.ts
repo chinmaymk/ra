@@ -12,15 +12,22 @@ export const defaultConfig: RaConfig = {
       maxSessions: 100,
       ttlDays: 30,
     },
+    // Per-provider credentials and connection options. Empty-string apiKeys
+    // are placeholders satisfying the underlying SDK types — they get filled
+    // in by standard env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, ...)
+    // or the secrets store at `~/.ra/secrets.json`, both wired through
+    // parse-args. See `interfaces/parse-args.ts` (`STANDARD_ENV`) for the
+    // complete mapping. If both env and secrets are empty, the provider's
+    // own SDK throws when first invoked, surfacing the missing credential.
     providers: {
-      anthropic: { apiKey: '${ANTHROPIC_API_KEY:-}' },
-      openai: { apiKey: '${OPENAI_API_KEY:-}' },
-      'openai-completions': { apiKey: '${OPENAI_API_KEY:-}' },
-      google: { apiKey: '${GOOGLE_API_KEY:-}' },
-      ollama: { host: '${OLLAMA_HOST:-http://localhost:11434}' },
-      bedrock: { region: '${AWS_REGION:-us-east-1}', apiKey: '${AWS_BEDROCK_API_KEY:-}', accessKeyId: '${AWS_ACCESS_KEY_ID:-}', secretAccessKey: '${AWS_SECRET_ACCESS_KEY:-}', sessionToken: '${AWS_SESSION_TOKEN:-}' },
-      azure: { endpoint: '${AZURE_OPENAI_ENDPOINT:-}', deployment: '${AZURE_OPENAI_DEPLOYMENT:-}', apiKey: '${AZURE_OPENAI_API_KEY:-}' },
-      codex: { accessToken: '${CODEX_ACCESS_TOKEN:-}' },
+      anthropic: { apiKey: '' },
+      openai: { apiKey: '' },
+      'openai-completions': { apiKey: '' },
+      google: { apiKey: '' },
+      ollama: { host: 'http://localhost:11434' },
+      bedrock: { region: 'us-east-1' },
+      azure: { endpoint: '', deployment: '' },
+      codex: { accessToken: '' },
       'anthropic-agents-sdk': {},
     },
     mcpServers: [],
