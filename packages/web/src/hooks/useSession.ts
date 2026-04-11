@@ -22,11 +22,13 @@ export function useSession(sessionId: string | null) {
 
   // Load session info and messages
   useEffect(() => {
-    if (!sessionId) {
-      setInfo(null)
-      setMessages([])
-      return
-    }
+    // Reset all per-session state whenever the sessionId changes, so streaming
+    // content from a previous session never leaks into the new one.
+    setInfo(null)
+    setMessages([])
+    setStreaming({ text: '', thinking: '', toolCalls: new Map(), isStreaming: false })
+
+    if (!sessionId) return
 
     let cancelled = false
     const load = async () => {

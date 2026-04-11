@@ -164,7 +164,7 @@ export function App() {
               onAdvance={handleAdvance}
             />
           )}
-          {view.type === 'detail' && <SessionDetail sessionId={view.sessionId} onBack={goAgents} />}
+          {view.type === 'detail' && <SessionDetail key={view.sessionId} sessionId={view.sessionId} onBack={goAgents} />}
           {view.type === 'config' && <ConfigPage onBack={goAgents} />}
           {view.type === 'tools' && <ToolsPage onBack={goAgents} />}
           {view.type === 'middleware' && <MiddlewarePage onBack={goAgents} />}
