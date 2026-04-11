@@ -19,6 +19,16 @@ export interface SessionMeta {
   tokenUsage?: TokenUsage
   iteration?: number
   lastAssistantMessage?: string
+  /** Git worktree for this session, if any (web UI). */
+  worktree?: { path: string; branch: string }
+  /** Working directory for tools / diff (worktree path or cwd at session creation). */
+  sessionCwd?: string
+  /**
+   * Last persisted lifecycle status (web UI). Restored on `ra web` restart so
+   * the session list reflects the state the user left it in. Running sessions
+   * are rehydrated as 'needs-input' since their loop does not survive restart.
+   */
+  status?: 'idle' | 'running' | 'needs-input' | 'error' | 'done'
 }
 
 export interface Session {

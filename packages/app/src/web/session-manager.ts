@@ -129,11 +129,15 @@ export class SessionManager {
   /**
    * Restore previously persisted web sessions from disk — METADATA ONLY.
    *
-   * No messages are read, no loop is built. Restored sessions appear in the
-   * session list as 'done' with a placeholder name. The messages.jsonl file
-   * is only touched on first interaction (send / getMessages / get) via
-   * `ensureMessagesLoaded`. This keeps startup O(N) cheap meta.json reads
-   * instead of O(N) full conversation reads.
+   * No messages are read, no loop is built. Sessions are rehydrated with the
+   * `status` last written to disk so the UI reflects the state the user left
+   * them in. A session recorded as `running` at shutdown is downgraded to
+   * `needs-input`, because the loop itself does not survive the process and
+   * cannot resume mid-turn — the user can kick it off again with a reply.
+   * Legacy meta files without a `status` field default to `done`.
+   *
+   * The messages.jsonl file is only touched on first interaction (send /
+   * getMessages / get) via `ensureMessagesLoaded`, keeping startup cheap.
    */
   async restore(): Promise<void> {
     const stored = await this.app.storage.list()
@@ -154,17 +158,21 @@ export class SessionManager {
         }
       }
 
+      const persistedStatus = s.meta.status ?? 'done'
+      const status: SessionStatus = persistedStatus === 'running' ? 'needs-input' : persistedStatus
+
       const info: ManagedSession = {
         id: s.id,
         name: title ?? `session-${s.id.slice(0, 8)}`,
-        status: 'done',
+        status,
         provider: s.meta.provider,
         model: s.meta.model,
         createdAt: s.meta.created,
+        worktree: s.meta.worktree,
         iteration: s.meta.iteration ?? 0,
         tokenUsage: s.meta.tokenUsage ?? { inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
         lastAssistantMessage,
-        cwd: process.cwd(),
+        cwd: s.meta.sessionCwd ?? s.meta.worktree?.path ?? process.cwd(),
       }
 
       this.sessions.set(s.id, {
@@ -257,8 +265,6 @@ export class SessionManager {
       model: this.app.config.agent.model,
       interface: 'web',
     })
-    await this.app.storage.updateMeta(id, { title: name })
-
     const info: ManagedSession = {
       id,
       name,
@@ -271,6 +277,13 @@ export class SessionManager {
       tokenUsage: { inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
       cwd: worktree?.path ?? process.cwd(),
     }
+
+    await this.app.storage.updateMeta(id, {
+      title: name,
+      worktree,
+      sessionCwd: info.cwd,
+      status: info.status,
+    })
 
     // Build message prefix (system prompt + skills + context)
     const prefix = buildMessagePrefix({
@@ -321,6 +334,7 @@ export class SessionManager {
     // don't leak into this one's snapshot replay.
     session.pendingStream = emptyPendingStream()
     this.broadcast(session, { type: 'status', status: 'running' })
+    void this.app.storage.updateMeta(session.info.id, { status: 'running' })
 
     // Create and run the loop
     this.runLoop(session).catch(err => {
@@ -328,6 +342,7 @@ export class SessionManager {
       session.info.errorMessage = err instanceof Error ? err.message : String(err)
       this.broadcast(session, { type: 'error', error: session.info.errorMessage })
       this.broadcast(session, { type: 'status', status: 'error', name: session.info.name })
+      void this.app.storage.updateMeta(session.info.id, { status: 'error' })
     })
   }
 
@@ -393,6 +408,7 @@ export class SessionManager {
       tokenUsage: session.info.tokenUsage,
       iteration: session.info.iteration,
       lastAssistantMessage: session.info.lastAssistantMessage,
+      status: session.info.status,
     })
 
     // Clear the per-turn streaming buffer before broadcasting 'done' so any
@@ -486,6 +502,17 @@ export class SessionManager {
     session.info.status = 'done'
     session.info.currentTool = undefined
     this.broadcast(session, { type: 'status', status: 'done', name: session.info.name })
+    void this.app.storage.updateMeta(session.info.id, { status: 'done' })
+  }
+
+  /**
+   * Mark a session as done without needing it to be running. For a running
+   * session, this aborts the loop (same as `stop`); for an idle / needs-input
+   * / error session, it just flips the status so the UI can move it out of
+   * the active queue once the user considers the work complete.
+   */
+  markDone(sessionId: string): void {
+    this.stop(sessionId)
   }
 
   /** Delete a session and its worktree. */
