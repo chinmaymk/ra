@@ -117,7 +117,16 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       throw err
     }
 
-    yield* withDoneGuard(this.parseSession(session))
+    // The SDK's `query()` is backed by a Claude CLI subprocess. Relying on the
+    // AsyncGenerator's implicit `return()` path on break/error does not reliably
+    // terminate it, so we explicitly abort the controller in a `finally` to
+    // guarantee teardown on normal completion, early consumer break, or thrown
+    // error. Without this, every ra loop turn leaks one subprocess.
+    try {
+      yield* withDoneGuard(this.parseSession(session))
+    } finally {
+      if (!abortController.signal.aborted) abortController.abort()
+    }
   }
 
   private mapThinking(thinking?: ThinkingLevel, budgetCap?: number): { thinking?: ThinkingConfig } {
