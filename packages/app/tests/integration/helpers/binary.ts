@@ -57,9 +57,22 @@ function buildEnv(opts: BinaryEnv): Record<string, string> {
   return env
 }
 
+/**
+ * Default cwd for spawned test binaries. We can't use the test runner's cwd
+ * (the ra repo root), because `loadConfig` auto-discovers `ra.config.yml`
+ * there — any dev with a local config will see the recipe/model/etc. from
+ * that file silently override what the test set up. Pin cwd to the test's
+ * isolated storage dir so only the config the test explicitly passes has
+ * any effect.
+ */
+function resolveCwd(opts: BinaryEnv): string {
+  return opts.storageDir ?? '/tmp'
+}
+
 /** Run binary to completion, return stdout/stderr/exitCode */
 export async function runBinary(args: string[], binaryEnv: BinaryEnv): Promise<BinaryRunResult> {
   const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
+    cwd: resolveCwd(binaryEnv),
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -77,6 +90,7 @@ export async function runBinary(args: string[], binaryEnv: BinaryEnv): Promise<B
 /** Run binary with piped stdin */
 export async function runBinaryWithStdin(args: string[], input: string, binaryEnv: BinaryEnv): Promise<BinaryRunResult> {
   const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
+    cwd: resolveCwd(binaryEnv),
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -102,6 +116,7 @@ export interface InteractiveProcess {
 /** Spawn an interactive binary process (for REPL tests) */
 export function spawnBinary(args: string[], binaryEnv: BinaryEnv): InteractiveProcess {
   const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
+    cwd: resolveCwd(binaryEnv),
     env: buildEnv(binaryEnv),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -133,6 +148,90 @@ export function spawnBinary(args: string[], binaryEnv: BinaryEnv): InteractivePr
       return { stdout, stderr, exitCode }
     })(),
   }
+}
+
+/**
+ * Spawn a binary that logs `listening on port N` / `ra web running at
+ * http://localhost:N` to stderr and return the parsed port. Shared plumbing
+ * for `spawnHttpServer` and `spawnWebBinary`.
+ */
+async function spawnServerBinary(
+  args: string[],
+  binaryEnv: BinaryEnv,
+  portRegex: RegExp,
+): Promise<{ proc: InteractiveProcess; port: number }> {
+  const proc = Bun.spawn([BINARY_PATH, ...buildArgs(binaryEnv), ...args], {
+    env: buildEnv(binaryEnv),
+    stdout: 'pipe',
+    stderr: 'pipe',
+    stdin: 'pipe',
+  })
+
+  const decoder = new TextDecoder()
+  const stdoutBufs: Uint8Array[] = []
+  ;(async () => { for await (const chunk of proc.stdout) stdoutBufs.push(chunk) })()
+
+  const stderrBufs: string[] = []
+  let portResolve: ((port: number) => void) | undefined
+  let portReject: ((err: Error) => void) | undefined
+  const portPromise = new Promise<number>((resolve, reject) => {
+    portResolve = resolve
+    portReject = reject
+  })
+
+  const timer = setTimeout(() => portReject!(new Error('server did not report port within 10s')), 10000)
+  let portFound = false
+  ;(async () => {
+    try {
+      for await (const chunk of proc.stderr) {
+        const text = decoder.decode(chunk)
+        stderrBufs.push(text)
+        if (!portFound) {
+          const m = stderrBufs.join('').match(portRegex)
+          if (m) {
+            portFound = true
+            clearTimeout(timer)
+            portResolve!(parseInt(m[1]!, 10))
+          }
+        }
+      }
+      if (!portFound) {
+        clearTimeout(timer)
+        portReject!(new Error('server stderr closed without port announcement'))
+      }
+    } catch (err) {
+      if (!portFound) {
+        clearTimeout(timer)
+        portReject!(err instanceof Error ? err : new Error(String(err)))
+      }
+    }
+  })()
+
+  const port = await portPromise
+
+  const interactiveProc: InteractiveProcess = {
+    write(text: string) { proc.stdin.write(text) },
+    async readAvailable(): Promise<string> {
+      await new Promise(r => setTimeout(r, 200))
+      return stdoutBufs.splice(0).map(b => decoder.decode(b)).join('')
+    },
+    kill() { proc.kill() },
+    exited: (async () => {
+      const exitCode = await proc.exited
+      return { stdout: stdoutBufs.map(b => decoder.decode(b)).join(''), stderr: stderrBufs.join(''), exitCode }
+    })(),
+  }
+
+  return { proc: interactiveProc, port }
+}
+
+/** Spawn `ra web` with port 0, return the bound port. */
+export async function spawnWebBinary(binaryEnv: BinaryEnv): Promise<{ proc: InteractiveProcess; port: number }> {
+  return spawnServerBinary(
+    ['--web', '--http-port', '0'],
+    binaryEnv,
+    /ra web running at http:\/\/localhost:(\d+)/,
+  )
 }
 
 /** Spawn HTTP server binary with port 0, read actual port from stderr */
