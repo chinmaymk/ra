@@ -15,6 +15,14 @@ export async function findGitRoot(cwd: string): Promise<string | null> {
   return result.stdout.toString().trim()
 }
 
+/** Resolve symlinks where possible; fall back to the input path if realpath
+ *  fails (the path may not exist yet, e.g. a tool argument for a file the
+ *  model is about to create). Keeps the middleware's path comparisons
+ *  consistent with `discoverContextFiles`, which realpaths its cwd. */
+function safeRealpath(p: string): string {
+  try { return realpathSync(p) } catch { return p }
+}
+
 /** Walk from `start` up to `stop` (inclusive), returning each directory. */
 function walkUpTo(start: string, stop: string): string[] {
   const normalizedStop = resolve(stop)
@@ -64,9 +72,18 @@ async function scanDirs(dirs: string[], patterns: string[], root: string, exclud
 /** Collect directories to scan for context files from a file path.
  *  When `walk` is true, walks from the file's directory up to `root`.
  *  When `walk` is false, returns only the file's immediate directory.
- *  Deduplicates against `checked` set. */
+ *  Deduplicates against `checked` set.
+ *
+ *  The file itself may not exist yet (the tool call may be about to create
+ *  it), so we realpath the *containing directory* — not the file — before
+ *  walking. This keeps the walk path in the same canonical namespace as
+ *  `root` (e.g. on macOS `/tmp` → `/private/tmp`) so `walkUpTo` actually
+ *  reaches the stop and `scanDirs` produces absPaths that match the
+ *  canonicalized `seen` set. Without this, walks started from an
+ *  uncanonical `/tmp/...` path never stop at a canonical root and end
+ *  up re-scanning every parent, rediscovering the initialPaths entries. */
 function collectDirs(filePath: string, root: string, walk: boolean, checked: Set<string>): string[] {
-  const start = dirname(filePath)
+  const start = safeRealpath(dirname(filePath))
   const candidates = walk ? walkUpTo(start, root) : [start]
   return candidates.filter(d => { if (checked.has(d)) return false; checked.add(d); return true })
 }
@@ -100,7 +117,14 @@ export function createDiscoveryMiddleware(
   patterns: string[], root: string, initialPaths: Set<string>,
   options?: { subdirectoryWalk?: boolean },
 ): Middleware<ModelCallContext> {
-  const seen = new Set(initialPaths)
+  // Normalize everything through realpath so the middleware's view of the
+  // filesystem matches discoverContextFiles (which realpaths its cwd). On
+  // macOS `/tmp` is a symlink to `/private/tmp`, so without this, paths
+  // extracted from tool calls walk up through `/tmp/...` and never match
+  // the canonical root, causing seen/initialPaths dedup to miss and the
+  // same CLAUDE.md to be re-injected on every iteration.
+  const canonicalRoot = safeRealpath(root)
+  const seen = new Set(Array.from(initialPaths, safeRealpath))
   const checked = new Set<string>()
   const walk = options?.subdirectoryWalk ?? true
 
@@ -109,11 +133,11 @@ export function createDiscoveryMiddleware(
       const filePaths = extractFilePathsFromMessages(ctx.request.messages)
       const dirs: string[] = []
       for (const fp of filePaths) {
-        dirs.push(...collectDirs(fp, root, walk, checked))
+        dirs.push(...collectDirs(fp, canonicalRoot, walk, checked))
       }
       if (dirs.length === 0) return
 
-      const files = await scanDirs(dirs, patterns, root, seen)
+      const files = await scanDirs(dirs, patterns, canonicalRoot, seen)
       if (files.length === 0) return
       for (const f of files) seen.add(f.path)
       ctx.logger.info('dynamic context files discovered', { fileCount: files.length, files: files.map(f => f.relativePath), dirsScanned: dirs.length })
