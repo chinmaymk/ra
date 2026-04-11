@@ -10,6 +10,7 @@ import { runCli } from './interfaces/cli'
 import { Repl } from './interfaces/repl'
 import { HttpServer } from './interfaces/http'
 import { InspectorServer } from './interfaces/inspector'
+import { WebServer } from './interfaces/web'
 import { startMcpStdio, startMcpHttp } from './mcp/server'
 import { runCron } from './interfaces/cron'
 import { createSessionMiddleware } from './agent/session'
@@ -307,6 +308,40 @@ async function launchInspector(app: AppContext): Promise<void> {
   console.error('Inspector running at', 'http://localhost:' + String(inspector.port))
 }
 
+async function launchWeb(app: AppContext, signals: { remove: () => void }): Promise<void> {
+  const { resolve } = await import('path')
+
+  // Try to find pre-built static files from packages/web/dist
+  let staticDir: string | undefined
+  for (const candidate of [
+    resolve(import.meta.dir, '../../../web/dist'),
+    resolve(process.cwd(), 'packages/web/dist'),
+    resolve(process.cwd(), 'node_modules/ra-web/dist'),
+  ]) {
+    if (await Bun.file(resolve(candidate, 'index.html')).exists()) {
+      staticDir = candidate
+      break
+    }
+  }
+
+  const port = app.config.app.http.port || 3000
+  const webServer = new WebServer(app, { port, staticDir })
+  await webServer.start()
+
+  console.error('ra web running at', 'http://localhost:' + String(webServer.port))
+  if (!staticDir) {
+    console.error('  (no static build found — run "cd packages/web && bun run build" or use Vite dev server)')
+  }
+
+  const webShutdown = async () => {
+    try { await webServer.stop() } catch { /* best-effort */ }
+    await app.shutdown()
+  }
+  signals.remove()
+  onSignals(webShutdown)
+  await new Promise(() => {}) // keep alive
+}
+
 // ── Main ─────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -358,11 +393,11 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  const isInspector = config.app.interface === 'inspector'
-  const app = await bootstrap(config, { resume: parsed.meta.resume, skipSession: isInspector, configFilePath, systemPromptPath, loadOptions })
+  const skipSession = config.app.interface === 'inspector' || config.app.interface === 'web'
+  const app = await bootstrap(config, { resume: parsed.meta.resume, skipSession, configFilePath, systemPromptPath, loadOptions })
 
   const signals = onSignals(app.shutdown)
-  if (!isInspector) await handleStandaloneCommands(parsed, app)
+  if (!skipSession) await handleStandaloneCommands(parsed, app)
 
   app.logger.info('starting interface', { interface: config.app.interface })
 
@@ -370,6 +405,7 @@ async function main(): Promise<void> {
     case 'mcp':       return launchMcpHttp(app)
     case 'mcp-stdio': return launchMcpStdio(app)
     case 'http':      return launchHttp(app, signals)
+    case 'web':       return launchWeb(app, signals)
     case 'inspector': return launchInspector(app)
     case 'cron':      return launchCron(app, parsed.meta.runImmediately)
     case 'cli':       return launchCli(parsed, app)

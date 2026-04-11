@@ -1,14 +1,22 @@
 import {
+  AgentLoop,
   extractTextContent,
   errorMessage,
   type IMessage,
-  type MiddlewareConfig,
   type StreamChunkContext,
 } from '@chinmaymk/ra'
 import type { SessionStorage } from '../storage/sessions'
 import { buildMessagePrefix, buildThreadMessages, buildLoopOptions, createSessionLoop, type BaseLoopOptions } from './messages'
 import type { AppContext } from '../bootstrap'
 import { timingSafeEqual } from 'crypto'
+
+/** Fanout listener for SSE streaming. One per in-flight request. */
+type StreamListener = (chunk: StreamChunkContext['chunk']) => void
+
+interface CachedLoop {
+  loop: AgentLoop
+  listeners: Set<StreamListener>
+}
 
 function timingSafeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a)
@@ -35,6 +43,16 @@ export interface HttpOptions extends BaseLoopOptions {
 export class HttpServer {
   private options: HttpOptions
   private server: ReturnType<typeof Bun.serve> | null = null
+  /**
+   * One AgentLoop per sessionId, sticky for the session's lifetime.
+   *
+   * Each cache entry owns a Set of SSE stream listeners — the loop's
+   * onStreamChunk middleware fans out to whoever is currently listening.
+   * This lets us pay the `createSessionLoop` cost (observability handles,
+   * compaction middleware, history middleware state) exactly once per
+   * session while still letting per-request SSE streams subscribe/unsub.
+   */
+  private loops = new Map<string, CachedLoop>()
 
   constructor(options: HttpOptions) {
     this.options = options
@@ -159,18 +177,43 @@ export class HttpServer {
     if (reloaded) {
       const fresh = buildLoopOptions(ctx)
       Object.assign(this.options, fresh)
+      // Config changed — drop every cached loop so the next request picks up
+      // the new provider/tools/middleware. AgentLoop identity is fixed at
+      // construction, so we can only honor hot-reload by rebuilding.
+      this.loops.clear()
     }
   }
 
-  /** Create a session-scoped AgentLoop. */
-  private createLoop(sessionId: string, priorCount: number, extraMiddleware?: Partial<MiddlewareConfig>, resumed = false) {
-    return createSessionLoop(this.options, {
+  /**
+   * Lazily build (and cache) the AgentLoop for a session.
+   *
+   * Both `/chat` and `/chat/sync` share the same cached loop per sessionId.
+   * A stable `onStreamChunk` middleware fans out to the entry's listener
+   * set — SSE handlers add their listener on connect and remove it in the
+   * finally block, so concurrent readers are not a concern within a single
+   * request lifecycle.
+   */
+  private getOrCreateLoop(sessionId: string, priorCount: number, resumed: boolean): CachedLoop {
+    const existing = this.loops.get(sessionId)
+    if (existing) return existing
+
+    const listeners = new Set<StreamListener>()
+    const { loop } = createSessionLoop(this.options, {
       storage: this.options.storage,
       sessionId,
       priorCount,
       resumed,
-      extraMiddleware,
-    }).loop
+      extraMiddleware: {
+        onStreamChunk: [
+          async (ctx: StreamChunkContext) => {
+            for (const fn of listeners) fn(ctx.chunk)
+          },
+        ],
+      },
+    })
+    const entry: CachedLoop = { loop, listeners }
+    this.loops.set(sessionId, entry)
+    return entry
   }
 
   private async handleChatSync(req: Request): Promise<Response> {
@@ -181,7 +224,7 @@ export class HttpServer {
 
     const { sessionId, isNew } = await this.ensureSession(body.sessionId)
     const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId, isNew)
-    const loop = this.createLoop(sessionId, priorCount, undefined, !isNew)
+    const { loop } = this.getOrCreateLoop(sessionId, priorCount, !isNew)
 
     try {
       const result = await loop.run(messages)
@@ -204,8 +247,8 @@ export class HttpServer {
 
     const { sessionId, isNew } = await this.ensureSession(body.sessionId)
     const { messages, priorCount } = await this.buildMessages(body.messages ?? [], sessionId, isNew)
+    const entry = this.getOrCreateLoop(sessionId, priorCount, !isNew)
 
-    const self = this
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()
@@ -213,8 +256,9 @@ export class HttpServer {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
         }
 
-        const onStreamChunk = async (ctx: StreamChunkContext) => {
-          const { chunk } = ctx
+        // Subscribe this request to the cached loop's stream fanout.
+        // Removed in the finally so the listener set doesn't leak.
+        const listener: StreamListener = (chunk) => {
           if (chunk.type === 'text') {
             send({ type: 'text', delta: chunk.delta })
           } else if (chunk.type === 'tool_call_start') {
@@ -225,15 +269,15 @@ export class HttpServer {
             send({ type: 'tool_call_end', id: chunk.id })
           }
         }
-
-        const loop = self.createLoop(sessionId, priorCount, { onStreamChunk: [onStreamChunk] }, !isNew)
+        entry.listeners.add(listener)
 
         try {
-          await loop.run(messages)
+          await entry.loop.run(messages)
           send({ type: 'done', sessionId })
         } catch (err) {
           send({ type: 'error', error: errorMessage(err) })
         } finally {
+          entry.listeners.delete(listener)
           controller.close()
         }
       },

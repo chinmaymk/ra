@@ -58,7 +58,7 @@ export interface ToolsConfig {
 
 /** Application-level settings — how the app runs, infrastructure, observability. */
 export interface AppConfig {
-  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector' | 'cron'
+  interface: 'cli' | 'repl' | 'http' | 'mcp' | 'mcp-stdio' | 'inspector' | 'web' | 'cron'
   /** Directory containing the config file. All relative paths in config are resolved against this. Falls back to cwd when no config file is found. */
   configDir: string
   /** Root directory for all runtime data (sessions, memory, etc.). Relative paths are resolved against configDir. Defaults to `.ra`. */

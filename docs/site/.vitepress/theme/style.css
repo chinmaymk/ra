@@ -8,6 +8,63 @@
 
 :root {
   --vp-font-family-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* ── Solarized Light ── */
+
+  /* Backgrounds */
+  --vp-c-bg: #fdf6e3;
+  --vp-c-bg-soft: #eee8d5;
+  --vp-c-bg-mute: #e6dfcc;
+  --vp-c-bg-elv: #eee8d5;
+  --vp-c-bg-alt: #f5eedb;
+
+  /* Text */
+  --vp-c-text-1: #073642;
+  --vp-c-text-2: #586e75;
+  --vp-c-text-3: #93a1a1;
+
+  /* Brand — Solarized cyan */
+  --vp-c-brand-1: #2aa198;
+  --vp-c-brand-2: #1e8c84;
+  --vp-c-brand-3: #177a73;
+  --vp-c-brand-soft: rgba(42, 161, 152, 0.14);
+
+  /* Borders & dividers */
+  --vp-c-divider: #eee8d5;
+  --vp-c-border: #d3cdb8;
+  --vp-c-gutter: #f5eedb;
+
+  /* Nav */
+  --vp-nav-bg-color: #f5eedb;
+  --vp-nav-screen-bg-color: #f5eedb;
+
+  /* Sidebar */
+  --vp-sidebar-bg-color: #f5eedb;
+
+  /* Code blocks */
+  --vp-code-block-bg: #eee8d5;
+  --vp-code-color: #073642;
+  --vp-code-bg: rgba(238, 232, 213, 0.8);
+
+  /* Inline code */
+  --vp-c-default-soft: rgba(238, 232, 213, 0.8);
+
+  /* Custom containers */
+  --vp-c-tip-1: #2aa198;
+  --vp-c-tip-2: #2aa198;
+  --vp-c-tip-soft: rgba(42, 161, 152, 0.1);
+
+  --vp-c-warning-1: #b58900;
+  --vp-c-warning-2: #b58900;
+  --vp-c-warning-soft: rgba(181, 137, 0, 0.1);
+
+  --vp-c-danger-1: #dc322f;
+  --vp-c-danger-2: #dc322f;
+  --vp-c-danger-soft: rgba(220, 50, 47, 0.1);
+
+  --vp-c-caution-1: #cb4b16;
+  --vp-c-caution-2: #cb4b16;
+  --vp-c-caution-soft: rgba(203, 75, 22, 0.1);
 }
 
 .dark {
@@ -68,6 +125,13 @@
 }
 
 /* Home page hero name gradient */
+.VPHero .name {
+  background: linear-gradient(120deg, #1e8c84 20%, #1a6fb5 80%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 .dark .VPHero .name {
   background: linear-gradient(120deg, #2aa198 20%, #268bd2 80%);
   -webkit-background-clip: text;
@@ -76,6 +140,12 @@
 }
 
 /* Code block border */
+.vp-code-group .tabs,
+div[class*='language-'] {
+  border: 1px solid #d3cdb8;
+  border-radius: 8px;
+}
+
 .dark .vp-code-group .tabs,
 .dark div[class*='language-'] {
   border: 1px solid #073642;
@@ -91,23 +161,23 @@
   max-width: 1080px !important;
 }
 
-/* Nav bar — extend background across full width (VitePress only applies it to .content-body) */
-.dark .VPNavBar {
+/* Nav bar — extend background across full width */
+.VPNavBar {
   background-color: var(--vp-nav-bg-color) !important;
 }
 
-/* Search button — fix focus ring and border in solarized dark */
-.dark .DocSearch-Button {
+/* Search button — fix focus ring and border */
+.DocSearch-Button {
   border: 1px solid var(--vp-c-border) !important;
   background-color: var(--vp-c-bg-soft) !important;
 }
 
-.dark .DocSearch-Button:focus {
+.DocSearch-Button:focus {
   outline: none !important;
   border-color: var(--vp-c-brand-1) !important;
 }
 
-.dark .DocSearch-Button:focus-visible {
+.DocSearch-Button:focus-visible {
   outline: 2px solid var(--vp-c-brand-1);
   outline-offset: 1px;
 }
@@ -137,6 +207,13 @@
 }
 
 /* Local search modal */
+.VPLocalSearchBox {
+  --vp-local-search-bg: #fdf6e3;
+  --vp-local-search-result-bg: #eee8d5;
+  --vp-local-search-highlight-bg: rgba(42, 161, 152, 0.15);
+  --vp-local-search-highlight-text: #1e8c84;
+}
+
 .dark .VPLocalSearchBox {
   --vp-local-search-bg: #002b36;
   --vp-local-search-result-bg: #073642;

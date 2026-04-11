@@ -29,6 +29,7 @@
   },
   "exclude": [
     "docs",
-    "dist"
+    "dist",
+    "packages/web"
   ]
 }

@@ -41,10 +41,21 @@ export class Repl {
   private activeLoop: AgentLoop | null = null
   private lastInterruptTime = 0
   private skillCache = new Map<string, Promise<Skill>>()
+  /** Cached AgentLoop, sticky for the lifetime of the current session. */
+  private cachedLoop: AgentLoop | null = null
+  private cachedLoopSessionId: string | undefined
+  /** Mutable per-turn TUI state that cached-loop middleware reads from. */
+  private tuiState: tui.TuiStreamState | null = null
 
   constructor(options: ReplOptions) {
     this.options = options
     this.sessionId = options.sessionId
+  }
+
+  /** Drop the cached loop — call when session identity or config changes. */
+  private invalidateLoop(): void {
+    this.cachedLoop = null
+    this.cachedLoopSessionId = undefined
   }
 
   /** Lazy-load a full skill by name, caching the result. */
@@ -133,8 +144,79 @@ export class Repl {
       // Rebuild options from fresh AppContext state
       const fresh = buildLoopOptions(ctx)
       Object.assign(this.options, fresh)
+      // Config changed — drop the cached loop so the next turn picks up the
+      // new provider/tools/middleware. An AgentLoop's identity is fixed at
+      // construction, so rebuilding is the only way to honor a hot reload.
+      this.invalidateLoop()
     }
     return this.options
+  }
+
+  /**
+   * Lazily build (and cache) the AgentLoop for the current REPL session.
+   *
+   * The loop is sticky: created once on the first user input for a given
+   * sessionId, reused across every subsequent turn. The session middleware's
+   * internal `savedIds` set lives with the loop and naturally dedupes message
+   * persistence across runs. We pay the `createSessionMiddleware`
+   * (observability handles, compaction middleware, etc.) cost exactly once.
+   *
+   * The per-turn TUI state is injected via `this.tuiState`, which the
+   * tuiHooks read by closing over `this` — so each turn resets the state
+   * in place without rebuilding the loop or its middleware.
+   */
+  private getOrCreateLoop(priorCount: number): AgentLoop {
+    if (this.cachedLoop && this.cachedLoopSessionId === this.sessionId) {
+      return this.cachedLoop
+    }
+
+    const tuiHooks: Partial<MiddlewareConfig> = {
+      onStreamChunk: [
+        async (ctx: StreamChunkContext) => {
+          const state = this.tuiState
+          if (!state) return
+          const chunk = ctx.chunk
+          const delta = 'delta' in chunk ? chunk.delta : undefined
+          const toolName = chunk.type === 'tool_call_start' ? chunk.name : undefined
+          tui.handleStreamChunk(state, chunk.type, delta, toolName)
+        },
+      ],
+      beforeToolExecution: [
+        async (ctx: ToolExecutionContext) => {
+          const state = this.tuiState
+          if (!state) return
+          tui.clearPendingTools(state)
+          if (state.thinkingOpened) tui.collapseThinking(state)
+          const out = state.streamBuf?.end(); if (out) process.stdout.write(out)
+          if (state.boxOpened) process.stdout.write('\n')
+          tui.stopSpinner(true)
+          state.boxOpened = false
+          state.streamBuf = null
+          state.toolStartTimes.set(ctx.toolCall.id, Date.now())
+          tui.printToolCall(state, ctx.toolCall.id, ctx.toolCall.name, ctx.toolCall.arguments)
+        },
+      ],
+      afterToolExecution: [
+        async (ctx: ToolResultContext) => {
+          const state = this.tuiState
+          if (!state) return
+          const resultStr = typeof ctx.result.content === 'string' ? ctx.result.content : ''
+          tui.printToolResult(state, ctx.toolCall.id, ctx.toolCall.name, Date.now() - (state.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()), resultStr, ctx.result.isError)
+          tui.startSpinner()
+        },
+      ],
+    }
+
+    const { loop } = createSessionLoop(this.options, {
+      storage: this.options.storage,
+      sessionId: this.sessionId as string,
+      priorCount,
+      resumed: priorCount > 0,
+      extraMiddleware: tuiHooks,
+    })
+    this.cachedLoop = loop
+    this.cachedLoopSessionId = this.sessionId
+    return loop
   }
 
   async processInput(input: string): Promise<void> {
@@ -161,48 +243,14 @@ export class Repl {
     })
     initialMessages.push(userMessage)
 
-    const tuiState = tui.createStreamState({ markdown: true })
+    // Fresh per-turn TUI state. The cached loop's middleware reads this via
+    // `this.tuiState`, so resetting the field is enough — no need to rebuild
+    // the loop or its middleware.
+    this.tuiState = tui.createStreamState({ markdown: true })
+    const tuiState = this.tuiState
     tui.startSpinner()
 
-    const tuiHooks: Partial<MiddlewareConfig> = {
-      onStreamChunk: [
-        async (ctx: StreamChunkContext) => {
-          const chunk = ctx.chunk
-          const delta = 'delta' in chunk ? chunk.delta : undefined
-          const toolName = chunk.type === 'tool_call_start' ? chunk.name : undefined
-          tui.handleStreamChunk(tuiState, chunk.type, delta, toolName)
-        },
-      ],
-      beforeToolExecution: [
-        async (ctx: ToolExecutionContext) => {
-          tui.clearPendingTools(tuiState)
-          if (tuiState.thinkingOpened) tui.collapseThinking(tuiState)
-          const out = tuiState.streamBuf?.end(); if (out) process.stdout.write(out)
-          if (tuiState.boxOpened) process.stdout.write('\n')
-          tui.stopSpinner(true)
-          tuiState.boxOpened = false
-          tuiState.streamBuf = null
-          tuiState.toolStartTimes.set(ctx.toolCall.id, Date.now())
-          tui.printToolCall(tuiState, ctx.toolCall.id, ctx.toolCall.name, ctx.toolCall.arguments)
-        },
-      ],
-      afterToolExecution: [
-        async (ctx: ToolResultContext) => {
-          const resultStr = typeof ctx.result.content === 'string' ? ctx.result.content : ''
-          tui.printToolResult(tuiState, ctx.toolCall.id, ctx.toolCall.name, Date.now() - (tuiState.toolStartTimes.get(ctx.toolCall.id) ?? Date.now()), resultStr, ctx.result.isError)
-          tui.startSpinner()
-        },
-      ],
-    }
-
-    const { loop } = createSessionLoop(this.options, {
-      storage: this.options.storage,
-      sessionId: this.sessionId as string,
-      priorCount,
-      resumed: priorCount > 0,
-      extraMiddleware: tuiHooks,
-    })
-
+    const loop = this.getOrCreateLoop(priorCount)
     this.activeLoop = loop
     const onKeypress = (_str: string | undefined, key: { name?: string } | undefined) => {
       if (key?.name === 'escape' && this.activeLoop) this.activeLoop.abort()
@@ -237,6 +285,7 @@ export class Repl {
         this.pendingSkill = undefined
         this.pendingAttachments = []
         this.sessionId = await this.newSession()
+        this.invalidateLoop()
         return `Session cleared. New session: ${this.sessionId}`
       }
       case '/save':
@@ -259,6 +308,7 @@ export class Repl {
         this.sessionId = id
         this.pendingSkill = undefined
         this.pendingAttachments = []
+        this.invalidateLoop()
         return `Resumed session ${id} (${this.messages.length} messages loaded).`
       }
       case '/skill': {

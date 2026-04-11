@@ -452,7 +452,7 @@ const VALID_PROVIDERS = new Set<string>([
 ])
 
 const VALID_INTERFACES = new Set<string>([
-  'cli', 'repl', 'http', 'mcp', 'mcp-stdio', 'inspector', 'cron',
+  'cli', 'repl', 'http', 'mcp', 'mcp-stdio', 'inspector', 'cron', 'web',
 ])
 
 function validateConfig(config: RaConfig): void {

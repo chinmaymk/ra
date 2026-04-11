@@ -40,7 +40,7 @@ export default defineConfig({
   title: 'ra',
   description: 'Your agent, your rules.',
   base: process.env.DOCS_BASE || '/ra/',
-  appearance: 'dark',
+  appearance: true,
   vite: {
     define: {
       __DOCS_VERSION__: JSON.stringify(process.env.DOCS_VERSION || 'dev'),
