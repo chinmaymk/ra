@@ -20,7 +20,14 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    const el = scrollRef.current
+    if (!el) return
+    // Only auto-scroll if the reader is already near the bottom, so we
+    // don't yank them away from content they're reading.
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (distance < 240) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    }
   }, [messages.length, streaming.text.length, streaming.toolCalls.size])
 
   if (!info) {
@@ -96,7 +103,7 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
           </div>
 
           {/* Messages */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto smooth-scroll">
             {!hasContent && !streaming.isStreaming ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm text-center px-8">
                 <div className="h-10 w-10 rounded-xl bg-surface-1 border border-border flex items-center justify-center mb-3">

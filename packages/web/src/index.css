@@ -267,13 +267,118 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.fade-in { animation: fade-in 0.4s ease-out; }
+.fade-in { animation: fade-in 0.4s ease-out both; }
 
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
 }
 .float { animation: float 3s ease-in-out infinite; }
+
+/* Soothing message entry — fade, rise, and subtle de-blur.
+   Applied to every conversation message so the thread feels like
+   a continuous flow rather than discrete cards snapping in. */
+@keyframes msg-flow {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+}
+.msg-flow {
+  animation: msg-flow 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Cinematic image reveal — soft focus pull. */
+@keyframes img-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+    filter: blur(10px) saturate(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0) saturate(1);
+  }
+}
+.img-reveal {
+  animation: img-reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Page / view transition. The main content area uses a keyed
+   wrapper that re-mounts on view change, so this plays every swap. */
+@keyframes view-fade {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+.view-fade {
+  animation: view-fade 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Stagger children with a gentle cascade. Cap the delay so long
+   lists don't trail forever. */
+.stagger > * { animation-delay: calc(var(--stagger, 60ms) * var(--i, 0)); }
+.stagger > *:nth-child(1)  { --i: 0; }
+.stagger > *:nth-child(2)  { --i: 1; }
+.stagger > *:nth-child(3)  { --i: 2; }
+.stagger > *:nth-child(4)  { --i: 3; }
+.stagger > *:nth-child(5)  { --i: 4; }
+.stagger > *:nth-child(6)  { --i: 5; }
+.stagger > *:nth-child(n+7) { --i: 6; }
+
+/* Smooth scroll container — used by the conversation thread so
+   auto-scroll-to-bottom glides instead of jumping. */
+.smooth-scroll { scroll-behavior: smooth; }
+
+/* Grid-row expand/collapse for tool-call panels.
+   Animating grid-template-rows from 0fr → 1fr gives us a real
+   content-sized height transition with zero JS. */
+.expand-row {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.expand-row[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+.expand-row > .expand-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Ambient background drift — extremely slow, keeps the page
+   feeling alive without being distracting. */
+@keyframes ambient-drift {
+  0%, 100% { background-position: 50% 0%, 0% 100%; }
+  50%      { background-position: 52% 2%, 2% 98%; }
+}
+body {
+  background-size: 100% 100%, 100% 100%;
+  animation: ambient-drift 24s ease-in-out infinite;
+}
+
+/* Respect reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  body { animation: none !important; }
+}
 
 /* ─────────────────────────────────────────────────────────────────
    Utilities

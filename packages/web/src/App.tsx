@@ -144,6 +144,10 @@ export function App() {
 
         {/* Main content */}
         <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
+          <div
+            key={view.type === 'detail' ? `detail:${view.sessionId}` : view.type}
+            className="h-full view-fade"
+          >
           {view.type === 'agents' && (
             <AgentsView
               sessions={sessions}
@@ -171,6 +175,7 @@ export function App() {
           {view.type === 'prompts' && <PromptsPage onBack={goAgents} />}
           {view.type === 'knowledge' && <KnowledgePage onBack={goAgents} />}
           {view.type === 'terminal' && <TerminalPage onBack={goAgents} />}
+          </div>
         </main>
 
         <CommandPalette

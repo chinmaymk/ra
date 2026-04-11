@@ -62,8 +62,7 @@ export function ConversationMessage({ message, compact = false }: ConversationMe
   return (
     <div
       className={cn(
-        'group transition-colors',
-        isStreaming && 'slide-up',
+        'group transition-colors msg-flow',
         isUser ? 'bg-surface-1/30' : 'hover:bg-surface-1/20',
       )}
     >
@@ -109,7 +108,8 @@ export function ConversationMessage({ message, compact = false }: ConversationMe
                   key={i}
                   src={img.src}
                   alt={img.alt ?? `attachment ${i + 1}`}
-                  className="max-h-64 max-w-full rounded-md border border-border object-contain bg-surface-1"
+                  className="max-h-64 max-w-full rounded-md border border-border object-contain bg-surface-1 img-reveal"
+                  style={{ animationDelay: `${i * 80}ms` }}
                 />
               ))}
             </div>
@@ -268,30 +268,32 @@ function ToolCallCard({ tc, compact, isStreaming }: ToolCallCardProps) {
         </div>
       </button>
 
-      {expanded && (
-        <div className="border-t border-border divide-y divide-border bg-surface-0/40">
-          {tc.arguments && (
-            <div className="px-3 py-2.5">
-              <div className="text-[9px] uppercase tracking-[0.08em] text-dim-foreground mb-1.5 font-semibold">Input</div>
-              <pre className="text-[11px] text-foreground/80 whitespace-pre-wrap break-words max-h-48 overflow-y-auto mono leading-relaxed">
-                {formatArgs(tc.arguments)}
-              </pre>
-            </div>
-          )}
-          {tc.result !== undefined && (
-            <div className="px-3 py-2.5">
-              <div className="text-[9px] uppercase tracking-[0.08em] text-dim-foreground mb-1.5 font-semibold">Output</div>
-              <ToolResultContent tc={tc} />
-            </div>
-          )}
-          {running && (
-            <div className="px-3 py-2.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span className="italic">Executing...</span>
-            </div>
-          )}
+      <div className="expand-row" data-open={expanded}>
+        <div className="expand-inner">
+          <div className="border-t border-border divide-y divide-border bg-surface-0/40">
+            {tc.arguments && (
+              <div className="px-3 py-2.5">
+                <div className="text-[9px] uppercase tracking-[0.08em] text-dim-foreground mb-1.5 font-semibold">Input</div>
+                <pre className="text-[11px] text-foreground/80 whitespace-pre-wrap break-words max-h-48 overflow-y-auto mono leading-relaxed">
+                  {formatArgs(tc.arguments)}
+                </pre>
+              </div>
+            )}
+            {tc.result !== undefined && (
+              <div className="px-3 py-2.5">
+                <div className="text-[9px] uppercase tracking-[0.08em] text-dim-foreground mb-1.5 font-semibold">Output</div>
+                <ToolResultContent tc={tc} />
+              </div>
+            )}
+            {running && (
+              <div className="px-3 py-2.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="italic">Executing...</span>
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
