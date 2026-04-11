@@ -92,7 +92,7 @@ export function MiddlewarePage({ onBack }: MiddlewarePageProps) {
                     {i < hooks.length - 1 && (
                       <div className={cn(
                         'h-[2px] w-6 -mx-0.5',
-                        isActive && hooks[i + 1]?.names.length > 0
+                        isActive && (hooks[i + 1]?.names.length ?? 0) > 0
                           ? 'bg-primary/40'
                           : 'bg-border'
                       )} />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type ComponentType } from 'react'
 import type { SessionInfo } from '@/lib/types'
 import {
   CommandDialog,
@@ -10,37 +10,40 @@ import {
   CommandShortcut,
 } from '@/components/ui/command'
 import { StatusDot } from './StatusDot'
-import { Settings, Wrench, Layers, BookOpen, Home, Plus, Trash2, Square, Copy } from 'lucide-react'
+import { Settings, Wrench, Layers, BookOpen, Home, Plus, Trash2, Square, LayoutGrid } from 'lucide-react'
+
+type NavTarget = 'agents' | 'config' | 'tools' | 'middleware' | 'knowledge' | 'panels' | 'prompts' | 'terminal'
 
 interface CommandPaletteProps {
   open: boolean
   setOpen: (v: boolean) => void
   sessions: SessionInfo[]
-  onNavigate: (view: 'agents' | 'config' | 'tools' | 'middleware' | 'knowledge') => void
+  onNavigate: (view: NavTarget) => void
   onSelectSession: (id: string) => void
   onNewSession: () => void
   onStopSession: (id: string) => void
   onDeleteSession: (id: string) => void
-  onDuplicateSession: (id: string) => void
+}
+
+interface Action {
+  icon: ComponentType<{ className?: string }>
+  label: string
+  run: () => void
+  shortcut?: string
 }
 
 export function CommandPalette({
-  open,
-  setOpen,
-  sessions,
-  onNavigate,
-  onSelectSession,
-  onNewSession,
-  onStopSession,
-  onDeleteSession,
-  onDuplicateSession,
+  open, setOpen, sessions,
+  onNavigate, onSelectSession, onNewSession, onStopSession, onDeleteSession,
 }: CommandPaletteProps) {
   const [search, setSearch] = useState('')
 
+  // Clear the query when the dialog closes so the next open starts fresh.
   useEffect(() => {
     if (!open) setSearch('')
   }, [open])
 
+  // Toggle with ⇧⌘P (or ⇧Ctrl P). ⌘K is wired higher up in App.tsx.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.shiftKey && (e.metaKey || e.ctrlKey) && e.key === 'p') {
@@ -57,6 +60,19 @@ export function CommandPalette({
     cmd()
   }
 
+  const actions: Action[] = useMemo(() => [
+    { icon: Plus, label: 'Start new session', run: onNewSession, shortcut: '⌘N' },
+    { icon: Home, label: 'Go to agents', run: () => onNavigate('agents'), shortcut: 'Esc' },
+    { icon: Settings, label: 'Open config editor', run: () => onNavigate('config'), shortcut: '⌘,' },
+    { icon: Wrench, label: 'Browse tools', run: () => onNavigate('tools') },
+    { icon: Layers, label: 'Inspect middleware', run: () => onNavigate('middleware') },
+    { icon: LayoutGrid, label: 'Web panels', run: () => onNavigate('panels') },
+    { icon: BookOpen, label: 'Manage knowledge bases', run: () => onNavigate('knowledge') },
+  ], [onNewSession, onNavigate])
+
+  const running = useMemo(() => sessions.filter(s => s.status === 'running'), [sessions])
+  const stopped = useMemo(() => sessions.filter(s => s.status !== 'running'), [sessions])
+
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
       <CommandInput
@@ -68,33 +84,13 @@ export function CommandPalette({
         <CommandEmpty>No results found.</CommandEmpty>
 
         <CommandGroup heading="Actions">
-          <CommandItem onSelect={() => runCommand(onNewSession)}>
-            <Plus className="h-4 w-4" />
-            <span>Start new session</span>
-            <CommandShortcut>⌘N</CommandShortcut>
-          </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => onNavigate('agents'))}>
-            <Home className="h-4 w-4" />
-            <span>Go to agents</span>
-            <CommandShortcut>Esc</CommandShortcut>
-          </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => onNavigate('config'))}>
-            <Settings className="h-4 w-4" />
-            <span>Open config editor</span>
-            <CommandShortcut>⌘,</CommandShortcut>
-          </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => onNavigate('tools'))}>
-            <Wrench className="h-4 w-4" />
-            <span>Browse tools</span>
-          </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => onNavigate('middleware'))}>
-            <Layers className="h-4 w-4" />
-            <span>Inspect middleware</span>
-          </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => onNavigate('knowledge'))}>
-            <BookOpen className="h-4 w-4" />
-            <span>Manage knowledge bases</span>
-          </CommandItem>
+          {actions.map(({ icon: Icon, label, run, shortcut }) => (
+            <CommandItem key={label} onSelect={() => runCommand(run)}>
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
+              {shortcut && <CommandShortcut>{shortcut}</CommandShortcut>}
+            </CommandItem>
+          ))}
         </CommandGroup>
 
         {sessions.length > 0 && (
@@ -103,20 +99,7 @@ export function CommandPalette({
               <CommandItem
                 key={s.id}
                 value={`session-${s.id}-${s.name}`}
-                onSelect={(value) => {
-                  // Shift+click is tracked via a mousedown listener on the item
-                }}
-                onMouseDown={(e: React.MouseEvent) => {
-                  if (e.shiftKey) {
-                    e.preventDefault()
-                    runCommand(() => onDuplicateSession(s.id))
-                  }
-                }}
-                onClick={(e: React.MouseEvent) => {
-                  if (!e.shiftKey) {
-                    runCommand(() => onSelectSession(s.id))
-                  }
-                }}
+                onSelect={() => runCommand(() => onSelectSession(s.id))}
               >
                 <StatusDot status={s.status} size="sm" animated={false} />
                 <span className="truncate">{s.name}</span>
@@ -126,51 +109,50 @@ export function CommandPalette({
           </CommandGroup>
         )}
 
-        {sessions.filter(s => s.status !== 'running').length > 0 && (
-          <CommandGroup heading="Duplicate">
-            {sessions.filter(s => s.status !== 'running').map(s => (
-              <CommandItem
-                key={`duplicate-${s.id}`}
-                value={`duplicate-${s.id}-${s.name}`}
-                onSelect={() => runCommand(() => onDuplicateSession(s.id))}
-              >
-                <Copy className="h-4 w-4" />
-                <span className="truncate">Duplicate {s.name}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        {sessions.filter(s => s.status === 'running').length > 0 && (
-          <CommandGroup heading="Stop running">
-            {sessions.filter(s => s.status === 'running').map(s => (
-              <CommandItem
-                key={`stop-${s.id}`}
-                value={`stop-${s.id}-${s.name}`}
-                onSelect={() => runCommand(() => onStopSession(s.id))}
-              >
-                <Square className="h-4 w-4 text-warning" />
-                <span className="truncate">Stop {s.name}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        {sessions.filter(s => s.status !== 'running').length > 0 && (
-          <CommandGroup heading="Delete">
-            {sessions.filter(s => s.status !== 'running').map(s => (
-              <CommandItem
-                key={`delete-${s.id}`}
-                value={`delete-${s.id}-${s.name}`}
-                onSelect={() => runCommand(() => onDeleteSession(s.id))}
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-                <span className="truncate">Delete {s.name}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
+        <SessionActionGroup
+          heading="Stop running"
+          items={running}
+          keyPrefix="stop"
+          icon={<Square className="h-4 w-4 text-warning" />}
+          verb="Stop"
+          onSelect={id => runCommand(() => onStopSession(id))}
+        />
+        <SessionActionGroup
+          heading="Delete"
+          items={stopped}
+          keyPrefix="delete"
+          icon={<Trash2 className="h-4 w-4 text-destructive" />}
+          verb="Delete"
+          onSelect={id => runCommand(() => onDeleteSession(id))}
+        />
       </CommandList>
     </CommandDialog>
+  )
+}
+
+function SessionActionGroup({
+  heading, items, keyPrefix, icon, verb, onSelect,
+}: {
+  heading: string
+  items: SessionInfo[]
+  keyPrefix: string
+  icon: React.ReactNode
+  verb: string
+  onSelect: (id: string) => void
+}) {
+  if (items.length === 0) return null
+  return (
+    <CommandGroup heading={heading}>
+      {items.map(s => (
+        <CommandItem
+          key={`${keyPrefix}-${s.id}`}
+          value={`${keyPrefix}-${s.id}-${s.name}`}
+          onSelect={() => onSelect(s.id)}
+        >
+          {icon}
+          <span className="truncate">{verb} {s.name}</span>
+        </CommandItem>
+      ))}
+    </CommandGroup>
   )
 }

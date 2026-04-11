@@ -1,12 +1,5 @@
 import { formatTokens } from '@/lib/utils'
-
-interface TokenUsage {
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheCreationTokens: number
-  thinkingTokens: number
-}
+import type { TokenUsage } from '@/lib/types'
 
 type Provider = 'anthropic' | 'openai'
 
@@ -50,10 +43,12 @@ export function CostDisplay({ provider, tokenUsage }: CostDisplayProps) {
     )
   }
 
+  const cacheReadTokens = tokenUsage.cacheReadTokens ?? 0
+  const cacheCreationTokens = tokenUsage.cacheCreationTokens ?? 0
   const inputCost = computeCost(tokenUsage.inputTokens, pricing.input)
   const outputCost = computeCost(tokenUsage.outputTokens, pricing.output)
-  const cacheReadCost = computeCost(tokenUsage.cacheReadTokens, pricing.cacheRead)
-  const cacheWriteCost = computeCost(tokenUsage.cacheCreationTokens, pricing.cacheWrite)
+  const cacheReadCost = computeCost(cacheReadTokens, pricing.cacheRead)
+  const cacheWriteCost = computeCost(cacheCreationTokens, pricing.cacheWrite)
   const totalCost = inputCost + outputCost + cacheReadCost + cacheWriteCost
 
   return (
@@ -75,8 +70,8 @@ export function CostDisplay({ provider, tokenUsage }: CostDisplayProps) {
         <div className="text-[9px] uppercase tracking-[0.08em] font-semibold text-dim-foreground">Breakdown</div>
         <CostRow label="Input" tokens={tokenUsage.inputTokens} rate={pricing.input} cost={inputCost} />
         <CostRow label="Output" tokens={tokenUsage.outputTokens} rate={pricing.output} cost={outputCost} />
-        <CostRow label="Cache reads" tokens={tokenUsage.cacheReadTokens} rate={pricing.cacheRead} cost={cacheReadCost} />
-        <CostRow label="Cache writes" tokens={tokenUsage.cacheCreationTokens} rate={pricing.cacheWrite} cost={cacheWriteCost} />
+        <CostRow label="Cache reads" tokens={cacheReadTokens} rate={pricing.cacheRead} cost={cacheReadCost} />
+        <CostRow label="Cache writes" tokens={cacheCreationTokens} rate={pricing.cacheWrite} cost={cacheWriteCost} />
       </div>
 
       {/* Rates */}

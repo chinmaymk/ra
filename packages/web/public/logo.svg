@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
   <rect width="32" height="32" rx="6" fill="#073642"/>
-  <circle cx="16" cy="16" r="9" fill="none" stroke="#2aa198" stroke-width="2.5"/>
-  <circle cx="16" cy="16" r="2.5" fill="#2aa198"/>
+  <!-- stem (the "r" downstroke) -->
+  <line x1="10" y1="25" x2="10" y2="14" stroke="#2aa198" stroke-width="3" stroke-linecap="round"/>
+  <!-- curved shoulder arcing right and looping back — fluid sweep -->
+  <path d="M10 14 C10 6 26 4 27 14 C28 23 17 27 13 22" fill="none" stroke="#2aa198" stroke-width="3" stroke-linecap="round"/>
+  <!-- arrowhead at end of loop -->
+  <polygon points="10.5,24 13,22 15.5,25" fill="#2aa198"/>
+  <!-- spark: gold diamond -->
+  <polygon points="18,13 20,16 18,19 16,16" fill="#b58900"/>
 </svg>

@@ -7,7 +7,6 @@ const COLORS: Record<SessionStatus, string> = {
   'error': 'bg-status-error',
   'done': 'bg-status-done',
   'idle': 'bg-status-idle',
-  'queued': 'bg-status-queued',
 }
 
 const LABELS: Record<SessionStatus, string> = {
@@ -16,7 +15,6 @@ const LABELS: Record<SessionStatus, string> = {
   'error': 'Error',
   'done': 'Done',
   'idle': 'Idle',
-  'queued': 'Queued',
 }
 
 export function StatusDot({

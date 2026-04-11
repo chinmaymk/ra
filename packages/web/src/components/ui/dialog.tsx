@@ -48,6 +48,36 @@ export const DialogContent = React.forwardRef<
 ))
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
+/** Edge-to-edge modal: fills the viewport (for diff viewer, media, etc.). */
+export const DialogFullscreenContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay className="bg-black/70 backdrop-blur-md" />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        'fixed inset-0 z-50 flex flex-col bg-background outline-none shadow-2xl',
+        'data-[state=open]:animate-in data-[state=closed]:animate-out',
+        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'duration-200',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <DialogPrimitive.Close
+        className="absolute right-4 top-4 z-60 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-1 text-muted-foreground opacity-90 transition-colors hover:bg-surface-2 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        aria-label="Close"
+      >
+        <X className="h-4 w-4" />
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+))
+DialogFullscreenContent.displayName = 'DialogFullscreenContent'
+
 export const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn('flex flex-col space-y-1.5 text-left', className)} {...props} />
 )

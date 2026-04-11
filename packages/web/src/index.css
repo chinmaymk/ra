@@ -2,6 +2,8 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
+@custom-variant light (&:where(.light, .light *));
+
 /* ─────────────────────────────────────────────────────────────────
    Theme — premium warm-tinted dark palette (Linear/Raycast inspired)
    Direct OKLCH values so Tailwind v4 generates all utilities
