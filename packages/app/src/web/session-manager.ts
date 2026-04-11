@@ -114,19 +114,31 @@ export class SessionManager {
     const stored = await this.app.storage.list()
     const webSessions = stored.filter(s => s.meta.interface === 'web')
 
-    for (const s of webSessions) {
-      if (this.sessions.has(s.id)) continue
+    await Promise.all(webSessions.map(async s => {
+      if (this.sessions.has(s.id)) return
+
+      // Backfill title for sessions persisted before titles were tracked.
+      let title = s.meta.title
+      let lastAssistantMessage = s.meta.lastAssistantMessage
+      if (!title || !lastAssistantMessage) {
+        const { title: t, lastAssistantMessage: l } = await this.extractMetaFromMessages(s.id)
+        title = title ?? t
+        lastAssistantMessage = lastAssistantMessage ?? l
+        if (title || lastAssistantMessage) {
+          await this.app.storage.updateMeta(s.id, { title, lastAssistantMessage })
+        }
+      }
 
       const info: ManagedSession = {
         id: s.id,
-        // Placeholder — refined by ensureMessagesLoaded() on first access
-        name: `session-${s.id.slice(0, 8)}`,
+        name: title ?? `session-${s.id.slice(0, 8)}`,
         status: 'done',
         provider: s.meta.provider,
         model: s.meta.model,
         createdAt: s.meta.created,
-        iteration: 0,
-        tokenUsage: { inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+        iteration: s.meta.iteration ?? 0,
+        tokenUsage: s.meta.tokenUsage ?? { inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+        lastAssistantMessage,
         cwd: process.cwd(),
       }
 
@@ -138,7 +150,30 @@ export class SessionManager {
         subscribers: new Set(),
         messagesLoaded: false,
       })
+    }))
+  }
+
+  /** Extract display title + last assistant preview from persisted messages. */
+  private async extractMetaFromMessages(sessionId: string): Promise<{ title?: string; lastAssistantMessage?: string }> {
+    let stored: IMessage[]
+    try {
+      stored = await this.app.storage.readMessages(sessionId)
+    } catch {
+      return {}
     }
+    const firstUser = stored.find(m =>
+      m.role === 'user' &&
+      typeof m.content === 'string' &&
+      !m.content.startsWith('<')
+    )
+    const title = firstUser && typeof firstUser.content === 'string'
+      ? generateName(firstUser.content)
+      : undefined
+    const lastAssistant = stored.filter(m => m.role === 'assistant').at(-1)
+    const lastAssistantMessage = lastAssistant
+      ? extractTextContent(lastAssistant.content).slice(0, 200)
+      : undefined
+    return { title, lastAssistantMessage }
   }
 
   /**
@@ -196,6 +231,7 @@ export class SessionManager {
       model: this.app.config.agent.model,
       interface: 'web',
     })
+    await this.app.storage.updateMeta(id, { title: name })
 
     const info: ManagedSession = {
       id,
@@ -320,6 +356,14 @@ export class SessionManager {
     } else {
       session.info.status = 'needs-input'
     }
+
+    // Persist title + usage stats so they survive restart
+    await this.app.storage.updateMeta(session.info.id, {
+      title: session.info.name,
+      tokenUsage: session.info.tokenUsage,
+      iteration: session.info.iteration,
+      lastAssistantMessage: session.info.lastAssistantMessage,
+    })
 
     this.broadcast(session, { type: 'done', stopReason: result.stopReason })
     this.broadcast(session, { type: 'status', status: session.info.status, name: session.info.name })

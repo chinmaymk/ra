@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { appendFile, mkdir, rm } from 'node:fs/promises'
-import type { IMessage, Logger } from '@chinmaymk/ra'
+import type { IMessage, Logger, TokenUsage } from '@chinmaymk/ra'
 import { NoopLogger } from '@chinmaymk/ra'
 import { parseJsonlFile } from '../utils/files'
 
@@ -15,6 +15,10 @@ export interface SessionMeta {
   interface: string
   namespace?: string
   configDir?: string
+  title?: string
+  tokenUsage?: TokenUsage
+  iteration?: number
+  lastAssistantMessage?: string
 }
 
 export interface Session {
@@ -71,6 +75,16 @@ export class SessionStorage {
     const meta = await this.writeMeta(id, options)
     this.logger.debug('session created', { sessionId: id, provider: options.provider, model: options.model })
     return { id, meta }
+  }
+
+  /** Merge a partial patch into an existing session's meta.json. */
+  async updateMeta(id: string, patch: Partial<Omit<SessionMeta, 'id' | 'created'>>): Promise<void> {
+    const path = join(this.sessionDir(id), 'meta.json')
+    const file = Bun.file(path)
+    if (!(await file.exists())) return
+    const current = JSON.parse(await file.text()) as SessionMeta
+    const next: SessionMeta = { ...current, ...patch }
+    await Bun.write(path, JSON.stringify(next, null, 2))
   }
 
   async appendMessage(id: string, message: IMessage): Promise<void> {
