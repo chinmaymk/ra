@@ -136,6 +136,17 @@ export function useSession(sessionId: string | null) {
           } : prev)
           break
 
+        case 'snapshot':
+          // Server-replayed in-progress turn — restores streaming state for
+          // clients that reconnected mid-stream (e.g. navigated away and back).
+          setStreaming({
+            text: data.text,
+            thinking: data.thinking,
+            toolCalls: new Map(data.toolCalls.map(tc => [tc.id, tc])),
+            isStreaming: true,
+          })
+          break
+
         case 'done':
           setStreaming(prev => ({ ...prev, isStreaming: false }))
           // Reload messages to get the final state

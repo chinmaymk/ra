@@ -19,8 +19,8 @@ export interface TokenUsage {
   inputTokens: number
   outputTokens: number
   thinkingTokens: number
-  cacheReadTokens: number
-  cacheCreationTokens: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
 }
 
 export interface ToolCall {
@@ -55,6 +55,7 @@ export type SessionEvent =
   | { type: 'tool_result'; toolCallId: string; content: string; isError?: boolean }
   | { type: 'status'; status: SessionStatus; name?: string }
   | { type: 'stats'; usage: TokenUsage; iteration: number; currentTool?: string }
+  | { type: 'snapshot'; text: string; thinking: string; toolCalls: ToolCall[] }
   | { type: 'done'; stopReason?: string }
   | { type: 'error'; error: string }
 

@@ -40,6 +40,24 @@ export interface ManagedSession {
   cwd: string
 }
 
+interface PendingToolCall {
+  id: string
+  name: string
+  arguments: string
+  result?: string
+  isError?: boolean
+}
+
+interface PendingStream {
+  text: string
+  thinking: string
+  toolCalls: Map<string, PendingToolCall>
+}
+
+function emptyPendingStream(): PendingStream {
+  return { text: '', thinking: '', toolCalls: new Map() }
+}
+
 interface SessionInternal {
   info: ManagedSession
   /** Active AgentLoop while running, null when idle/done. */
@@ -49,6 +67,13 @@ interface SessionInternal {
   subscribers: Set<(event: SessionEvent) => void>
   /** True once messages have been read from disk (or initialized for new sessions). */
   messagesLoaded: boolean
+  /**
+   * Accumulated streaming chunks for the currently-running turn. Broadcast as
+   * a `snapshot` event to any new SSE subscriber so that clients which reconnect
+   * mid-stream (e.g. after navigating away and back) don't lose in-progress
+   * content. Reset at the start of each turn and cleared on loop completion.
+   */
+  pendingStream: PendingStream
 }
 
 export interface ImageAttachment {
@@ -149,6 +174,7 @@ export class SessionManager {
         priorCount: 0,
         subscribers: new Set(),
         messagesLoaded: false,
+        pendingStream: emptyPendingStream(),
       })
     }))
   }
@@ -260,6 +286,7 @@ export class SessionManager {
       priorCount: 0,
       subscribers: new Set(),
       messagesLoaded: true, // newly-created sessions have their prefix in memory
+      pendingStream: emptyPendingStream(),
     }
 
     this.sessions.set(id, internal)
@@ -290,6 +317,9 @@ export class SessionManager {
     session.info.status = 'running'
     session.info.currentTool = undefined
     session.info.errorMessage = undefined
+    // Reset per-turn streaming buffer so stale chunks from a prior turn
+    // don't leak into this one's snapshot replay.
+    session.pendingStream = emptyPendingStream()
     this.broadcast(session, { type: 'status', status: 'running' })
 
     // Create and run the loop
@@ -365,6 +395,10 @@ export class SessionManager {
       lastAssistantMessage: session.info.lastAssistantMessage,
     })
 
+    // Clear the per-turn streaming buffer before broadcasting 'done' so any
+    // subscriber that reconnects after this point gets an empty snapshot.
+    session.pendingStream = emptyPendingStream()
+
     this.broadcast(session, { type: 'done', stopReason: result.stopReason })
     this.broadcast(session, { type: 'status', status: session.info.status, name: session.info.name })
   }
@@ -372,13 +406,19 @@ export class SessionManager {
   private buildStreamMiddleware(session: SessionInternal): Partial<MiddlewareConfig> {
     const onStreamChunk = async (ctx: StreamChunkContext) => {
       const { chunk } = ctx
+      const pending = session.pendingStream
       if (chunk.type === 'text') {
+        pending.text += chunk.delta
         this.broadcast(session, { type: 'text', delta: chunk.delta })
       } else if (chunk.type === 'thinking') {
+        pending.thinking += chunk.delta
         this.broadcast(session, { type: 'thinking', delta: chunk.delta })
       } else if (chunk.type === 'tool_call_start') {
+        pending.toolCalls.set(chunk.id, { id: chunk.id, name: chunk.name, arguments: '' })
         this.broadcast(session, { type: 'tool_call_start', id: chunk.id, name: chunk.name })
       } else if (chunk.type === 'tool_call_delta') {
+        const tc = pending.toolCalls.get(chunk.id)
+        if (tc) tc.arguments += chunk.argsDelta
         this.broadcast(session, { type: 'tool_call_delta', id: chunk.id, argsDelta: chunk.argsDelta })
       } else if (chunk.type === 'tool_call_end') {
         this.broadcast(session, { type: 'tool_call_end', id: chunk.id })
@@ -397,10 +437,16 @@ export class SessionManager {
 
     const afterToolExecution = async (ctx: ToolResultContext) => {
       const result = ctx.result
+      const content = typeof result.content === 'string' ? result.content : JSON.stringify(result.content)
+      const tc = session.pendingStream.toolCalls.get(result.toolCallId)
+      if (tc) {
+        tc.result = content
+        tc.isError = result.isError
+      }
       this.broadcast(session, {
         type: 'tool_result',
         toolCallId: result.toolCallId,
-        content: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
+        content,
         isError: result.isError,
       })
       session.info.currentTool = undefined
@@ -486,6 +532,26 @@ export class SessionManager {
     const session = this.sessions.get(sessionId)
     if (!session) return () => {}
     session.subscribers.add(listener)
+
+    // Replay the in-progress turn so clients that reconnect mid-stream
+    // (e.g. after navigating away and coming back) don't lose whatever
+    // content has already been broadcast. Only meaningful while running.
+    if (session.info.status === 'running') {
+      const { text, thinking, toolCalls } = session.pendingStream
+      if (text || thinking || toolCalls.size > 0) {
+        try {
+          listener({
+            type: 'snapshot',
+            text,
+            thinking,
+            toolCalls: Array.from(toolCalls.values()).map(tc => ({ ...tc })),
+          })
+        } catch {
+          // A bad listener shouldn't prevent subscription
+        }
+      }
+    }
+
     return () => { session.subscribers.delete(listener) }
   }
 
