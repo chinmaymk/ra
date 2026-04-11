@@ -330,40 +330,65 @@ function stripLineNumbers(text: string): string {
   return text.replace(/^\d+: /gm, '')
 }
 
+/** Try to detect if a string is valid JSON (object or array) */
+function detectJson(text: string): boolean {
+  const trimmed = text.trimStart()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false
+  try { JSON.parse(trimmed); return true } catch { return false }
+}
+
+/** Try to detect if a string looks like XML */
+function detectXml(text: string): boolean {
+  const trimmed = text.trimStart()
+  return (trimmed.startsWith('<?xml') || trimmed.startsWith('<')) && trimmed.includes('</') 
+}
+
+function HighlightedBlock({ content, language }: { content: string; language: string }) {
+  const markdown = `\`\`\`${language}\n${content}\n\`\`\``
+  return (
+    <div className="max-h-64 overflow-y-auto text-[11px]">
+      <Markdown content={markdown} />
+    </div>
+  )
+}
+
 function ToolResultContent({ tc }: { tc: ToolCall }) {
   const toolName = baseToolName(tc.name)
+  const result = tc.result ?? ''
 
   if (tc.isError) {
     return (
       <pre className="text-[11px] whitespace-pre-wrap break-words max-h-64 overflow-y-auto mono leading-relaxed text-destructive">
-        {tc.result}
+        {result}
       </pre>
     )
   }
 
   if (toolName === 'Read') {
     const lang = inferLanguage(tc.arguments)
-    const code = stripLineNumbers(tc.result ?? '')
-    const markdown = `\`\`\`${lang}\n${code}\n\`\`\``
-    return (
-      <div className="max-h-64 overflow-y-auto text-[11px]">
-        <Markdown content={markdown} />
-      </div>
-    )
+    return <HighlightedBlock content={stripLineNumbers(result)} language={lang} />
   }
 
   if (toolName === 'LS') {
-    const markdown = `\`\`\`\n${tc.result ?? ''}\n\`\`\``
-    return (
-      <div className="max-h-64 overflow-y-auto text-[11px]">
-        <Markdown content={markdown} />
-      </div>
-    )
+    return <HighlightedBlock content={result} language="" />
+  }
+
+  // Auto-detect JSON
+  if (detectJson(result)) {
+    try {
+      const formatted = JSON.stringify(JSON.parse(result), null, 2)
+      return <HighlightedBlock content={formatted} language="json" />
+    } catch { /* fall through */ }
+  }
+
+  // Auto-detect XML
+  if (detectXml(result)) {
+    return <HighlightedBlock content={result} language="xml" />
   }
 
   return (
     <pre className="text-[11px] whitespace-pre-wrap break-words max-h-64 overflow-y-auto mono leading-relaxed text-foreground/80">
-      {tc.result}
+      {result}
     </pre>
   )
 }
