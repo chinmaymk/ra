@@ -32,9 +32,14 @@ export interface ToolCall {
   durationMs?: number
 }
 
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; mediaType: string; data: string } | { type: 'url'; url: string } }
+  | { type: 'file'; mimeType: string; data: string }
+
 export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string
+  content: string | ContentPart[]
   toolCalls?: ToolCall[]
   toolCallId?: string
   isError?: boolean

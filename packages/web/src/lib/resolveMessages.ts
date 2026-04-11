@@ -1,8 +1,8 @@
-import type { Message, ToolCall } from './types'
+import type { Message, ToolCall, ContentPart } from './types'
 
 export interface ResolvedMessage {
   role: 'user' | 'assistant'
-  content: string
+  content: string | ContentPart[]
   thinking?: string
   toolCalls?: ToolCall[]
   isStreaming?: boolean
@@ -20,7 +20,8 @@ export function resolveMessages(messages: Message[]): ResolvedMessage[] {
   const toolResults = new Map<string, { content: string; isError?: boolean }>()
   for (const msg of messages) {
     if (msg.role === 'tool' && msg.toolCallId) {
-      toolResults.set(msg.toolCallId, { content: msg.content, isError: msg.isError })
+      const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+      toolResults.set(msg.toolCallId, { content, isError: msg.isError })
     }
   }
 

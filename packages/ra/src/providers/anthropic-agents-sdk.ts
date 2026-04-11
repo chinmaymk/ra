@@ -1,9 +1,10 @@
 import { query, createSdkMcpServer, tool as sdkTool } from '@anthropic-ai/claude-agent-sdk'
 import type { SDKMessage, SDKPartialAssistantMessage, SDKUserMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs'
 import { z } from 'zod/v4'
 import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
-import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, TokenUsage, ThinkingLevel } from './types'
+import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, TokenUsage, ThinkingLevel, ContentPart } from './types'
 
 export interface AnthropicAgentsSdkProviderOptions {
   /** Default model (overridden by ChatRequest.model). */
@@ -94,11 +95,11 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       request.signal.addEventListener('abort', () => abortController.abort(), { once: true })
     }
 
-    const prompt = this.formatConversation(filtered)
+    const promptContent = this.buildPromptContent(filtered)
     let session: AsyncIterable<SDKMessage>
     try {
       session = query({
-        prompt: promptIterable(prompt),
+        prompt: promptIterable(promptContent),
         options: {
           ...options,
           abortController,
@@ -156,6 +157,35 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       }
     }
     return `<conversation_history>\n${parts.join('\n\n')}`
+  }
+
+  /**
+   * Build the SDK prompt content, preserving image attachments from user
+   * messages as native Anthropic image content blocks. The text conversation
+   * history is wrapped in <conversation_history>, and any images collected
+   * from user messages are appended as inline image blocks so the model
+   * actually receives them.
+   */
+  buildPromptContent(messages: IMessage[]): string | ContentBlockParam[] {
+    const text = this.formatConversation(messages)
+    const imageBlocks: ContentBlockParam[] = []
+    for (const msg of messages) {
+      if (msg.role !== 'user' || typeof msg.content === 'string') continue
+      for (const part of msg.content as ContentPart[]) {
+        if (part.type !== 'image') continue
+        const src = part.source
+        if (src.type === 'base64') {
+          imageBlocks.push({
+            type: 'image',
+            source: { type: 'base64', media_type: src.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data: src.data },
+          })
+        } else {
+          imageBlocks.push({ type: 'image', source: { type: 'url', url: src.url } })
+        }
+      }
+    }
+    if (imageBlocks.length === 0) return text
+    return [{ type: 'text', text }, ...imageBlocks]
   }
 
   // ── MCP tools with real handlers ───────────────────────────────────
@@ -299,10 +329,10 @@ function stripMcpPrefix(name: string): string {
  * streaming-input mode, where the SDK applies automatic cache_control
  * breakpoints.
  */
-async function* promptIterable(text: string): AsyncGenerator<SDKUserMessage> {
+async function* promptIterable(content: string | ContentBlockParam[]): AsyncGenerator<SDKUserMessage> {
   yield {
     type: 'user',
-    message: { role: 'user', content: text },
+    message: { role: 'user', content },
     parent_tool_use_id: null,
   }
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { ResolvedMessage } from '@/lib/resolveMessages'
-import type { ToolCall } from '@/lib/types'
+import type { ToolCall, ContentPart } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Markdown } from '@/components/Markdown'
 import { SvgPreview } from '@/components/SvgPreview'
@@ -20,6 +20,29 @@ function extractSvgs(content: string): { cleaned: string; svgs: string[] } {
   return { cleaned, svgs }
 }
 
+interface NormalizedContent {
+  text: string
+  images: Array<{ src: string; alt?: string }>
+}
+
+function normalizeContent(content: string | ContentPart[]): NormalizedContent {
+  if (typeof content === 'string') return { text: content, images: [] }
+  const text: string[] = []
+  const images: Array<{ src: string; alt?: string }> = []
+  for (const part of content) {
+    if (part.type === 'text') {
+      text.push(part.text)
+    } else if (part.type === 'image') {
+      if (part.source.type === 'base64') {
+        images.push({ src: `data:${part.source.mediaType};base64,${part.source.data}` })
+      } else {
+        images.push({ src: part.source.url })
+      }
+    }
+  }
+  return { text: text.join(''), images }
+}
+
 interface ConversationMessageProps {
   message: ResolvedMessage
   compact?: boolean
@@ -29,9 +52,11 @@ export function ConversationMessage({ message, compact = false }: ConversationMe
   const isUser = message.role === 'user'
   const { isStreaming } = message
 
+  const { text, images } = useMemo(() => normalizeContent(message.content), [message.content])
+
   const { cleaned, svgs } = useMemo(
-    () => message.content ? extractSvgs(message.content) : { cleaned: '', svgs: [] },
-    [message.content],
+    () => text ? extractSvgs(text) : { cleaned: '', svgs: [] },
+    [text],
   )
 
   return (
@@ -76,6 +101,20 @@ export function ConversationMessage({ message, compact = false }: ConversationMe
             <ThinkingBlock text={message.thinking} defaultOpen={!!isStreaming} />
           )}
 
+          {/* Image attachments */}
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {images.map((img, i) => (
+                <img
+                  key={i}
+                  src={img.src}
+                  alt={img.alt ?? `attachment ${i + 1}`}
+                  className="max-h-64 max-w-full rounded-md border border-border object-contain bg-surface-1"
+                />
+              ))}
+            </div>
+          )}
+
           {/* Text content */}
           {cleaned && (
             <div className={cn(isStreaming && !isUser && 'streaming-cursor')}>
@@ -84,7 +123,7 @@ export function ConversationMessage({ message, compact = false }: ConversationMe
           )}
 
           {/* Thinking loader (streaming, no content yet) */}
-          {isStreaming && !message.content && (!message.toolCalls || message.toolCalls.length === 0) && (
+          {isStreaming && !text && images.length === 0 && (!message.toolCalls || message.toolCalls.length === 0) && (
             <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin text-primary" />
               <span className="italic">thinking...</span>
