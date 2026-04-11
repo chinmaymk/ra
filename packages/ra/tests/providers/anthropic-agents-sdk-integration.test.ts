@@ -94,16 +94,28 @@ describe('AnthropicAgentsSdkProvider + AgentLoop', () => {
     expect(handlerResult.content[0]!.text).toBe('result')
   })
 
-  it('abort stops the loop', async () => {
-    mockQuery.mockImplementation((params: { options: { abortController: AbortController } }) => {
-      const ac = params.options.abortController
-      return (async function* () {
-        await new Promise<void>(resolve => {
-          ac.signal.addEventListener('abort', () => resolve(), { once: true })
-          setTimeout(resolve, 10000)
-        })
-        yield resultMsg()
-      })()
+  it('abort stops the loop via query.interrupt()', async () => {
+    // The persistent-session provider uses query.interrupt() — not an
+    // options.abortController — to stop a long-running turn without tearing
+    // down the subprocess.
+    mockQuery.mockImplementation(() => {
+      let interrupted = false
+      let interruptResolve: (() => void) | undefined
+      const interruptedPromise = new Promise<void>(r => { interruptResolve = r })
+      const q = {
+        next: async (): Promise<IteratorResult<unknown>> => {
+          if (interrupted) return { value: undefined, done: true }
+          await Promise.race([
+            interruptedPromise,
+            new Promise<void>(r => setTimeout(r, 10000)),
+          ])
+          return { value: resultMsg(), done: false }
+        },
+        interrupt: async () => { interrupted = true; interruptResolve?.() },
+        close: () => { interrupted = true; interruptResolve?.() },
+        [Symbol.asyncIterator]() { return this },
+      }
+      return q
     })
 
     const loop = new AgentLoop({ provider: new AnthropicAgentsSdkProvider(), tools: new ToolRegistry(), maxIterations: 10, model: 'x' })

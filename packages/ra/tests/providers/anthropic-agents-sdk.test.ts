@@ -183,10 +183,12 @@ describe('AnthropicAgentsSdkProvider', () => {
       const { prompt } = mockQuery.mock.calls[0]![0]
       expect(prompt[Symbol.asyncIterator]).toBeDefined()
 
-      const yielded: unknown[] = []
-      for await (const m of prompt as AsyncIterable<unknown>) yielded.push(m)
-      expect(yielded).toHaveLength(1)
-      const msg = yielded[0] as { type: string; message: { role: string; content: string } }
+      // The channel is a persistent pushable async iterable — drain the first
+      // queued message only, don't iterate to completion (which would hang).
+      const iter = (prompt as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+      const first = await iter.next()
+      expect(first.done).toBe(false)
+      const msg = first.value as { type: string; message: { role: string; content: string } }
       expect(msg.type).toBe('user')
       expect(msg.message.content).toStartWith('<conversation_history>')
     })
@@ -281,6 +283,265 @@ describe('AnthropicAgentsSdkProvider', () => {
       const c = new AbortController(); c.abort()
       const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }], signal: c.signal }))
       expect(chunks).toEqual([{ type: 'done' }])
+    })
+  })
+
+  // ── persistent session (one subprocess per provider) ─────────────
+
+  describe('persistent session', () => {
+    /**
+     * Build a fake Query that reads from the channel (prompt) and replies
+     * with a scripted batch of events for each user message it receives.
+     * Mirrors how the real CLI subprocess keeps the process alive across turns.
+     */
+    function persistentQueryMock(batches: unknown[][]) {
+      let batchIdx = 0
+      return (params: { prompt: AsyncIterable<unknown>; options: unknown }) => {
+        const prompt = params.prompt
+        const inputIter = prompt[Symbol.asyncIterator]()
+        const outQueue: unknown[] = []
+        let pendingResolve: ((r: IteratorResult<unknown, void>) => void) | null = null
+        let closed = false
+
+        async function pump() {
+          while (!closed) {
+            const { done } = await inputIter.next()
+            if (done) { closed = true; break }
+            const batch = batches[batchIdx++] ?? []
+            for (const msg of batch) {
+              if (pendingResolve) {
+                const r = pendingResolve; pendingResolve = null
+                r({ value: msg, done: false })
+              } else {
+                outQueue.push(msg)
+              }
+            }
+          }
+          if (pendingResolve) {
+            const r = pendingResolve; pendingResolve = null
+            r({ value: undefined, done: true })
+          }
+        }
+        void pump()
+
+        const q = {
+          next: (): Promise<IteratorResult<unknown, void>> => {
+            if (outQueue.length > 0) return Promise.resolve({ value: outQueue.shift()!, done: false })
+            if (closed) return Promise.resolve({ value: undefined, done: true })
+            return new Promise(resolve => { pendingResolve = resolve })
+          },
+          interrupt: async () => { /* noop */ },
+          close: () => {
+            closed = true
+            if (pendingResolve) {
+              const r = pendingResolve; pendingResolve = null
+              r({ value: undefined, done: true })
+            }
+          },
+          [Symbol.asyncIterator]() { return this },
+        }
+        return q
+      }
+    }
+
+    it('reuses a single query() across multiple stream() calls', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([
+        [streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'first' } }), resultMsg()],
+        [streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'second' } }), resultMsg()],
+      ]))
+
+      const provider = new AnthropicAgentsSdkProvider()
+      const t1 = await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as { type: string; delta?: string }[]
+      const t2 = await collect(provider.stream({ model: 'x', messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'first' },
+        { role: 'user', content: 'again' },
+      ] })) as { type: string; delta?: string }[]
+
+      expect(mockQuery).toHaveBeenCalledTimes(1)
+      expect(t1.find(c => c.type === 'text')?.delta).toBe('first')
+      expect(t2.find(c => c.type === 'text')?.delta).toBe('second')
+      await provider.close()
+    })
+
+    it('pushes only new user messages on follow-up turns (raw text, not re-wrapped history)', async () => {
+      let pushedInputs: { type: string; message: { content: string } }[] = []
+      mockQuery.mockImplementation((params: { prompt: AsyncIterable<unknown> }) => {
+        const iter = params.prompt[Symbol.asyncIterator]()
+        let closed = false
+        async function drainOne() {
+          const r = await iter.next()
+          if (!r.done) pushedInputs.push(r.value as { type: string; message: { content: string } })
+        }
+        return {
+          next: async () => {
+            if (closed) return { value: undefined, done: true }
+            await drainOne()
+            closed = true
+            return { value: resultMsg(), done: false }
+          },
+          interrupt: async () => {},
+          close: () => { closed = true },
+          [Symbol.asyncIterator]() { return this },
+        }
+      })
+
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      // The mock above only drains one message per turn, so reset and switch
+      // mock for a second turn-aware scenario using the persistent mock.
+      pushedInputs = []
+      mockQuery.mockImplementation(persistentQueryMock([
+        [resultMsg()],
+        [resultMsg()],
+      ]))
+      const provider2 = new AnthropicAgentsSdkProvider()
+      // Capture what gets pushed into the channel via the mock
+      const captured: string[] = []
+      const originalImpl = mockQuery.getMockImplementation()!
+      mockQuery.mockImplementation((params: { prompt: AsyncIterable<unknown>; options: unknown }) => {
+        const realIter = params.prompt[Symbol.asyncIterator]()
+        const wrapped: AsyncIterable<unknown> = {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => {
+                const r = await realIter.next()
+                if (!r.done) captured.push((r.value as { message: { content: string } }).message.content)
+                return r
+              },
+            }
+          },
+        }
+        return originalImpl({ prompt: wrapped, options: params.options })
+      })
+
+      await collect(provider2.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      await collect(provider2.stream({ model: 'x', messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'ok' },
+        { role: 'user', content: 'next' },
+      ] }))
+
+      expect(captured[0]).toStartWith('<conversation_history>')
+      expect(captured[1]).toBe('next')
+      await provider2.close()
+    })
+
+    it('starts a fresh subprocess when the model changes', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([[resultMsg()], [resultMsg()]]))
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'a', messages: [{ role: 'user', content: 'hi' }] }))
+      await collect(provider.stream({ model: 'b', messages: [{ role: 'user', content: 'hi' }] }))
+      expect(mockQuery).toHaveBeenCalledTimes(2)
+      await provider.close()
+    })
+
+    it('starts a fresh subprocess when the system prompt changes', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([[resultMsg()], [resultMsg()]]))
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'system', content: 'A.' }, { role: 'user', content: 'hi' }] }))
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'system', content: 'B.' }, { role: 'user', content: 'hi' }] }))
+      expect(mockQuery).toHaveBeenCalledTimes(2)
+      await provider.close()
+    })
+
+    it('starts a fresh subprocess when tool schemas change', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([[resultMsg()], [resultMsg()]]))
+      const provider = new AnthropicAgentsSdkProvider()
+      const toolA = { name: 'a', description: 'a', inputSchema: { type: 'object', properties: {} }, execute: async () => 'ok' }
+      const toolB = { name: 'b', description: 'b', inputSchema: { type: 'object', properties: {} }, execute: async () => 'ok' }
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }], tools: [toolA] }))
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }], tools: [toolB] }))
+      expect(mockQuery).toHaveBeenCalledTimes(2)
+      await provider.close()
+    })
+
+    it('reuses the subprocess when tools swap execute() refs but keep schemas', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([[resultMsg()], [resultMsg()]]))
+      const provider = new AnthropicAgentsSdkProvider()
+      const tool1 = { name: 'x', description: 'd', inputSchema: { type: 'object', properties: {} }, execute: async () => 'one' }
+      const tool2 = { name: 'x', description: 'd', inputSchema: { type: 'object', properties: {} }, execute: async () => 'two' }
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }], tools: [tool1] }))
+      await collect(provider.stream({ model: 'x', messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'ok' },
+        { role: 'user', content: 'again' },
+      ], tools: [tool2] }))
+      expect(mockQuery).toHaveBeenCalledTimes(1)
+
+      // The MCP handler registered at session creation should, when invoked,
+      // resolve through the mutable map and call tool2.execute (the latest ref).
+      const handler = mockSdkTool.mock.calls[0]![3] as (input: unknown) => Promise<{ content: { text: string }[] }>
+      expect((await handler({})).content[0]!.text).toBe('two')
+      await provider.close()
+    })
+
+    it('invalidates the session when prior messages are rewritten (e.g. compaction)', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([[resultMsg()], [resultMsg()]]))
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'x', messages: [
+        { role: 'user', content: 'original' },
+      ] }))
+      // Simulate compaction: the first user message is rewritten.
+      await collect(provider.stream({ model: 'x', messages: [
+        { role: 'user', content: 'compacted summary' },
+        { role: 'user', content: 'follow-up' },
+      ] }))
+      expect(mockQuery).toHaveBeenCalledTimes(2)
+      await provider.close()
+    })
+
+    it('close() terminates the subprocess and the next stream() starts fresh', async () => {
+      const closeCalls: number[] = []
+      let idx = 0
+      const orig = persistentQueryMock([[resultMsg()], [resultMsg()]])
+      mockQuery.mockImplementation((params: { prompt: AsyncIterable<unknown>; options: unknown }) => {
+        const inner = orig(params) as { close: () => void } & AsyncIterator<unknown, void>
+        const origClose = inner.close.bind(inner)
+        const instanceId = ++idx
+        inner.close = () => { closeCalls.push(instanceId); origClose() }
+        return inner
+      })
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      await provider.close()
+      expect(closeCalls).toEqual([1])
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      expect(mockQuery).toHaveBeenCalledTimes(2)
+      await provider.close()
+    })
+
+    it('interrupts the session on abort but does not spawn a new subprocess until it is invalidated', async () => {
+      let interrupts = 0
+      let closes = 0
+      mockQuery.mockImplementation(() => {
+        let interrupted = false
+        let resolveWait: (() => void) | undefined
+        const wait = new Promise<void>(r => { resolveWait = r })
+        const q = {
+          next: async () => {
+            if (interrupted) return { value: undefined, done: true }
+            await wait
+            return { value: resultMsg(), done: false }
+          },
+          interrupt: async () => { interrupts++; interrupted = true; resolveWait?.() },
+          close: () => { closes++; interrupted = true; resolveWait?.() },
+          [Symbol.asyncIterator]() { return this },
+        }
+        return q
+      })
+
+      const provider = new AnthropicAgentsSdkProvider()
+      const ac = new AbortController()
+      const streamPromise = collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'wait' }], signal: ac.signal }))
+      await new Promise(r => setTimeout(r, 10))
+      ac.abort()
+      const chunks = await streamPromise as { type: string }[]
+      expect(chunks.at(-1)?.type).toBe('done')
+      expect(interrupts).toBeGreaterThanOrEqual(1)
+      // Session is retired after interrupt → next call spawns a fresh process.
+      expect(closes).toBeGreaterThanOrEqual(1)
+      await provider.close()
     })
   })
 
