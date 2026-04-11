@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from '@/hooks/useSession'
 import { ConversationThread } from '@/components/session/ConversationThread'
 import { SessionSidebar } from '@/components/session/SessionSidebar'
@@ -6,8 +6,8 @@ import { ChatComposer } from '@/components/ChatComposer'
 import { StatusBadge, StatusDot } from '@/components/StatusDot'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { ArrowLeft, Square, GitBranch, PanelRightClose, PanelRightOpen, Activity } from '@/components/icons'
-import { formatTokens } from '@/lib/utils'
+import { ArrowLeft, ArrowUp, Square, GitBranch, PanelRightClose, PanelRightOpen, Activity } from '@/components/icons'
+import { cn, formatTokens } from '@/lib/utils'
 
 interface SessionDetailProps {
   sessionId: string
@@ -17,18 +17,42 @@ interface SessionDetailProps {
 export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
   const { info, messages, streaming, send, stop } = useSession(sessionId)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const didInitialScrollRef = useRef(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showScrollUp, setShowScrollUp] = useState(false)
+
+  const hasContent = messages.some(m => m.role === 'user' || m.role === 'assistant')
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    // Only auto-scroll if the reader is already near the bottom, so we
-    // don't yank them away from content they're reading.
+
+    // On first render with content, pin instantly to the bottom so the
+    // user lands on the latest message without a jarring scroll animation.
+    if (!didInitialScrollRef.current && hasContent) {
+      el.scrollTop = el.scrollHeight
+      didInitialScrollRef.current = true
+      setShowScrollUp(el.scrollTop > 40)
+      return
+    }
+
+    // Subsequent updates: only auto-scroll if the reader is already near
+    // the bottom, so we don't yank them away from content they're reading.
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
     if (distance < 240) {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     }
-  }, [messages.length, streaming.text.length, streaming.toolCalls.size])
+  }, [hasContent, messages.length, streaming.text.length, streaming.toolCalls.size])
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setShowScrollUp(el.scrollTop > 40)
+  }, [])
+
+  const scrollToTop = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
 
   if (!info) {
     return (
@@ -45,8 +69,6 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
   const cachePercent = info.tokenUsage.inputTokens > 0
     ? Math.round((info.tokenUsage.cacheReadTokens / info.tokenUsage.inputTokens) * 100)
     : 0
-
-  const hasContent = messages.some(m => m.role === 'user' || m.role === 'assistant')
 
   return (
     <TooltipProvider>
@@ -103,20 +125,46 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
           </div>
 
           {/* Messages */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto smooth-scroll">
-            {!hasContent && !streaming.isStreaming ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm text-center px-8">
-                <div className="h-10 w-10 rounded-xl bg-surface-1 border border-border flex items-center justify-center mb-3">
-                  <Activity className="h-5 w-5 text-dim-foreground" />
+          <div className="relative flex-1 min-h-0">
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="absolute inset-0 overflow-y-auto"
+            >
+              {!hasContent && !streaming.isStreaming ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm text-center px-8">
+                  <div className="h-10 w-10 rounded-xl bg-surface-1 border border-border flex items-center justify-center mb-3">
+                    <Activity className="h-5 w-5 text-dim-foreground" />
+                  </div>
+                  <p>No messages yet</p>
+                  <p className="text-xs text-dim-foreground mt-1">Send a message below to start the conversation</p>
                 </div>
-                <p>No messages yet</p>
-                <p className="text-xs text-dim-foreground mt-1">Send a message below to start the conversation</p>
-              </div>
-            ) : (
-              <div className="py-2">
-                <ConversationThread messages={messages} streaming={streaming} />
-              </div>
-            )}
+              ) : (
+                <div className="py-2">
+                  <ConversationThread messages={messages} streaming={streaming} />
+                </div>
+              )}
+            </div>
+
+            {/* Scroll-to-top affordance — lands at bottom by default,
+                so this lets the reader reach earlier messages. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={scrollToTop}
+                  aria-label="Scroll to top"
+                  className={cn(
+                    'absolute bottom-4 right-4 h-9 w-9 rounded-full border border-border-strong bg-surface-2/90 backdrop-blur-md text-muted-foreground shadow-lg flex items-center justify-center hover:text-foreground hover:bg-surface-3 hover:border-border-bright transition-all',
+                    showScrollUp
+                      ? 'opacity-100 translate-y-0 pointer-events-auto'
+                      : 'opacity-0 translate-y-2 pointer-events-none',
+                  )}
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Scroll to top</TooltipContent>
+            </Tooltip>
           </div>
 
           {/* Stats footer */}
