@@ -153,6 +153,7 @@ export class AgentLoop {
       ...(thinking && { thinking }),
       ...(thinking && this.thinkingBudgetCap && { thinkingBudgetCap: this.thinkingBudgetCap }),
       signal,
+      sessionId: this.sessionId,
     }
   }
 

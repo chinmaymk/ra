@@ -29,6 +29,12 @@ export interface SessionMeta {
    * are rehydrated as 'needs-input' since their loop does not survive restart.
    */
   status?: 'idle' | 'running' | 'needs-input' | 'error' | 'done'
+  /**
+   * CC session UUID captured from the anthropic-agents-sdk provider's init
+   * event. Persisted so a new provider instance after an ra process restart
+   * can `resume` the same CC conversation instead of starting fresh.
+   */
+  sdkSessionId?: string
 }
 
 export interface Session {

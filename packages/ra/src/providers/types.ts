@@ -69,6 +69,13 @@ export interface ChatRequest {
   thinkingBudgetCap?: number
   providerOptions?: Record<string, unknown>
   signal?: AbortSignal
+  /**
+   * Identifier of the ra session driving this request. Stateless providers
+   * ignore it; stateful providers (e.g. anthropic-agents-sdk, whose subprocess
+   * is 1:1 with a session) may use it as a stable UUID for CC session
+   * resumption so history survives subprocess rebuilds and ra restarts.
+   */
+  sessionId?: string
 }
 
 export interface ChatResponse {

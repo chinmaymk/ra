@@ -57,7 +57,7 @@ describe('AnthropicAgentsSdkProvider', () => {
     }
 
     it('disables all setting sources', async () => { expect((await getOptions()).settingSources).toEqual([]) })
-    it('disables session persistence', async () => { expect((await getOptions()).persistSession).toBe(false) })
+    it('enables session persistence so we can resume across subprocess restarts', async () => { expect((await getOptions()).persistSession).toBe(true) })
     it('disables auto-memory and auto-dream', async () => {
       const o = await getOptions()
       expect(o.settings.autoMemoryEnabled).toBe(false)
@@ -365,6 +365,33 @@ describe('AnthropicAgentsSdkProvider', () => {
       const c = new AbortController(); c.abort()
       const chunks = await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }], signal: c.signal }))
       expect(chunks).toEqual([{ type: 'done' }])
+    })
+
+    it('seeds resumeSessionId from constructor options and passes it as resume', async () => {
+      mockQueryWith(resultMsg())
+      const provider = new AnthropicAgentsSdkProvider({ resumeSessionId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' })
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      const opts = mockQuery.mock.calls[0]![0].options
+      expect(opts.resume).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
+    })
+
+    it('calls onSessionId when init event contains session_id', async () => {
+      const captured: string[] = []
+      mockQueryWith(
+        { type: 'system', subtype: 'init', session_id: 'cc-uuid-1234', uuid: 'u' },
+        resultMsg(),
+      )
+      const provider = new AnthropicAgentsSdkProvider({ onSessionId: (id) => captured.push(id) })
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      expect(captured).toEqual(['cc-uuid-1234'])
+    })
+
+    it('uses constructor resumeSessionId over request.sessionId', async () => {
+      mockQueryWith(resultMsg())
+      const provider = new AnthropicAgentsSdkProvider({ resumeSessionId: 'from-constructor' })
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }], sessionId: 'from-request' }))
+      const opts = mockQuery.mock.calls[0]![0].options
+      expect(opts.resume).toBe('from-constructor')
     })
   })
 

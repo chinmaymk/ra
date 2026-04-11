@@ -9,6 +9,19 @@ import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool
 export interface AnthropicAgentsSdkProviderOptions {
   /** Default model (overridden by ChatRequest.model). */
   model?: string
+  /**
+   * CC session UUID to resume on startup. Persisted by the caller (e.g.
+   * SessionManager) so that a freshly-constructed provider after an ra
+   * process restart can reattach to CC's server-side conversation state
+   * instead of starting a brand-new session.
+   */
+  resumeSessionId?: string
+  /**
+   * Called whenever the provider captures a CC session UUID (from the
+   * `init` system message). The caller should persist this so it can be
+   * passed back as `resumeSessionId` on the next provider construction.
+   */
+  onSessionId?: (sessionId: string) => void
 }
 
 interface PersistentSession {
@@ -18,7 +31,17 @@ interface PersistentSession {
   fingerprint: string
   /** Number of messages from the previous ChatRequest that we have already seeded into the session. */
   sentMessages: number
+  /**
+   * CC's own session UUID, captured from the first `init` system message.
+   * Used to `resume` the same CC session if the subprocess has to restart
+   * (fingerprint change, error recovery, or a new provider instance after
+   * an ra process restart). Without this, the rebuilt subprocess would
+   * have no memory of prior turns and followups would lose all history.
+   */
+  sdkSessionId?: string
 }
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * Provider that wraps the Anthropic Agent SDK.
@@ -27,11 +50,16 @@ interface PersistentSession {
  * AND tool execution (via MCP handlers that bridge to ra's tools).
  * ra owns context engineering, the outer conversation loop, and middleware.
  *
- * Persistent subprocess: one `query()` (one Claude CLI subprocess) per
- * provider instance. Each `stream()` call pushes the new user message(s)
- * into the streaming-input prompt channel and consumes SDK events until
- * the turn's `result` message arrives, then yields control back to ra.
- * The subprocess — and its prompt cache — stays warm across turns.
+ * **One provider instance = one Claude CLI subprocess = one conversation.**
+ * Callers that manage multiple concurrent ra sessions (e.g. the web session
+ * manager) should instantiate a separate `AnthropicAgentsSdkProvider` per
+ * session so the subprocesses — and their prompt caches — stay isolated.
+ *
+ * Each `stream()` call pushes the new user message into the streaming-input
+ * prompt channel and consumes SDK events until the turn's `result` message
+ * arrives, then yields control back to ra. The subprocess stays warm across
+ * turns. If it has to be rebuilt (fingerprint change, error, process restart),
+ * we reattach to the same CC session via `resume` so no history is lost.
  */
 export class AnthropicAgentsSdkProvider implements IProvider {
   readonly name = 'anthropic-agents-sdk'
@@ -42,9 +70,19 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   private defaultModel?: string
   private session?: PersistentSession
   private turnLock: Promise<void> = Promise.resolve()
+  /**
+   * CC session UUID to resume on next subprocess start. Survives `teardown()`
+   * so that rebuilding the subprocess (for any reason) reattaches to CC's
+   * server-side conversation state instead of starting fresh.
+   */
+  private resumeSessionId?: string
+
+  private onSessionId?: (sessionId: string) => void
 
   constructor(options: AnthropicAgentsSdkProviderOptions = {}) {
     this.defaultModel = options.model
+    if (options.resumeSessionId) this.resumeSessionId = options.resumeSessionId
+    this.onSessionId = options.onSessionId
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
@@ -75,7 +113,11 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         includeGitInstructions: false,
         respectGitignore: false,
       },
-      persistSession: false,
+      // Enable CC's native session persistence so a fresh subprocess can
+      // `resume` the same conversation after ra restarts or the subprocess
+      // dies. Without this, mid-conversation subprocess restarts would lose
+      // all prior turns (ra only forwards new user messages each turn).
+      persistSession: true,
       enableFileCheckpointing: false,
       includePartialMessages: true,
       plugins: [],
@@ -115,10 +157,22 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       const fingerprint = this.fingerprint(request)
       const { filtered } = extractSystemMessages(request.messages)
 
+      // Seed `resumeSessionId` from the caller's ra session id on the very
+      // first call against a new provider instance. This makes the CC side
+      // use a stable, caller-supplied UUID so subsequent resume attempts
+      // find the right persisted session even across ra process restarts.
+      // Only used when the session is cold (no subprocess yet) and we don't
+      // already have a captured `sdkSessionId` from a prior turn.
+      if (!this.session && !this.resumeSessionId && request.sessionId && UUID_REGEX.test(request.sessionId)) {
+        this.resumeSessionId = request.sessionId
+      }
+
       // Restart the subprocess if: fingerprint (model/system/tools/thinking)
       // changed, OR the caller's message history shrunk below what we
       // already sent (compaction / reset — ra's view has diverged from the
-      // SDK's internal state and we can't sync cleanly).
+      // SDK's internal state and we can't sync cleanly). CC's server-side
+      // session state survives the teardown: on the next `startSession` we
+      // `resume` it so no history is lost.
       if (
         this.session &&
         (this.session.fingerprint !== fingerprint || filtered.length < this.session.sentMessages)
@@ -133,7 +187,12 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       // Forward every ra message the SDK hasn't seen yet. Assistant messages
       // are skipped (the SDK emitted them itself), user messages pass through,
       // and tool messages are wrapped as user messages so seeded/injected
-      // tool results still reach the model.
+      // tool results still reach the model. When we just resumed a CC session
+      // after a subprocess rebuild, `sentMessages` is 0 so we replay all of
+      // ra's history — but CC itself already has the prior turns persisted,
+      // and the streaming-input inbox only accepts new user/tool turns after
+      // the `resume`, so in practice only the trailing untracked user/tool
+      // messages reach the model.
       const toSend: SDKUserMessage[] = []
       for (const msg of filtered.slice(session.sentMessages)) {
         const sdkMsg = this.toSdkMessage(msg)
@@ -157,7 +216,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       request.signal?.addEventListener('abort', onAbort, { once: true })
 
       try {
-        yield* withDoneGuard(this.parseOneTurn(session.query))
+        yield* withDoneGuard(this.parseOneTurn(session))
       } catch (err) {
         await this.teardown()
         this.rethrowCliError(err)
@@ -176,6 +235,12 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     const abortController = new AbortController()
     const inbox = makeInbox<SDKUserMessage>()
 
+    // Resume CC's server-side session if we know its id (either captured from
+    // a previous init event, or supplied by the caller via request.sessionId
+    // on the first cold-start). This is what keeps history intact across
+    // subprocess rebuilds — ra no longer has to replay transcripts manually.
+    const resumeId = this.resumeSessionId
+
     let q: Query
     try {
       q = query({
@@ -183,6 +248,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         options: {
           ...options,
           abortController,
+          ...(resumeId && { resume: resumeId }),
           ...(mcpServer && { mcpServers: { [MCP_SERVER_NAME]: mcpServer } }),
         },
       })
@@ -196,6 +262,7 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       abortController,
       fingerprint,
       sentMessages: 0,
+      sdkSessionId: resumeId,
     }
   }
 
@@ -203,6 +270,9 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     const session = this.session
     if (!session) return
     this.session = undefined
+    // Preserve the CC session id so the next startSession() can resume it —
+    // the subprocess is gone but CC has the conversation state persisted.
+    if (session.sdkSessionId) this.resumeSessionId = session.sdkSessionId
     try { await session.query.interrupt() } catch { /* ignore */ }
     session.inbox.close()
     if (!session.abortController.signal.aborted) session.abortController.abort()
@@ -339,14 +409,17 @@ export class AnthropicAgentsSdkProvider implements IProvider {
    * until the SDK emits its `result` message, then returns — leaving
    * the underlying Query paused, ready for the next user message.
    * Tool calls are resolved by the SDK internally and are not surfaced.
+   *
+   * Captures CC's session UUID from the `init` system message so we can
+   * `resume` it if the subprocess has to restart later.
    */
-  private async *parseOneTurn(session: Query): AsyncIterable<StreamChunk> {
+  private async *parseOneTurn(session: PersistentSession): AsyncIterable<StreamChunk> {
     let usage: TokenUsage | undefined
     // Manual iteration — using `for await ... break` would implicitly call
     // `.return()` on the iterator and close the generator, which would kill
     // the persistent subprocess. We need to stop pulling at the turn's
     // `result` message without signalling the generator to terminate.
-    const iter = session[Symbol.asyncIterator]()
+    const iter = session.query[Symbol.asyncIterator]()
     while (true) {
       const step = await iter.next()
       if (step.done) break
@@ -359,6 +432,13 @@ export class AnthropicAgentsSdkProvider implements IProvider {
           } else if (event.delta.type === 'thinking_delta') {
             yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
           }
+        }
+      } else if (msg.type === 'system' && msg.subtype === 'init') {
+        const id = (msg as { session_id?: string }).session_id
+        if (id) {
+          session.sdkSessionId = id
+          this.resumeSessionId = id
+          this.onSessionId?.(id)
         }
       } else if (msg.type === 'result') {
         usage = this.extractUsage(msg)

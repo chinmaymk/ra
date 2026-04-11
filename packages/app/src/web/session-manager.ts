@@ -1,9 +1,13 @@
 import {
   type AgentLoop,
+  createProvider,
+  buildProviderConfig,
   extractTextContent,
   type IMessage,
+  type IProvider,
   type ContentPart,
   type MiddlewareConfig,
+  type ProviderName,
   type StreamChunkContext,
   type LoopContext,
   type ToolExecutionContext,
@@ -62,6 +66,12 @@ interface SessionInternal {
   info: ManagedSession
   /** Active AgentLoop while running, null when idle/done. */
   loop: AgentLoop | null
+  /**
+   * Per-session provider instance. Stateful providers (e.g. anthropic-agents-sdk,
+   * whose subprocess and prompt cache are 1:1 with a conversation) must not be
+   * shared across managed sessions. Lazily constructed when the loop is built.
+   */
+  provider: IProvider | null
   messages: IMessage[]
   priorCount: number
   subscribers: Set<(event: SessionEvent) => void>
@@ -74,6 +84,11 @@ interface SessionInternal {
    * content. Reset at the start of each turn and cleared on loop completion.
    */
   pendingStream: PendingStream
+  /**
+   * CC session UUID from the anthropic-agents-sdk provider. Persisted to
+   * storage so a new provider after restart can resume the CC conversation.
+   */
+  sdkSessionId?: string
 }
 
 export interface ImageAttachment {
@@ -178,11 +193,13 @@ export class SessionManager {
       this.sessions.set(s.id, {
         info,
         loop: null,
+        provider: null,
         messages: [],
         priorCount: 0,
         subscribers: new Set(),
         messagesLoaded: false,
         pendingStream: emptyPendingStream(),
+        sdkSessionId: s.meta.sdkSessionId,
       })
     }))
   }
@@ -295,6 +312,7 @@ export class SessionManager {
     const internal: SessionInternal = {
       info,
       loop: null,
+      provider: null,
       messages: [...prefix],
       priorCount: 0,
       subscribers: new Set(),
@@ -361,7 +379,13 @@ export class SessionManager {
     // the loop is born. Subsequent hot reloads to the config won't affect
     // sessions that have already started — by design, an agent's identity
     // is fixed for its lifetime.
-    const baseOptions = buildLoopOptions(this.app)
+    //
+    // Mint a dedicated provider instance for this session. Stateful providers
+    // like anthropic-agents-sdk keep a persistent CC subprocess per instance,
+    // so sharing `app.provider` across managed sessions would make them
+    // clobber each other's subprocess state. One provider = one session.
+    if (!session.provider) session.provider = this.buildSessionProvider(session)
+    const baseOptions = { ...buildLoopOptions(this.app), provider: session.provider }
     const streamMiddleware = this.buildStreamMiddleware(session)
 
     const { loop } = createSessionLoop(baseOptions, {
@@ -374,6 +398,37 @@ export class SessionManager {
 
     session.loop = loop
     return loop
+  }
+
+  /**
+   * Build a fresh provider instance for a session. Mirrors bootstrap.ts's
+   * construction but reads the *current* config (so newly-created sessions
+   * pick up any hot-reloaded provider settings). Existing sessions keep
+   * their provider for life — see the lifetime note in `getOrCreateLoop`.
+   *
+   * For the anthropic-agents-sdk provider, `sdkSessionId` is passed as
+   * `resumeSessionId` so a fresh subprocess can reattach to CC's persisted
+   * conversation state after an ra process restart. The `onSessionId`
+   * callback persists any newly-captured CC session UUID to storage.
+   */
+  private buildSessionProvider(session: SessionInternal): IProvider {
+    const { agent, app } = this.app.config
+    const name = agent.provider as ProviderName
+    const baseOpts = app.providers[name] ?? {}
+
+    if (name === 'anthropic-agents-sdk') {
+      const sdkOpts = {
+        ...baseOpts,
+        ...(session.sdkSessionId && { resumeSessionId: session.sdkSessionId }),
+        onSessionId: (id: string) => {
+          session.sdkSessionId = id
+          void this.app.storage.updateMeta(session.info.id, { sdkSessionId: id })
+        },
+      }
+      return createProvider({ provider: name, ...sdkOpts })
+    }
+
+    return createProvider(buildProviderConfig(name as Exclude<ProviderName, 'anthropic-agents-sdk'>, baseOpts as Record<string, unknown>))
   }
 
   private async runLoop(session: SessionInternal): Promise<void> {
