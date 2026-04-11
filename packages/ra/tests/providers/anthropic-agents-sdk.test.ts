@@ -102,46 +102,31 @@ describe('AnthropicAgentsSdkProvider', () => {
     })
   })
 
-  // ── formatConversation ─────────────────────────────────────────────
+  // ── toSdkUserMessage ──────────────────────────────────────────────
 
-  describe('formatConversation', () => {
+  describe('toSdkUserMessage', () => {
     const provider = new AnthropicAgentsSdkProvider()
 
-    it('opens with a stable conversation_history anchor and no closing tag', () => {
-      const result = provider.formatConversation([{ role: 'user', content: 'hello' }])
-      expect(result).toStartWith('<conversation_history>')
-      expect(result).not.toContain('</conversation_history>')
-      expect(result).toContain('<user>\nhello\n</user>')
+    it('passes plain text through as a string content', () => {
+      const msg = provider.toSdkUserMessage({ role: 'user', content: 'hi' })
+      expect(msg.type).toBe('user')
+      expect(msg.message.role).toBe('user')
+      expect(msg.message.content).toBe('hi')
+      expect(msg.parent_tool_use_id).toBeNull()
     })
 
-    it('includes user and assistant messages', () => {
-      const result = provider.formatConversation([
-        { role: 'user', content: 'hi' },
-        { role: 'assistant', content: 'hello!' },
-      ])
-      expect(result).toContain('<user>\nhi\n</user>')
-      expect(result).toContain('<assistant>\nhello!\n</assistant>')
-    })
-
-    it('omits tool messages — the SDK resolved them internally', () => {
-      const result = provider.formatConversation([
-        { role: 'user', content: 'read it' },
-        { role: 'assistant', content: 'Sure, reading now.' },
-        { role: 'tool', content: 'file contents', toolCallId: 'tc_1' },
-      ])
-      expect(result).not.toContain('<tool_result')
-      expect(result).not.toContain('<tool_call')
-      expect(result).toContain('<user>')
-      expect(result).toContain('<assistant>')
-    })
-
-    it('is append-only: each new turn is a byte-prefix of the next', () => {
-      const turn1 = provider.formatConversation([{ role: 'user', content: 'hi' }])
-      const turn2 = provider.formatConversation([
-        { role: 'user', content: 'hi' },
-        { role: 'assistant', content: 'hello!' },
-      ])
-      expect(turn2.startsWith(turn1)).toBe(true)
+    it('preserves image attachments as native image blocks', () => {
+      const msg = provider.toSdkUserMessage({
+        role: 'user',
+        content: [
+          { type: 'text', text: 'see this' },
+          { type: 'image', source: { type: 'base64', mediaType: 'image/png', data: 'abc' } },
+        ],
+      })
+      const content = msg.message.content as Array<{ type: string }>
+      expect(Array.isArray(content)).toBe(true)
+      expect(content[0]!.type).toBe('text')
+      expect(content[1]!.type).toBe('image')
     })
   })
 
@@ -177,18 +162,117 @@ describe('AnthropicAgentsSdkProvider', () => {
   // ── stream() ──────────────────────────────────────────────────────
 
   describe('stream()', () => {
-    it('passes prompt as an async iterable (streaming-input mode)', async () => {
+    it('pushes the new user message into the persistent prompt channel', async () => {
       mockQueryWith(resultMsg())
       await collect(new AnthropicAgentsSdkProvider().stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
       const { prompt } = mockQuery.mock.calls[0]![0]
       expect(prompt[Symbol.asyncIterator]).toBeDefined()
 
-      const yielded: unknown[] = []
-      for await (const m of prompt as AsyncIterable<unknown>) yielded.push(m)
-      expect(yielded).toHaveLength(1)
-      const msg = yielded[0] as { type: string; message: { role: string; content: string } }
+      // Pull one message from the inbox without draining — the channel
+      // stays open across turns so `for await … of prompt` would hang.
+      const iterator = (prompt as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+      const first = await iterator.next()
+      expect(first.done).toBe(false)
+      const msg = first.value as { type: string; message: { role: string; content: string } }
       expect(msg.type).toBe('user')
-      expect(msg.message.content).toStartWith('<conversation_history>')
+      expect(msg.message.content).toBe('hi')
+    })
+
+    it('reuses a single subprocess across multiple turns', async () => {
+      // First turn yields a text delta then a result; after the result the SDK
+      // stays paused — second turn continues from the same generator, yielding
+      // a second text delta and a second result.
+      mockQuery.mockReturnValueOnce((async function* () {
+        yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'one' } })
+        yield resultMsg()
+        yield streamEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'two' } })
+        yield resultMsg()
+      })())
+
+      const provider = new AnthropicAgentsSdkProvider()
+      const first = await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as { type: string; delta?: string }[]
+      const second = await collect(provider.stream({
+        model: 'x',
+        messages: [
+          { role: 'user', content: 'hi' },
+          { role: 'assistant', content: 'one' },
+          { role: 'user', content: 'again' },
+        ],
+      })) as { type: string; delta?: string }[]
+
+      expect(mockQuery).toHaveBeenCalledTimes(1)
+      expect(first.filter(c => c.type === 'text')).toEqual([{ type: 'text', delta: 'one' }])
+      expect(second.filter(c => c.type === 'text')).toEqual([{ type: 'text', delta: 'two' }])
+    })
+
+    it('restarts the subprocess when history shrinks (compaction / reset)', async () => {
+      mockQuery.mockReturnValueOnce((async function* () { yield resultMsg() })())
+      mockQuery.mockReturnValueOnce((async function* () { yield resultMsg() })())
+
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({
+        model: 'x',
+        messages: [
+          { role: 'user', content: 'one' },
+          { role: 'assistant', content: 'ok' },
+          { role: 'user', content: 'two' },
+        ],
+      }))
+      // Caller compacts history to just the latest turn — persistent SDK
+      // state has diverged, so we must restart.
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'fresh' }] }))
+
+      expect(mockQuery).toHaveBeenCalledTimes(2)
+    })
+
+    it('throws when a turn has no new user or tool input', async () => {
+      mockQuery.mockReturnValueOnce((async function* () { yield resultMsg() })())
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      // Same history, no new input — would hang the SDK forever.
+      await expect(
+        collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })),
+      ).rejects.toThrow(/no new user\/tool messages/)
+    })
+
+    it('forwards tool result messages as native tool_result content blocks', async () => {
+      mockQuery.mockReturnValueOnce((async function* () {
+        yield resultMsg()
+        yield resultMsg()
+      })())
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'go' }] }))
+      await collect(provider.stream({
+        model: 'x',
+        messages: [
+          { role: 'user', content: 'go' },
+          { role: 'assistant', content: 'thinking…' },
+          { role: 'tool', content: 'file contents here', toolCallId: 'tc_1', isError: true },
+        ],
+      }))
+
+      const prompt = mockQuery.mock.calls[0]![0].prompt as AsyncIterable<{ message: { content: unknown } }>
+      const iter = prompt[Symbol.asyncIterator]()
+      const first = (await iter.next()).value
+      const second = (await iter.next()).value
+      expect(first.message.content).toBe('go')
+      expect(Array.isArray(second.message.content)).toBe(true)
+      const block = (second.message.content as Array<Record<string, unknown>>)[0]!
+      expect(block.type).toBe('tool_result')
+      expect(block.tool_use_id).toBe('tc_1')
+      expect(block.content).toBe('file contents here')
+      expect(block.is_error).toBe(true)
+    })
+
+    it('restarts the subprocess when the system prompt or tools change', async () => {
+      mockQuery.mockReturnValueOnce((async function* () { yield resultMsg() })())
+      mockQuery.mockReturnValueOnce((async function* () { yield resultMsg() })())
+
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'system', content: 'A' }, { role: 'user', content: 'hi' }] }))
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'system', content: 'B' }, { role: 'user', content: 'hi' }] }))
+
+      expect(mockQuery).toHaveBeenCalledTimes(2)
     })
 
     it('yields text chunks', async () => {

@@ -120,14 +120,19 @@ export class AgentLoop {
     this.toolTimeout = options.toolTimeout ?? 0
     this.logger = options.logger ?? new NoopLogger()
     this.resumed = options.resumed ?? false
-    this.compactionConfig = options.compaction?.enabled ? options.compaction : undefined
+    // Providers that manage their own context window (e.g. the Claude CLI
+    // subprocess behind anthropic-agents-sdk) must not be compacted by ra —
+    // doing so would double-truncate the history and break the persistent
+    // session. We silently drop the config in that case.
+    const compactionEnabled = options.compaction?.enabled && !this.provider.autoContextManaged
+    this.compactionConfig = compactionEnabled ? options.compaction : undefined
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
     this.maxToolResponseSize = options.maxToolResponseSize ?? DEFAULT_MAX_TOOL_RESPONSE_SIZE
     this.parallelToolCalls = options.parallelToolCalls ?? true
     this.maxTokenBudget = options.maxTokenBudget ?? 0
     this.maxDuration = options.maxDuration ?? 0
 
-    if (options.compaction?.enabled) {
+    if (compactionEnabled && options.compaction) {
       this.middleware.beforeModelCall.unshift(
         createCompactionMiddleware(this.provider, options.compaction),
       )

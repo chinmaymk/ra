@@ -1,14 +1,23 @@
 import { query, createSdkMcpServer, tool as sdkTool } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKMessage, SDKPartialAssistantMessage, SDKUserMessage, ThinkingConfig, EffortLevel, SettingSource } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKMessage, SDKPartialAssistantMessage, SDKUserMessage, ThinkingConfig, EffortLevel, SettingSource, Query } from '@anthropic-ai/claude-agent-sdk'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs'
 import { z } from 'zod/v4'
 import { withDoneGuard, extractSystemMessages, extractTextContent, resolveThinkingBudget, THINKING_BUDGETS } from './utils'
-import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, IToolCall, TokenUsage, ThinkingLevel, ContentPart } from './types'
+import type { IProvider, ChatRequest, ChatResponse, StreamChunk, IMessage, ITool, TokenUsage, ThinkingLevel, ContentPart } from './types'
 
 export interface AnthropicAgentsSdkProviderOptions {
   /** Default model (overridden by ChatRequest.model). */
   model?: string
+}
+
+interface PersistentSession {
+  query: Query
+  inbox: Inbox<SDKUserMessage>
+  abortController: AbortController
+  fingerprint: string
+  /** Number of messages from the previous ChatRequest that we have already seeded into the session. */
+  sentMessages: number
 }
 
 /**
@@ -18,17 +27,21 @@ export interface AnthropicAgentsSdkProviderOptions {
  * AND tool execution (via MCP handlers that bridge to ra's tools).
  * ra owns context engineering, the outer conversation loop, and middleware.
  *
- * Key design:
- * - Tools registered as MCP tools with **real handlers** that call `tool.execute()`
- * - The SDK runs its own agentic loop (model → tool → model → …) inside
- *   a single `query()` call, so one subprocess handles the full turn
- * - Caching works OOTB: one subprocess = stable system prompt + tools prefix
- * - Only text/thinking chunks are surfaced to ra; tool calls are resolved
- *   internally by the SDK, so ra's AgentLoop sees a text-only response
+ * Persistent subprocess: one `query()` (one Claude CLI subprocess) per
+ * provider instance. Each `stream()` call pushes the new user message(s)
+ * into the streaming-input prompt channel and consumes SDK events until
+ * the turn's `result` message arrives, then yields control back to ra.
+ * The subprocess — and its prompt cache — stays warm across turns.
  */
 export class AnthropicAgentsSdkProvider implements IProvider {
   readonly name = 'anthropic-agents-sdk'
+  // The Claude CLI subprocess compacts its own context window — ra must
+  // not try to compact on top of it, or we'll double-truncate the history
+  // and corrupt the persistent session's state.
+  readonly autoContextManaged = true
   private defaultModel?: string
+  private session?: PersistentSession
+  private turnLock: Promise<void> = Promise.resolve()
 
   constructor(options: AnthropicAgentsSdkProviderOptions = {}) {
     this.defaultModel = options.model
@@ -83,23 +96,90 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const { filtered } = extractSystemMessages(request.messages)
-    const options = this.buildOptions(request)
-    const mcpServer = request.tools?.length
-      ? this.buildMcpTools(request.tools)
-      : undefined
-
-    const abortController = new AbortController()
-    if (request.signal) {
-      if (request.signal.aborted) { abortController.abort(); yield { type: 'done' }; return }
-      request.signal.addEventListener('abort', () => abortController.abort(), { once: true })
+    // Serialize turns: only one stream() call may drive the subprocess at a time.
+    const prev = this.turnLock
+    let release!: () => void
+    this.turnLock = new Promise<void>(r => { release = r })
+    try {
+      await prev
+    } catch {
+      // ignore — previous turn's rejection is its own caller's problem
     }
 
-    const promptContent = this.buildPromptContent(filtered)
-    let session: AsyncIterable<SDKMessage>
     try {
-      session = query({
-        prompt: promptIterable(promptContent),
+      if (request.signal?.aborted) {
+        yield { type: 'done' }
+        return
+      }
+
+      const fingerprint = this.fingerprint(request)
+      const { filtered } = extractSystemMessages(request.messages)
+
+      // Restart the subprocess if: fingerprint (model/system/tools/thinking)
+      // changed, OR the caller's message history shrunk below what we
+      // already sent (compaction / reset — ra's view has diverged from the
+      // SDK's internal state and we can't sync cleanly).
+      if (
+        this.session &&
+        (this.session.fingerprint !== fingerprint || filtered.length < this.session.sentMessages)
+      ) {
+        await this.teardown()
+      }
+      if (!this.session) {
+        this.startSession(request, fingerprint)
+      }
+      const session = this.session!
+
+      // Forward every ra message the SDK hasn't seen yet. Assistant messages
+      // are skipped (the SDK emitted them itself), user messages pass through,
+      // and tool messages are wrapped as user messages so seeded/injected
+      // tool results still reach the model.
+      const toSend: SDKUserMessage[] = []
+      for (const msg of filtered.slice(session.sentMessages)) {
+        const sdkMsg = this.toSdkMessage(msg)
+        if (sdkMsg) toSend.push(sdkMsg)
+      }
+      session.sentMessages = filtered.length
+
+      // Nothing new to push means the agent loop would hang waiting for a
+      // `result` that never comes — the SDK only speaks when spoken to.
+      if (toSend.length === 0) {
+        throw new Error('AnthropicAgentsSdkProvider.stream: no new user/tool messages to send — the persistent session needs new input each turn.')
+      }
+      for (const msg of toSend) session.inbox.push(msg)
+
+      // Per-turn abort: interrupt the SDK's current turn. We also tear down
+      // on abort because the interrupted query can't be cleanly resumed.
+      const onAbort = () => {
+        try { session.query.interrupt?.()?.catch?.(() => {}) } catch { /* ignore */ }
+        if (!session.abortController.signal.aborted) session.abortController.abort()
+      }
+      request.signal?.addEventListener('abort', onAbort, { once: true })
+
+      try {
+        yield* withDoneGuard(this.parseOneTurn(session.query))
+      } catch (err) {
+        await this.teardown()
+        this.rethrowCliError(err)
+      } finally {
+        request.signal?.removeEventListener('abort', onAbort)
+        if (request.signal?.aborted) await this.teardown()
+      }
+    } finally {
+      release()
+    }
+  }
+
+  private startSession(request: ChatRequest, fingerprint: string) {
+    const options = this.buildOptions(request)
+    const mcpServer = request.tools?.length ? this.buildMcpTools(request.tools) : undefined
+    const abortController = new AbortController()
+    const inbox = makeInbox<SDKUserMessage>()
+
+    let q: Query
+    try {
+      q = query({
+        prompt: inbox,
         options: {
           ...options,
           abortController,
@@ -107,26 +187,49 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         },
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes('ENOENT') || msg.includes('not found') || msg.includes('claude')) {
-        throw new Error(
-          'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
-          'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
-        )
-      }
-      throw err
+      this.rethrowCliError(err)
     }
 
-    // The SDK's `query()` is backed by a Claude CLI subprocess. Relying on the
-    // AsyncGenerator's implicit `return()` path on break/error does not reliably
-    // terminate it, so we explicitly abort the controller in a `finally` to
-    // guarantee teardown on normal completion, early consumer break, or thrown
-    // error. Without this, every ra loop turn leaks one subprocess.
-    try {
-      yield* withDoneGuard(this.parseSession(session))
-    } finally {
-      if (!abortController.signal.aborted) abortController.abort()
+    this.session = {
+      query: q!,
+      inbox,
+      abortController,
+      fingerprint,
+      sentMessages: 0,
     }
+  }
+
+  private async teardown() {
+    const session = this.session
+    if (!session) return
+    this.session = undefined
+    try { await session.query.interrupt() } catch { /* ignore */ }
+    session.inbox.close()
+    if (!session.abortController.signal.aborted) session.abortController.abort()
+    try { await session.query.return(undefined) } catch { /* ignore */ }
+  }
+
+  private rethrowCliError(err: unknown): never {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('ENOENT') || msg.includes('not found') || msg.includes('spawn') || msg.includes('claude')) {
+      throw new Error(
+        'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
+        'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
+      )
+    }
+    throw err instanceof Error ? err : new Error(msg)
+  }
+
+  private fingerprint(request: ChatRequest): string {
+    const { system } = extractSystemMessages(request.messages)
+    const toolNames = (request.tools ?? []).map(t => t.name).sort().join(',')
+    return JSON.stringify({
+      model: request.model ?? this.defaultModel ?? '',
+      system: system ?? '',
+      thinking: request.thinking ?? '',
+      cap: request.thinkingBudgetCap ?? 0,
+      tools: toolNames,
+    })
   }
 
   private mapThinking(thinking?: ThinkingLevel, budgetCap?: number): { thinking?: ThinkingConfig } {
@@ -144,42 +247,39 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   // ── Message formatting ───────────────────────────────────────────────
 
   /**
-   * Format ra's conversation history as a text prompt for the SDK.
-   *
-   * Only the user-facing conversation is serialized (user messages and
-   * prior assistant text). Tool calls and results from earlier turns
-   * are omitted because the SDK handled them internally — the model
-   * already saw them during that subprocess's agentic loop.
+   * Map an ra message to an SDK streaming-input user message.
+   * - user  → pass through (text + native image blocks).
+   * - tool  → forward as a native `tool_result` content block, preserving
+   *           `tool_use_id` and `is_error`. The SDK normally handles tool
+   *           execution internally, but seeded/injected tool results still
+   *           reach the model this way without string mangling.
+   * - assistant / other → undefined (already in SDK state, skip).
    */
-  formatConversation(messages: IMessage[]): string {
-    if (messages.length === 0) return ''
-    const parts: string[] = []
-    for (const msg of messages) {
-      switch (msg.role) {
-        case 'user':
-          parts.push(`<user>\n${extractTextContent(msg.content)}\n</user>`)
-          break
-        case 'assistant':
-          parts.push(`<assistant>\n${extractTextContent(msg.content)}\n</assistant>`)
-          break
-        // tool results omitted — the SDK resolved them internally
+  toSdkMessage(msg: IMessage): SDKUserMessage | undefined {
+    if (msg.role === 'user') return this.toSdkUserMessage(msg)
+    if (msg.role === 'tool') {
+      if (!msg.toolCallId) return undefined
+      const block: ContentBlockParam = {
+        type: 'tool_result',
+        tool_use_id: msg.toolCallId,
+        content: extractTextContent(msg.content),
+        ...(msg.isError && { is_error: true }),
       }
+      return { type: 'user', message: { role: 'user', content: [block] }, parent_tool_use_id: null }
     }
-    return `<conversation_history>\n${parts.join('\n\n')}`
+    return undefined
   }
 
   /**
-   * Build the SDK prompt content, preserving image attachments from user
-   * messages as native Anthropic image content blocks. The text conversation
-   * history is wrapped in <conversation_history>, and any images collected
-   * from user messages are appended as inline image blocks so the model
-   * actually receives them.
+   * Convert one ra user message into the SDK's streaming-input user message.
+   * Text is passed through as-is; images are preserved as native Anthropic
+   * image blocks. Since the SDK retains conversation history across turns
+   * inside the persistent subprocess, only the new user message is sent.
    */
-  buildPromptContent(messages: IMessage[]): string | ContentBlockParam[] {
-    const text = this.formatConversation(messages)
+  toSdkUserMessage(msg: IMessage): SDKUserMessage {
+    const text = extractTextContent(msg.content)
     const imageBlocks: ContentBlockParam[] = []
-    for (const msg of messages) {
-      if (msg.role !== 'user' || typeof msg.content === 'string') continue
+    if (typeof msg.content !== 'string') {
       for (const part of msg.content as ContentPart[]) {
         if (part.type !== 'image') continue
         const src = part.source
@@ -193,8 +293,10 @@ export class AnthropicAgentsSdkProvider implements IProvider {
         }
       }
     }
-    if (imageBlocks.length === 0) return text
-    return [{ type: 'text', text }, ...imageBlocks]
+    const content: string | ContentBlockParam[] = imageBlocks.length
+      ? [{ type: 'text', text }, ...imageBlocks]
+      : text
+    return { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null }
   }
 
   // ── MCP tools with real handlers ───────────────────────────────────
@@ -233,48 +335,35 @@ export class AnthropicAgentsSdkProvider implements IProvider {
   // ── Stream parsing ──────────────────────────────────────────────────
 
   /**
-   * Parse Agent SDK events into ra StreamChunks.
-   *
-   * The SDK may run multiple agentic turns (model → tool → model → …)
-   * inside one `query()` call. We surface **only text and thinking**
-   * chunks — tool calls are resolved by the SDK internally, so ra's
-   * AgentLoop sees a clean text-only response and terminates after one
-   * iteration.
+   * Consume SDK events for a single turn. Yields text/thinking chunks
+   * until the SDK emits its `result` message, then returns — leaving
+   * the underlying Query paused, ready for the next user message.
+   * Tool calls are resolved by the SDK internally and are not surfaced.
    */
-  private async *parseSession(session: AsyncIterable<SDKMessage>): AsyncIterable<StreamChunk> {
+  private async *parseOneTurn(session: Query): AsyncIterable<StreamChunk> {
     let usage: TokenUsage | undefined
-
-    try {
-      for await (const msg of session) {
-        if (msg.type === 'stream_event') {
-          const event = (msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent
-          switch (event.type) {
-            case 'content_block_delta':
-              if (event.delta.type === 'text_delta') {
-                yield { type: 'text', delta: event.delta.text }
-              } else if (event.delta.type === 'thinking_delta') {
-                yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
-              }
-              // tool_call deltas are handled by the SDK — don't surface them
-              break
+    // Manual iteration — using `for await ... break` would implicitly call
+    // `.return()` on the iterator and close the generator, which would kill
+    // the persistent subprocess. We need to stop pulling at the turn's
+    // `result` message without signalling the generator to terminate.
+    const iter = session[Symbol.asyncIterator]()
+    while (true) {
+      const step = await iter.next()
+      if (step.done) break
+      const msg = step.value
+      if (msg.type === 'stream_event') {
+        const event = (msg as SDKPartialAssistantMessage).event as BetaRawMessageStreamEvent
+        if (event.type === 'content_block_delta') {
+          if (event.delta.type === 'text_delta') {
+            yield { type: 'text', delta: event.delta.text }
+          } else if (event.delta.type === 'thinking_delta') {
+            yield { type: 'thinking', delta: (event.delta as { thinking: string }).thinking }
           }
-        } else if (msg.type === 'result') {
-          usage = this.extractUsage(msg)
-          break
         }
+      } else if (msg.type === 'result') {
+        usage = this.extractUsage(msg)
+        break
       }
-    } catch (err) {
-      if (err && typeof err === 'object' && 'message' in err) {
-        const message = (err as Error).message
-        if (message.includes('ENOENT') || message.includes('not found') || message.includes('spawn')) {
-          throw new Error(
-            'Claude CLI is not installed or not found on PATH. The anthropic-agents-sdk provider requires the Claude CLI. ' +
-            'Install it from https://docs.anthropic.com/en/docs/claude-cli or use a different provider (e.g. provider: "anthropic").',
-          )
-        }
-        throw err
-      }
-      throw err
     }
     yield { type: 'done', ...(usage && { usage }) }
   }
@@ -326,23 +415,55 @@ export class AnthropicAgentsSdkProvider implements IProvider {
 }
 
 const MCP_SERVER_NAME = 'ra-tools'
-const MCP_PREFIX = `mcp__${MCP_SERVER_NAME}__`
 
-/** Strip the SDK's `mcp__ra-tools__` prefix from tool names so they match ra's registry. */
-function stripMcpPrefix(name: string): string {
-  return name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name
+interface Inbox<T> extends AsyncIterable<T> {
+  push(value: T): void
+  close(): void
 }
 
 /**
- * Wrap the formatted prompt in an async generator so `query()` runs in
- * streaming-input mode, where the SDK applies automatic cache_control
- * breakpoints.
+ * Unbounded async FIFO backing the SDK's streaming-input prompt channel.
+ * Keeping this iterable open is what keeps the Claude CLI subprocess alive
+ * between turns — the SDK waits for the next user message instead of exiting.
  */
-async function* promptIterable(content: string | ContentBlockParam[]): AsyncGenerator<SDKUserMessage> {
-  yield {
-    type: 'user',
-    message: { role: 'user', content },
-    parent_tool_use_id: null,
+function makeInbox<T>(): Inbox<T> {
+  const queue: T[] = []
+  let pending: ((r: IteratorResult<T>) => void) | null = null
+  let closed = false
+
+  return {
+    push(value: T) {
+      if (closed) return
+      if (pending) {
+        const resolve = pending
+        pending = null
+        resolve({ value, done: false })
+      } else {
+        queue.push(value)
+      }
+    },
+    close() {
+      if (closed) return
+      closed = true
+      if (pending) {
+        const resolve = pending
+        pending = null
+        resolve({ value: undefined as never, done: true })
+      }
+    },
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      return {
+        next: (): Promise<IteratorResult<T>> => {
+          if (queue.length) return Promise.resolve({ value: queue.shift()!, done: false })
+          if (closed) return Promise.resolve({ value: undefined as never, done: true })
+          return new Promise<IteratorResult<T>>(resolve => { pending = resolve })
+        },
+        return: (): Promise<IteratorResult<T>> => {
+          closed = true
+          return Promise.resolve({ value: undefined as never, done: true })
+        },
+      }
+    },
   }
 }
 

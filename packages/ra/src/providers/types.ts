@@ -80,6 +80,13 @@ export interface IProvider {
   name: string
   chat(request: ChatRequest): Promise<ChatResponse>
   stream(request: ChatRequest): AsyncIterable<StreamChunk>
+  /**
+   * When true, the provider manages its own context window internally
+   * (e.g. the Claude CLI subprocess compacts on its own). ra's AgentLoop
+   * will skip installing its compaction middleware and error-recovery
+   * path for this provider.
+   */
+  readonly autoContextManaged?: boolean
 }
 
 export type ProviderName =
