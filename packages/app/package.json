@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "ra": "bun run src/index.ts",
-    "compile": "bun build src/index.ts --compile --target bun --outfile dist/ra --define __RA_VERSION__='\"'$(bun -e \"process.stdout.write(require('../ra/package.json').version)\")'\"' --define __RA_COMMIT__='\"'$(git rev-parse --short HEAD)'\"'"
+    "compile": "bun run scripts/compile.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

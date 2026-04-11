@@ -310,8 +310,12 @@ async function launchInspector(app: AppContext): Promise<void> {
 
 async function launchWeb(app: AppContext, signals: { remove: () => void }): Promise<void> {
   const { resolve } = await import('path')
+  const { embeddedWebAssets } = await import('./web/embedded-assets.generated')
 
-  // Try to find pre-built static files from packages/web/dist
+  // Prefer disk (dev) so iterating on packages/web doesn't require rebuilds.
+  // In the compiled binary the on-disk paths don't exist; fall back to
+  // `embeddedWebAssets`, which is populated by scripts/embed-web.ts before
+  // `bun build --compile`.
   let staticDir: string | undefined
   for (const candidate of [
     resolve(import.meta.dir, '../../../web/dist'),
@@ -324,12 +328,14 @@ async function launchWeb(app: AppContext, signals: { remove: () => void }): Prom
     }
   }
 
-  const port = app.config.app.http.port || 3000
-  const webServer = new WebServer(app, { port, staticDir })
+  const hasEmbedded = Object.keys(embeddedWebAssets).length > 0
+  const port = app.config.app.http.port ?? 3000
+  const webServer = new WebServer(app, { port, staticDir, embeddedAssets: embeddedWebAssets })
   await webServer.start()
 
-  console.error('ra web running at', 'http://localhost:' + String(webServer.port))
-  if (!staticDir) {
+  const source = staticDir ? `disk (${staticDir})` : hasEmbedded ? 'embedded' : 'none'
+  console.error('ra web running at', 'http://localhost:' + String(webServer.port), `[assets: ${source}]`)
+  if (!staticDir && !hasEmbedded) {
     console.error('  (no static build found — run "cd packages/web && bun run build" or use Vite dev server)')
   }
 

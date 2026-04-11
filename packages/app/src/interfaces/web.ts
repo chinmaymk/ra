@@ -87,7 +87,15 @@ function sseResponse<T>(setup: (send: (event: T) => void) => () => void): Respon
 
 export interface WebServerOptions {
   port: number
+  /** Preferred: serve static files from this directory (dev mode). */
   staticDir?: string
+  /**
+   * Fallback: map of URL path → file reference for assets embedded in the
+   * compiled binary. Values are the strings returned by
+   * `import … with { type: 'file' }`, which `Bun.file()` can open whether the
+   * source is on-disk (dev) or virtual (compiled binary).
+   */
+  embeddedAssets?: Record<string, string>
 }
 
 export class WebServer {
@@ -128,6 +136,14 @@ export class WebServer {
     }
 
     const staticDir = this.options.staticDir
+    const embedded = this.options.embeddedAssets
+    const hasEmbedded = embedded && Object.keys(embedded).length > 0
+
+    const resolveAsset = (urlPath: string): string | null => {
+      if (staticDir) return join(staticDir, urlPath)
+      if (hasEmbedded) return embedded[urlPath] ?? null
+      return null
+    }
 
     this.server = Bun.serve({
       port: this.options.port,
@@ -339,24 +355,24 @@ export class WebServer {
 
         // ── Static file serving ──────────────────────────────────
 
-        if (staticDir) {
-          let filePath: string
-          if (path === '/' || path === '/index.html') {
-            filePath = join(staticDir, 'index.html')
-          } else {
-            filePath = join(staticDir, path)
-          }
-
-          const file = Bun.file(filePath)
-          if (await file.exists()) {
-            return new Response(file)
+        if (staticDir || hasEmbedded) {
+          const requested = path === '/' ? '/index.html' : path
+          const target = resolveAsset(requested)
+          if (target) {
+            const file = Bun.file(target)
+            if (await file.exists()) {
+              return new Response(file)
+            }
           }
 
           // SPA fallback — serve index.html for non-API, non-file routes
           if (!path.startsWith('/api/')) {
-            const index = Bun.file(join(staticDir, 'index.html'))
-            if (await index.exists()) {
-              return new Response(index)
+            const indexTarget = resolveAsset('/index.html')
+            if (indexTarget) {
+              const index = Bun.file(indexTarget)
+              if (await index.exists()) {
+                return new Response(index)
+              }
             }
           }
         }
