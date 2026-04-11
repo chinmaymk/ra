@@ -191,8 +191,8 @@ export const DiffRows = memo(DiffRowsImpl)
 function DiffRowsImpl({ text, files, compact, activePath }: DiffRowsProps) {
   const groups = useFileGroups(text, files)
   const gutterW = compact ? '2.25rem' : '2.75rem'
-  const numText = compact ? 'text-[10px]' : 'text-[11px]'
-  const codeText = compact ? 'text-[11px] leading-[1.55]' : 'text-[12.5px] leading-[1.65]'
+  const numText = compact ? 'text-[0.8125rem]' : 'text-[0.875rem]'
+  const codeText = compact ? 'text-[0.875rem] leading-[1.55]' : 'text-[13.5px] leading-[1.65]'
 
   return (
     <div className="diff-rows font-mono antialiased selection:bg-primary/25">
@@ -294,7 +294,7 @@ function FileHeaderRowImpl({ row, compact, active }: { row: FileRow; compact: bo
       id={diffLineDomId(row.lineIndex)}
       className={cn(
         'sticky top-0 z-10 flex items-center gap-2 border-y border-border/80 bg-surface-2/95 px-3 py-2 backdrop-blur-md scroll-mt-3',
-        compact ? 'text-[11px]' : 'text-[12px]',
+        compact ? 'text-[0.875rem]' : 'text-[0.9375rem]',
         active && 'ring-1 ring-inset ring-primary/45',
       )}
     >
@@ -303,7 +303,7 @@ function FileHeaderRowImpl({ row, compact, active }: { row: FileRow; compact: bo
         {row.file.path}
       </span>
       {row.language !== 'plaintext' && (
-        <span className="shrink-0 rounded-md bg-surface-0 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-dim-foreground">
+        <span className="shrink-0 rounded-md bg-surface-0 px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase tracking-wider text-dim-foreground">
           {row.language}
         </span>
       )}
@@ -320,7 +320,7 @@ function HunkRowImpl({ row, compact }: { row: HunkMarkerRow; compact: boolean })
       id={diffLineDomId(row.lineIndex)}
       className={cn(
         'flex items-center gap-3 border-y border-border/35 bg-purple/[0.06] px-3 scroll-mt-3',
-        compact ? 'py-0.5 text-[10px]' : 'py-1 text-[11px]',
+        compact ? 'py-0.5 text-[0.8125rem]' : 'py-1 text-[0.875rem]',
       )}
     >
       <span className="shrink-0 tabular-nums text-purple/80">

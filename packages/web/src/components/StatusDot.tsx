@@ -65,7 +65,7 @@ export function StatusBadge({ status }: { status: SessionStatus }) {
 
   return (
     <span className={cn(
-      'inline-flex items-center gap-1.5 rounded-md border px-1.5 h-[18px] text-[9px] font-semibold uppercase tracking-[0.06em]',
+      'inline-flex items-center gap-1.5 rounded-md border px-1.5 h-[18px] text-[0.6875rem] font-semibold uppercase tracking-[0.06em]',
       className
     )}>
       <StatusDot status={status} size="sm" animated={false} />

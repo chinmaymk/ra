@@ -44,7 +44,7 @@ export function ToolsPage({ onBack }: ToolsPageProps) {
             </button>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight gradient-text">Tools</h1>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[0.9375rem] text-muted-foreground mt-1">
                 <span className="tabular text-foreground">{tools.length}</span> registered
                 <span className="opacity-30 mx-1.5">·</span>
                 <span className="tabular text-foreground">{grouped.builtin.length}</span> built-in
@@ -124,7 +124,7 @@ function ToolGroup({
         <div className="flex h-5 w-5 items-center justify-center rounded bg-surface-2 border border-border text-muted-foreground">
           {icon}
         </div>
-        <h2 className="text-[10px] uppercase tracking-[0.08em] font-semibold text-muted-foreground">{title}</h2>
+        <h2 className="text-[0.8125rem] uppercase tracking-[0.08em] font-semibold text-muted-foreground">{title}</h2>
         <Badge variant="muted" className="h-4 px-1.5 normal-case tracking-normal">{tools.length}</Badge>
         {/* Enabled/disabled mini bar */}
         {(() => {
@@ -147,7 +147,7 @@ function ToolGroup({
                   />
                 )}
               </div>
-              <span className="text-[9px] text-dim-foreground mono tabular">
+              <span className="text-[0.6875rem] text-dim-foreground mono tabular">
                 {enabled}<span className="opacity-50">/{tools.length}</span>
               </span>
             </div>
@@ -178,16 +178,16 @@ function ToolGroup({
                   }
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={cn('mono font-semibold text-[13px]', !tool.enabled && 'line-through text-muted-foreground')}>{tool.name}</span>
+                      <span className={cn('mono font-semibold text-[1rem]', !tool.enabled && 'line-through text-muted-foreground')}>{tool.name}</span>
                       {!tool.enabled && <Badge variant="muted">disabled</Badge>}
                     </div>
-                    <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{tool.description}</p>
+                    <p className="text-[0.875rem] text-muted-foreground line-clamp-2 leading-relaxed">{tool.description}</p>
                   </div>
                 </div>
                 {isExpanded && tool.schema && (
                   <div className="mt-4 ml-6 pt-3 border-t border-border">
-                    <div className="text-[9px] uppercase tracking-[0.08em] font-semibold text-dim-foreground mb-1.5">Input schema</div>
-                    <pre className="text-[11px] mono bg-surface-0 border border-border p-3 rounded-md overflow-x-auto max-h-72 leading-relaxed">
+                    <div className="text-[0.6875rem] uppercase tracking-[0.08em] font-semibold text-dim-foreground mb-1.5">Input schema</div>
+                    <pre className="text-[0.875rem] mono bg-surface-0 border border-border p-3 rounded-md overflow-x-auto max-h-72 leading-relaxed">
                       {JSON.stringify(tool.schema, null, 2)}
                     </pre>
                   </div>

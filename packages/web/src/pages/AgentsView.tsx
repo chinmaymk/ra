@@ -82,10 +82,10 @@ export function AgentsView({
               <>
                 {/* ── Hero: greeting + one-line summary ─────────────── */}
                 <header className="mb-10 fade-in">
-                  <h1 className="text-[28px] font-semibold tracking-tight leading-tight mb-2">
+                  <h1 className="text-[1.875rem] font-semibold tracking-tight leading-tight mb-2">
                     {greeting()}
                   </h1>
-                  <p className="text-[13px] text-muted-foreground tabular">
+                  <p className="text-[1rem] text-muted-foreground tabular">
                     {sessions.length} session{sessions.length > 1 ? 's' : ''}
                     {running.length > 0 && (
                       <>
@@ -114,7 +114,7 @@ export function AgentsView({
                     action={needsInput.length > 1 && (
                       <button
                         onClick={onProcessQueue}
-                        className="flex items-center gap-1.5 text-[11px] font-medium text-status-waiting hover:underline"
+                        className="flex items-center gap-1.5 text-[0.875rem] font-medium text-status-waiting hover:underline"
                       >
                         Process all
                         <kbd>⌘I</kbd>
@@ -127,7 +127,7 @@ export function AgentsView({
                       ))}
                     </div>
                     {needsInput.length > 4 && (
-                      <p className="text-[11px] text-dim-foreground mt-2.5 px-1">
+                      <p className="text-[0.875rem] text-dim-foreground mt-2.5 px-1">
                         +{needsInput.length - 4} more in sidebar
                       </p>
                     )}
@@ -169,7 +169,7 @@ export function AgentsView({
                       ))}
                     </div>
                     {errors.length > 3 && (
-                      <p className="text-[11px] text-dim-foreground mt-2.5 px-1">
+                      <p className="text-[0.875rem] text-dim-foreground mt-2.5 px-1">
                         +{errors.length - 3} more in sidebar
                       </p>
                     )}
@@ -180,7 +180,7 @@ export function AgentsView({
                 {isCalm && (
                   <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-border bg-surface-1/40 fade-in">
                     <CheckCircle2 className="h-4 w-4 text-status-done shrink-0" />
-                    <div className="text-[12.5px] text-muted-foreground leading-relaxed">
+                    <div className="text-[13.5px] text-muted-foreground leading-relaxed">
                       All caught up. Start another task below, or pick a session from the sidebar to review.
                     </div>
                   </div>
@@ -231,7 +231,7 @@ function Section({
   return (
     <section className="mb-8 fade-in">
       <div className="flex items-center justify-between mb-3 px-0.5">
-        <div className={cn('flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] font-semibold', ACCENT_TEXT[accent])}>
+        <div className={cn('flex items-center gap-2 text-[0.8125rem] uppercase tracking-[0.12em] font-semibold', ACCENT_TEXT[accent])}>
           {icon}
           <span>{title}</span>
           <span className="opacity-50 tabular">{count}</span>
@@ -256,15 +256,15 @@ function PriorityCard({
       className="group relative text-left overflow-hidden rounded-xl border border-status-waiting/30 bg-status-waiting/[0.04] p-4 transition-all hover:bg-status-waiting/10 hover:border-status-waiting/50 hover:-translate-y-px"
     >
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="font-semibold text-[13px] truncate">{s.name}</span>
+        <span className="font-semibold text-[1rem] truncate">{s.name}</span>
         <ArrowRight className="h-3.5 w-3.5 text-status-waiting shrink-0 opacity-70 group-hover:translate-x-0.5 transition-transform" />
       </div>
       {s.lastAssistantMessage && (
-        <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed mb-2">
+        <p className="text-[0.9375rem] text-muted-foreground line-clamp-2 leading-relaxed mb-2">
           {s.lastAssistantMessage}
         </p>
       )}
-      <div className="text-[10px] text-dim-foreground mono">
+      <div className="text-[0.8125rem] text-dim-foreground mono">
         {timeAgo(s.createdAt)}
         {s.iteration > 0 && <> · iter {s.iteration}</>}
       </div>
@@ -286,13 +286,13 @@ function LiveRow({
       className="group flex items-center gap-3 px-3.5 py-2.5 rounded-lg border border-status-running/20 bg-status-running/[0.03] cursor-pointer hover:bg-status-running/[0.08] hover:border-status-running/35 transition-colors"
     >
       <StatusDot status="running" size="sm" animated />
-      <span className="text-[13px] font-medium truncate flex-1 min-w-0">{s.name}</span>
+      <span className="text-[1rem] font-medium truncate flex-1 min-w-0">{s.name}</span>
       {s.currentTool && (
         <span className="text-[10.5px] mono text-status-running bg-status-running/10 px-2 py-0.5 rounded truncate max-w-[160px]">
           {s.currentTool}
         </span>
       )}
-      <span className="text-[10px] text-dim-foreground mono hidden sm:inline tabular">iter {s.iteration}</span>
+      <span className="text-[0.8125rem] text-dim-foreground mono hidden sm:inline tabular">iter {s.iteration}</span>
       <button
         onClick={(e) => { e.stopPropagation(); onStop(s.id) }}
         className="opacity-0 group-hover:opacity-100 p-1 rounded text-dim-foreground hover:text-status-error transition-all"
@@ -319,14 +319,14 @@ function ErrorRow({
     >
       <StatusDot status="error" size="sm" />
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium truncate">{s.name}</div>
+        <div className="text-[1rem] font-medium truncate">{s.name}</div>
         {s.lastAssistantMessage && (
-          <div className="text-[11px] text-muted-foreground/80 truncate mt-0.5">
+          <div className="text-[0.875rem] text-muted-foreground/80 truncate mt-0.5">
             {s.lastAssistantMessage}
           </div>
         )}
       </div>
-      <span className="text-[10px] text-dim-foreground mono shrink-0">{timeAgo(s.createdAt)}</span>
+      <span className="text-[0.8125rem] text-dim-foreground mono shrink-0">{timeAgo(s.createdAt)}</span>
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(s.id) }}
         className="opacity-0 group-hover:opacity-100 p-1 rounded text-dim-foreground hover:text-status-error transition-all"
@@ -353,7 +353,7 @@ function EmptyState() {
         Describe a task below and ra will spin up an agent. Each session can run in
         its own git worktree for safe parallel work.
       </p>
-      <div className="mt-10 flex flex-wrap items-center justify-center gap-4 text-[12px] text-dim-foreground">
+      <div className="mt-10 flex flex-wrap items-center justify-center gap-4 text-[0.9375rem] text-dim-foreground">
         <div className="flex items-center gap-2">
           <kbd>⌘K</kbd>
           <span>command palette</span>

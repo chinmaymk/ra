@@ -37,7 +37,7 @@ export function CostDisplay({ provider, tokenUsage }: CostDisplayProps) {
 
   if (!pricing) {
     return (
-      <div className="text-[11px] text-muted-foreground px-1">
+      <div className="text-[0.875rem] text-muted-foreground px-1">
         Cost data unavailable for provider <span className="mono">{provider}</span>
       </div>
     )
@@ -55,7 +55,7 @@ export function CostDisplay({ provider, tokenUsage }: CostDisplayProps) {
     <div className="space-y-4">
       {/* Total */}
       <div className="flex items-baseline justify-between">
-        <div className="text-[10px] uppercase tracking-[0.08em] font-semibold text-muted-foreground">
+        <div className="text-[0.8125rem] uppercase tracking-[0.08em] font-semibold text-muted-foreground">
           Total cost
         </div>
         <div className="text-right">
@@ -67,7 +67,7 @@ export function CostDisplay({ provider, tokenUsage }: CostDisplayProps) {
 
       {/* Breakdown */}
       <div className="space-y-2">
-        <div className="text-[9px] uppercase tracking-[0.08em] font-semibold text-dim-foreground">Breakdown</div>
+        <div className="text-[0.6875rem] uppercase tracking-[0.08em] font-semibold text-dim-foreground">Breakdown</div>
         <CostRow label="Input" tokens={tokenUsage.inputTokens} rate={pricing.input} cost={inputCost} />
         <CostRow label="Output" tokens={tokenUsage.outputTokens} rate={pricing.output} cost={outputCost} />
         <CostRow label="Cache reads" tokens={cacheReadTokens} rate={pricing.cacheRead} cost={cacheReadCost} />
@@ -76,7 +76,7 @@ export function CostDisplay({ provider, tokenUsage }: CostDisplayProps) {
 
       {/* Rates */}
       <div className="space-y-2">
-        <div className="text-[9px] uppercase tracking-[0.08em] font-semibold text-dim-foreground">
+        <div className="text-[0.6875rem] uppercase tracking-[0.08em] font-semibold text-dim-foreground">
           Rates <span className="normal-case opacity-60">({provider})</span>
         </div>
         <div className="space-y-1">
@@ -92,10 +92,10 @@ export function CostDisplay({ provider, tokenUsage }: CostDisplayProps) {
 
 function CostRow({ label, tokens, cost }: { label: string; tokens: number; rate: number; cost: number }) {
   return (
-    <div className="flex items-center justify-between text-[11px]">
+    <div className="flex items-center justify-between text-[0.875rem]">
       <div className="flex items-center gap-2 text-muted-foreground">
         <span>{label}</span>
-        <span className="text-[9px] text-dim-foreground mono">{formatTokens(tokens)}</span>
+        <span className="text-[0.6875rem] text-dim-foreground mono">{formatTokens(tokens)}</span>
       </div>
       <span className="mono tabular text-foreground">{formatCost(cost)}</span>
     </div>
@@ -104,7 +104,7 @@ function CostRow({ label, tokens, cost }: { label: string; tokens: number; rate:
 
 function RateRow({ label, rate }: { label: string; rate: number }) {
   return (
-    <div className="flex items-center justify-between text-[10px]">
+    <div className="flex items-center justify-between text-[0.8125rem]">
       <span className="text-muted-foreground">{label}</span>
       <span className="mono tabular text-dim-foreground">${rate.toFixed(2)}/M</span>
     </div>

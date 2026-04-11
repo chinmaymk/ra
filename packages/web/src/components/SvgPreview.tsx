@@ -17,7 +17,7 @@ function CopySvgButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium text-dim-foreground hover:text-foreground hover:bg-surface-3 transition-colors"
+      className="flex items-center gap-1 px-2 py-1 rounded text-[0.8125rem] font-medium text-dim-foreground hover:text-foreground hover:bg-surface-3 transition-colors"
     >
       {copied ? (
         <>
@@ -38,7 +38,7 @@ export function SvgPreview({ svg }: SvgPreviewProps) {
   return (
     <div className="rounded-lg border border-border overflow-hidden bg-surface-0/60">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-1/40">
-        <span className="text-[10px] mono text-dim-foreground uppercase tracking-wider">
+        <span className="text-[0.8125rem] mono text-dim-foreground uppercase tracking-wider">
           SVG
         </span>
         <CopySvgButton text={svg} />

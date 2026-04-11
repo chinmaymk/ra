@@ -108,7 +108,7 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
               {info.status === 'running' ? (
                 <button
                   onClick={stop}
-                  className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11px] font-medium bg-warning/10 text-warning border border-warning/25 hover:bg-warning/15 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[0.875rem] font-medium bg-warning/10 text-warning border border-warning/25 hover:bg-warning/15 transition-colors"
                 >
                   <Square className="h-2.5 w-2.5 fill-current" />
                   Stop
@@ -118,7 +118,7 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
                   <TooltipTrigger asChild>
                     <button
                       onClick={markDone}
-                      className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11px] font-medium bg-success/10 text-success border border-success/25 hover:bg-success/15 transition-colors"
+                      className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[0.875rem] font-medium bg-success/10 text-success border border-success/25 hover:bg-success/15 transition-colors"
                     >
                       <CheckCircle2 className="h-3 w-3" />
                       Mark done
@@ -154,7 +154,7 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
                     <Activity className="h-5 w-5 text-dim-foreground" />
                   </div>
                   <p>No messages yet</p>
-                  <p className="text-xs text-dim-foreground mt-1">Send a message below to start the conversation</p>
+                  <p className="text-[0.9375rem] text-dim-foreground mt-1">Send a message below to start the conversation</p>
                 </div>
               ) : (
                 <div className="py-2">

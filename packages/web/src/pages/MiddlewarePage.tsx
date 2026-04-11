@@ -49,7 +49,7 @@ export function MiddlewarePage({ onBack }: MiddlewarePageProps) {
           </button>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight gradient-text">Middleware</h1>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-[0.9375rem] text-muted-foreground mt-1">
               <span className="tabular text-foreground">{total}</span> middleware function{total !== 1 ? 's' : ''}
               <span className="opacity-30 mx-1.5">·</span>
               <span className="tabular text-foreground">{activeHooks}</span> active hook{activeHooks !== 1 ? 's' : ''}
@@ -83,7 +83,7 @@ export function MiddlewarePage({ onBack }: MiddlewarePageProps) {
                         )}
                       />
                       <span className={cn(
-                        'text-[8px] font-mono leading-none max-w-[60px] text-center truncate transition-colors',
+                        'text-[0.6875rem] font-mono leading-none max-w-[60px] text-center truncate transition-colors',
                         isActive ? 'text-primary font-semibold' : 'text-dim-foreground group-hover:text-muted-foreground'
                       )}>
                         {hook.hook.replace(/^(before|after|on)/, '')}
@@ -103,7 +103,7 @@ export function MiddlewarePage({ onBack }: MiddlewarePageProps) {
             </div>
           )}
 
-          <div className="text-[11px] text-muted-foreground mb-4 px-1 leading-relaxed">
+          <div className="text-[0.875rem] text-muted-foreground mb-4 px-1 leading-relaxed">
             Middleware hooks execute in array order during the agent loop. All contexts extend{' '}
             <code className="mono bg-surface-2 px-1.5 py-0.5 rounded text-foreground">StoppableContext</code>
             {' '}and can call <code className="mono bg-surface-2 px-1.5 py-0.5 rounded text-foreground">stop()</code> to halt execution.
@@ -140,17 +140,17 @@ export function MiddlewarePage({ onBack }: MiddlewarePageProps) {
                           {hook.names.length}
                         </Badge>
                       </div>
-                      <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
+                      <p className="text-[0.875rem] text-muted-foreground mb-3 leading-relaxed">
                         {HOOK_DESCRIPTIONS[hook.hook]}
                       </p>
                       {hasMiddleware && (
                         <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-border">
-                          <span className="text-[9px] uppercase tracking-[0.08em] text-dim-foreground font-semibold mr-1">
+                          <span className="text-[0.6875rem] uppercase tracking-[0.08em] text-dim-foreground font-semibold mr-1">
                             Pipeline
                           </span>
                           {hook.names.map((name, idx) => (
                             <div key={idx} className="flex items-center gap-1.5">
-                              <div className="mono text-[10px] bg-surface-0 px-2 py-0.5 rounded border border-border-strong text-foreground/90">
+                              <div className="mono text-[0.8125rem] bg-surface-0 px-2 py-0.5 rounded border border-border-strong text-foreground/90">
                                 {name}
                               </div>
                               {idx < hook.names.length - 1 && (

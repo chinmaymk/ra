@@ -85,8 +85,8 @@ export function Sidebar({
             className="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-surface-2 transition-colors"
           >
             <img src="/favicon.svg" alt="ra" className="h-5 w-5" />
-            <span className="text-[13px] font-semibold tracking-tight">ra</span>
-            <span className="text-[10px] font-medium text-dim-foreground">web</span>
+            <span className="text-[1rem] font-semibold tracking-tight">ra</span>
+            <span className="text-[0.8125rem] font-medium text-dim-foreground">web</span>
           </button>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -106,7 +106,7 @@ export function Sidebar({
         <div className="px-3 pt-3 pb-2 space-y-2">
           <button
             onClick={onNewSession}
-            className="w-full flex items-center gap-2 h-8 px-3 rounded-md gradient-primary text-primary-foreground text-[12px] font-medium shadow-sm hover:opacity-90 transition-opacity"
+            className="w-full flex items-center gap-2 h-8 px-3 rounded-md gradient-primary text-primary-foreground text-[0.9375rem] font-medium shadow-sm hover:opacity-90 transition-opacity"
           >
             <Plus className="h-3.5 w-3.5" />
             New agent
@@ -114,7 +114,7 @@ export function Sidebar({
           {needsInputCount > 0 && (
             <button
               onClick={onProcessQueue}
-              className="w-full flex items-center gap-2 h-7 px-2.5 rounded-md bg-status-waiting/10 border border-status-waiting/25 text-status-waiting text-[11px] font-medium hover:bg-status-waiting/15 transition-colors"
+              className="w-full flex items-center gap-2 h-7 px-2.5 rounded-md bg-status-waiting/10 border border-status-waiting/25 text-status-waiting text-[0.875rem] font-medium hover:bg-status-waiting/15 transition-colors"
             >
               <Inbox className="h-3 w-3" />
               <span className="tabular">{needsInputCount}</span>
@@ -133,7 +133,7 @@ export function Sidebar({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search agents..."
-                className="w-full h-7 pl-7 pr-2 rounded-md bg-surface-1 border border-border text-[12px] placeholder:text-dim-foreground"
+                className="w-full h-7 pl-7 pr-2 rounded-md bg-surface-1 border border-border text-[0.9375rem] placeholder:text-dim-foreground"
               />
             </div>
           </div>
@@ -142,7 +142,7 @@ export function Sidebar({
         {/* Session list */}
         <div className="flex-1 overflow-y-auto px-2 pb-2 min-h-0">
           {totalVisible === 0 && (
-            <div className="px-2 py-6 text-center text-[11px] text-dim-foreground">
+            <div className="px-2 py-6 text-center text-[0.875rem] text-dim-foreground">
               {sessions.length === 0 ? 'No agents yet' : 'No matches'}
             </div>
           )}
@@ -222,7 +222,7 @@ function ThemeButton({ theme, onCycle }: { theme: Theme; onCycle: () => void }) 
   return (
     <button
       onClick={onCycle}
-      className="w-full flex items-center gap-2 px-2 h-7 rounded-md text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+      className="w-full flex items-center gap-2 px-2 h-7 rounded-md text-[0.875rem] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
     >
       <Icon className="h-3.5 w-3.5" />
       <span>{label}</span>
@@ -234,7 +234,7 @@ function SessionGroup({ label, tone, children }: { label: string; tone?: 'waitin
   return (
     <div className="mb-2">
       <div className={cn(
-        'px-2 py-1 text-[9px] uppercase tracking-[0.1em] font-semibold',
+        'px-2 py-1 text-[0.6875rem] uppercase tracking-[0.1em] font-semibold',
         tone === 'waiting' ? 'text-status-waiting' :
         tone === 'running' ? 'text-status-running' :
         'text-dim-foreground'
@@ -274,10 +274,10 @@ function SessionRow({
         <StatusDot status={s.status} size="sm" animated />
       </div>
       <div className="flex-1 min-w-0">
-        <span className={cn('block text-[12px] font-medium truncate', active && 'text-foreground')}>
+        <span className={cn('block text-[0.9375rem] font-medium truncate', active && 'text-foreground')}>
           {s.name}
         </span>
-        <div className="text-[10px] text-dim-foreground truncate">{subtitle}</div>
+        <div className="text-[0.8125rem] text-dim-foreground truncate">{subtitle}</div>
       </div>
       <div
         className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center"
@@ -323,7 +323,7 @@ function NavRow({
     <button
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-2 px-2 h-7 rounded-md text-[11px] font-medium transition-colors',
+        'w-full flex items-center gap-2 px-2 h-7 rounded-md text-[0.875rem] font-medium transition-colors',
         active
           ? 'text-foreground bg-surface-2'
           : 'text-muted-foreground hover:text-foreground hover:bg-surface-1'

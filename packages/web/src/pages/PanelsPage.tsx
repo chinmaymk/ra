@@ -22,9 +22,9 @@ export function PanelsPage({ onBack }: PanelsPageProps) {
           </button>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight gradient-text">Web panels</h1>
-            <p className="text-xs text-muted-foreground mt-1">
-              Session sidebar panels are loaded from <code className="mono text-[10px]">agent.web.panels</code>
-              {' '}(builtin ids like <code className="mono text-[10px]">diff</code> or paths to panel modules).
+            <p className="text-[0.9375rem] text-muted-foreground mt-1">
+              Session sidebar panels are loaded from <code className="mono text-[0.8125rem]">agent.web.panels</code>
+              {' '}(builtin ids like <code className="mono text-[0.8125rem]">diff</code> or paths to panel modules).
             </p>
           </div>
         </div>
@@ -34,7 +34,7 @@ export function PanelsPage({ onBack }: PanelsPageProps) {
         <div className="max-w-4xl mx-auto space-y-3">
           {panels.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No panels are enabled. Add entries under <code className="mono text-xs">agent.web.panels</code> in your ra config.
+              No panels are enabled. Add entries under <code className="mono text-[0.9375rem]">agent.web.panels</code> in your ra config.
             </p>
           ) : (
             <ul className="space-y-2">
@@ -46,9 +46,9 @@ export function PanelsPage({ onBack }: PanelsPageProps) {
                   <LayoutGrid className="h-4 w-4 text-dim-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">{p.title}</div>
-                    <div className="text-[11px] text-dim-foreground mono truncate">{p.id}</div>
+                    <div className="text-[0.875rem] text-dim-foreground mono truncate">{p.id}</div>
                   </div>
-                  <Badge variant="outline" className="mono text-[10px] shrink-0">
+                  <Badge variant="outline" className="mono text-[0.8125rem] shrink-0">
                     {p.source === 'builtin' ? 'builtin' : 'custom'}
                   </Badge>
                 </li>

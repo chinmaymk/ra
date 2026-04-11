@@ -96,7 +96,7 @@ export function ConfigPage({ onBack }: ConfigPageProps) {
             </button>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight gradient-text">Configuration</h1>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[0.9375rem] text-muted-foreground mt-1">
                 In-memory settings for the running ra instance. Affects all new agent runs.
               </p>
             </div>
@@ -107,7 +107,7 @@ export function ConfigPage({ onBack }: ConfigPageProps) {
               onClick={save}
               disabled={!dirty || saving}
               className={cn(
-                'flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium transition-all',
+                'flex items-center gap-1.5 h-8 px-3 rounded-md text-[0.875rem] font-medium transition-all',
                 !dirty || saving
                   ? 'bg-surface-2 text-dim-foreground cursor-not-allowed'
                   : saved
@@ -150,9 +150,9 @@ export function ConfigPage({ onBack }: ConfigPageProps) {
                   value={config.systemPrompt}
                   onChange={(e) => update('systemPrompt', e.target.value)}
                   placeholder="You are a helpful AI assistant."
-                  className="mono text-xs leading-relaxed"
+                  className="mono text-[0.9375rem] leading-relaxed"
                 />
-                <div className="text-[10px] text-dim-foreground mt-1.5 mono">
+                <div className="text-[0.8125rem] text-dim-foreground mt-1.5 mono">
                   {config.systemPrompt.length} chars
                 </div>
               </Section>
@@ -186,7 +186,7 @@ export function ConfigPage({ onBack }: ConfigPageProps) {
                             <div className="flex items-center gap-2">
                               {p.name}
                               {!p.hasCredentials && (
-                                <span className="text-[9px] text-warning bg-warning/10 px-1 rounded">no creds</span>
+                                <span className="text-[0.6875rem] text-warning bg-warning/10 px-1 rounded">no creds</span>
                               )}
                             </div>
                           </SelectItem>
@@ -264,7 +264,7 @@ export function ConfigPage({ onBack }: ConfigPageProps) {
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-semibold">Raw configuration</h3>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">The full sanitized config object. Read-only — secrets are masked.</p>
+                    <p className="text-[0.875rem] text-muted-foreground mt-0.5 leading-relaxed">The full sanitized config object. Read-only — secrets are masked.</p>
                   </div>
                   <button
                     onClick={() => {
@@ -272,7 +272,7 @@ export function ConfigPage({ onBack }: ConfigPageProps) {
                       setRawCopied(true)
                       setTimeout(() => setRawCopied(false), 1500)
                     }}
-                    className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                    className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[0.875rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                   >
                     {rawCopied
                       ? <><Check className="h-3 w-3 text-emerald-500" /><span className="text-emerald-500">Copied</span></>
@@ -280,7 +280,7 @@ export function ConfigPage({ onBack }: ConfigPageProps) {
                     }
                   </button>
                 </div>
-                <pre className="mono text-[11px] bg-surface-0 border border-border p-4 rounded-lg overflow-x-auto max-h-[600px] leading-relaxed">
+                <pre className="mono text-[0.875rem] bg-surface-0 border border-border p-4 rounded-lg overflow-x-auto max-h-[600px] leading-relaxed">
                   {JSON.stringify(config.raw, null, 2)}
                 </pre>
               </div>
@@ -297,7 +297,7 @@ function Section({ title, description, children }: { title: string; description?
     <div className="rounded-xl border border-border bg-surface-1/40 p-5">
       <div className="mb-4">
         <h3 className="text-sm font-semibold">{title}</h3>
-        {description && <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{description}</p>}
+        {description && <p className="text-[0.875rem] text-muted-foreground mt-0.5 leading-relaxed">{description}</p>}
       </div>
       {children}
     </div>
@@ -308,8 +308,8 @@ function ToggleRow({ label, description, checked, onChange }: { label: string; d
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex-1">
-        <Label className="text-[12px] text-foreground font-medium">{label}</Label>
-        <p className="text-[10px] text-muted-foreground mt-0.5">{description}</p>
+        <Label className="text-[0.9375rem] text-foreground font-medium">{label}</Label>
+        <p className="text-[0.8125rem] text-muted-foreground mt-0.5">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onChange} />
     </div>

@@ -19,11 +19,11 @@ export function SessionSidebar({ info, sessionId, webPanels, onSendFeedback }: S
       <Tabs defaultValue="stats" className="flex-1 flex flex-col min-h-0">
         <div className="px-4 pt-3 pb-3 border-b border-border">
           <TabsList className="w-full flex flex-wrap h-auto gap-1 justify-start">
-            <TabsTrigger value="stats" className="text-[11px] px-2">Stats</TabsTrigger>
-            <TabsTrigger value="cost" className="text-[11px] px-2">Cost</TabsTrigger>
-            <TabsTrigger value="meta" className="text-[11px] px-2">Meta</TabsTrigger>
+            <TabsTrigger value="stats" className="text-[0.875rem] px-2">Stats</TabsTrigger>
+            <TabsTrigger value="cost" className="text-[0.875rem] px-2">Cost</TabsTrigger>
+            <TabsTrigger value="meta" className="text-[0.875rem] px-2">Meta</TabsTrigger>
             {webPanels.map(p => (
-              <TabsTrigger key={p.id} value={`panel-${p.id}`} className="text-[11px] px-2">
+              <TabsTrigger key={p.id} value={`panel-${p.id}`} className="text-[0.875rem] px-2">
                 {p.title}
               </TabsTrigger>
             ))}
@@ -65,7 +65,7 @@ export function SessionSidebar({ info, sessionId, webPanels, onSendFeedback }: S
         ))}
       </Tabs>
 
-      <div className="px-4 py-2.5 border-t border-border text-[10px] text-dim-foreground flex items-center gap-1.5 mono">
+      <div className="px-4 py-2.5 border-t border-border text-[0.8125rem] text-dim-foreground flex items-center gap-1.5 mono">
         <LiveDot />
         live via SSE
       </div>
@@ -147,10 +147,10 @@ function PanelBody({
   }
   const kind = panel.source === 'builtin' ? 'builtin' : 'custom module'
   return (
-    <p className="text-[11px] text-muted-foreground leading-relaxed">
+    <p className="text-[0.875rem] text-muted-foreground leading-relaxed">
       Panel <span className="mono text-foreground">{panel.id}</span> is registered on the server ({kind})
       but has no UI component in ra-web yet. Add a case for this id next to the diff panel in{' '}
-      <span className="mono text-[10px]">SessionSidebar.tsx</span>.
+      <span className="mono text-[0.8125rem]">SessionSidebar.tsx</span>.
     </p>
   )
 }
@@ -230,11 +230,11 @@ function StatBlock({
           <div className="flex h-4 w-4 items-center justify-center rounded text-dim-foreground">
             {icon}
           </div>
-          <div className="text-[10px] uppercase tracking-[0.08em] font-semibold text-muted-foreground">{label}</div>
+          <div className="text-[0.8125rem] uppercase tracking-[0.08em] font-semibold text-muted-foreground">{label}</div>
         </div>
         <div className="text-right">
           <div className="text-xl font-semibold mono tabular tracking-tight gradient-text">{primary}</div>
-          {caption && <div className="text-[9px] text-dim-foreground mt-0.5">{caption}</div>}
+          {caption && <div className="text-[0.6875rem] text-dim-foreground mt-0.5">{caption}</div>}
         </div>
       </div>
       {children && <div className="space-y-1.5">{children}</div>}
@@ -253,7 +253,7 @@ function StatBar({ label, value, max, color }: { label: string; value: number; m
   const pct = max > 0 ? (value / max) * 100 : 0
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-[10px]">
+      <div className="flex items-center justify-between text-[0.8125rem]">
         <span className="text-muted-foreground">{label}</span>
         <span className="mono tabular text-foreground">{formatTokens(value)}</span>
       </div>
@@ -266,7 +266,7 @@ function StatBar({ label, value, max, color }: { label: string; value: number; m
 
 function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between text-[11px]">
+    <div className="flex items-center justify-between text-[0.875rem]">
       <span className="text-muted-foreground">{label}</span>
       <div className="mono tabular">{value}</div>
     </div>
@@ -276,7 +276,7 @@ function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
 function MetaSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <div className="text-[9px] uppercase tracking-[0.08em] font-semibold text-dim-foreground">{title}</div>
+      <div className="text-[0.6875rem] uppercase tracking-[0.08em] font-semibold text-dim-foreground">{title}</div>
       <div className="space-y-1.5 pl-0.5">{children}</div>
     </div>
   )
@@ -284,9 +284,9 @@ function MetaSection({ title, children }: { title: string; children: React.React
 
 function MetaRow({ label, value, mono, small }: { label: string; value: string; mono?: boolean; small?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-2 text-[11px]">
+    <div className="flex items-start justify-between gap-2 text-[0.875rem]">
       <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className={cn('text-right break-all text-foreground', mono && 'mono', small && 'text-[10px]')}>{value}</span>
+      <span className={cn('text-right break-all text-foreground', mono && 'mono', small && 'text-[0.8125rem]')}>{value}</span>
     </div>
   )
 }

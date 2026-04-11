@@ -23,7 +23,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium text-dim-foreground hover:text-foreground hover:bg-surface-3 transition-colors"
+      className="flex items-center gap-1 px-2 py-1 rounded text-[0.8125rem] font-medium text-dim-foreground hover:text-foreground hover:bg-surface-3 transition-colors"
     >
       {copied ? (
         <>
@@ -70,7 +70,7 @@ const components: Components = {
     return (
       <div className="group/code relative my-3 rounded-lg border border-border overflow-hidden bg-surface-0/60">
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-1/40">
-          <span className="text-[10px] mono text-dim-foreground uppercase tracking-wider">
+          <span className="text-[0.8125rem] mono text-dim-foreground uppercase tracking-wider">
             {language || 'code'}
           </span>
           <CopyButton text={rawText} />
@@ -112,7 +112,7 @@ const components: Components = {
   table({ children, ...props }) {
     return (
       <div className="my-3 overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-[13px]" {...props}>{children}</table>
+        <table className="w-full text-[1rem]" {...props}>{children}</table>
       </div>
     )
   },
@@ -123,7 +123,7 @@ const components: Components = {
 
   th({ children, ...props }) {
     return (
-      <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" {...props}>
+      <th className="px-3 py-2 text-left text-[0.875rem] font-semibold uppercase tracking-wider text-muted-foreground" {...props}>
         {children}
       </th>
     )

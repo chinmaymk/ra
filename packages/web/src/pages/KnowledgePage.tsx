@@ -151,7 +151,7 @@ function Header({
           </button>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight gradient-text">Knowledge</h1>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-[0.9375rem] text-muted-foreground mt-1">
               <Tabular>{count}</Tabular> base{count !== 1 ? 's' : ''}
               <Dot />
               <Tabular>{totalDocs}</Tabular> document{totalDocs !== 1 ? 's' : ''}
@@ -172,7 +172,7 @@ function Header({
           </div>
           <button
             onClick={onCreate}
-            className="flex items-center gap-1.5 h-9 px-3 rounded-md gradient-primary text-primary-foreground text-[11px] font-medium shadow-sm hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 h-9 px-3 rounded-md gradient-primary text-primary-foreground text-[0.875rem] font-medium shadow-sm hover:opacity-90 transition-opacity"
           >
             <Plus className="h-3 w-3" />
             New knowledge base
@@ -219,7 +219,7 @@ function CreateKnowledgeBaseForm({
         <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/30 text-primary">
           <Database className="h-3.5 w-3.5" />
         </div>
-        <span className="text-[12px] font-semibold text-foreground">Create knowledge base</span>
+        <span className="text-[0.9375rem] font-semibold text-foreground">Create knowledge base</span>
       </div>
       <div className="space-y-3">
         <Field label="Name">
@@ -227,7 +227,7 @@ function CreateKnowledgeBaseForm({
             placeholder="e.g. API documentation, Codebase reference..."
             value={name}
             onChange={e => setName(e.target.value)}
-            className="h-9 text-[12px]"
+            className="h-9 text-[0.9375rem]"
             autoFocus
           />
         </Field>
@@ -236,7 +236,7 @@ function CreateKnowledgeBaseForm({
             placeholder="What kind of knowledge does this base contain?"
             value={description}
             onChange={e => setDescription(e.target.value)}
-            className="w-full min-h-[72px] bg-surface-0 border border-border rounded-md p-3 text-[12px] leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground placeholder:text-dim-foreground"
+            className="w-full min-h-[72px] bg-surface-0 border border-border rounded-md p-3 text-[0.9375rem] leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground placeholder:text-dim-foreground"
           />
         </Field>
         <Field label="Embedding model">
@@ -246,7 +246,7 @@ function CreateKnowledgeBaseForm({
                 key={model.value}
                 onClick={() => setEmbedding(model.value)}
                 className={cn(
-                  'flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[10px] font-medium border transition-colors',
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[0.8125rem] font-medium border transition-colors',
                   embedding === model.value
                     ? 'border-primary/40 bg-primary/10 text-primary'
                     : 'border-border bg-surface-0 text-muted-foreground hover:text-foreground hover:border-border-strong',
@@ -254,7 +254,7 @@ function CreateKnowledgeBaseForm({
               >
                 <Brain className="h-3 w-3" />
                 <span className="mono">{model.label}</span>
-                <span className="text-[9px] text-dim-foreground">{model.provider}</span>
+                <span className="text-[0.6875rem] text-dim-foreground">{model.provider}</span>
               </button>
             ))}
           </div>
@@ -273,7 +273,7 @@ function CreateKnowledgeBaseForm({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-[10px] uppercase tracking-[0.06em] font-semibold text-muted-foreground mb-1.5 block">
+      <label className="text-[0.8125rem] uppercase tracking-[0.06em] font-semibold text-muted-foreground mb-1.5 block">
         {label}
       </label>
       {children}
@@ -281,8 +281,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-const TEXT_BUTTON = 'h-7 px-3 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors'
-const PRIMARY_BUTTON = 'h-7 px-3 rounded-md gradient-primary text-primary-foreground text-[11px] font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50'
+const TEXT_BUTTON = 'h-7 px-3 rounded-md text-[0.875rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors'
+const PRIMARY_BUTTON = 'h-7 px-3 rounded-md gradient-primary text-primary-foreground text-[0.875rem] font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50'
 
 // ─── Knowledge base list + card ──────────────────────────
 
@@ -301,7 +301,7 @@ function KnowledgeBaseList({
         <div className="flex h-5 w-5 items-center justify-center rounded bg-surface-2 border border-border text-muted-foreground">
           <BookOpen className="h-3 w-3" />
         </div>
-        <h2 className="text-[10px] uppercase tracking-[0.08em] font-semibold text-muted-foreground">Knowledge bases</h2>
+        <h2 className="text-[0.8125rem] uppercase tracking-[0.08em] font-semibold text-muted-foreground">Knowledge bases</h2>
         <Badge variant="muted" className="h-4 px-1.5 normal-case tracking-normal">{bases.length}</Badge>
       </div>
       <div className="space-y-2">
@@ -413,17 +413,17 @@ function CardHeader({
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="font-semibold text-[13px] truncate">{kb.name}</span>
+          <span className="font-semibold text-[1rem] truncate">{kb.name}</span>
           {isExpanded
             ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             : <ChevronRight className="h-3.5 w-3.5 text-dim-foreground shrink-0" />}
         </div>
         {kb.description && (
-          <p className="text-[11px] text-muted-foreground line-clamp-1 leading-relaxed mb-2">
+          <p className="text-[0.875rem] text-muted-foreground line-clamp-1 leading-relaxed mb-2">
             {kb.description}
           </p>
         )}
-        <div className="flex items-center gap-3 text-[10px] text-dim-foreground">
+        <div className="flex items-center gap-3 text-[0.8125rem] text-dim-foreground">
           <IconStat icon={FileText} value={kb.documentCount} suffix={` doc${kb.documentCount !== 1 ? 's' : ''}`} />
           <IconStat icon={HardDrive} value={formatTokens(kb.totalTokens)} suffix=" tokens" />
           <span className="flex items-center gap-1">
@@ -477,13 +477,13 @@ function EditKnowledgeBaseForm({
   return (
     <div className="space-y-3 ml-12">
       <Field label="Name">
-        <Input value={name} onChange={e => setName(e.target.value)} className="h-8 text-[12px]" autoFocus />
+        <Input value={name} onChange={e => setName(e.target.value)} className="h-8 text-[0.9375rem]" autoFocus />
       </Field>
       <Field label="Description">
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
-          className="w-full min-h-[60px] bg-surface-0 border border-border rounded-md p-3 text-[12px] leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
+          className="w-full min-h-[60px] bg-surface-0 border border-border rounded-md p-3 text-[0.9375rem] leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
         />
       </Field>
       <div className="flex items-center gap-2 justify-end">
@@ -509,24 +509,24 @@ function CardActions({
     <div className="flex items-center gap-1.5 pt-3 border-t border-border">
       <button
         onClick={onStartEdit}
-        className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+        className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
       >
         <Pencil className="h-3 w-3" />
         Edit
       </button>
       {confirmingDelete ? (
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[10px] text-red-400">Delete this knowledge base?</span>
+          <span className="text-[0.8125rem] text-red-400">Delete this knowledge base?</span>
           <button
             onClick={onDelete}
-            className="flex items-center gap-1 h-6 px-2 rounded text-[10px] font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+            className="flex items-center gap-1 h-6 px-2 rounded text-[0.8125rem] font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors"
           >
             <Check className="h-3 w-3" />
             Confirm
           </button>
           <button
             onClick={onCancelDelete}
-            className="flex items-center gap-1 h-6 px-2 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+            className="flex items-center gap-1 h-6 px-2 rounded text-[0.8125rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
           >
             <X className="h-3 w-3" />
             Cancel
@@ -535,7 +535,7 @@ function CardActions({
       ) : (
         <button
           onClick={onConfirmDelete}
-          className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
+          className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
         >
           <Trash2 className="h-3 w-3" />
           Delete
@@ -597,7 +597,7 @@ function DocumentList({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground py-3">
+      <div className="flex items-center gap-2 text-[0.875rem] text-muted-foreground py-3">
         <Loader2 className="h-3 w-3 animate-spin" />
         Loading documents...
       </div>
@@ -611,7 +611,7 @@ function DocumentList({
 
       {documents.length > 0 ? (
         <div className="space-y-1">
-          <div className="text-[9px] uppercase tracking-[0.08em] font-semibold text-dim-foreground mb-2 px-1">
+          <div className="text-[0.6875rem] uppercase tracking-[0.08em] font-semibold text-dim-foreground mb-2 px-1">
             Documents ({documents.length})
           </div>
           {documents.map(doc => (
@@ -619,7 +619,7 @@ function DocumentList({
           ))}
         </div>
       ) : (
-        <p className="text-[11px] text-dim-foreground text-center py-2">
+        <p className="text-[0.875rem] text-dim-foreground text-center py-2">
           No documents yet — upload files to build this knowledge base
         </p>
       )}
@@ -667,17 +667,17 @@ function UploadDropzone({
         }}
       />
       {uploading ? (
-        <div className="flex items-center justify-center gap-2 text-[11px] text-primary">
+        <div className="flex items-center justify-center gap-2 text-[0.875rem] text-primary">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Uploading...
         </div>
       ) : (
         <div className="flex flex-col items-center gap-1.5">
           <Upload className={cn('h-4 w-4 transition-colors', dragOver ? 'text-primary' : 'text-dim-foreground')} />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[0.875rem] text-muted-foreground">
             <span className="text-foreground font-medium">Click to upload</span> or drag & drop
           </p>
-          <p className="text-[9px] text-dim-foreground">
+          <p className="text-[0.6875rem] text-dim-foreground">
             TXT, Markdown, PDF, CSV, JSON, HTML, code files
           </p>
         </div>
@@ -688,7 +688,7 @@ function UploadDropzone({
 
 function UploadError({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   return (
-    <div className="flex items-center gap-2 text-[11px] text-red-400 bg-red-500/10 rounded-md px-3 py-2">
+    <div className="flex items-center gap-2 text-[0.875rem] text-red-400 bg-red-500/10 rounded-md px-3 py-2">
       <AlertCircle className="h-3 w-3 shrink-0" />
       {message}
       <button onClick={onDismiss} className="ml-auto hover:text-red-300">
@@ -707,12 +707,12 @@ function DocumentRow({ doc, onDelete }: { doc: KnowledgeDocument; onDelete: () =
     <div className="group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-surface-0 transition-colors">
       <div className={cn('h-2 w-2 rounded-full shrink-0', DOC_STATUS_COLORS[doc.status] ?? 'bg-muted')} />
       <FileText className="h-3.5 w-3.5 text-dim-foreground shrink-0" />
-      <span className="text-[12px] font-medium truncate flex-1">{doc.filename}</span>
-      <Badge variant="muted" className={cn('h-4 px-1.5 text-[9px] mono', mimeInfo.color)}>
+      <span className="text-[0.9375rem] font-medium truncate flex-1">{doc.filename}</span>
+      <Badge variant="muted" className={cn('h-4 px-1.5 text-[0.6875rem] mono', mimeInfo.color)}>
         {mimeInfo.label}
       </Badge>
-      <span className="text-[10px] text-dim-foreground tabular w-16 text-right">{formatTokens(doc.tokenCount)}</span>
-      <span className="text-[10px] text-dim-foreground w-14 text-right">{timeAgo(doc.createdAt)}</span>
+      <span className="text-[0.8125rem] text-dim-foreground tabular w-16 text-right">{formatTokens(doc.tokenCount)}</span>
+      <span className="text-[0.8125rem] text-dim-foreground w-14 text-right">{timeAgo(doc.createdAt)}</span>
       <button
         onClick={e => { e.stopPropagation(); onDelete() }}
         className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-dim-foreground hover:text-red-400 transition-all"
@@ -743,12 +743,12 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         </div>
       </div>
       <p className="text-sm font-medium text-foreground mb-1">No knowledge bases yet</p>
-      <p className="text-[11px] text-muted-foreground mb-5 max-w-sm mx-auto leading-relaxed">
+      <p className="text-[0.875rem] text-muted-foreground mb-5 max-w-sm mx-auto leading-relaxed">
         Create a knowledge base to give your agents access to custom documents via RAG retrieval. Upload text, markdown, PDFs, and more.
       </p>
       <button
         onClick={onCreate}
-        className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md gradient-primary text-primary-foreground text-[11px] font-medium shadow-sm hover:opacity-90 transition-opacity"
+        className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md gradient-primary text-primary-foreground text-[0.875rem] font-medium shadow-sm hover:opacity-90 transition-opacity"
       >
         <Plus className="h-3 w-3" />
         Create your first knowledge base

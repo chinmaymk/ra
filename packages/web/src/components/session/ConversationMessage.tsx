@@ -84,11 +84,11 @@ export function ConversationMessage({ message, compact = false }: ConversationMe
         <div className="flex-1 min-w-0 space-y-2.5">
           {/* Label */}
           <div className="flex items-baseline gap-2">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.08em]">
+            <span className="text-[0.8125rem] font-semibold text-muted-foreground uppercase tracking-[0.08em]">
               {isUser ? 'You' : 'Assistant'}
             </span>
             {isStreaming && (
-              <span className="text-[10px] text-primary flex items-center gap-1">
+              <span className="text-[0.8125rem] text-primary flex items-center gap-1">
                 <span className="h-1 w-1 rounded-full bg-primary pulse" />
                 streaming
               </span>
@@ -118,13 +118,13 @@ export function ConversationMessage({ message, compact = false }: ConversationMe
           {/* Text content */}
           {cleaned && (
             <div className={cn(isStreaming && !isUser && 'streaming-cursor')}>
-              <Markdown content={cleaned} className="text-[14px] text-foreground" />
+              <Markdown content={cleaned} className="text-[1rem] text-foreground" />
             </div>
           )}
 
           {/* Thinking loader (streaming, no content yet) */}
           {isStreaming && !text && images.length === 0 && (!message.toolCalls || message.toolCalls.length === 0) && (
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+            <div className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin text-primary" />
               <span className="italic">thinking...</span>
             </div>
@@ -162,14 +162,14 @@ function ThinkingBlock({ text, defaultOpen }: { text: string; defaultOpen: boole
     <div>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-[11px] text-purple hover:text-purple/80 transition-colors"
+        className="flex items-center gap-1.5 text-[0.875rem] text-purple hover:text-purple/80 transition-colors"
       >
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         <Brain className="h-3 w-3" />
         <span className="font-medium">Reasoning</span>
       </button>
       {open && (
-        <div className="mt-2 ml-1 pl-3 border-l-2 border-purple/20 text-[12px] text-muted-foreground italic whitespace-pre-wrap leading-relaxed">
+        <div className="mt-2 ml-1 pl-3 border-l-2 border-purple/20 text-[0.9375rem] text-muted-foreground italic whitespace-pre-wrap leading-relaxed">
           {text}
         </div>
       )}
@@ -196,7 +196,7 @@ function ToolCallCard({ tc, compact, isStreaming }: ToolCallCardProps) {
     return (
       <div
         className={cn(
-          'flex items-center gap-2 px-3 py-2 rounded-md border text-[11px] transition-colors',
+          'flex items-center gap-2 px-3 py-2 rounded-md border text-[0.875rem] transition-colors',
           mcp && 'border-l-2 border-l-cyan-500/50',
           tc.isError
             ? 'border-destructive/30 bg-destructive/5'
@@ -208,14 +208,14 @@ function ToolCallCard({ tc, compact, isStreaming }: ToolCallCardProps) {
         <ToolIcon tc={tc} running={running} isMcp={!!mcp} />
         {mcp ? (
           <>
-            <span className="text-[10px] text-cyan-400/70 mono">{mcp.serverName}</span>
-            <span className="text-dim-foreground text-[10px] mono">/</span>
+            <span className="text-[0.8125rem] text-cyan-400/70 mono">{mcp.serverName}</span>
+            <span className="text-dim-foreground text-[0.8125rem] mono">/</span>
             <span className="font-semibold mono">{mcp.toolName}</span>
           </>
         ) : (
           <span className="font-semibold mono">{tc.name}</span>
         )}
-        <span className="text-dim-foreground truncate font-mono text-[10px] flex-1">
+        <span className="text-dim-foreground truncate font-mono text-[0.8125rem] flex-1">
           {tc.arguments.slice(0, 60)}
         </span>
         <StatusIcon tc={tc} running={running} hasResult={hasResult} />
@@ -238,7 +238,7 @@ function ToolCallCard({ tc, compact, isStreaming }: ToolCallCardProps) {
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-3 py-2 text-left text-[11px]"
+        className="flex items-center gap-2 w-full px-3 py-2 text-left text-[0.875rem]"
       >
         {expanded
           ? <ChevronDown className="h-3 w-3 text-dim-foreground shrink-0" />
@@ -246,21 +246,21 @@ function ToolCallCard({ tc, compact, isStreaming }: ToolCallCardProps) {
         <ToolIcon tc={tc} running={running} isMcp={!!mcp} />
         {mcp ? (
           <>
-            <span className="text-[10px] text-cyan-400/70 mono">{mcp.serverName}</span>
-            <span className="text-dim-foreground text-[10px] mono">/</span>
+            <span className="text-[0.8125rem] text-cyan-400/70 mono">{mcp.serverName}</span>
+            <span className="text-dim-foreground text-[0.8125rem] mono">/</span>
             <span className="font-semibold mono text-foreground">{mcp.toolName}</span>
           </>
         ) : (
           <span className="font-semibold mono text-foreground">{tc.name}</span>
         )}
         {!compact && tc.arguments && (
-          <span className="text-dim-foreground truncate font-mono text-[10px] max-w-xs flex-1">
+          <span className="text-dim-foreground truncate font-mono text-[0.8125rem] max-w-xs flex-1">
             {summarizeArgs(tc.arguments)}
           </span>
         )}
         <div className="ml-auto flex items-center gap-2 shrink-0">
           {tc.durationMs !== undefined && (
-            <span className="text-dim-foreground text-[10px] mono tabular">
+            <span className="text-dim-foreground text-[0.8125rem] mono tabular">
               {tc.durationMs < 1000 ? `${tc.durationMs}ms` : `${(tc.durationMs / 1000).toFixed(1)}s`}
             </span>
           )}
@@ -273,20 +273,20 @@ function ToolCallCard({ tc, compact, isStreaming }: ToolCallCardProps) {
           <div className="border-t border-border divide-y divide-border bg-surface-0/40">
             {tc.arguments && (
               <div className="px-3 py-2.5">
-                <div className="text-[9px] uppercase tracking-[0.08em] text-dim-foreground mb-1.5 font-semibold">Input</div>
-                <pre className="text-[11px] text-foreground/80 whitespace-pre-wrap break-words max-h-48 overflow-y-auto mono leading-relaxed">
+                <div className="text-[0.6875rem] uppercase tracking-[0.08em] text-dim-foreground mb-1.5 font-semibold">Input</div>
+                <pre className="text-[0.875rem] text-foreground/80 whitespace-pre-wrap break-words max-h-48 overflow-y-auto mono leading-relaxed">
                   {formatArgs(tc.arguments)}
                 </pre>
               </div>
             )}
             {tc.result !== undefined && (
               <div className="px-3 py-2.5">
-                <div className="text-[9px] uppercase tracking-[0.08em] text-dim-foreground mb-1.5 font-semibold">Output</div>
+                <div className="text-[0.6875rem] uppercase tracking-[0.08em] text-dim-foreground mb-1.5 font-semibold">Output</div>
                 <ToolResultContent tc={tc} />
               </div>
             )}
             {running && (
-              <div className="px-3 py-2.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="px-3 py-2.5 flex items-center gap-2 text-[0.875rem] text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span className="italic">Executing...</span>
               </div>
@@ -387,7 +387,7 @@ function detectXml(text: string): boolean {
 function HighlightedBlock({ content, language }: { content: string; language: string }) {
   const markdown = `\`\`\`${language}\n${content}\n\`\`\``
   return (
-    <div className="max-h-64 overflow-y-auto text-[11px]">
+    <div className="max-h-64 overflow-y-auto text-[0.875rem]">
       <Markdown content={markdown} />
     </div>
   )
@@ -399,7 +399,7 @@ function ToolResultContent({ tc }: { tc: ToolCall }) {
 
   if (tc.isError) {
     return (
-      <pre className="text-[11px] whitespace-pre-wrap break-words max-h-64 overflow-y-auto mono leading-relaxed text-destructive">
+      <pre className="text-[0.875rem] whitespace-pre-wrap break-words max-h-64 overflow-y-auto mono leading-relaxed text-destructive">
         {result}
       </pre>
     )
@@ -428,7 +428,7 @@ function ToolResultContent({ tc }: { tc: ToolCall }) {
   }
 
   return (
-    <pre className="text-[11px] whitespace-pre-wrap break-words max-h-64 overflow-y-auto mono leading-relaxed text-foreground/80">
+    <pre className="text-[0.875rem] whitespace-pre-wrap break-words max-h-64 overflow-y-auto mono leading-relaxed text-foreground/80">
       {result}
     </pre>
   )

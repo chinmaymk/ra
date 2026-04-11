@@ -180,8 +180,8 @@ export function ChatComposer({
                     className="h-9 w-9 rounded object-cover"
                   />
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-[11px] truncate text-foreground">{att.name ?? 'pasted image'}</span>
-                    <span className="text-[9px] text-dim-foreground mono uppercase">{att.mimeType.replace('image/', '')}</span>
+                    <span className="text-[0.875rem] truncate text-foreground">{att.name ?? 'pasted image'}</span>
+                    <span className="text-[0.6875rem] text-dim-foreground mono uppercase">{att.mimeType.replace('image/', '')}</span>
                   </div>
                   <button
                     onClick={() => removeAttachment(att.id)}
@@ -196,7 +196,7 @@ export function ChatComposer({
 
           {dragOver && attachments.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-primary/5">
-              <div className="flex items-center gap-2 text-primary text-xs font-medium">
+              <div className="flex items-center gap-2 text-primary text-[0.9375rem] font-medium">
                 <ImageIcon className="h-4 w-4" />
                 Drop image to attach
               </div>
@@ -215,7 +215,7 @@ export function ChatComposer({
             disabled={disabled}
             rows={1}
             className={cn(
-              'w-full bg-transparent px-4 pt-3 pb-1.5 text-[14px] resize-none outline-none leading-[1.55]',
+              'w-full bg-transparent px-4 pt-3 pb-1.5 text-[1rem] resize-none outline-none leading-[1.55]',
               'placeholder:text-dim-foreground',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
@@ -259,7 +259,7 @@ export function ChatComposer({
                       <button
                         onClick={() => setWorktreeEnabled(!worktreeEnabled)}
                         className={cn(
-                          'flex items-center gap-1 h-7 px-2 rounded-md text-[11px] transition-all',
+                          'flex items-center gap-1 h-7 px-2 rounded-md text-[0.875rem] transition-all',
                           worktreeEnabled
                             ? 'text-success bg-success/10 border border-success/25'
                             : 'text-muted-foreground hover:text-foreground hover:bg-surface-2 border border-transparent'
@@ -279,7 +279,7 @@ export function ChatComposer({
                       <PopoverTrigger asChild>
                         <button
                           className={cn(
-                            'flex items-center gap-1 h-7 px-2 rounded-md text-[11px] transition-all',
+                            'flex items-center gap-1 h-7 px-2 rounded-md text-[0.875rem] transition-all',
                             hasOverrides
                               ? 'text-primary bg-primary/10 border border-primary/25'
                               : 'text-muted-foreground hover:text-foreground hover:bg-surface-2 border border-transparent'
@@ -296,8 +296,8 @@ export function ChatComposer({
                       <PopoverContent className="w-80" align="start" sideOffset={8}>
                         <div className="space-y-3">
                           <div>
-                            <div className="text-xs font-semibold mb-0.5">Session overrides</div>
-                            <div className="text-[10px] text-muted-foreground">Use a different model just for this session</div>
+                            <div className="text-[0.9375rem] font-semibold mb-0.5">Session overrides</div>
+                            <div className="text-[0.8125rem] text-muted-foreground">Use a different model just for this session</div>
                           </div>
                           <div className="space-y-1.5">
                             <Label>Provider</Label>
@@ -345,7 +345,7 @@ export function ChatComposer({
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="text-[10px] text-dim-foreground hidden sm:flex items-center gap-1">
+              <div className="text-[0.8125rem] text-dim-foreground hidden sm:flex items-center gap-1">
                 <kbd>↵</kbd>
                 <span>send</span>
                 <span className="opacity-50">·</span>

@@ -47,12 +47,12 @@ export function QueueView({ session, queuePosition, queueTotal, onSkip, onInspec
               <div className="flex h-6 w-6 items-center justify-center rounded-md bg-status-waiting/10 border border-status-waiting/20">
                 <Inbox className="h-3 w-3 text-status-waiting" />
               </div>
-              <span className="text-xs font-semibold text-status-waiting">Queue mode</span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-[0.9375rem] font-semibold text-status-waiting">Queue mode</span>
+              <span className="text-[0.8125rem] text-muted-foreground">
                 Process waiting agents one by one
               </span>
             </div>
-            <div className="text-[10px] text-muted-foreground mono">
+            <div className="text-[0.8125rem] text-muted-foreground mono">
               <span className="text-foreground tabular font-semibold">{queuePosition}</span>
               <span className="opacity-50"> / {queueTotal}</span>
             </div>
@@ -84,7 +84,7 @@ export function QueueView({ session, queuePosition, queueTotal, onSkip, onInspec
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onInspect(session.id)}
-                  className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[0.875rem] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                 >
                   <Eye className="h-3 w-3" />
                   Inspect
@@ -96,7 +96,7 @@ export function QueueView({ session, queuePosition, queueTotal, onSkip, onInspec
               <TooltipTrigger asChild>
                 <button
                   onClick={onSkip}
-                  className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[0.875rem] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                 >
                   <SkipForward className="h-3 w-3" />
                   Skip
@@ -118,7 +118,7 @@ export function QueueView({ session, queuePosition, queueTotal, onSkip, onInspec
         </div>
 
         {/* Stats footer */}
-        <div className="flex items-center gap-3 px-5 h-7 text-[10px] text-dim-foreground border-t border-border bg-surface-0/40 mono">
+        <div className="flex items-center gap-3 px-5 h-7 text-[0.8125rem] text-dim-foreground border-t border-border bg-surface-0/40 mono">
           <span>iter <span className="text-muted-foreground tabular">{current.iteration}</span></span>
           <span className="opacity-30">·</span>
           <span><span className="text-muted-foreground tabular">{formatTokens(totalTokens)}</span> tokens</span>
@@ -132,7 +132,7 @@ export function QueueView({ session, queuePosition, queueTotal, onSkip, onInspec
 
         {/* Advance notice */}
         {advanced && (
-          <div className="px-5 py-1.5 text-xs text-muted-foreground text-center fade-in">
+          <div className="px-5 py-1.5 text-[0.9375rem] text-muted-foreground text-center fade-in">
             ✨ Session resumed — switching to full view...
           </div>
         )}

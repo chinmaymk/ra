@@ -186,7 +186,7 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
             </button>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight gradient-text">Prompts</h1>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[0.9375rem] text-muted-foreground mt-1">
                 <span className="tabular text-foreground">{templates.length}</span> template{templates.length !== 1 ? 's' : ''}
                 {starred.length > 0 && (
                   <>
@@ -209,7 +209,7 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
             </div>
             <button
               onClick={() => setAdding(true)}
-              className="flex items-center gap-1.5 h-9 px-3 rounded-md gradient-primary text-primary-foreground text-[11px] font-medium shadow-sm hover:opacity-90 transition-opacity"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-md gradient-primary text-primary-foreground text-[0.875rem] font-medium shadow-sm hover:opacity-90 transition-opacity"
             >
               <Plus className="h-3 w-3" />
               New template
@@ -227,7 +227,7 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
               <div className="flex h-5 w-5 items-center justify-center rounded bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/30 text-primary">
                 <Sparkles className="h-3 w-3" />
               </div>
-              <h2 className="text-[10px] uppercase tracking-[0.08em] font-semibold text-muted-foreground">Active system prompt</h2>
+              <h2 className="text-[0.8125rem] uppercase tracking-[0.08em] font-semibold text-muted-foreground">Active system prompt</h2>
             </div>
             <div className="rounded-xl border border-primary/20 bg-surface-1/40 p-5 fade-in">
               {editingSystem ? (
@@ -235,19 +235,19 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
                   <textarea
                     value={systemDraft}
                     onChange={(e) => setSystemDraft(e.target.value)}
-                    className="w-full min-h-[120px] bg-surface-0 border border-border rounded-md p-3 text-[12px] mono leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
+                    className="w-full min-h-[120px] bg-surface-0 border border-border rounded-md p-3 text-[0.9375rem] mono leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
                     autoFocus
                   />
                   <div className="flex items-center gap-2 justify-end">
                     <button
                       onClick={() => setEditingSystem(false)}
-                      className="h-7 px-3 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                      className="h-7 px-3 rounded-md text-[0.875rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSaveSystem}
-                      className="h-7 px-3 rounded-md gradient-primary text-primary-foreground text-[11px] font-medium shadow-sm hover:opacity-90 transition-opacity"
+                      className="h-7 px-3 rounded-md gradient-primary text-primary-foreground text-[0.875rem] font-medium shadow-sm hover:opacity-90 transition-opacity"
                     >
                       Save
                     </button>
@@ -255,20 +255,20 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
                 </div>
               ) : (
                 <div className="group">
-                  <pre className="text-[12px] mono text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                  <pre className="text-[0.9375rem] mono text-foreground/90 whitespace-pre-wrap leading-relaxed">
                     {systemPrompt || 'No system prompt configured'}
                   </pre>
                   <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => { setSystemDraft(systemPrompt); setEditingSystem(true) }}
-                      className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                      className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                     >
                       <Pencil className="h-3 w-3" />
                       Edit
                     </button>
                     <button
                       onClick={() => handleCopy('system', systemPrompt)}
-                      className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                      className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                     >
                       {copiedId === 'system' ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                       {copiedId === 'system' ? 'Copied' : 'Copy'}
@@ -284,33 +284,33 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
             <div className="rounded-xl border border-primary/30 bg-surface-1 p-5 fade-in shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <Plus className="h-3.5 w-3.5 text-primary" />
-                <span className="text-[11px] font-semibold text-foreground">New prompt template</span>
+                <span className="text-[0.875rem] font-semibold text-foreground">New prompt template</span>
               </div>
               <div className="space-y-3">
                 <Input
                   placeholder="Template name..."
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="h-8 text-[12px]"
+                  className="h-8 text-[0.9375rem]"
                   autoFocus
                 />
                 <textarea
                   placeholder="Prompt content..."
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
-                  className="w-full min-h-[100px] bg-surface-0 border border-border rounded-md p-3 text-[12px] mono leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground placeholder:text-dim-foreground"
+                  className="w-full min-h-[100px] bg-surface-0 border border-border rounded-md p-3 text-[0.9375rem] mono leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground placeholder:text-dim-foreground"
                 />
                 <div className="flex items-center gap-2 justify-end">
                   <button
                     onClick={() => { setAdding(false); setNewName(''); setNewContent('') }}
-                    className="h-7 px-3 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                    className="h-7 px-3 rounded-md text-[0.875rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleAdd}
                     disabled={!newName.trim() || !newContent.trim()}
-                    className="h-7 px-3 rounded-md gradient-primary text-primary-foreground text-[11px] font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                    className="h-7 px-3 rounded-md gradient-primary text-primary-foreground text-[0.875rem] font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                   >
                     Save template
                   </button>
@@ -326,7 +326,7 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
                 <div className="flex h-5 w-5 items-center justify-center rounded bg-surface-2 border border-border text-muted-foreground">
                   <Bookmark className="h-3 w-3" />
                 </div>
-                <h2 className="text-[10px] uppercase tracking-[0.08em] font-semibold text-muted-foreground">Templates</h2>
+                <h2 className="text-[0.8125rem] uppercase tracking-[0.08em] font-semibold text-muted-foreground">Templates</h2>
                 <Badge variant="muted" className="h-4 px-1.5 normal-case tracking-normal">{filtered.length}</Badge>
               </div>
               <div className="space-y-1.5">
@@ -362,16 +362,16 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
                           }
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-semibold text-[13px]">{template.name}</span>
+                              <span className="font-semibold text-[1rem]">{template.name}</span>
                               {template.starred && (
                                 <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                               )}
                             </div>
-                            <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed mono">
+                            <p className="text-[0.875rem] text-muted-foreground line-clamp-2 leading-relaxed mono">
                               {template.content}
                             </p>
                           </div>
-                          <span className="text-[10px] text-dim-foreground shrink-0 tabular mt-0.5">
+                          <span className="text-[0.8125rem] text-dim-foreground shrink-0 tabular mt-0.5">
                             {new Date(template.createdAt).toLocaleDateString()}
                           </span>
                         </div>
@@ -383,24 +383,24 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
                                 <Input
                                   value={editName}
                                   onChange={(e) => setEditName(e.target.value)}
-                                  className="h-8 text-[12px]"
+                                  className="h-8 text-[0.9375rem]"
                                   autoFocus
                                 />
                                 <textarea
                                   value={editContent}
                                   onChange={(e) => setEditContent(e.target.value)}
-                                  className="w-full min-h-[100px] bg-surface-0 border border-border rounded-md p-3 text-[12px] mono leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
+                                  className="w-full min-h-[100px] bg-surface-0 border border-border rounded-md p-3 text-[0.9375rem] mono leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
                                 />
                                 <div className="flex items-center gap-2 justify-end">
                                   <button
                                     onClick={() => setEditingId(null)}
-                                    className="h-7 px-3 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                                    className="h-7 px-3 rounded-md text-[0.875rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                                   >
                                     Cancel
                                   </button>
                                   <button
                                     onClick={handleSaveEdit}
-                                    className="h-7 px-3 rounded-md gradient-primary text-primary-foreground text-[11px] font-medium shadow-sm hover:opacity-90 transition-opacity"
+                                    className="h-7 px-3 rounded-md gradient-primary text-primary-foreground text-[0.875rem] font-medium shadow-sm hover:opacity-90 transition-opacity"
                                   >
                                     Save
                                   </button>
@@ -408,41 +408,41 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
                               </div>
                             ) : (
                               <>
-                                <pre className="text-[11px] mono bg-surface-0 border border-border p-3 rounded-md whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed">
+                                <pre className="text-[0.875rem] mono bg-surface-0 border border-border p-3 rounded-md whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed">
                                   {template.content}
                                 </pre>
                                 <div className="flex items-center gap-1.5 mt-3">
                                   <button
                                     onClick={() => handleApplyAsSystem(template.content)}
-                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors"
+                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] font-medium text-primary hover:bg-primary/10 transition-colors"
                                   >
                                     <Sparkles className="h-3 w-3" />
                                     Apply as system prompt
                                   </button>
                                   <button
                                     onClick={() => handleCopy(template.id, template.content)}
-                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                                   >
                                     {copiedId === template.id ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                                     {copiedId === template.id ? 'Copied' : 'Copy'}
                                   </button>
                                   <button
                                     onClick={() => { setEditingId(template.id); setEditName(template.name); setEditContent(template.content) }}
-                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                                   >
                                     <Pencil className="h-3 w-3" />
                                     Edit
                                   </button>
                                   <button
                                     onClick={() => handleToggleStar(template.id)}
-                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                                   >
                                     <Star className={cn('h-3 w-3', template.starred && 'fill-amber-400 text-amber-400')} />
                                     {template.starred ? 'Unstar' : 'Star'}
                                   </button>
                                   <button
                                     onClick={() => handleDelete(template.id)}
-                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[10px] text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
+                                    className="flex items-center gap-1.5 h-6 px-2 rounded text-[0.8125rem] text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
                                   >
                                     <Trash2 className="h-3 w-3" />
                                     Delete
@@ -469,10 +469,10 @@ export function PromptsPage({ onBack }: PromptsPageProps) {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground mb-1">No prompt templates yet</p>
-              <p className="text-[11px] text-dim-foreground mb-4">Save reusable prompts to quickly apply them as system prompts</p>
+              <p className="text-[0.875rem] text-dim-foreground mb-4">Save reusable prompts to quickly apply them as system prompts</p>
               <button
                 onClick={() => setAdding(true)}
-                className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md gradient-primary text-primary-foreground text-[11px] font-medium shadow-sm hover:opacity-90 transition-opacity"
+                className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md gradient-primary text-primary-foreground text-[0.875rem] font-medium shadow-sm hover:opacity-90 transition-opacity"
               >
                 <Plus className="h-3 w-3" />
                 Create your first template

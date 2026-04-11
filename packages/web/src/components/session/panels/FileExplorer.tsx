@@ -45,7 +45,7 @@ function FileExplorerImpl({
   if (filterLower !== '') {
     const matches = files.filter(f => f.path.toLowerCase().includes(filterLower))
     if (matches.length === 0) {
-      return <p className="px-2 py-4 text-center text-[11px] text-dim-foreground">No files match filter</p>
+      return <p className="px-2 py-4 text-center text-[0.875rem] text-dim-foreground">No files match filter</p>
     }
     return (
       <div className="space-y-0.5">
@@ -104,7 +104,7 @@ function TreeNodeView({
           onClick={() => onToggle(node.fullPath)}
           className={cn(
             'flex w-full items-center gap-1 rounded-lg py-1 text-left transition-colors hover:bg-surface-2/80',
-            compact ? 'px-1.5 text-[10px]' : 'px-2 text-[11px]',
+            compact ? 'px-1.5 text-[0.8125rem]' : 'px-2 text-[0.875rem]',
           )}
           style={{ paddingLeft: pad + 4 }}
         >
@@ -165,7 +165,7 @@ function TreeFileRow({
       onClick={() => onSelect(file)}
       className={cn(
         'flex w-full min-w-0 items-center gap-1.5 rounded-lg py-1.5 text-left transition-colors',
-        compact ? 'px-1.5 text-[10px]' : 'px-2 text-[11px]',
+        compact ? 'px-1.5 text-[0.8125rem]' : 'px-2 text-[0.875rem]',
         active ? 'bg-primary/18 text-foreground' : 'hover:bg-surface-2/80 text-muted-foreground',
       )}
       style={{ paddingLeft: indent }}
@@ -191,7 +191,7 @@ function FlatFileRow({
       onClick={() => onSelect(file)}
       className={cn(
         'flex w-full min-w-0 items-center gap-2 rounded-lg py-1.5 text-left font-mono transition-colors',
-        compact ? 'px-2 text-[10px]' : 'px-2 text-[11px]',
+        compact ? 'px-2 text-[0.8125rem]' : 'px-2 text-[0.875rem]',
         active ? 'bg-primary/18' : 'hover:bg-surface-2/80',
       )}
     >
@@ -228,7 +228,7 @@ export function ExplorerSearch({
         placeholder="Filter files…"
         className={cn(
           'w-full rounded-lg border border-border bg-surface-0 py-2 pl-8 pr-2 font-sans text-foreground placeholder:text-dim-foreground outline-none focus:ring-2 focus:ring-primary/30',
-          compact ? 'text-[10px]' : 'text-xs',
+          compact ? 'text-[0.8125rem]' : 'text-[0.9375rem]',
         )}
         autoComplete="off"
         aria-label="Filter changed files"

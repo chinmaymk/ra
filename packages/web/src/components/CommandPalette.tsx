@@ -103,7 +103,7 @@ export function CommandPalette({
               >
                 <StatusDot status={s.status} size="sm" animated={false} />
                 <span className="truncate">{s.name}</span>
-                <span className="ml-auto text-xs text-muted-foreground">{s.model}</span>
+                <span className="ml-auto text-[0.9375rem] text-muted-foreground">{s.model}</span>
               </CommandItem>
             ))}
           </CommandGroup>

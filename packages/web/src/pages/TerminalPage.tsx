@@ -220,7 +220,7 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
             </button>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight gradient-text">Terminal</h1>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[0.9375rem] text-muted-foreground mt-1">
                 Run bash commands
                 {entries.length > 0 && (
                   <>
@@ -240,7 +240,7 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
           {entries.some(e => !e.running) && (
             <button
               onClick={clearHistory}
-              className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors text-[11px]"
+              className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors text-[0.875rem]"
             >
               <Trash2 className="h-3 w-3" />
               Clear
@@ -271,14 +271,14 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
               value={cwd}
               onChange={e => setCwd(e.target.value)}
               placeholder="cwd (optional)"
-              className="w-40 h-10 px-3 text-xs font-mono bg-surface-0 border border-border rounded-lg text-muted-foreground placeholder:text-dim-foreground outline-none focus:border-primary/50 transition-colors"
+              className="w-40 h-10 px-3 text-[0.9375rem] font-mono bg-surface-0 border border-border rounded-lg text-muted-foreground placeholder:text-dim-foreground outline-none focus:border-primary/50 transition-colors"
               spellCheck={false}
             />
             <button
               onClick={runCommand}
               disabled={!command.trim()}
               className={cn(
-                'flex items-center gap-1.5 h-10 px-4 rounded-lg text-[12px] font-medium transition-all',
+                'flex items-center gap-1.5 h-10 px-4 rounded-lg text-[0.9375rem] font-medium transition-all',
                 command.trim()
                   ? 'gradient-primary text-primary-foreground shadow-sm hover:opacity-90'
                   : 'bg-surface-2 text-dim-foreground cursor-not-allowed'
@@ -297,7 +297,7 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <TerminalIcon className="h-12 w-12 mb-4 opacity-20" />
             <p className="text-sm">No commands yet</p>
-            <p className="text-xs mt-1 text-dim-foreground">Type a command above and press Enter or click Run</p>
+            <p className="text-[0.9375rem] mt-1 text-dim-foreground">Type a command above and press Enter or click Run</p>
           </div>
         )}
         {entries.map(entry => {
@@ -330,7 +330,7 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-status-running" />
                   </span>
                 )}
-                <code className="flex-1 text-[12px] font-mono font-semibold text-foreground truncate">
+                <code className="flex-1 text-[0.9375rem] font-mono font-semibold text-foreground truncate">
                   {entry.cwd && <span className="text-primary/60">{entry.cwd} </span>}
                   $ {entry.command}
                 </code>
@@ -338,7 +338,7 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
                   {entry.output && !entry.running && (
                     <button
                       onClick={e => { e.stopPropagation(); copyOutput(entry.id, entry.output) }}
-                      className="flex items-center gap-1 h-6 px-2 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                      className="flex items-center gap-1 h-6 px-2 rounded text-[0.8125rem] text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                     >
                       {copiedEntryId === entry.id
                         ? <><Check className="h-2.5 w-2.5 text-emerald-500" /><span className="text-emerald-500">Copied</span></>
@@ -349,14 +349,14 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
                   {entry.running ? (
                     <button
                       onClick={e => { e.stopPropagation(); killProcess(entry.id) }}
-                      className="flex items-center gap-1 h-6 px-2 rounded text-[10px] font-medium bg-status-error/10 text-status-error border border-status-error/20 hover:bg-status-error/20 transition-colors"
+                      className="flex items-center gap-1 h-6 px-2 rounded text-[0.8125rem] font-medium bg-status-error/10 text-status-error border border-status-error/20 hover:bg-status-error/20 transition-colors"
                     >
                       <Square className="h-2.5 w-2.5" />
                       Kill
                     </button>
                   ) : (
                     <span className={cn(
-                      'text-[10px] font-mono tabular px-1.5 py-0.5 rounded',
+                      'text-[0.8125rem] font-mono tabular px-1.5 py-0.5 rounded',
                       entry.exitCode === 0
                         ? 'text-status-done bg-status-done/10'
                         : 'text-status-error bg-status-error/10'
@@ -372,14 +372,14 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
                 <div className="border-t border-border">
                   {entry.output ? (
                     <pre
-                      className="px-4 py-3 text-[12px] font-mono leading-relaxed overflow-x-auto max-h-[60vh] overflow-y-auto terminal-output"
+                      className="px-4 py-3 text-[0.9375rem] font-mono leading-relaxed overflow-x-auto max-h-[60vh] overflow-y-auto terminal-output"
                       dangerouslySetInnerHTML={{
                         __html: ansiConverter.toHtml(entry.output)
                       }}
                     />
                   ) : (
                     !entry.running && (
-                      <div className="px-4 py-3 text-[11px] text-dim-foreground italic">
+                      <div className="px-4 py-3 text-[0.875rem] text-dim-foreground italic">
                         No output
                       </div>
                     )
@@ -388,7 +388,7 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
                   {entry.running && (
                     <div className="px-4 py-2 border-t border-border bg-surface-0/50">
                       <div className="flex items-center gap-2">
-                        <span className="text-dim-foreground text-xs font-mono">stdin:</span>
+                        <span className="text-dim-foreground text-[0.9375rem] font-mono">stdin:</span>
                         <input
                           type="text"
                           value={stdinInputs[entry.id] ?? ''}
@@ -400,12 +400,12 @@ export function TerminalPage({ onBack }: TerminalPageProps) {
                             }
                           }}
                           placeholder="Send input to process..."
-                          className="flex-1 bg-transparent text-xs font-mono text-foreground placeholder:text-dim-foreground outline-none"
+                          className="flex-1 bg-transparent text-[0.9375rem] font-mono text-foreground placeholder:text-dim-foreground outline-none"
                           spellCheck={false}
                         />
                         <button
                           onClick={() => sendStdin(entry.id)}
-                          className="flex items-center gap-1 h-6 px-2 rounded text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                          className="flex items-center gap-1 h-6 px-2 rounded text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
                         >
                           <Send className="h-2.5 w-2.5" />
                         </button>
