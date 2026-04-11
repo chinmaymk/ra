@@ -1,6 +1,6 @@
 # src/interfaces/
 
-Four entry points that wire up the agent loop with different I/O patterns. All share the same wiring sequence:
+Entry points that wire up the agent loop with different I/O patterns. All share the same wiring sequence:
 
 ```
 loadConfig() → createProvider() → ToolRegistry + MCP tools → loadSkills() → loadMiddleware()
@@ -15,16 +15,18 @@ loadConfig() → createProvider() → ToolRegistry + MCP tools → loadSkills() 
 | `cli.ts` | One-shot mode: takes a prompt, runs the loop once, exits |
 | `repl.ts` | Interactive mode: readline loop, session persistence, `/slash` commands |
 | `http.ts` | HTTP server: `POST /chat` (SSE streaming) and `POST /chat/sync` (JSON) |
+| `web.ts` | Web dashboard server: REST + SSE API under `/api/*`, serves `packages/web/dist` SPA. Backed by `src/web/SessionManager` for multi-session state, restart-safe persistence, and optional git worktrees per session. See `src/web/CLAUDE.md`. |
+| `inspector.ts` | Inspector UI (single-file HTML over HTTP) for debugging a single session |
 | `parse-args.ts` | CLI argument parser shared across interfaces |
 | `tui.ts` | Terminal UI utilities (spinners, thinking boxes, tool timing) |
 
 ## Interface Differences
 
-| | CLI | REPL | HTTP |
-|---|---|---|---|
-| Loop calls | Single `run()` | `run()` per user input | `run()` per POST request |
-| Sessions | None (one-shot) | Auto-saved per turn | Optional via `sessionId` |
-| Streaming | `onChunk` callback | TUI middleware | Server-Sent Events |
+| | CLI | REPL | HTTP | Web |
+|---|---|---|---|---|
+| Loop calls | Single `run()` | `run()` per user input | `run()` per POST request | `run()` per message, one loop per session |
+| Sessions | None (one-shot) | Auto-saved per turn | Optional via `sessionId` | Managed by `SessionManager`, persisted to disk |
+| Streaming | `onChunk` callback | TUI middleware | Server-Sent Events | SSE per session (`/api/sessions/:id/events`) |
 
 ## Skill Injection
 

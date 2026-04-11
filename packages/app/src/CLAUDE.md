@@ -12,7 +12,7 @@ index.ts (CLI entry)
   → skills/loader.ts (load skills from directories)
   → middleware/loader.ts (load middleware from config)
   → AgentLoop from @chinmaymk/ra (run the loop)
-  → interfaces/{cli,repl,http}.ts or mcp/server.ts (run the loop)
+  → interfaces/{cli,repl,http,web,inspector}.ts or mcp/server.ts (run the loop)
 ```
 
 ## Conventions

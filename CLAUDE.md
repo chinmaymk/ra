@@ -20,6 +20,7 @@ Each subfolder has its own `CLAUDE.md` with patterns and conventions.
 packages/
   ra/              # @chinmaymk/ra — core library (published, runtime-agnostic)
   app/             # ra-app — CLI binary (Bun only, not published)
+  web/             # ra-web — React/Vite dashboard served by `ra web` (not published)
 recipes/           # Complete agent configurations
 docs/              # VitePress documentation site
 ```
