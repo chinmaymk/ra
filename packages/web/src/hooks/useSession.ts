@@ -197,5 +197,10 @@ export function useSession(sessionId: string | null) {
     await api.sessions.stop(sessionId)
   }, [sessionId])
 
-  return { info, messages, streaming, send, stop }
+  const markDone = useCallback(async () => {
+    if (!sessionId) return
+    await api.sessions.markDone(sessionId)
+  }, [sessionId])
+
+  return { info, messages, streaming, send, stop, markDone }
 }

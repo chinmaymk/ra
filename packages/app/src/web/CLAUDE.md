@@ -8,6 +8,7 @@ Backend state for the web dashboard interface (`src/interfaces/web.ts`). HTTP ro
 |------|---------|
 | `session-manager.ts` | `SessionManager` — owns all `ManagedSession`s for the dashboard. Creates per-session `AgentLoop`s via `createSessionLoop`, streams chunks/tool events to SSE subscribers, persists messages and session metadata to disk so state survives `ra web` restarts. |
 | `worktree-manager.ts` | `WorktreeManager` — thin wrapper over `git worktree add/remove/list` for sessions that opt in to running in an isolated branch. Worktrees live under `<baseDir>/worktrees/<sessionId>`. |
+| `panels/` | Config-driven session sidebar panels (`loadWebPanels`, builtin `diff`, optional file modules). Routes: `GET /api/web/panels`, `GET /api/sessions/:id/panels/:panelId/...`. |
 
 ## SessionManager responsibilities
 

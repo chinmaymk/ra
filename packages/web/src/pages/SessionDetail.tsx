@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from '@/hooks/useSession'
+import { useWebPanels } from '@/hooks/useWebPanels'
 import { ConversationThread } from '@/components/session/ConversationThread'
 import { SessionSidebar } from '@/components/session/SessionSidebar'
 import { ChatComposer } from '@/components/ChatComposer'
 import { StatusBadge, StatusDot } from '@/components/StatusDot'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { ArrowLeft, ArrowUp, Square, GitBranch, PanelRightClose, PanelRightOpen, Activity } from '@/components/icons'
+import { ArrowLeft, ArrowUp, Square, GitBranch, PanelRightClose, PanelRightOpen, Activity, CheckCircle2 } from '@/components/icons'
+import type { SessionInfo } from '@/lib/types'
 import { cn, formatTokens } from '@/lib/utils'
 
 interface SessionDetailProps {
@@ -15,7 +17,8 @@ interface SessionDetailProps {
 }
 
 export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
-  const { info, messages, streaming, send, stop } = useSession(sessionId)
+  const { info, messages, streaming, send, stop, markDone } = useSession(sessionId)
+  const webPanels = useWebPanels()
   const scrollRef = useRef<HTMLDivElement>(null)
   const didInitialScrollRef = useRef(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -66,8 +69,9 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
   }
 
   const totalTokens = info.tokenUsage.inputTokens + info.tokenUsage.outputTokens
+  const cacheRead = info.tokenUsage.cacheReadTokens ?? 0
   const cachePercent = info.tokenUsage.inputTokens > 0
-    ? Math.round((info.tokenUsage.cacheReadTokens / info.tokenUsage.inputTokens) * 100)
+    ? Math.round((cacheRead / info.tokenUsage.inputTokens) * 100)
     : 0
 
   return (
@@ -101,7 +105,7 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
               <StatusBadge status={info.status} />
             </div>
             <div className="flex items-center gap-1">
-              {info.status === 'running' && (
+              {info.status === 'running' ? (
                 <button
                   onClick={stop}
                   className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11px] font-medium bg-warning/10 text-warning border border-warning/25 hover:bg-warning/15 transition-colors"
@@ -109,6 +113,19 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
                   <Square className="h-2.5 w-2.5 fill-current" />
                   Stop
                 </button>
+              ) : info.status !== 'done' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={markDone}
+                      className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11px] font-medium bg-success/10 text-success border border-success/25 hover:bg-success/15 transition-colors"
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      Mark done
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Archive this session — you can still reopen it from history</TooltipContent>
+                </Tooltip>
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -182,42 +199,35 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
         </div>
 
         {/* ─── Sidebar ───────────────────────────────────────────── */}
-        {sidebarOpen && <SessionSidebar info={info} />}
+        {sidebarOpen && (
+          <SessionSidebar
+            info={info}
+            sessionId={sessionId}
+            webPanels={webPanels}
+            onSendFeedback={send}
+          />
+        )}
       </div>
     </TooltipProvider>
   )
 }
 
-function StatsFooter({ info, totalTokens, cachePercent }: { info: { iteration: number; tokenUsage: { thinkingTokens: number }; currentTool?: string; status: string; errorMessage?: string }; totalTokens: number; cachePercent: number }) {
+const Sep = () => <span className="opacity-30">·</span>
+const Num = ({ children }: { children: React.ReactNode }) => (
+  <span className="text-muted-foreground tabular">{children}</span>
+)
+
+function StatsFooter({ info, totalTokens, cachePercent }: { info: SessionInfo; totalTokens: number; cachePercent: number }) {
+  const { thinkingTokens } = info.tokenUsage
   return (
     <div className="flex items-center gap-3 px-5 h-7 text-[10.5px] text-dim-foreground border-t border-border bg-surface-0/40 mono">
-      <span>iter <span className="text-muted-foreground tabular">{info.iteration}</span></span>
-      <span className="opacity-30">·</span>
-      <span><span className="text-muted-foreground tabular">{formatTokens(totalTokens)}</span> tokens</span>
-      {cachePercent > 0 && (
-        <>
-          <span className="opacity-30">·</span>
-          <span>cache <span className="text-muted-foreground tabular">{cachePercent}%</span></span>
-        </>
-      )}
-      {info.tokenUsage.thinkingTokens > 0 && (
-        <>
-          <span className="opacity-30">·</span>
-          <span><span className="text-purple tabular">{formatTokens(info.tokenUsage.thinkingTokens)}</span> thinking</span>
-        </>
-      )}
-      {info.currentTool && info.status === 'running' && (
-        <>
-          <span className="opacity-30">·</span>
-          <span className="text-warning">{info.currentTool}</span>
-        </>
-      )}
-      {info.errorMessage && (
-        <>
-          <span className="opacity-30">·</span>
-          <span className="text-destructive truncate max-w-xs">{info.errorMessage}</span>
-        </>
-      )}
+      <span>iter <Num>{info.iteration}</Num></span>
+      <Sep />
+      <span><Num>{formatTokens(totalTokens)}</Num> tokens</span>
+      {cachePercent > 0 && <><Sep /><span>cache <Num>{cachePercent}%</Num></span></>}
+      {thinkingTokens > 0 && <><Sep /><span><span className="text-purple tabular">{formatTokens(thinkingTokens)}</span> thinking</span></>}
+      {info.currentTool && info.status === 'running' && <><Sep /><span className="text-warning">{info.currentTool}</span></>}
+      {info.errorMessage && <><Sep /><span className="text-destructive truncate max-w-xs">{info.errorMessage}</span></>}
     </div>
   )
 }

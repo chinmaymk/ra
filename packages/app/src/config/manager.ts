@@ -96,6 +96,13 @@ export class ConfigManager {
       }
     }
 
+    // Web panel modules (agent.web.panels)
+    if (agent.web?.panels) {
+      for (const entry of agent.web.panels) {
+        if (looksLikeFilePath(entry)) paths.push(entry)
+      }
+    }
+
     // Context resolver files
     if (agent.context.resolvers) {
       for (const r of agent.context.resolvers) {

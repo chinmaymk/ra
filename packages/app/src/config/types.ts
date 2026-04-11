@@ -137,6 +137,13 @@ export interface AgentConfig {
     ttlDays: number      // auto-prune memories older than this
     injectLimit: number  // memories to inject as context per loop (0 to disable)
   }
+  /**
+   * Web UI session panels. Entries are builtin ids (`diff`, `builtin:diff`) or paths
+   * to panel modules (default export: WebPanelDefinition).
+   */
+  web: {
+    panels: string[]
+  }
 }
 
 /** A single cron job definition. */

@@ -13,6 +13,14 @@ export interface SessionInfo {
   currentTool?: string
   lastAssistantMessage?: string
   errorMessage?: string
+  /** Working directory for tools / diff (session worktree or project cwd). */
+  cwd: string
+}
+
+export interface WebPanelInfo {
+  id: string
+  title: string
+  source: string
 }
 
 export interface TokenUsage {

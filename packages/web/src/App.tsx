@@ -11,6 +11,7 @@ import { MiddlewarePage } from '@/pages/MiddlewarePage'
 import { TerminalPage } from '@/pages/TerminalPage'
 import { PromptsPage } from '@/pages/PromptsPage'
 import { KnowledgePage } from '@/pages/KnowledgePage'
+import { PanelsPage } from '@/pages/PanelsPage'
 import { CommandPalette } from '@/components/CommandPalette'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { api } from '@/lib/api'
@@ -27,8 +28,9 @@ type View =
   | { type: 'terminal' }
   | { type: 'prompts' }
   | { type: 'knowledge' }
+  | { type: 'panels' }
 
-type NavTarget = 'agents' | 'config' | 'tools' | 'middleware' | 'prompts' | 'knowledge' | 'terminal'
+type NavTarget = 'agents' | 'config' | 'tools' | 'middleware' | 'prompts' | 'knowledge' | 'terminal' | 'panels'
 
 export function App() {
   const { sessions, needsInput, refresh } = useSessionList()
@@ -175,6 +177,7 @@ export function App() {
           {view.type === 'prompts' && <PromptsPage onBack={goAgents} />}
           {view.type === 'knowledge' && <KnowledgePage onBack={goAgents} />}
           {view.type === 'terminal' && <TerminalPage onBack={goAgents} />}
+          {view.type === 'panels' && <PanelsPage onBack={goAgents} />}
           </div>
         </main>
 

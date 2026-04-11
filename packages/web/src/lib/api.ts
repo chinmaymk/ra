@@ -9,6 +9,7 @@ import type {
   ImageAttachment,
   KnowledgeBase,
   KnowledgeDocument,
+  WebPanelInfo,
 } from './types'
 
 const BASE = '/api'
@@ -48,6 +49,9 @@ export const api = {
     stop: (id: string) =>
       fetchJson<{ ok: boolean }>(`/sessions/${id}/stop`, { method: 'POST' }),
 
+    markDone: (id: string) =>
+      fetchJson<{ ok: boolean }>(`/sessions/${id}/done`, { method: 'POST' }),
+
     delete: (id: string) =>
       fetchJson<{ ok: boolean }>(`/sessions/${id}`, { method: 'DELETE' }),
   },
@@ -67,6 +71,10 @@ export const api = {
 
   middleware: {
     list: () => fetchJson<MiddlewareInfo[]>('/middleware'),
+  },
+
+  web: {
+    panels: () => fetchJson<{ panels: WebPanelInfo[] }>('/web/panels'),
   },
 
   providers: {

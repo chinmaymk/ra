@@ -85,7 +85,7 @@ const AGENT_KEYS = new Set([
   'provider', 'model', 'thinking', 'systemPrompt',
   'maxIterations', 'maxRetries', 'toolTimeout', 'maxConcurrency',
   'tools', 'skillDirs', 'permissions',
-  'middleware', 'context', 'compaction', 'memory', 'hotReload',
+  'middleware', 'context', 'compaction', 'memory', 'hotReload', 'web',
 ])
 
 // Keys that belong under `app` when found at the top level (legacy flat config)
@@ -274,6 +274,14 @@ function preResolveRecipePaths(agent: Record<string, unknown>, recipeDir: string
       tools.custom = (tools.custom as string[]).map(e => looksLikePath(e) ? resolvePath(e, recipeDir) : e)
     }
   }
+  if (isPlainObject(agent.web)) {
+    const web = agent.web as Record<string, unknown>
+    if (Array.isArray(web.panels)) {
+      web.panels = (web.panels as string[]).map(e =>
+        typeof e === 'string' && looksLikePath(e) ? resolvePath(e, recipeDir) : e,
+      )
+    }
+  }
 }
 
 /** Saved recipe arrays to prepend after all merges complete. */
@@ -281,11 +289,12 @@ interface RecipeArrays {
   skillDirs: string[]
   middleware: Record<string, string[]>
   customTools: string[]
+  webPanels: string[]
 }
 
 /** Extract array fields from a recipe config (they'd be lost by deepMerge). */
 function extractRecipeArrays(config: Record<string, unknown>): RecipeArrays {
-  const result: RecipeArrays = { skillDirs: [], middleware: {}, customTools: [] }
+  const result: RecipeArrays = { skillDirs: [], middleware: {}, customTools: [], webPanels: [] }
   const agent = (config.agent ?? config) as Record<string, unknown>
   if (Array.isArray(agent.skillDirs)) result.skillDirs = agent.skillDirs as string[]
   if (isPlainObject(agent.middleware)) {
@@ -296,6 +305,10 @@ function extractRecipeArrays(config: Record<string, unknown>): RecipeArrays {
   if (isPlainObject(agent.tools)) {
     const tools = agent.tools as Record<string, unknown>
     if (Array.isArray(tools.custom)) result.customTools = tools.custom as string[]
+  }
+  if (isPlainObject(agent.web)) {
+    const web = agent.web as Record<string, unknown>
+    if (Array.isArray(web.panels)) result.webPanels = web.panels as string[]
   }
   return result
 }
@@ -312,6 +325,10 @@ function prependRecipeArrays(config: RaConfig, arrays: RecipeArrays): void {
   if (arrays.customTools.length > 0) {
     const existing = config.agent.tools.custom ?? []
     config.agent.tools.custom = [...arrays.customTools, ...existing]
+  }
+  if (arrays.webPanels.length > 0) {
+    const existing = config.agent.web.panels ?? []
+    config.agent.web.panels = [...arrays.webPanels, ...existing]
   }
 }
 
@@ -439,6 +456,12 @@ export async function loadConfigWithPath(options: LoadConfigOptions = {}, logger
       config.agent.systemPrompt = await f.text()
       log.debug('system prompt loaded from file', { path: resolved })
     }
+  }
+
+  if (config.agent.web?.panels?.length) {
+    config.agent.web.panels = config.agent.web.panels.map(e =>
+      typeof e === 'string' && looksLikePath(e) ? resolvePath(e, configDir) : e,
+    )
   }
 
   validateConfig(config)
