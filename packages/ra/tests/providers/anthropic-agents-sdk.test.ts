@@ -10,7 +10,7 @@ mock.module('@anthropic-ai/claude-agent-sdk', () => ({
   tool: mockSdkTool,
 }))
 
-import { AnthropicAgentsSdkProvider } from '@chinmaymk/ra'
+import { AnthropicAgentsSdkProvider, type TokenUsage } from '@chinmaymk/ra'
 
 function streamEvent(event: unknown) {
   return { type: 'stream_event', event, parent_tool_use_id: null, uuid: 'u', session_id: 's' }
@@ -507,6 +507,66 @@ describe('AnthropicAgentsSdkProvider', () => {
       await provider.close()
       expect(closeCalls).toEqual([1])
       await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      expect(mockQuery).toHaveBeenCalledTimes(2)
+      await provider.close()
+    })
+
+    it('surfaces cacheReadTokens from the per-turn result event', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([
+        [resultMsg({
+          modelUsage: {
+            'claude-sonnet-4-6': { inputTokens: 50, outputTokens: 10, cacheReadInputTokens: 4000, cacheCreationInputTokens: 200 },
+          },
+        })],
+        [resultMsg({
+          modelUsage: {
+            // Turn 2: the stable prefix hits cache — cacheReadInputTokens
+            // jumps to reflect the full prior-turn prefix being served from
+            // cache, and inputTokens (uncached fresh input) stays tiny.
+            'claude-sonnet-4-6': { inputTokens: 30, outputTokens: 8, cacheReadInputTokens: 9000, cacheCreationInputTokens: 100 },
+          },
+        })],
+      ]))
+      const provider = new AnthropicAgentsSdkProvider()
+      const t1 = await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] })) as { type: string; usage?: TokenUsage }[]
+      const t2 = await collect(provider.stream({ model: 'x', messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'ok' },
+        { role: 'user', content: 'again' },
+      ] })) as { type: string; usage?: TokenUsage }[]
+
+      const u1 = t1.find(c => c.type === 'done')!.usage!
+      const u2 = t2.find(c => c.type === 'done')!.usage!
+      expect(u1.cacheReadTokens).toBe(4000)
+      expect(u2.cacheReadTokens).toBe(9000)
+      // The second turn reads more from cache than the first — the cache is
+      // warm from turn 1 on the [system, tools, user1, assistant1] prefix.
+      expect(u2.cacheReadTokens!).toBeGreaterThan(u1.cacheReadTokens!)
+      expect(mockQuery).toHaveBeenCalledTimes(1)
+      await provider.close()
+    })
+
+    it('recovers from a redundant stream() call (same messages twice) by rebuilding a fresh session instead of deadlocking', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([[resultMsg()], [resultMsg()]]))
+      const provider = new AnthropicAgentsSdkProvider()
+      const msgs = [{ role: 'user' as const, content: 'hi' }]
+      await collect(provider.stream({ model: 'x', messages: msgs }))
+      // Same messages — no new user turn to push. Without the guard the
+      // subprocess would block forever waiting for input.
+      await collect(provider.stream({ model: 'x', messages: msgs }))
+      // Rebuilt rather than deadlocked.
+      expect(mockQuery).toHaveBeenCalledTimes(2)
+      await provider.close()
+    })
+
+    it('rebuilds when follow-up messages are all assistant-role (no user delta)', async () => {
+      mockQuery.mockImplementation(persistentQueryMock([[resultMsg()], [resultMsg()]]))
+      const provider = new AnthropicAgentsSdkProvider()
+      await collect(provider.stream({ model: 'x', messages: [{ role: 'user', content: 'hi' }] }))
+      await collect(provider.stream({ model: 'x', messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'ok' },
+      ] }))
       expect(mockQuery).toHaveBeenCalledTimes(2)
       await provider.close()
     })

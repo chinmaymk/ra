@@ -17,7 +17,8 @@ export interface AnthropicAgentsSdkProviderOptions {
  * AND tool execution (via MCP handlers that bridge to ra's tools).
  * ra owns context engineering, the outer conversation loop, and middleware.
  *
- * Key design:
+ * ## Key design
+ *
  * - **One subprocess per provider instance** (not per stream() call). A persistent
  *   `Query` is kept alive behind a pushable user-message channel; each `stream()`
  *   call pushes the next user turn and drains messages until the SDK's per-turn
@@ -30,9 +31,32 @@ export interface AnthropicAgentsSdkProviderOptions {
  * - Only text/thinking chunks are surfaced to ra; tool calls are resolved
  *   internally by the SDK.
  *
- * Session invalidation: if `model`, system prompt, tool schemas, or thinking
- * config change between calls — or if a prior turn errored / was interrupted —
- * the existing subprocess is closed and a fresh one is started on the next call.
+ * ## Prompt cache leverage
+ *
+ * This provider is designed so every follow-up turn hits Anthropic's prompt
+ * cache on the `[system, tools, prior turns]` prefix:
+ *
+ * 1. **Stable subprocess** — the CLI child process is kept alive across turns,
+ *    so its internal Anthropic conversation state persists. The
+ *    `cache_control` breakpoints placed on turn N stay warm for turn N+1.
+ * 2. **Stream-input mode** — `query({ prompt: asyncIterable })` triggers the
+ *    SDK's streaming-input protocol, which automatically places cache
+ *    breakpoints. Verified against `sdk.mjs`: the channel is an async
+ *    iterable that deliberately never ends, so `streamInput()` never calls
+ *    `transport.endInput()` — the CLI keeps its stdin open forever.
+ * 3. **Delta-only pushes** — follow-up turns push **only the new user
+ *    message** as plain text. Prior user/assistant/tool state lives inside
+ *    the subprocess; we never re-send it, so the API's prefix is
+ *    byte-identical across turns and the cache always hits.
+ * 4. **Tight invalidation gate** — the session is torn down only on changes
+ *    that would already break the cache (model, system prompt, tool schema,
+ *    thinking config) or on unrecoverable state (error, interrupt, message
+ *    prefix rewrite by compaction). Tool `execute()` refs can swap freely
+ *    without invalidation because they're resolved through a mutable map at
+ *    call time.
+ *
+ * Cache hit rates show up in the `done` chunk's `usage.cacheReadTokens`
+ * which is extracted from the SDK's per-turn `result` event.
  */
 export class AnthropicAgentsSdkProvider implements IProvider {
   readonly name = 'anthropic-agents-sdk'
@@ -139,9 +163,20 @@ export class AnthropicAgentsSdkProvider implements IProvider {
       session = this.createSession(request, key, filtered)
       this.session = session
     } else {
-      // Reuse: refresh tool execute() refs and push new user messages.
+      // Reuse: refresh tool execute() refs and push the new user turns.
+      // This is the cache-critical path — the subprocess keeps its stable
+      // prefix [system, tools, prior turns] hot; we only send the delta.
       this.refreshTools(session, request.tools ?? [])
-      this.pushNewMessages(session, filtered)
+      const pushed = this.pushNewMessages(session, filtered)
+      if (pushed === 0) {
+        // No new user input means the subprocess has nothing to do — the
+        // Query would block forever waiting for input, the caller would
+        // eventually abort, and we'd lose the cache. Rebuild as a fresh
+        // session so at least the *next* turn can benefit from cache.
+        this.invalidateSession()
+        session = this.createSession(request, key, filtered)
+        this.session = session
+      }
     }
 
     // Hook request.signal → query.interrupt() so the subprocess halts the
@@ -244,23 +279,33 @@ export class AnthropicAgentsSdkProvider implements IProvider {
     return true
   }
 
-  /** Push any messages added since the last call; update the sent-digest cursor. */
-  private pushNewMessages(session: Session, filtered: IMessage[]): void {
+  /**
+   * Push any messages added since the last call; update the sent-digest
+   * cursor. Returns the number of messages actually pushed to the subprocess.
+   *
+   * Only user-role messages are pushed as plain text — no `<conversation_history>`
+   * wrapper — so the API call's prefix is `[system, tools, prior turns]` and
+   * hits the prompt cache created on the previous turn. Assistant messages
+   * from prior turns are already in the subprocess's internal conversation
+   * state, so re-sending them would corrupt that state.
+   */
+  private pushNewMessages(session: Session, filtered: IMessage[]): number {
     const start = session.sentDigests.length
+    let pushed = 0
     for (let i = start; i < filtered.length; i++) {
       const msg = filtered[i]!
-      // Only user-role messages need to be sent; the SDK already has the
-      // assistant responses it produced, and tool results are resolved inside
-      // the SDK via MCP so we have no faithful way to inject them here.
       if (msg.role === 'user') {
         session.channel.push({
           type: 'user',
           message: { role: 'user', content: extractTextContent(msg.content) },
           parent_tool_use_id: null,
         })
+        pushed++
       }
+      // assistant / tool messages are skipped — see doc above
     }
     session.sentDigests = filtered.map(digestMessage)
+    return pushed
   }
 
   /**
